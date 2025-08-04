@@ -22,7 +22,7 @@ import Stripe from 'stripe';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
-const port = 4002;
+const port = process.env.PORT || 4002;
 
 // Load environment variables
 dotenv.config({ path: path.resolve(__dirname, '.env') });

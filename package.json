@@ -10,7 +10,8 @@
     "build": "vite build",
     "lint": "eslint ./src --quiet",
     "preview": "vite preview",
-    "start": "cross-env NODE_OPTIONS='--max-old-space-size=8192' concurrently \"cross-env NODE_ENV=development vite\" \"cross-env NODE_ENV=development node -r dotenv/config ./server.js\""
+    "start": "node server.js",
+    "start:dev": "cross-env NODE_OPTIONS='--max-old-space-size=8192' concurrently \"cross-env NODE_ENV=development vite\" \"cross-env NODE_ENV=development node -r dotenv/config ./server.js\""
   },
   "dependencies": {
     "@emotion/react": "^11.11.3",
