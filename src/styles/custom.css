@@ -1,0 +1,4 @@
+.lesson-content strong, 
+.lesson-content b {
+  color: #000000 !important; /* Ensure text is black */
+} 

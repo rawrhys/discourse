@@ -1,0 +1,477 @@
+.flashcard-container {
+  perspective: 1000px;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 1rem;
+}
+
+.flashcard {
+  perspective: 1000px;
+  background-color: transparent;
+  width: 100%;
+  min-width: 280px;
+  max-width: 600px;
+  height: auto;
+  min-height: unset;
+  margin: 20px auto;
+  cursor: pointer;
+  border-radius: 12px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  position: relative;
+}
+
+.flashcard:hover {
+  box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+  transform: translateY(-2px);
+}
+
+.flashcard-inner {
+  position: relative;
+  width: 100%;
+  min-height: unset;
+  height: auto;
+  text-align: center;
+  transition: transform 0.6s;
+  transform-style: preserve-3d;
+  border-radius: 12px;
+  min-height: unset;
+}
+
+.flashcard.flipped .flashcard-inner {
+  transform: rotateY(180deg);
+}
+
+.flashcard-front,
+.flashcard-back {
+  position: absolute;
+  width: 100%;
+  min-height: unset;
+  height: auto;
+  flex: 1 1 auto;
+  backface-visibility: hidden;
+  border-radius: 12px;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.flashcard-front {
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+  border: 1px solid #e9ecef;
+  z-index: 2;
+}
+
+.flashcard-back {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border: 1px solid #dee2e6;
+  transform: rotateY(180deg);
+}
+
+.flashcard-content {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+}
+
+.flashcard-content p {
+  margin: 0;
+  font-size: 1.125rem;
+  line-height: 1.5;
+  color: #1a1a1a;
+}
+
+.flip-hint {
+  position: absolute;
+  bottom: 0.75rem;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 0.875rem;
+  color: #6c757d;
+  opacity: 0.8;
+}
+
+.flashcard-error {
+  width: 100%;
+  min-width: 280px;
+  max-width: 600px;
+  margin: 20px auto;
+  padding: 1.5rem;
+  text-align: center;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .flashcard {
+    min-width: 240px;
+    min-height: 180px;
+  }
+
+  .flashcard-front,
+  .flashcard-back {
+    min-height: 180px;
+    padding: 1rem;
+  }
+
+  .flashcard-content p {
+    font-size: 1rem;
+  }
+}
+
+/* Animation for flipping */
+@keyframes flipIn {
+  from {
+    transform: rotateY(-180deg);
+  }
+  to {
+    transform: rotateY(0);
+  }
+}
+
+@keyframes flipOut {
+  from {
+    transform: rotateY(0);
+  }
+  to {
+    transform: rotateY(180deg);
+  }
+}
+
+.flashcard h4 {
+  margin: 0 0 0.5rem 0;
+  color: #333;
+  font-size: 1.2rem;
+  line-height: 1.3;
+  font-weight: 600;
+  width: 100%;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+  -ms-hyphens: auto;
+}
+
+/* Add styles for markdown content */
+.flashcard h4 p {
+  margin: 0;
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
+}
+
+.flashcard .definition-content {
+  width: 100%;
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 0.5rem;
+}
+
+.flashcard .definition-content p {
+  margin: 0;
+  color: #666;
+  font-size: 1rem;
+  line-height: 1.4;
+}
+
+.flashcard strong {
+  color: #2563eb;
+  font-weight: 600;
+}
+
+.flashcard em {
+  font-style: italic;
+  color: #4b5563;
+}
+
+.flashcard code {
+  background-color: #f3f4f6;
+  padding: 0.2em 0.4em;
+  border-radius: 0.25em;
+  font-size: 0.9em;
+  color: #dc2626;
+}
+
+.flashcard p {
+  margin: 0;
+  color: #666;
+  font-size: 1rem;
+  line-height: 1.4;
+  width: 100%;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+  -ms-hyphens: auto;
+}
+
+.flashcard small {
+  position: absolute;
+  bottom: 0.5rem;
+  left: 0;
+  right: 0;
+  text-align: center;
+  color: #999;
+  font-size: 0.8rem;
+  padding: 0.25rem;
+  background: rgba(255, 255, 255, 0.9);
+  border-top: 1px solid #eee;
+}
+
+/* Add color variants */
+.flashcard.color-variant-0 .flashcard-front { border-color: #3b82f6; }
+.flashcard.color-variant-1 .flashcard-front { border-color: #10b981; }
+.flashcard.color-variant-2 .flashcard-front { border-color: #f59e0b; }
+.flashcard.color-variant-3 .flashcard-front { border-color: #ef4444; }
+.flashcard.color-variant-4 .flashcard-front { border-color: #8b5cf6; }
+
+/* Add error state styles */
+.flashcard.error {
+  border: 2px solid #ef4444;
+  background-color: #fee2e2;
+}
+
+.flashcard.error .flashcard-front {
+  border: none;
+  background-color: transparent;
+}
+
+.flashcard.error h4 {
+  color: #b91c1c;
+}
+
+.flashcard-hint {
+  position: absolute;
+  bottom: 0.5rem;
+  left: 0;
+  right: 0;
+  text-align: center;
+  color: #999;
+  font-size: 0.8rem;
+  padding: 0.25rem;
+  background: rgba(255, 255, 255, 0.9);
+  border-top: 1px solid #eee;
+}
+
+.flashcard-term {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1a202c;
+  margin-bottom: 1rem;
+  line-height: 1.4;
+}
+
+.flashcard-definition {
+  font-size: 1.25rem;
+  color: #4a5568;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.flashcard-image {
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.flashcard-image-container {
+  width: 100%;
+  height: 200px;
+  margin-bottom: 1rem;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  position: relative;
+}
+
+.flashcard-image-container img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.flashcard-image-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent);
+  padding: 1rem;
+  color: white;
+  font-size: 0.875rem;
+}
+
+.flashcard-image-overlay a {
+  color: white;
+  text-decoration: underline;
+}
+
+.flashcard-image-overlay a:hover {
+  color: #e2e8f0;
+}
+
+.flashcard-hint-button {
+  background: none;
+  border: none;
+  color: #4a5568;
+  font-size: 0.875rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  transition: all 0.2s;
+}
+
+.flashcard-hint-button:hover {
+  background: #f7fafc;
+  color: #2d3748;
+}
+
+.flashcard-hint-text {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  color: #4a5568;
+  font-style: italic;
+}
+
+.flashcard-progress {
+  position: absolute;
+  bottom: 0.5rem;
+  right: 0.5rem;
+  font-size: 0.75rem;
+  color: #718096;
+}
+
+.flashcard-navigation {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.flashcard-nav-button {
+  background: #f7fafc;
+  border: 1px solid #e2e8f0;
+  color: #4a5568;
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.875rem;
+}
+
+.flashcard-nav-button:hover {
+  background: #edf2f7;
+  color: #2d3748;
+}
+
+.flashcard-nav-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.flashcard-nav-button.active {
+  background: #4299e1;
+  color: white;
+  border-color: #4299e1;
+}
+
+.flashcard-nav-button.active:hover {
+  background: #3182ce;
+}
+
+@media (min-width: 640px) {
+  .flashcard-container {
+    padding: 1.5rem;
+  }
+
+  .flashcard {
+    min-height: 200px;
+  }
+
+  .flashcard-front,
+  .flashcard-back {
+    min-height: 200px;
+    padding: 1.5rem;
+  }
+
+  .flashcard-term {
+    font-size: 1.3rem;
+  }
+
+  .flashcard-definition {
+    font-size: 1.1rem;
+  }
+
+  .flashcard-image,
+  .flashcard-image-container {
+    height: 250px;
+  }
+}
+
+@media (min-width: 768px) {
+  .flashcard-container {
+    padding: 1.5rem;
+  }
+
+  .flashcard {
+    min-height: 220px;
+  }
+
+  .flashcard-front,
+  .flashcard-back {
+    min-height: 220px;
+    padding: 1.75rem;
+  }
+
+  .flashcard-term {
+    font-size: 1.4rem;
+  }
+
+  .flashcard-definition {
+    font-size: 1.15rem;
+  }
+
+  .flashcard-image,
+  .flashcard-image-container {
+    height: 300px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .flashcard-container {
+    padding: 2rem;
+  }
+
+  .flashcard {
+    min-height: 240px;
+  }
+
+  .flashcard-front,
+  .flashcard-back {
+    min-height: 240px;
+    padding: 2rem;
+  }
+
+  .flashcard-term {
+    font-size: 1.5rem;
+  }
+
+  .flashcard-definition {
+    font-size: 1.2rem;
+  }
+
+  .flashcard-image,
+  .flashcard-image-container {
+    height: 350px;
+  }
+} 

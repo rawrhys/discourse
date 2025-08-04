@@ -1,0 +1,262 @@
+{
+  "id": "course_54cn84fe9",
+  "title": "History of Ancient Rome: Intermediate Course",
+  "description": "Explore the rich history of Ancient Rome, from its founding to its fall, and its lasting impact on the modern world.",
+  "subject": "history of ancient rome",
+  "difficultyLevel": "intermediate",
+  "learningObjectives": [],
+  "createdBy": "system",
+  "createdAt": "2025-06-10T11:41:57.491Z",
+  "updatedAt": "2025-06-10T11:41:57.491Z",
+  "modules": [
+    {
+      "id": "module_0_qganvu",
+      "title": "The Rise of Rome",
+      "description": "Examine the founding and early expansion of Rome.",
+      "sequenceNumber": 0,
+      "prerequisites": [],
+      "estimatedDuration": 60,
+      "quizScores": {},
+      "lessons": [
+        {
+          "id": "lesson_cdlyqtagi",
+          "title": "Error Loading Lesson",
+          "content": {
+            "introduction": "",
+            "main_content": "",
+            "conclusion": ""
+          },
+          "sequenceNumber": 0,
+          "moduleId": null,
+          "moduleTitle": "",
+          "quiz": [],
+          "key_terms": [],
+          "important_dates": [],
+          "key_figures": [],
+          "imageData": {
+            "imageUrl": null,
+            "description": "",
+            "author": "",
+            "license": "",
+            "pageURL": "",
+            "thumbnailUrl": null
+          }
+        },
+        {
+          "id": "lesson_jcosaustn",
+          "title": "Error Loading Lesson",
+          "content": {
+            "introduction": "",
+            "main_content": "",
+            "conclusion": ""
+          },
+          "sequenceNumber": 0,
+          "moduleId": null,
+          "moduleTitle": "",
+          "quiz": [],
+          "key_terms": [],
+          "important_dates": [],
+          "key_figures": [],
+          "imageData": {
+            "imageUrl": null,
+            "description": "",
+            "author": "",
+            "license": "",
+            "pageURL": "",
+            "thumbnailUrl": null
+          }
+        },
+        {
+          "id": "lesson_ndhliryz3",
+          "title": "Error Loading Lesson",
+          "content": {
+            "introduction": "",
+            "main_content": "",
+            "conclusion": ""
+          },
+          "sequenceNumber": 0,
+          "moduleId": null,
+          "moduleTitle": "",
+          "quiz": [],
+          "key_terms": [],
+          "important_dates": [],
+          "key_figures": [],
+          "imageData": {
+            "imageUrl": null,
+            "description": "",
+            "author": "",
+            "license": "",
+            "pageURL": "",
+            "thumbnailUrl": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "module_1_qganw6",
+      "title": "The Roman Empire",
+      "description": "Investigate the establishment and development of the Roman Empire.",
+      "sequenceNumber": 0,
+      "prerequisites": [],
+      "estimatedDuration": 60,
+      "quizScores": {},
+      "lessons": [
+        {
+          "id": "lesson_om3a4i3t5",
+          "title": "Error Loading Lesson",
+          "content": {
+            "introduction": "",
+            "main_content": "",
+            "conclusion": ""
+          },
+          "sequenceNumber": 0,
+          "moduleId": null,
+          "moduleTitle": "",
+          "quiz": [],
+          "key_terms": [],
+          "important_dates": [],
+          "key_figures": [],
+          "imageData": {
+            "imageUrl": null,
+            "description": "",
+            "author": "",
+            "license": "",
+            "pageURL": "",
+            "thumbnailUrl": null
+          }
+        },
+        {
+          "id": "lesson_bxme9iebe",
+          "title": "Error Loading Lesson",
+          "content": {
+            "introduction": "",
+            "main_content": "",
+            "conclusion": ""
+          },
+          "sequenceNumber": 0,
+          "moduleId": null,
+          "moduleTitle": "",
+          "quiz": [],
+          "key_terms": [],
+          "important_dates": [],
+          "key_figures": [],
+          "imageData": {
+            "imageUrl": null,
+            "description": "",
+            "author": "",
+            "license": "",
+            "pageURL": "",
+            "thumbnailUrl": null
+          }
+        },
+        {
+          "id": "lesson_qr9d2ueee",
+          "title": "Error Loading Lesson",
+          "content": {
+            "introduction": "",
+            "main_content": "",
+            "conclusion": ""
+          },
+          "sequenceNumber": 0,
+          "moduleId": null,
+          "moduleTitle": "",
+          "quiz": [],
+          "key_terms": [],
+          "important_dates": [],
+          "key_figures": [],
+          "imageData": {
+            "imageUrl": null,
+            "description": "",
+            "author": "",
+            "license": "",
+            "pageURL": "",
+            "thumbnailUrl": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "module_2_qganw6",
+      "title": "Legacy of Rome",
+      "description": "Examine the lasting impact of Ancient Rome on the modern world.",
+      "sequenceNumber": 0,
+      "prerequisites": [],
+      "estimatedDuration": 60,
+      "quizScores": {},
+      "lessons": [
+        {
+          "id": "lesson_547106l2l",
+          "title": "Error Loading Lesson",
+          "content": {
+            "introduction": "",
+            "main_content": "",
+            "conclusion": ""
+          },
+          "sequenceNumber": 0,
+          "moduleId": null,
+          "moduleTitle": "",
+          "quiz": [],
+          "key_terms": [],
+          "important_dates": [],
+          "key_figures": [],
+          "imageData": {
+            "imageUrl": null,
+            "description": "",
+            "author": "",
+            "license": "",
+            "pageURL": "",
+            "thumbnailUrl": null
+          }
+        },
+        {
+          "id": "lesson_zogfens69",
+          "title": "Error Loading Lesson",
+          "content": {
+            "introduction": "",
+            "main_content": "",
+            "conclusion": ""
+          },
+          "sequenceNumber": 0,
+          "moduleId": null,
+          "moduleTitle": "",
+          "quiz": [],
+          "key_terms": [],
+          "important_dates": [],
+          "key_figures": [],
+          "imageData": {
+            "imageUrl": null,
+            "description": "",
+            "author": "",
+            "license": "",
+            "pageURL": "",
+            "thumbnailUrl": null
+          }
+        },
+        {
+          "id": "lesson_4ingy4zkq",
+          "title": "Error Loading Lesson",
+          "content": {
+            "introduction": "",
+            "main_content": "",
+            "conclusion": ""
+          },
+          "sequenceNumber": 0,
+          "moduleId": null,
+          "moduleTitle": "",
+          "quiz": [],
+          "key_terms": [],
+          "important_dates": [],
+          "key_figures": [],
+          "imageData": {
+            "imageUrl": null,
+            "description": "",
+            "author": "",
+            "license": "",
+            "pageURL": "",
+            "thumbnailUrl": null
+          }
+        }
+      ]
+    }
+  ]
+}
