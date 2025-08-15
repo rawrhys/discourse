@@ -39,6 +39,7 @@ export default function QuizView({ questions = [], onComplete, lessonId }) {
 
   const handleAnswerSelect = (questionIndex, answer) => {
     if (showResult) return;
+    console.log(`[QuizView] Answer selected for question ${questionIndex}:`, answer);
     setSelectedAnswers(prev => ({
       ...prev,
       [questionIndex]: answer
