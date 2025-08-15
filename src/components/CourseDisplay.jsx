@@ -114,6 +114,7 @@ const CourseDisplay = () => {
         const newLessons = module.lessons.map(lesson => {
           if (lesson.id === lessonId) {
             lessonFound = true;
+
             return {
               ...lesson,
               quizScores: {
@@ -166,6 +167,7 @@ const CourseDisplay = () => {
         const newLessons = module.lessons.map(lesson => {
           if (lesson.id === lessonId) {
             lessonFound = true;
+
             return {
               ...lesson,
               quizScores: {
@@ -210,7 +212,8 @@ const CourseDisplay = () => {
     if (course && course.modules) {
       const initialUnlocked = new Set();
       course.modules.forEach((module, index) => {
-        if (index === 0 || !module.isLocked) {
+        // First module is always unlocked, others are unlocked if isLocked is false or undefined
+        if (index === 0 || module.isLocked === false) {
           initialUnlocked.add(module.id);
         }
       });
@@ -381,9 +384,13 @@ const CourseDisplay = () => {
                   onPreviousLesson={handlePreviousLesson}
                   onTakeQuiz={() => setShowQuiz(true)}
                   checkAndUnlockNextModule={(lessonId) => {
-                    // This function is called when a perfect score is achieved
-                    // The actual unlocking logic is handled in handleQuizCompletion
+                    // This function is called when a perfect score is achieved in LessonView
+                    // We need to trigger the same unlock logic as handleQuizCompletion
                     console.log(`[CourseDisplay] checkAndUnlockNextModule called for lesson: ${lessonId}`);
+                    
+                    // Call handleQuizCompletion to ensure consistent unlock logic
+                    // We pass a dummy score of 5 since this is only called for perfect scores
+                    handleQuizCompletion(lessonId, 5);
                   }}
               />
             ) : (

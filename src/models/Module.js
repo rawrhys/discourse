@@ -13,7 +13,8 @@ class Module {
     order = 0,
     completed = false,
     perfectQuizzes = 0,
-    progress = 0
+    progress = 0,
+    isLocked = false
   } = {}) {
     this.id = id;
     this.title = title;
@@ -28,6 +29,7 @@ class Module {
     this._completed = completed;
     this.perfectQuizzes = perfectQuizzes;
     this.progress = progress;
+    this.isLocked = isLocked;
   }
 
   static fromJSON(json) {
@@ -35,7 +37,8 @@ class Module {
       ...json,
       completed: json.isCompleted || json.completed || false,
       perfectQuizzes: json.perfectQuizzes || 0,
-      progress: json.progress || 0
+      progress: json.progress || 0,
+      isLocked: json.isLocked || false
     });
   }
 
@@ -48,7 +51,8 @@ class Module {
       order: this.order,
       isCompleted: this.isCompleted(),
       perfectQuizzes: this.perfectQuizzes,
-      progress: this.progress
+      progress: this.progress,
+      isLocked: this.isLocked
     };
   }
 
@@ -71,6 +75,14 @@ class Module {
     if (this.progress >= 100) {
       this._completed = true;
     }
+  }
+
+  unlock() {
+    this.isLocked = false;
+  }
+
+  lock() {
+    this.isLocked = true;
   }
 }
 

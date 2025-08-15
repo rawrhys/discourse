@@ -186,7 +186,19 @@ const CourseLayout = () => {
         const module = newCourse.modules.find(m => m.lessons.some(l => l.id === lessonId));
         if (module) {
             const lesson = module.lessons.find(l => l.id === lessonId);
-            if (lesson) Object.assign(lesson, updates);
+            if (lesson) {
+                // Handle quizScore to quizScores conversion
+                if (updates.quizScore !== undefined) {
+                    if (!lesson.quizScores) {
+                        lesson.quizScores = {};
+                    }
+                    lesson.quizScores[user?.id] = updates.quizScore;
+                    // Also keep the old quizScore for backward compatibility
+                    lesson.quizScore = updates.quizScore;
+                } else {
+                    Object.assign(lesson, updates);
+                }
+            }
         }
         return newCourse;
     });

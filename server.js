@@ -1413,6 +1413,8 @@ Return only the JSON array, no other text.`;
     if (!courseData || !courseData.modules) return courseData;
     courseData.modules.forEach((module, mIdx) => {
       module.id = `module_${mIdx}_${Date.now()}`;
+      // Set module locking: first module is unlocked, others are locked
+      module.isLocked = mIdx > 0;
       if (module.lessons && Array.isArray(module.lessons)) {
         module.lessons.forEach((lesson, lIdx) => {
           lesson.id = `lesson_${mIdx}_${lIdx}_${Date.now()}`;
