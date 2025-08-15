@@ -1,5 +1,6 @@
 name: Deploy to VPS and Shared Hosting 
 
+# Trivial change to force cache clear
 on:
   push:
     branches:
