@@ -20,7 +20,9 @@ function shuffleQuestionsAndOptions(questions) {
   });
 }
 
-export default function QuizView({ questions = [], onComplete, lessonId }) {
+export default function QuizView({ questions = [], onComplete, lessonId, module }) {
+  console.log('[QuizView] Component rendered with props:', { questionsLength: questions?.length, lessonId, moduleId: module?.id });
+  
   const [selectedAnswers, setSelectedAnswers] = useState({});
   const [showResult, setShowResult] = useState(false);
   const [score, setScore] = useState(0);
@@ -150,7 +152,7 @@ export default function QuizView({ questions = [], onComplete, lessonId }) {
             disabled={Object.keys(selectedAnswers).length !== shuffledQuestions.length}
             className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Submit Quiz
+            Submit Quiz ({Object.keys(selectedAnswers).length}/{shuffledQuestions.length})
           </button>
         ) : (
           <div className="w-full">
