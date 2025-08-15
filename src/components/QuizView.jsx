@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import './QuizView.css';
-import { useApiWrapper } from '../services/api';
 
 // Helper to shuffle an array in place (Fisher-Yates)
 function shuffleArray(array) {
@@ -21,14 +20,13 @@ function shuffleQuestionsAndOptions(questions) {
   });
 }
 
-export default function QuizView({ questions = [], onComplete, lessonContent, lessonTitle, onRetakeQuiz, lessonId, courseId, moduleId, onModuleUnlocked }) {
+export default function QuizView({ questions = [], onComplete, lessonId, module, onModuleUpdate, checkAndUnlockNextModule }) {
   const [selectedAnswers, setSelectedAnswers] = useState({});
   const [showResult, setShowResult] = useState(false);
   const [score, setScore] = useState(0);
   const [shuffledQuestions, setShuffledQuestions] = useState([]);
   const [incorrectAnswers, setIncorrectAnswers] = useState({});
   const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false);
-  const { submitQuiz } = useApiWrapper();
 
   useEffect(() => {
     if (questions && questions.length > 0) {
@@ -47,7 +45,7 @@ export default function QuizView({ questions = [], onComplete, lessonContent, le
     }));
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (shuffledQuestions.length === 0) return;
 
     let correctCount = 0;
@@ -69,20 +67,24 @@ export default function QuizView({ questions = [], onComplete, lessonContent, le
     setShowResult(true);
     setIncorrectAnswers(incorrect);
 
-    try {
-      const response = await submitQuiz({ courseId, moduleId, lessonId, score: finalScore });
-      if (response.unlockedNextModule) {
-        onModuleUnlocked();
+    if (onComplete) {
+      onComplete(finalScore);
+    }
+
+    if (finalScore === 5) {
+      if (module && onModuleUpdate) {
+        const updatedModule = { ...module };
+        if (!updatedModule.perfectQuizzes) updatedModule.perfectQuizzes = 0;
+        updatedModule.perfectQuizzes += 1;
+        onModuleUpdate(updatedModule);
       }
-      if (onComplete) {
-        onComplete(finalScore);
+      if (checkAndUnlockNextModule) {
+        checkAndUnlockNextModule(lessonId);
       }
-    } catch (error) {
-      console.error('Failed to submit quiz score:', error);
     }
   };
 
-  const handleRetake = async () => {
+  const handleRetake = () => {
     setIsGeneratingQuestions(true);
     // This is where you would regenerate questions if needed
     setIsGeneratingQuestions(false);
@@ -90,7 +92,7 @@ export default function QuizView({ questions = [], onComplete, lessonContent, le
     setSelectedAnswers({});
     setShowResult(false);
     setScore(0);
-    if (onRetakeQuiz) onRetakeQuiz();
+    // if (onRetakeQuiz) onRetakeQuiz(); // onRetakeQuiz is removed from props
   };
 
   if (isGeneratingQuestions) {

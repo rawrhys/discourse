@@ -81,13 +81,7 @@ const api = {
             method: 'POST',
             body: JSON.stringify(course),
         }),
-
-        submitQuiz: (quizData) =>
-          apiClient('/api/quizzes/submit', {
-              method: 'POST',
-              body: JSON.stringify(quizData),
-          }),
-          
+    
     getDefinitionForTerm: aiService.getDefinitionForTerm,
     validateCourseStructure: aiService.validateCourseStructure,
     getUser: aiService.getUser,

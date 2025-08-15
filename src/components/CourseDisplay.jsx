@@ -39,6 +39,47 @@ const CourseDisplay = () => {
   const [unlockedModules, setUnlockedModules] = useState(new Set());
   const [showUnlockToast, setShowUnlockToast] = useState(false);
   const [unlockedModuleName, setUnlockedModuleName] = useState('');
+  
+  const handleQuizCompletion = useCallback((lessonId, score) => {
+    if (!course) return;
+
+    let updatedCourse = { ...course };
+    let moduleOfCompletedQuiz = null;
+
+    const newModules = updatedCourse.modules.map(module => {
+      const newLessons = module.lessons.map(lesson => {
+        if (lesson.id === lessonId) {
+          moduleOfCompletedQuiz = module;
+          return { ...lesson, quizScore: score };
+        }
+        return lesson;
+      });
+      return { ...module, lessons: newLessons };
+    });
+    
+    updatedCourse = { ...updatedCourse, modules: newModules };
+    setCourse(updatedCourse);
+
+    if (score === 5 && moduleOfCompletedQuiz) {
+        const allQuizzesPerfect = moduleOfCompletedQuiz.lessons.every(lesson => {
+            // Find the updated lesson in the new course state
+            const updatedLesson = newModules.flatMap(m => m.lessons).find(l => l.id === lesson.id);
+            return updatedLesson.quizScore === 5;
+        });
+
+        if (allQuizzesPerfect) {
+            const currentModuleIndex = course.modules.findIndex(m => m.id === moduleOfCompletedQuiz.id);
+            if (currentModuleIndex !== -1 && currentModuleIndex + 1 < course.modules.length) {
+                const nextModule = course.modules[currentModuleIndex + 1];
+                setUnlockedModules(prev => new Set(prev).add(nextModule.id));
+                setUnlockedModuleName(nextModule.title);
+                setShowUnlockToast(true);
+                setTimeout(() => setShowUnlockToast(false), 5000);
+            }
+        }
+    }
+  }, [course, setCourse]);
+
 
   const unlockAudioRef = useRef(null);
   useEffect(() => {
@@ -69,19 +110,6 @@ const CourseDisplay = () => {
       setUnlockedModules(initialUnlocked);
     }
   }, [course]);
-
-  const handleModuleUnlocked = useCallback(() => {
-    if (course && activeModuleId) {
-      const currentModuleIndex = course.modules.findIndex(m => m.id === activeModuleId);
-      if (currentModuleIndex !== -1 && currentModuleIndex + 1 < course.modules.length) {
-        const nextModule = course.modules[currentModuleIndex + 1];
-        setUnlockedModules(prev => new Set(prev).add(nextModule.id));
-        setUnlockedModuleName(nextModule.title);
-        setShowUnlockToast(true);
-        setTimeout(() => setShowUnlockToast(false), 5000);
-      }
-    }
-  }, [course, activeModuleId]);
   
   const handleModuleSelect = useCallback((moduleId) => {
     if (!course?.modules) return;
@@ -225,12 +253,25 @@ const CourseDisplay = () => {
             <QuizView
               key={currentLesson.id}
               questions={currentLesson.quiz}
-              onComplete={() => setShowQuiz(false)}
+              onComplete={(score) => {
+                handleQuizCompletion(currentLesson.id, score);
+                setShowQuiz(false);
+              }}
               lessonId={currentLesson.id}
-              courseId={courseId}
-              moduleId={activeModuleId}
-              onModuleUnlocked={handleModuleUnlocked}
-              lessonTitle={currentLesson.title}
+              module={currentModule}
+              onModuleUpdate={(updatedModule) => {
+                const newModules = course.modules.map(m => m.id === updatedModule.id ? updatedModule : m);
+                setCourse({ ...course, modules: newModules });
+              }}
+              checkAndUnlockNextModule={() => {
+                const currentModuleIndex = course.modules.findIndex(m => m.id === activeModuleId);
+                if (currentModule.lessons.every(l => l.quizScore === 5)) {
+                  if (currentModuleIndex + 1 < course.modules.length) {
+                    const nextModule = course.modules[currentModuleIndex + 1];
+                    setUnlockedModules(prev => new Set(prev).add(nextModule.id));
+                  }
+                }
+              }}
             />
           ) : (
             currentLesson ? (
