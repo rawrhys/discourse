@@ -134,11 +134,13 @@ const FlashcardRenderer = memo(({ flashcards }) => {
     }
   }, [flashcards?.length, throttledLog]);
 
-  console.log('[FlashcardRenderer] Received flashcards:', {
-    hasFlashcards: !!flashcards,
-    count: flashcards?.length,
-    data: flashcards
-  });
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[FlashcardRenderer] Received flashcards:', {
+      hasFlashcards: !!flashcards,
+      count: flashcards?.length,
+      data: flashcards
+    });
+  }
 
   if (!flashcards || flashcards.length === 0) {
     return (
@@ -328,13 +330,15 @@ const LessonView = ({
                  propLesson?.questions ||
                  propLesson?.assessment;
     
-    console.log('[LessonView] Quiz data extraction:', {
-      directQuiz: propLesson?.quiz,
-      contentQuiz: propLesson?.content?.quiz,
-      questions: propLesson?.questions,
-      assessment: propLesson?.assessment,
-      finalQuiz: quiz
-    });
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[LessonView] Quiz data extraction:', {
+        directQuiz: propLesson?.quiz,
+        contentQuiz: propLesson?.content?.quiz,
+        questions: propLesson?.questions,
+        assessment: propLesson?.assessment,
+        finalQuiz: quiz
+      });
+    }
     
     return quiz;
   }, [propLesson]);
@@ -346,13 +350,15 @@ const LessonView = ({
                       propLesson?.cards ||
                       propLesson?.studyCards;
     
-    console.log('[LessonView] Flashcard data extraction:', {
-      directFlashcards: propLesson?.flashcards,
-      contentFlashcards: propLesson?.content?.flashcards,
-      cards: propLesson?.cards,
-      studyCards: propLesson?.studyCards,
-      finalFlashcards: flashcards
-    });
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[LessonView] Flashcard data extraction:', {
+        directFlashcards: propLesson?.flashcards,
+        contentFlashcards: propLesson?.content?.flashcards,
+        cards: propLesson?.cards,
+        studyCards: propLesson?.studyCards,
+        finalFlashcards: flashcards
+      });
+    }
     
     return flashcards;
   }, [propLesson]);
@@ -361,7 +367,9 @@ const LessonView = ({
   const renderFlashcards = useCallback(() => {
     // Track flashcard rendering for performance monitoring
     performanceMonitor.trackFlashcardRender();
-    console.log('[LessonView] renderFlashcards called with data:', flashcardData);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[LessonView] renderFlashcards called with data:', flashcardData);
+    }
     return <FlashcardRenderer flashcards={flashcardData} />;
   }, [flashcardData]);
 
@@ -485,9 +493,13 @@ const LessonView = ({
 
   // Handle tab change
   const handleTabChange = useCallback((newView) => {
-    console.log('[LessonView] handleTabChange called with:', newView, 'current view:', view);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[LessonView] handleTabChange called with:', newView, 'current view:', view);
+    }
     setView(newView);
-    console.log('[LessonView] View state updated to:', newView);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[LessonView] View state updated to:', newView);
+    }
   }, [view]);
 
   // Image handling effect
@@ -697,7 +709,9 @@ const LessonView = ({
         <div className="flex space-x-2 mb-4">
           <button
             onClick={() => {
-              console.log('[LessonView] Switching to content view');
+              if (process.env.NODE_ENV === 'development') {
+                console.log('[LessonView] Switching to content view');
+              }
               handleTabChange('content');
             }}
             className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
@@ -710,7 +724,9 @@ const LessonView = ({
           </button>
           <button
             onClick={() => {
-              console.log('[LessonView] Switching to quiz view');
+              if (process.env.NODE_ENV === 'development') {
+                console.log('[LessonView] Switching to quiz view');
+              }
               handleTabChange('quiz');
             }}
             className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
@@ -724,7 +740,9 @@ const LessonView = ({
           </button>
           <button
             onClick={() => {
-              console.log('[LessonView] Switching to flashcards view');
+              if (process.env.NODE_ENV === 'development') {
+                console.log('[LessonView] Switching to flashcards view');
+              }
               handleTabChange('flashcards');
             }}
             className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
@@ -738,7 +756,9 @@ const LessonView = ({
           </button>
           <button
             onClick={() => {
-              console.log('[LessonView] TTS toggle clicked');
+              if (process.env.NODE_ENV === 'development') {
+                console.log('[LessonView] TTS toggle clicked');
+              }
               handleTTSToggle();
             }}
             className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${

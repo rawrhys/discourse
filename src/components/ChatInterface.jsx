@@ -59,7 +59,9 @@ const ChatInterface = ({ onGenerateCourse, isGenerating, generationProgress: par
   const handleProgressUpdate = (data) => {
     if (!data) return;
 
-    console.log('📡 [CHAT INTERFACE] Progress update:', data);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('📡 [CHAT INTERFACE] Progress update:', data);
+    }
 
     // Update streaming status
     if (data.message) {
@@ -129,13 +131,15 @@ const ChatInterface = ({ onGenerateCourse, isGenerating, generationProgress: par
     
     if (!prompt.trim() || localLoading) return; // Prevent submission if prompt is empty or already loading
 
-    console.log('🎯 [CHAT INTERFACE] Starting course generation request', {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🎯 [CHAT INTERFACE] Starting course generation request', {
       prompt: prompt,
       difficultyLevel: difficultyLevel,
       numModules: numModules,
       numLessonsPerModule: numLessonsPerModule,
       timestamp: new Date().toISOString()
     });
+  }
 
     // Set local loading state immediately for better UX feedback
     setLocalLoading(true);
@@ -149,10 +153,12 @@ const ChatInterface = ({ onGenerateCourse, isGenerating, generationProgress: par
       numLessonsPerModule: parseInt(numLessonsPerModule),
       onStream: (chunk) => {
         // Handle different types of streaming updates
-        console.log('📡 [CHAT INTERFACE] Received streaming chunk:', {
-          chunk: chunk,
-          timestamp: new Date().toISOString()
-        });
+        if (process.env.NODE_ENV === 'development') {
+          console.log('📡 [CHAT INTERFACE] Received streaming chunk:', {
+            chunk: chunk,
+            timestamp: new Date().toISOString()
+          });
+        }
 
         if (typeof chunk === 'object' && chunk.type) {
           // Handle structured progress updates

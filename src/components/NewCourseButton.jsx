@@ -6,9 +6,11 @@ const NewCourseButton = React.memo(() => {
   const navigate = useNavigate();
   
   const handleNewCourse = useCallback(() => {
+    if (process.env.NODE_ENV === 'development') {
     console.log('NewCourseButton: Clicked', {
-      timestamp: new Date().toISOString()
-    });
+              timestamp: new Date().toISOString()
+      });
+    }
     localStorage.removeItem('currentCourseId');
     navigate('/');
   }, [navigate]);

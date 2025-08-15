@@ -51,7 +51,8 @@ const CourseLayout = () => {
 
   // Add detailed logging for courseId
   useEffect(() => {
-    console.log('🔍 [COURSE LAYOUT] CourseId parameter received:', {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 [COURSE LAYOUT] CourseId parameter received:', {
       courseId: courseId,
       courseIdType: typeof courseId,
       courseIdLength: courseId?.length,
@@ -60,6 +61,7 @@ const CourseLayout = () => {
       params: Object.fromEntries(new URLSearchParams(location.search)),
       timestamp: new Date().toISOString()
     });
+  }
     
     // If courseId is "saved", this is wrong - log an error and try to redirect
     if (courseId === 'saved') {
@@ -74,13 +76,17 @@ const CourseLayout = () => {
       // Try to get the current course ID from localStorage as a fallback
       const storedCourseId = localStorage.getItem('currentCourseId');
       if (storedCourseId && storedCourseId !== 'saved') {
+        if (process.env.NODE_ENV === 'development') {
         console.log('🔄 [COURSE LAYOUT] Found stored courseId, redirecting:', storedCourseId);
+      }
         navigate(`/course/${storedCourseId}`, { replace: true });
         return;
       }
       
       // If no valid stored courseId, redirect to dashboard
-      console.log('🔄 [COURSE LAYOUT] No valid courseId found, redirecting to dashboard');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔄 [COURSE LAYOUT] No valid courseId found, redirecting to dashboard');
+      }
       navigate('/dashboard', { replace: true });
       return;
     }
@@ -93,25 +99,31 @@ const CourseLayout = () => {
     }
 
     const fetchCourse = async () => {
-      console.log('🎯 [COURSE LAYOUT] Starting to fetch course:', {
-        courseId: courseId,
-        timestamp: new Date().toISOString()
-      });
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🎯 [COURSE LAYOUT] Starting to fetch course:', {
+          courseId: courseId,
+          timestamp: new Date().toISOString()
+        });
+      }
       
       setLoading(true);
       setError(null);
       try {
-        console.log('📡 [COURSE LAYOUT] Making API call to get course:', courseId);
+        if (process.env.NODE_ENV === 'development') {
+          console.log('📡 [COURSE LAYOUT] Making API call to get course:', courseId);
+        }
         const courseData = await api.getCourse(courseId);
         
-        console.log('✅ [COURSE LAYOUT] Course data received:', {
-          courseId: courseData?.id,
-          title: courseData?.title,
-          modulesCount: courseData?.modules?.length,
-          hasModules: !!courseData?.modules,
-          userId: courseData?.userId,
-          timestamp: new Date().toISOString()
-        });
+        if (process.env.NODE_ENV === 'development') {
+          console.log('✅ [COURSE LAYOUT] Course data received:', {
+            courseId: courseData?.id,
+            title: courseData?.title,
+            modulesCount: courseData?.modules?.length,
+            hasModules: !!courseData?.modules,
+            userId: courseData?.userId,
+            timestamp: new Date().toISOString()
+          });
+        }
 
         if (!courseData) {
           throw new Error('No course data received from server');
@@ -128,11 +140,13 @@ const CourseLayout = () => {
         }
 
         courseData.modules = courseData.modules.map(moduleData => Module.fromJSON(moduleData));
-        console.log('🔄 [COURSE LAYOUT] Modules converted to Module instances:', {
-          modulesCount: courseData.modules.length,
-          firstModuleTitle: courseData.modules[0]?.title,
-          firstModuleLessons: courseData.modules[0]?.lessons?.length
-        });
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🔄 [COURSE LAYOUT] Modules converted to Module instances:', {
+            modulesCount: courseData.modules.length,
+            firstModuleTitle: courseData.modules[0]?.title,
+            firstModuleLessons: courseData.modules[0]?.lessons?.length
+          });
+        }
         
         setCourse(courseData);
         localStorage.setItem('currentCourseId', courseId);
@@ -149,7 +163,9 @@ const CourseLayout = () => {
         } else {
           const firstLesson = courseData.modules[0]?.lessons[0];
           if (firstLesson) {
-            console.log('🚀 [COURSE LAYOUT] Navigating to first lesson:', firstLesson.id);
+            if (process.env.NODE_ENV === 'development') {
+              console.log('🚀 [COURSE LAYOUT] Navigating to first lesson:', firstLesson.id);
+            }
             navigate(`/course/${courseData.id}/lesson/${firstLesson.id}`, { replace: true });
           } else {
             console.error('❌ [COURSE LAYOUT] No lessons found in first module');
@@ -166,12 +182,14 @@ const CourseLayout = () => {
         setError(error.message || 'Failed to load course');
         localStorage.removeItem('currentCourseId');
       } finally {
-        console.log('🏁 [COURSE LAYOUT] Course fetch completed:', {
-          courseId: courseId,
-          loading: false,
-          hasError: !!error,
-          timestamp: new Date().toISOString()
-        });
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🏁 [COURSE LAYOUT] Course fetch completed:', {
+            courseId: courseId,
+            loading: false,
+            hasError: !!error,
+            timestamp: new Date().toISOString()
+          });
+        }
         setLoading(false);
       }
     };
@@ -224,19 +242,23 @@ function App() {
   useApi(); // Activate the global auth error listener
 
   useEffect(() => {
-    console.log('🚀 [APP] Application loaded', {
-      pathname: location.pathname,
-      timestamp: new Date().toISOString()
-    });
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🚀 [APP] Application loaded', {
+        pathname: location.pathname,
+        timestamp: new Date().toISOString()
+      });
+    }
   }, [location.pathname]);
 
   // Log when course generation routes are accessed
   useEffect(() => {
     if (location.pathname.includes('/dashboard')) {
-      console.log('📊 [APP] Dashboard accessed', {
-        pathname: location.pathname,
-        timestamp: new Date().toISOString()
-      });
+      if (process.env.NODE_ENV === 'development') {
+        console.log('📊 [APP] Dashboard accessed', {
+          pathname: location.pathname,
+          timestamp: new Date().toISOString()
+        });
+      }
     }
   }, [location.pathname]);
 

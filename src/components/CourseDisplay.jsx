@@ -44,7 +44,9 @@ const CourseDisplay = () => {
   const handleQuizCompletion = useCallback(async (lessonId, score) => {
     if (!course) return;
 
-    console.log(`[QuizCompletion] Received score: ${score} for lessonId: ${lessonId}`);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[QuizCompletion] Received score: ${score} for lessonId: ${lessonId}`);
+    }
 
     let moduleOfCompletedQuizId = null;
 
@@ -64,28 +66,32 @@ const CourseDisplay = () => {
       return true;
     });
 
-    console.log(`[QuizCompletion] Frontend module completion check:`, {
-      moduleId: moduleOfCompletedQuizId,
-      moduleTitle: module?.title,
-      totalLessons: module?.lessons.length,
-      lessonsWithQuizzes: module?.lessons.filter(l => l.quiz && l.quiz.length > 0).length,
-      allQuizzesPerfect,
-      lessonScores: module?.lessons.map(l => ({
-        lessonId: l.id,
-        lessonTitle: l.title,
-        hasQuiz: !!(l.quiz && l.quiz.length > 0),
-        score: l.quizScores ? l.quizScores[user.id] : undefined
-      }))
-    });
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[QuizCompletion] Frontend module completion check:`, {
+        moduleId: moduleOfCompletedQuizId,
+        moduleTitle: module?.title,
+        totalLessons: module?.lessons.length,
+        lessonsWithQuizzes: module?.lessons.filter(l => l.quiz && l.quiz.length > 0).length,
+        allQuizzesPerfect,
+        lessonScores: module?.lessons.map(l => ({
+          lessonId: l.id,
+          lessonTitle: l.title,
+          hasQuiz: !!(l.quiz && l.quiz.length > 0),
+          score: l.quizScores ? l.quizScores[user.id] : undefined
+        }))
+      });
+    }
 
     // Call the backend API to submit the quiz score
     try {
       const token = localStorage.getItem('token');
-      console.log(`[QuizCompletion] Token check:`, {
-        hasToken: !!token,
-        tokenLength: token ? token.length : 0,
-        tokenPrefix: token ? token.substring(0, 10) + '...' : 'none'
-      });
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[QuizCompletion] Token check:`, {
+          hasToken: !!token,
+          tokenLength: token ? token.length : 0,
+          tokenPrefix: token ? token.substring(0, 10) + '...' : 'none'
+        });
+      }
       
       const response = await fetch(`${API_BASE_URL}/api/quizzes/submit`, {
         method: 'POST',
@@ -106,7 +112,9 @@ const CourseDisplay = () => {
       }
 
       const result = await response.json();
-      console.log(`[QuizCompletion] Backend response:`, result);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[QuizCompletion] Backend response:`, result);
+      }
 
       // Update local state with the backend response
       const newModules = course.modules.map(module => {
@@ -136,12 +144,16 @@ const CourseDisplay = () => {
 
           // Check if the backend unlocked the next module OR if frontend detects all quizzes perfect
       if (result.unlockedNextModule || allQuizzesPerfect) {
-        console.log(`[QuizCompletion] ${result.unlockedNextModule ? 'Backend' : 'Frontend'} detected module completion!`);
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[QuizCompletion] ${result.unlockedNextModule ? 'Backend' : 'Frontend'} detected module completion!`);
+        }
         const currentModuleIndex = course.modules.findIndex(m => m.id === moduleOfCompletedQuizId);
         
         if (currentModuleIndex !== -1 && currentModuleIndex + 1 < course.modules.length) {
           const nextModule = course.modules[currentModuleIndex + 1];
-          console.log(`[QuizCompletion] Unlocking module: ${nextModule.title}`);
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`[QuizCompletion] Unlocking module: ${nextModule.title}`);
+          }
           setUnlockedModules(prev => {
             const newUnlocked = new Set(prev);
             newUnlocked.add(nextModule.id);
@@ -151,12 +163,18 @@ const CourseDisplay = () => {
           setShowUnlockToast(true);
           setTimeout(() => setShowUnlockToast(false), 5000);
         } else {
-          console.log(`[QuizCompletion] No next module to unlock or module index not found`);
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`[QuizCompletion] No next module to unlock or module index not found`);
+          }
         }
       } else if (result.moduleCompleted) {
-        console.log(`[QuizCompletion] Module completed but no next module to unlock.`);
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[QuizCompletion] Module completed but no next module to unlock.`);
+        }
       } else {
-        console.log(`[QuizCompletion] Module not yet complete.`);
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[QuizCompletion] Module not yet complete.`);
+        }
       }
 
     } catch (error) {
@@ -297,7 +315,9 @@ const CourseDisplay = () => {
       currentLesson = currentModule.lessons.find(l => l.id === activeLessonId);
       // Update activeModuleId to match the found module
       if (activeModuleId !== currentModule.id) {
-        console.log(`[CourseDisplay] Updating activeModuleId from ${activeModuleId} to ${currentModule.id}`);
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[CourseDisplay] Updating activeModuleId from ${activeModuleId} to ${currentModule.id}`);
+        }
         setActiveModuleId(currentModule.id);
       }
     }
@@ -404,7 +424,9 @@ const CourseDisplay = () => {
               key={currentLesson.id}
               questions={currentLesson.quiz}
               onComplete={(score) => {
-                console.log(`[CourseDisplay] Quiz completed with score: ${score} for lesson: ${currentLesson.id}`);
+                if (process.env.NODE_ENV === 'development') {
+                  console.log(`[CourseDisplay] Quiz completed with score: ${score} for lesson: ${currentLesson.id}`);
+                }
                 handleQuizCompletion(currentLesson.id, score);
                 setShowQuiz(false);
               }}
@@ -427,7 +449,9 @@ const CourseDisplay = () => {
                   checkAndUnlockNextModule={(lessonId) => {
                     // This function is called when a perfect score is achieved in LessonView
                     // We need to trigger the same unlock logic as handleQuizCompletion
-                    console.log(`[CourseDisplay] checkAndUnlockNextModule called for lesson: ${lessonId}`);
+                    if (process.env.NODE_ENV === 'development') {
+                      console.log(`[CourseDisplay] checkAndUnlockNextModule called for lesson: ${lessonId}`);
+                    }
                     
                     // Call handleQuizCompletion to ensure consistent unlock logic
                     // We pass a dummy score of 5 since this is only called for perfect scores

@@ -21,7 +21,9 @@ function shuffleQuestionsAndOptions(questions) {
 }
 
 export default function QuizView({ questions = [], onComplete, lessonId, module }) {
-  console.log('[QuizView] Component rendered with props:', { questionsLength: questions?.length, lessonId, moduleId: module?.id });
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[QuizView] Component rendered with props:', { questionsLength: questions?.length, lessonId, moduleId: module?.id });
+  }
   
   const [selectedAnswers, setSelectedAnswers] = useState({});
   const [showResult, setShowResult] = useState(false);
@@ -41,7 +43,9 @@ export default function QuizView({ questions = [], onComplete, lessonId, module 
 
   const handleAnswerSelect = (questionIndex, answer) => {
     if (showResult) return;
-    console.log(`[QuizView] Answer selected for question ${questionIndex}:`, answer);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[QuizView] Answer selected for question ${questionIndex}:`, answer);
+    }
     setSelectedAnswers(prev => ({
       ...prev,
       [questionIndex]: answer
@@ -49,7 +53,9 @@ export default function QuizView({ questions = [], onComplete, lessonId, module 
   };
 
   const handleSubmit = () => {
-    console.log('[QuizView] handleSubmit called.');
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[QuizView] handleSubmit called.');
+    }
     if (shuffledQuestions.length === 0) return;
 
     let correctCount = 0;
@@ -72,13 +78,15 @@ export default function QuizView({ questions = [], onComplete, lessonId, module 
     setIncorrectAnswers(incorrect);
 
     if (onComplete) {
-      console.log(`[QuizView] Completing quiz with score: ${finalScore}/5`, {
-        lessonId,
-        moduleId: module?.id,
-        score: finalScore,
-        correctCount,
-        totalQuestions: shuffledQuestions.length
-      });
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[QuizView] Completing quiz with score: ${finalScore}/5`, {
+          lessonId,
+          moduleId: module?.id,
+          score: finalScore,
+          correctCount,
+          totalQuestions: shuffledQuestions.length
+        });
+      }
       onComplete(finalScore);
     }
   };
