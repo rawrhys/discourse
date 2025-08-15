@@ -26,13 +26,15 @@ export const AuthProvider = ({ children }) => {
       return null;
     } catch (error) {
       console.error('Failed to refresh user:', error);
-      // Do not clear token on server-side errors (5xx). Only clear for auth errors.
-      if (error && (error.status === 401 || error.status === 403)) {
+      
+      // Handle cases where the server returns a non-JSON response (e.g., HTML error page from a proxy)
+      // for what should be a JSON endpoint. This is a common issue with authentication checks.
+      if (error.message === 'Server returned invalid JSON response' || (error && (error.status === 401 || error.status === 403))) {
         localStorage.removeItem('token');
         setUser(null);
       } else {
-        // Keep token; just log. UI can retry later.
-        console.warn('Keeping auth token despite refresh error (likely server issue)');
+        // Keep token; just log. The UI can handle retries for server-side (5xx) or network errors.
+        console.warn('Keeping auth token despite refresh error (likely a temporary server issue)');
       }
       return null;
     }
@@ -54,8 +56,8 @@ export const AuthProvider = ({ children }) => {
           }
         } catch (error) {
           console.error('Failed to fetch user:', error);
-          // Only clear token for explicit auth failures
-          if (error && (error.status === 401 || error.status === 403)) {
+          // Only clear token for explicit auth failures or invalid server responses on this critical path.
+          if (error.message === 'Server returned invalid JSON response' || (error && (error.status === 401 || error.status === 403))) {
             localStorage.removeItem('token');
             setUser(null);
           } else {
