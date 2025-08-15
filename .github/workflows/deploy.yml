@@ -42,8 +42,25 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Verify latest changes
+        run: |
+          echo "=== Checking for latest changes ==="
+          git log --oneline -5
+          echo "=== Checking CourseDisplay.jsx ==="
+          grep -n "isLocked" src/components/CourseDisplay.jsx || echo "isLocked not found in CourseDisplay.jsx"
+          echo "=== Checking Module.js ==="
+          grep -n "isLocked" src/models/Module.js || echo "isLocked not found in Module.js"
+
       - name: Build project
         run: npm run build
+
+      - name: List dist contents
+        run: |
+          echo "=== Dist folder contents ==="
+          ls -la dist/
+          echo "=== Assets folder contents ==="
+          ls -la dist/assets/
+          echo "=== Build completed successfully ==="
 
       - name: FTP Deploy
         uses: SamKirkland/FTP-Deploy-Action@4.3.3
@@ -52,5 +69,6 @@ jobs:
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           local-dir: ./dist/
-          server-dir: public_html/
+          server-dir: public/
           port: 21
+          dangerous-clean-slate: true
