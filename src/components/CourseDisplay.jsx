@@ -192,10 +192,20 @@ const CourseDisplay = () => {
 
   const unlockAudioRef = useRef(null);
   useEffect(() => {
+    // Only create audio if the file exists to prevent errors
     const audio = new Audio('/sounds/unlock.mp3');
     audio.preload = 'auto';
     audio.volume = 0.7;
-    unlockAudioRef.current = audio;
+    
+    // Handle audio loading errors gracefully
+    audio.addEventListener('error', (e) => {
+      console.warn('[CourseDisplay] Unlock sound file not found, audio disabled');
+      unlockAudioRef.current = null;
+    });
+    
+    audio.addEventListener('canplaythrough', () => {
+      unlockAudioRef.current = audio;
+    });
   }, []);
 
   const prevUnlockedModules = usePrevious(unlockedModules);
@@ -203,7 +213,12 @@ const CourseDisplay = () => {
   useEffect(() => {
     if (prevUnlockedModules && unlockedModules.size > prevUnlockedModules.size) {
       if (unlockAudioRef.current) {
-        unlockAudioRef.current.play().catch(e => console.error("Audio play failed", e));
+        unlockAudioRef.current.play().catch(e => {
+          // Only log if it's not a "not supported" error (which is expected if no audio file)
+          if (!e.message.includes('NotSupportedError')) {
+            console.warn('[CourseDisplay] Audio play failed:', e.message);
+          }
+        });
       }
     }
   }, [unlockedModules, prevUnlockedModules]);
@@ -288,15 +303,16 @@ const CourseDisplay = () => {
     }
   }
   
-  // Debug logging to help identify the issue
-  console.log('[CourseDisplay] Module/Lesson Debug:', {
-    activeModuleId,
-    activeLessonId,
-    currentModule: currentModule ? { id: currentModule.id, title: currentModule.title } : null,
-    currentLesson: currentLesson ? { id: currentLesson.id, title: currentLesson.title } : null,
-    totalModules: course?.modules?.length,
-    moduleIds: course?.modules?.map(m => ({ id: m.id, title: m.title }))
-  });
+  // Debug logging to help identify the issue (only log once per render cycle)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[CourseDisplay] Module/Lesson Debug:', {
+      activeModuleId,
+      activeLessonId,
+      currentModule: currentModule ? { id: currentModule.id, title: currentModule.title } : null,
+      currentLesson: currentLesson ? { id: currentLesson.id, title: currentLesson.title } : null,
+      totalModules: course?.modules?.length
+    });
+  }
 
   const allImageUrls = useMemo(() => {
     if (!course) return [];

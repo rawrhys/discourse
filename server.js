@@ -1421,7 +1421,34 @@ Return only the JSON array, no other text.`;
         });
       }
     });
+    
+    // Validate that all modules have proper isLocked properties
+    this.validateModuleLocking(courseData);
+    
     return courseData;
+  }
+
+  validateModuleLocking(courseData) {
+    if (!courseData || !courseData.modules) return;
+    
+    courseData.modules.forEach((module, mIdx) => {
+      if (module.isLocked === undefined) {
+        console.warn(`[AIService] Module ${mIdx} missing isLocked property - fixing automatically`);
+        module.isLocked = mIdx > 0;
+      }
+      
+      if (mIdx === 0 && module.isLocked !== false) {
+        console.warn(`[AIService] First module should be unlocked - fixing automatically`);
+        module.isLocked = false;
+      }
+      
+      if (mIdx > 0 && module.isLocked !== true) {
+        console.warn(`[AIService] Module ${mIdx} should be locked - fixing automatically`);
+        module.isLocked = true;
+      }
+    });
+    
+    console.log(`[AIService] Module locking validation complete for ${courseData.modules.length} modules`);
   }
   
   constructQuizPrompt(content, lessonTitle) {
@@ -2374,6 +2401,16 @@ app.post('/api/courses/generate', authenticateToken, async (req, res, next) => {
         
         if (!course || !course.title) {
             throw new Error('Failed to generate course structure');
+        }
+
+        // Final validation: ensure all modules have proper isLocked properties
+        if (course.modules && Array.isArray(course.modules)) {
+          course.modules.forEach((module, mIdx) => {
+            if (module.isLocked === undefined) {
+              console.warn(`[COURSE_GENERATION] Module ${mIdx} missing isLocked - setting to ${mIdx > 0}`);
+              module.isLocked = mIdx > 0;
+            }
+          });
         }
 
         // Assign user ID to the course

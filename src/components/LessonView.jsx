@@ -419,11 +419,12 @@ const LessonView = ({
 
   // Memoized quiz view to prevent unnecessary re-renders
   const memoizedQuizView = useMemo(() => {
-    console.log('[LessonView] Quiz data check:', {
-      hasQuiz: !!quizData,
-      quizLength: quizData?.length,
-      quizData: quizData
-    });
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[LessonView] Quiz data check:', {
+        hasQuiz: !!quizData,
+        quizLength: quizData?.length
+      });
+    }
     
     if (!quizData || quizData.length === 0) {
       console.warn('[LessonView] No quiz data available for lesson:', propLesson?.title);
@@ -596,25 +597,19 @@ const LessonView = ({
     );
   }
 
-  // Debug lesson data
-  console.log('[LessonView] Lesson data:', {
-    id: propLesson?.id,
-    title: propLesson?.title,
-    hasContent: !!propLesson?.content,
-    hasQuiz: !!propLesson?.quiz,
-    quizLength: propLesson?.quiz?.length,
-    hasFlashcards: !!propLesson?.flashcards,
-    flashcardLength: propLesson?.flashcards?.length,
-    view: view,
-    // Detailed quiz data
-    quizData: propLesson?.quiz,
-    // Detailed flashcard data
-    flashcardData: propLesson?.flashcards,
-    // Content structure
-    contentStructure: propLesson?.content ? Object.keys(propLesson.content) : 'No content',
-    // Full lesson object for debugging
-    fullLesson: propLesson
-  });
+  // Debug lesson data (only in development)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[LessonView] Lesson data:', {
+      id: propLesson?.id,
+      title: propLesson?.title,
+      hasContent: !!propLesson?.content,
+      hasQuiz: !!propLesson?.quiz,
+      quizLength: propLesson?.quiz?.length,
+      hasFlashcards: !!propLesson?.flashcards,
+      flashcardLength: propLesson?.flashcards?.length,
+      view: view
+    });
+  }
 
   // Loading state
   if (isLoading) {
@@ -763,19 +758,16 @@ const LessonView = ({
           <Suspense fallback={<LoadingSpinner />}>
             {view === 'content' && (
               <div>
-                {console.log('[LessonView] Rendering content view')}
                 {memoizedContent}
               </div>
             )}
             {view === 'quiz' && (
               <div>
-                {console.log('[LessonView] Rendering quiz view')}
                 {memoizedQuizView}
               </div>
             )}
             {view === 'flashcards' && (
               <div>
-                {console.log('[LessonView] Rendering flashcards view')}
                 {renderFlashcards()}
               </div>
             )}

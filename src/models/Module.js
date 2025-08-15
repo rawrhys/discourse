@@ -33,12 +33,21 @@ class Module {
   }
 
   static fromJSON(json) {
+    // Ensure isLocked is always set correctly
+    let isLocked = json.isLocked;
+    if (isLocked === undefined) {
+      // If isLocked is undefined, we can't determine the correct value from JSON alone
+      // This should be set during course generation, but we'll default to false for safety
+      console.warn('[Module] isLocked property missing from JSON, defaulting to false');
+      isLocked = false;
+    }
+    
     return new Module({
       ...json,
       completed: json.isCompleted || json.completed || false,
       perfectQuizzes: json.perfectQuizzes || 0,
       progress: json.progress || 0,
-      isLocked: json.isLocked || false
+      isLocked: isLocked
     });
   }
 
@@ -83,6 +92,14 @@ class Module {
 
   lock() {
     this.isLocked = true;
+  }
+
+  // Static method to create a module with proper locking based on index
+  static createWithLocking(moduleData, index) {
+    return new Module({
+      ...moduleData,
+      isLocked: index > 0 // First module (index 0) unlocked, others locked
+    });
   }
 }
 
