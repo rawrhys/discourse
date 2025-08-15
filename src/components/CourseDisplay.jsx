@@ -354,6 +354,11 @@ const CourseDisplay = () => {
                   onNextLesson={handleNextLesson}
                   onPreviousLesson={handlePreviousLesson}
                   onTakeQuiz={() => setShowQuiz(true)}
+                  checkAndUnlockNextModule={(lessonId) => {
+                    // This function is called when a perfect score is achieved
+                    // The actual unlocking logic is handled in handleQuizCompletion
+                    console.log(`[CourseDisplay] checkAndUnlockNextModule called for lesson: ${lessonId}`);
+                  }}
               />
             ) : (
               <div className="text-center text-gray-500 pt-10">
