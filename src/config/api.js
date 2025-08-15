@@ -15,8 +15,8 @@ const inferDefaultBaseUrl = () => {
   return '';
 };
 
-// Force API_BASE_URL to use correct endpoint for production
-let resolvedBaseUrl = 'https://thediscourse.ai/api';
+// Force API_BASE_URL to use correct endpoint for production (no trailing /api)
+let resolvedBaseUrl = 'https://thediscourse.ai';
 
 export const API_BASE_URL = resolvedBaseUrl;
 
@@ -33,7 +33,7 @@ export const testBackendConnection = async () => {
   console.log('🔍 [CONNECTION TEST] Testing backend connection...');
   
   try {
-    const response = await fetch(`${API_BASE_URL}/health`, {
+    const response = await fetch(`${API_BASE_URL}/api/health`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
