@@ -28,14 +28,20 @@ const SimpleImageService = {
   },
 
   // Simple image search - just make the API call
-  async search(lessonTitle, content = '', usedImageTitles = [], usedImageUrls = [], courseId = undefined, lessonId = undefined) {
+  async search(lessonTitle, content = '', usedImageTitles = [], usedImageUrls = [], courseId = undefined, lessonId = undefined, forceUnique = false) {
     try {
       const searchUrl = `${API_BASE_URL}/api/image-search/search`;
       
-      console.log('[SimpleImageService] Searching for:', lessonTitle);
+      let finalQuery = lessonTitle;
+      if (forceUnique) {
+        const uniqueStr = Math.random().toString(36).substring(2, 10);
+        finalQuery = `${lessonTitle} ${uniqueStr}`;
+      }
+      
+      console.log('[SimpleImageService] Searching for:', finalQuery);
       
       const requestBody = { 
-        lessonTitle, 
+        lessonTitle: finalQuery, 
         content, 
         usedImageTitles, 
         usedImageUrls, 
@@ -82,7 +88,7 @@ const SimpleImageService = {
   // Simple search with context
   searchWithContext: function(lessonTitle, courseSubject, content, usedImageTitles, usedImageUrls, courseId, lessonId) {
     var contextualQuery = this.createContextAwareQuery(lessonTitle, courseSubject, content);
-    return this.search(contextualQuery, content, usedImageTitles, usedImageUrls, courseId, lessonId);
+    return this.search(contextualQuery, content, usedImageTitles, usedImageUrls, courseId, lessonId, true);
   },
 
   // Get image source for debugging
@@ -99,62 +105,6 @@ const SimpleImageService = {
       return 'local';
     }
     return 'unknown';
-  },
-
-  // Find duplicate images
-  findDuplicateImages: function(course) {
-    if (!course || !course.modules) return [];
-    var imageMap = new Map();
-    var duplicates = [];
-    for (var i = 0; i < course.modules.length; i++) {
-      var module = course.modules[i];
-      for (var j = 0; j < (module.lessons || []).length; j++) {
-        var lesson = module.lessons[j];
-        var imageUrl = (lesson.image && lesson.image.imageUrl) || (lesson.image && lesson.image.url);
-        if (imageUrl) {
-          if (!imageMap.has(imageUrl)) {
-            imageMap.set(imageUrl, []);
-          }
-          imageMap.get(imageUrl).push({
-            moduleTitle: module.title,
-            lessonTitle: lesson.title,
-            lessonId: lesson.id,
-            moduleId: module.id
-          });
-        }
-      }
-    }
-    imageMap.forEach(function(lessons, url) {
-      if (lessons.length > 1) {
-        duplicates.push({
-          url: url,
-          usageCount: lessons.length,
-          lessons: lessons
-        });
-      }
-    });
-    return duplicates;
-  },
-
-  // Log duplicate image analysis
-  logDuplicateImageAnalysis: function(course) {
-    var duplicates = this.findDuplicateImages(course);
-    if (duplicates.length > 0) {
-      console.group('[SimpleImageService] Duplicate Image Analysis');
-      console.warn('Found ' + duplicates.length + ' images used multiple times:');
-      duplicates.forEach(function(dup, index) {
-        console.group('Duplicate ' + (index + 1) + ': ' + dup.url);
-        console.log('Used ' + dup.usageCount + ' times:');
-        dup.lessons.forEach(function(lesson) {
-          console.log('• ' + lesson.moduleTitle + ' > ' + lesson.lessonTitle);
-        });
-        console.groupEnd();
-      });
-      console.groupEnd();
-    } else {
-      console.log('[SimpleImageService] No duplicate images found - all images are unique!');
-    }
-    return duplicates;
   },
 
   // Create context-aware search query
