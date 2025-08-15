@@ -240,6 +240,13 @@ const apiClient = async (url, options = {}) => {
         logger.info('✅ [API SUCCESS] Empty response body, returning null.');
         return null;
     }
+
+    // If backend deliberately returns the JSON literal "null",
+    // treat it as a valid null value rather than attempting to parse and erroring
+    if (responseText.trim().toLowerCase() === 'null') {
+        logger.info('✅ [API SUCCESS] Literal null response, returning null.');
+        return null;
+    }
     const responseData = JsonParser.RobustJsonParser.parse(responseText, 'API Response');
     // The parser returns null on failure. We need to distinguish a failed parse
     // from a successful parse of a literal "null".
