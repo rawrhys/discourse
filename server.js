@@ -461,66 +461,66 @@ class RobustJsonParser {
     // Convert to string if needed
     let text = typeof input === 'string' ? input : String(input);
     
-    console.log(`[${context}] Attempting to parse JSON: ${text.substring(0, 200)}...`);
+  
 
     // Strategy 1: Direct JSON parsing
     try {
       const result = JSON.parse(text);
-      console.log(`[${context}] Direct JSON parsing successful`);
+
       return result;
     } catch (error) {
-      console.log(`[${context}] Direct JSON parsing failed: ${error.message}`);
+      
     }
 
     // Strategy 2: Handle "data:" prefixes
     const cleanedText = this.removeDataPrefix(text);
     if (cleanedText !== text) {
-      console.log(`[${context}] Removed "data:" prefix, attempting to parse cleaned text`);
+
       try {
         const result = JSON.parse(cleanedText);
-        console.log(`[${context}] JSON parsing successful after removing "data:" prefix`);
+        
         return result;
       } catch (error) {
-        console.log(`[${context}] JSON parsing failed after removing "data:" prefix: ${error.message}`);
+        
       }
     }
 
     // Strategy 3: Extract JSON from markdown code blocks
     const markdownJson = this.extractJsonFromMarkdown(text);
     if (markdownJson) {
-      console.log(`[${context}] Extracted JSON from markdown, attempting to parse`);
+
       try {
         const result = JSON.parse(markdownJson);
-        console.log(`[${context}] JSON parsing successful from markdown extraction`);
+        
         return result;
       } catch (error) {
-        console.log(`[${context}] JSON parsing failed from markdown extraction: ${error.message}`);
+        
       }
     }
 
     // Strategy 4: Find and extract JSON object/array
     const extractedJson = this.extractJsonFromText(text);
     if (extractedJson) {
-      console.log(`[${context}] Extracted JSON from text, attempting to parse`);
+
       try {
         const result = JSON.parse(extractedJson);
-        console.log(`[${context}] JSON parsing successful from text extraction`);
+        
         return result;
       } catch (error) {
-        console.log(`[${context}] JSON parsing failed from text extraction: ${error.message}`);
+        
       }
     }
 
     // Strategy 5: Try to fix common JSON issues
     const fixedJson = this.attemptJsonFix(text);
     if (fixedJson) {
-      console.log(`[${context}] Attempting to parse fixed JSON`);
+
       try {
         const result = JSON.parse(fixedJson);
-        console.log(`[${context}] JSON parsing successful after fixing`);
+        
         return result;
       } catch (error) {
-        console.log(`[${context}] JSON parsing failed after fixing: ${error.message}`);
+        
       }
     }
 
@@ -665,7 +665,7 @@ class AIService {
         const cleanPrompt = prompt.trim();
         const actualMaxTokens = this.maxTokens[intent] || this.maxTokens.course;
         
-        console.log(`[AIService] Making API request for ${intent} (attempt ${attempt + 1})`);
+    
         
         const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
           method: 'POST',
@@ -692,7 +692,7 @@ class AIService {
           }
           const errorText = await response.text();
           console.error(`[AIService] API request failed with status ${response.status}: ${errorText}`);
-          console.log(`[AIService] Retrying in 3 seconds...`);
+  
           await new Promise(resolve => setTimeout(resolve, 3000));
           attempt++;
           continue;
@@ -700,7 +700,9 @@ class AIService {
 
         // Read response as text first to handle potential "data:" prefixes
         const responseText = await response.text();
+        if (process.env.NODE_ENV === 'development') {
         console.log(`[AIService] Raw response received: ${responseText.substring(0, 200)}...`);
+      }
         
         // Use robust JSON parser with retry mechanism for parsing failures
         let data = null;
@@ -1087,7 +1089,7 @@ Context: "${context.substring(0, 1000)}..."`;
     const usedImageTitles = new Set(); // Track used image titles for this course
     const usedImageUrls = new Set();   // Track used image URLs for this course
     try {
-      console.log(`[AIService] Starting course generation for "${topic}" with ${numModules} modules`);
+  
       
       const coursePrompt = this.constructCoursePrompt(topic, difficulty, numModules, numLessonsPerModule);
       const courseStructure = await this._makeApiRequest(coursePrompt, 'course', true);
@@ -1097,13 +1099,13 @@ Context: "${context.substring(0, 1000)}..."`;
       }
       
       courseWithIds = this.assignIdsToModulesAndLessons(courseStructure);
-      console.log(`[AIService] Course structure generated, processing ${courseWithIds.modules.length} modules`);
+  
 
       for (let mIdx = 0; mIdx < courseWithIds.modules.length; mIdx++) {
         const module = courseWithIds.modules[mIdx];
         if (!module.lessons) continue;
         
-        console.log(`[AIService] Processing module ${mIdx + 1}/${courseWithIds.modules.length}: ${module.title}`);
+  
         
         // Send module start progress update
         if (global.progressCallback) {
@@ -1117,7 +1119,7 @@ Context: "${context.substring(0, 1000)}..."`;
         
         for (let lIdx = 0; lIdx < module.lessons.length; lIdx++) {
           const lesson = module.lessons[lIdx];
-          console.log(`[AIService] Processing lesson ${lIdx + 1}/${module.lessons.length}: ${lesson.title}`);
+  
           
           // Send lesson start progress update
           if (global.progressCallback) {
@@ -1152,7 +1154,7 @@ Context: "${context.substring(0, 1000)}..."`;
               };
             }
 
-            console.log(`[AIService] Lesson content generated successfully for: ${lesson.title}`);
+    
             
             // Attempt to fetch an illustrative image for the lesson (with cache and relaxed retry)
             try {
@@ -1201,7 +1203,7 @@ Context: "${context.substring(0, 1000)}..."`;
 
             // Generate quiz with infinite retries
             try {
-              console.log(`[AIService] Generating quiz for lesson: ${lesson.title}`);
+      
               
               // Send quiz generation start progress update
               if (global.progressCallback) {
@@ -1213,7 +1215,7 @@ Context: "${context.substring(0, 1000)}..."`;
               
               const quizQuestions = await this.generateQuiz(lesson.content, lesson.title);
               lesson.quiz = quizQuestions || [];
-              console.log(`[AIService] Quiz generated successfully for: ${lesson.title}`);
+      
               
               // Send quiz complete progress update
               if (global.progressCallback) {

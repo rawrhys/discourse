@@ -1,0 +1,3 @@
+[33m4542fb0[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Add smiley face to test YAML deployment
+[33mc5ff75e[m Reduce console logging - wrap all debug logs in development mode checks
+[33mca1c518[m Fix YAML deployment - update FTP server directory and add build verification steps

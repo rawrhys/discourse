@@ -1,0 +1,3 @@
+YAML Deployment Test - $(date)
+This file was created to test if the YAML deployment pipeline is working.
+If you see this file on your FTP server, the deployment is working!
