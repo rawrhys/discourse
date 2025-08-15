@@ -11,7 +11,7 @@ A modern React application template with Vite, Tailwind CSS, and more.
 - 🚀 Optimized for production
 
 ## Getting Started
-       hi there
+       
 1. Clone the repository
 2. Install dependencies: `npm install`
 3. Start development server: `npm run dev`
