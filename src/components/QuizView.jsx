@@ -72,6 +72,13 @@ export default function QuizView({ questions = [], onComplete, lessonId, module 
     setIncorrectAnswers(incorrect);
 
     if (onComplete) {
+      console.log(`[QuizView] Completing quiz with score: ${finalScore}/5`, {
+        lessonId,
+        moduleId: module?.id,
+        score: finalScore,
+        correctCount,
+        totalQuestions: shuffledQuestions.length
+      });
       onComplete(finalScore);
     }
   };

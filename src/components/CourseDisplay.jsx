@@ -53,7 +53,13 @@ const CourseDisplay = () => {
       const newLessons = module.lessons.map(lesson => {
         if (lesson.id === lessonId) {
           lessonFound = true;
-          return { ...lesson, quizScore: score };
+          return {
+            ...lesson,
+            quizScores: {
+              ...(lesson.quizScores || {}),
+              [user.id]: score
+            }
+          };
         }
         return lesson;
       });
