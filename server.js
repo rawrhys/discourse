@@ -2385,7 +2385,17 @@ app.post('/api/quizzes/submit', authenticateToken, async (req, res) => {
   const { courseId, moduleId, lessonId, score } = req.body;
   const userId = req.user.id;
 
+  console.log(`[QUIZ_SUBMIT] Received quiz submission:`, {
+    courseId,
+    moduleId,
+    lessonId,
+    score,
+    userId,
+    timestamp: new Date().toISOString()
+  });
+
   if (!courseId || !moduleId || !lessonId || score === undefined) {
+    console.log(`[QUIZ_SUBMIT] Missing required fields:`, { courseId, moduleId, lessonId, score });
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
@@ -2426,19 +2436,55 @@ app.post('/api/quizzes/submit', authenticateToken, async (req, res) => {
       return true;
     });
 
+    console.log(`[QUIZ_SUBMIT] Module completion check:`, {
+      moduleId,
+      moduleTitle: module.title,
+      totalLessons: module.lessons.length,
+      lessonsWithQuizzes: module.lessons.filter(l => l.quiz && l.quiz.length > 0).length,
+      allQuizzesPerfect,
+      lessonScores: module.lessons.map(l => ({
+        lessonId: l.id,
+        lessonTitle: l.title,
+        hasQuiz: !!(l.quiz && l.quiz.length > 0),
+        score: l.quizScores ? l.quizScores[userId] : undefined
+      }))
+    });
+
     let unlockedNextModule = false;
     if (allQuizzesPerfect) {
+      console.log(`[QUIZ_SUBMIT] All quizzes perfect! Unlocking next module...`);
       module.isCompleted = true; // Mark module as completed
       const currentModuleIndex = course.modules.findIndex(m => m.id === moduleId);
       
+      console.log(`[QUIZ_SUBMIT] Module index check:`, {
+        currentModuleIndex,
+        totalModules: course.modules.length,
+        hasNextModule: currentModuleIndex !== -1 && currentModuleIndex + 1 < course.modules.length
+      });
+      
       // Unlock the next module if there is one
       if (currentModuleIndex !== -1 && currentModuleIndex + 1 < course.modules.length) {
-        course.modules[currentModuleIndex + 1].isLocked = false;
+        const nextModule = course.modules[currentModuleIndex + 1];
+        nextModule.isLocked = false;
         unlockedNextModule = true;
+        console.log(`[QUIZ_SUBMIT] Successfully unlocked next module:`, {
+          nextModuleId: nextModule.id,
+          nextModuleTitle: nextModule.title
+        });
+      } else {
+        console.log(`[QUIZ_SUBMIT] No next module to unlock or module index not found`);
       }
+    } else {
+      console.log(`[QUIZ_SUBMIT] Module not yet complete - not all quizzes are perfect`);
     }
 
     await db.write();
+
+    console.log(`[QUIZ_SUBMIT] Sending response:`, {
+      unlockedNextModule,
+      moduleCompleted: allQuizzesPerfect,
+      message: 'Quiz score submitted successfully'
+    });
 
     res.json({
       message: 'Quiz score submitted successfully',
@@ -3671,64 +3717,6 @@ app.get('*', (req, res, next) => {
   }
 });
 
-app.post('/api/quizzes/submit', authenticateToken, async (req, res) => {
-  const { courseId, moduleId, lessonId, score } = req.body;
-  const userId = req.user.id;
 
-  if (!courseId || !moduleId || !lessonId || score === undefined) {
-    return res.status(400).json({ error: 'Missing required fields' });
-  }
-
-  try {
-    await db.read();
-    const course = db.data.courses.find(c => c.id === courseId && c.userId === userId);
-
-    if (!course) {
-      return res.status(404).json({ error: 'Course not found' });
-    }
-
-    const module = course.modules.find(m => m.id === moduleId);
-    if (!module) {
-      return res.status(404).json({ error: 'Module not found' });
-    }
-
-    const lesson = module.lessons.find(l => l.id === lessonId);
-    if (!lesson) {
-      return res.status(404).json({ error: 'Lesson not found' });
-    }
-
-    // Update or add the quiz score for the lesson
-    if (!lesson.quizScores) {
-      lesson.quizScores = {};
-    }
-    lesson.quizScores[userId] = score;
-    lesson.lastQuizScore = score; // Keep track of the last score
-
-    // Check if the module is now complete
-    const allQuizzesPerfect = module.lessons.every(l => l.quiz && l.quiz.length > 0 ? (l.quizScores && l.quizScores[userId] === 5) : true);
-
-    let unlockedNextModule = false;
-    if (allQuizzesPerfect) {
-      module.isCompleted = true; // Mark module as completed
-      const currentModuleIndex = course.modules.findIndex(m => m.id === moduleId);
-      if (currentModuleIndex !== -1 && currentModuleIndex + 1 < course.modules.length) {
-        course.modules[currentModuleIndex + 1].isLocked = false;
-        unlockedNextModule = true;
-      }
-    }
-
-    await db.write();
-
-    res.json({
-      message: 'Quiz score submitted successfully',
-      unlockedNextModule,
-      moduleCompleted: allQuizzesPerfect
-    });
-
-  } catch (error) {
-    console.error('Error submitting quiz score:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
 
 export { app, db, startServer };
