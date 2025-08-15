@@ -8,7 +8,7 @@ import LoadingIndicator from './LoadingIndicator';
 import logger from '../utils/logger';
 
 const Dashboard = () => {
-  const { user, logout, refreshUser } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [savedCourses, setSavedCourses] = useState([]);
   const [showNewCourseForm, setShowNewCourseForm] = useState(false);
@@ -35,22 +35,6 @@ const Dashboard = () => {
     message: '',
     details: []
   });
-
-  // Function to refresh user data and credits
-  const refreshUserData = useCallback(async () => {
-    try {
-      logger.debug('🔄 [DASHBOARD] Refreshing user data');
-      const refreshedUser = await refreshUser();
-      if (refreshedUser) {
-        logger.debug('✅ [DASHBOARD] User data refreshed successfully');
-      } else {
-        logger.warn('⚠️ [DASHBOARD] User refresh returned null');
-      }
-    } catch (error) {
-      logger.error('❌ [DASHBOARD] Failed to refresh user data:', error);
-      // Don't throw error, just log it
-    }
-  }, [refreshUser]);
 
   // Get the user's name from the user object
   const userName = user?.name || user?.email || 'Guest';
@@ -447,14 +431,12 @@ const Dashboard = () => {
           handlePaymentSuccess();
         }
         
-        // Refresh user data to ensure credits are up to date
-        refreshUserData();
       } catch (error) {
         logger.error('❌ [DASHBOARD] Error in initial data fetch:', error);
         // Don't let errors propagate - just log them
       }
     }
-  }, [user, fetchSavedCourses, refreshUserData]); // Added refreshUserData dependency
+  }, [user, fetchSavedCourses]); // Added refreshUserData dependency
 
   const handlePaymentSuccess = async () => {
     try {
@@ -497,9 +479,6 @@ const Dashboard = () => {
       
       // Clean up URL parameters
       window.history.replaceState({}, document.title, window.location.pathname);
-      
-      // Refresh user data to ensure everything is in sync
-      await refreshUserData();
       
     } catch (error) {
       logger.error('❌ [PAYMENT] Error handling payment success:', error);
@@ -588,15 +567,6 @@ const Dashboard = () => {
             <div className="text-lg font-semibold text-gray-700">
               Tokens: <span className={credits === 0 ? 'text-red-500' : 'text-green-600'}>{credits}</span>
             </div>
-            <button
-              onClick={refreshUserData}
-              className="text-sm text-gray-500 hover:text-gray-700 disabled:opacity-50"
-              title="Refresh tokens"
-            >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            </button>
           </div>
           <div className="flex items-center space-x-3">
             <button
