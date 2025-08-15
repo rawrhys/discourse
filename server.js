@@ -2028,7 +2028,7 @@ app.get('/api/auth/me', authenticateToken, (req, res) => {
 
 // Get current user info (for Supabase users)
 // This route is now protected and will return user data
-app.get('/api/user/current', (req, res) => {
+app.get('/api/user/current', authenticateToken, (req, res) => {
   try {
     if (req.user) {
       const { id, email, name, courseCredits } = req.user;
