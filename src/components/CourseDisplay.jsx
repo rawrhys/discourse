@@ -54,6 +54,30 @@ const CourseDisplay = () => {
       moduleOfCompletedQuizId = module.id;
     }
 
+    // Check if all quizzes in the module are perfect (frontend check)
+    const allQuizzesPerfect = module.lessons.every(l => {
+      if (l.quiz && l.quiz.length > 0) {
+        // If there is a quiz, check if user has perfect score
+        return l.quizScores && l.quizScores[user.id] === 5;
+      }
+      // If there is no quiz, it doesn't block progression
+      return true;
+    });
+
+    console.log(`[QuizCompletion] Frontend module completion check:`, {
+      moduleId: moduleOfCompletedQuizId,
+      moduleTitle: module?.title,
+      totalLessons: module?.lessons.length,
+      lessonsWithQuizzes: module?.lessons.filter(l => l.quiz && l.quiz.length > 0).length,
+      allQuizzesPerfect,
+      lessonScores: module?.lessons.map(l => ({
+        lessonId: l.id,
+        lessonTitle: l.title,
+        hasQuiz: !!(l.quiz && l.quiz.length > 0),
+        score: l.quizScores ? l.quizScores[user.id] : undefined
+      }))
+    });
+
     // Call the backend API to submit the quiz score
     try {
       const token = localStorage.getItem('token');
@@ -109,9 +133,9 @@ const CourseDisplay = () => {
       const updatedCourse = { ...course, modules: newModules };
       setCourse(updatedCourse);
 
-          // Check if the backend unlocked the next module
-      if (result.unlockedNextModule) {
-        console.log(`[QuizCompletion] Backend unlocked next module!`);
+          // Check if the backend unlocked the next module OR if frontend detects all quizzes perfect
+      if (result.unlockedNextModule || allQuizzesPerfect) {
+        console.log(`[QuizCompletion] ${result.unlockedNextModule ? 'Backend' : 'Frontend'} detected module completion!`);
         const currentModuleIndex = course.modules.findIndex(m => m.id === moduleOfCompletedQuizId);
         
         if (currentModuleIndex !== -1 && currentModuleIndex + 1 < course.modules.length) {
@@ -125,6 +149,8 @@ const CourseDisplay = () => {
           setUnlockedModuleName(nextModule.title);
           setShowUnlockToast(true);
           setTimeout(() => setShowUnlockToast(false), 5000);
+        } else {
+          console.log(`[QuizCompletion] No next module to unlock or module index not found`);
         }
       } else if (result.moduleCompleted) {
         console.log(`[QuizCompletion] Module completed but no next module to unlock.`);
