@@ -82,9 +82,12 @@ const api = {
             body: JSON.stringify(course),
         }),
 
-    getQuizScoresForModule: (moduleId) => 
-        apiClient(`/api/modules/${moduleId}/quiz-scores`),
-    
+        submitQuiz: (quizData) =>
+          apiClient('/api/quizzes/submit', {
+              method: 'POST',
+              body: JSON.stringify(quizData),
+          }),
+          
     getDefinitionForTerm: aiService.getDefinitionForTerm,
     validateCourseStructure: aiService.validateCourseStructure,
     getUser: aiService.getUser,
