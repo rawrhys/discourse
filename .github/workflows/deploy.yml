@@ -62,13 +62,21 @@ jobs:
           ls -la dist/assets/
           echo "=== Build completed successfully ==="
 
+      - name: Copy dist contents to public
+        run: |
+          echo "=== Copying dist contents to public folder ==="
+          mkdir -p public
+          cp -r dist/* public/
+          echo "=== Public folder contents ==="
+          ls -la public/
+
       - name: FTP Deploy
         uses: SamKirkland/FTP-Deploy-Action@4.3.3
         with:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          local-dir: ./dist/
-          server-dir: public/
+          local-dir: ./public/
+          server-dir: ./
           port: 21
           dangerous-clean-slate: true
