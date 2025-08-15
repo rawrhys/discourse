@@ -46,6 +46,7 @@ export default function QuizView({ questions = [], onComplete, lessonId }) {
   };
 
   const handleSubmit = () => {
+    console.log('[QuizView] handleSubmit called.');
     if (shuffledQuestions.length === 0) return;
 
     let correctCount = 0;
