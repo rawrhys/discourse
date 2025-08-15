@@ -23,9 +23,13 @@ const apiClient = async (url, options = {}) => {
     body: fetchOptions.body,
   };
 
+  // Construct the full URL by prepending API_BASE_URL if it's a relative path
+  const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
+  
   // Log the outgoing request (info level)
   logger.info('📡 [API REQUEST]', {
-    url: url,
+    url: fullUrl,
+    originalUrl: url,
     method: config.method || 'GET',
     headers: config.headers,
     body: config.body ? JSON.parse(config.body) : undefined,
@@ -36,7 +40,11 @@ const apiClient = async (url, options = {}) => {
     // Add timeout to prevent hanging requests
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
-    const response = await fetch(url, {
+    
+    // Construct the full URL by prepending API_BASE_URL if it's a relative path
+    const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
+    
+    const response = await fetch(fullUrl, {
       ...config,
       signal: controller.signal
     });
@@ -44,7 +52,8 @@ const apiClient = async (url, options = {}) => {
 
     // Log the response status and headers (info level)
     logger.info('📥 [API RESPONSE]', {
-      url: url,
+      url: fullUrl,
+      originalUrl: url,
       status: response.status,
       statusText: response.statusText,
       headers: Object.fromEntries(response.headers.entries()),
@@ -106,7 +115,8 @@ const apiClient = async (url, options = {}) => {
       const errorData = JsonParser.RobustJsonParser.parse(errorText, 'API Error Response') || {};
       const errorMessage = errorData.error || response.statusText;
       logger.error('❌ [API ERROR]', {
-        url: url,
+        url: fullUrl,
+        originalUrl: url,
         status: response.status,
         error: errorData,
         message: errorMessage
@@ -258,7 +268,8 @@ const apiClient = async (url, options = {}) => {
     }
     // Log successful response data (info level)
     logger.info('✅ [API SUCCESS]', {
-      url: url,
+      url: fullUrl,
+      originalUrl: url,
       data: responseData,
       dataSize: JSON.stringify(responseData).length,
       timestamp: new Date().toISOString()
@@ -275,7 +286,8 @@ const apiClient = async (url, options = {}) => {
     // Check for network errors (server is offline)
     if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
         logger.error('💥 [FETCH ERROR] Backend server is not available.', {
-            url: url,
+            url: fullUrl,
+            originalUrl: url,
             timestamp: new Date().toISOString(),
             error: error
         });
@@ -285,7 +297,8 @@ const apiClient = async (url, options = {}) => {
     if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
       // This is likely a CORS, mixed content, or network connectivity issue
       logger.warn('🌐 [NETWORK ERROR]', {
-        url: url,
+        url: fullUrl,
+        originalUrl: url,
         protocol: window.location.protocol,
         backendProtocol: API_BASE_URL.startsWith('https:') ? 'HTTPS' : 'HTTP',
         mixedContent: window.location.protocol === 'https:' && API_BASE_URL.startsWith('http:'),
@@ -299,7 +312,8 @@ const apiClient = async (url, options = {}) => {
     }
     if (error.message.includes('Unexpected token') && error.message.includes('<!doctype')) {
       logger.warn('🔧 [SERVER ERROR] Server returned HTML instead of JSON', {
-        url: url,
+        url: fullUrl,
+        originalUrl: url,
         error: error.message
       });
       throw new Error('Server is not responding correctly. Please check your connection and try again.');
@@ -307,13 +321,15 @@ const apiClient = async (url, options = {}) => {
     // Handle SSL protocol errors specifically
     if (error.message.toLowerCase().includes('ssl') || error.message.toLowerCase().includes('protocol')) {
       logger.error('🔐 [SSL ERROR] SSL connection issue', {
-        url: url,
+        url: fullUrl,
+        originalUrl: url,
         error: error.message
       });
       throw new Error('SSL connection error. The backend server may be temporarily unavailable or misconfigured.');
     }
     logger.error('💥 [UNEXPECTED ERROR]', {
-      url: url,
+      url: fullUrl,
+      originalUrl: url,
       error: error.message,
       stack: error.stack
     });
