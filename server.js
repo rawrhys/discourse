@@ -2223,7 +2223,17 @@ app.get('/api/courses/:courseId', authenticateToken, (req, res) => {
       return res.status(404).json({ error: 'Course not found' });
     }
     
+    console.log(`[API] Course ownership check:`, {
+      courseUserId: course.userId,
+      courseUserIdType: typeof course.userId,
+      requestUserId: req.user.id,
+      requestUserIdType: typeof req.user.id,
+      isEqual: course.userId === req.user.id,
+      isStrictEqual: course.userId === req.user.id
+    });
+    
     if (course.userId !== req.user.id) {
+      console.log(`[API] Access denied - course belongs to user ${course.userId}, but request is from user ${req.user.id}`);
       return res.status(403).json({ error: 'Unauthorized to access this course' });
     }
     

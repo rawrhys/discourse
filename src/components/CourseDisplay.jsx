@@ -57,6 +57,12 @@ const CourseDisplay = () => {
     // Call the backend API to submit the quiz score
     try {
       const token = localStorage.getItem('token');
+      console.log(`[QuizCompletion] Token check:`, {
+        hasToken: !!token,
+        tokenLength: token ? token.length : 0,
+        tokenPrefix: token ? token.substring(0, 10) + '...' : 'none'
+      });
+      
       const response = await fetch(`${API_BASE_URL}/api/quizzes/submit`, {
         method: 'POST',
         headers: {
