@@ -10,6 +10,7 @@ const apiClient = async (url, options = {}) => {
   const token = localStorage.getItem('token');
   const defaultHeaders = {
     'Content-Type': 'application/json',
+    'Accept': 'application/json',
     ...(token && { 'Authorization': `Bearer ${token}` })
   };
 
