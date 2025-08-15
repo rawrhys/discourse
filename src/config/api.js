@@ -16,7 +16,7 @@ const inferDefaultBaseUrl = () => {
 };
 
 // Force API_BASE_URL to use correct endpoint for production
-let resolvedBaseUrl = '';
+let resolvedBaseUrl = 'https://thediscourse.ai/api';
 
 export const API_BASE_URL = resolvedBaseUrl;
 
