@@ -39,44 +39,57 @@ const CourseDisplay = () => {
   const [unlockedModules, setUnlockedModules] = useState(new Set());
   const [showUnlockToast, setShowUnlockToast] = useState(false);
   const [unlockedModuleName, setUnlockedModuleName] = useState('');
-  
+
   const handleQuizCompletion = useCallback((lessonId, score) => {
     if (!course) return;
 
-    let updatedCourse = { ...course };
-    let moduleOfCompletedQuiz = null;
+    let moduleOfCompletedQuizId = null;
 
-    const newModules = updatedCourse.modules.map(module => {
+    // Create a new version of the course state with the updated score
+    const newModules = course.modules.map(module => {
+      let lessonFound = false;
       const newLessons = module.lessons.map(lesson => {
         if (lesson.id === lessonId) {
-          moduleOfCompletedQuiz = module;
+          lessonFound = true;
           return { ...lesson, quizScore: score };
         }
         return lesson;
       });
+      if (lessonFound) {
+        moduleOfCompletedQuizId = module.id;
+      }
       return { ...module, lessons: newLessons };
     });
-    
-    updatedCourse = { ...updatedCourse, modules: newModules };
+
+    const updatedCourse = { ...course, modules: newModules };
     setCourse(updatedCourse);
 
-    if (score === 5 && moduleOfCompletedQuiz) {
-        const allQuizzesPerfect = moduleOfCompletedQuiz.lessons.every(lesson => {
-            // Find the updated lesson in the new course state
-            const updatedLesson = newModules.flatMap(m => m.lessons).find(l => l.id === lesson.id);
-            return updatedLesson.quizScore === 5;
-        });
+    // If the quiz score was perfect, check if the module is complete
+    if (score === 5 && moduleOfCompletedQuizId) {
+      const completedModule = newModules.find(m => m.id === moduleOfCompletedQuizId);
+      if (completedModule) {
+        // Find all lessons in this module that have a quiz
+        const lessonsWithQuizzes = completedModule.lessons.filter(l => l.quiz && l.quiz.length > 0);
+        // Count how many of them have a perfect score
+        const perfectScoreCount = lessonsWithQuizzes.filter(l => l.quizScore === 5).length;
 
-        if (allQuizzesPerfect) {
-            const currentModuleIndex = course.modules.findIndex(m => m.id === moduleOfCompletedQuiz.id);
-            if (currentModuleIndex !== -1 && currentModuleIndex + 1 < course.modules.length) {
-                const nextModule = course.modules[currentModuleIndex + 1];
-                setUnlockedModules(prev => new Set(prev).add(nextModule.id));
-                setUnlockedModuleName(nextModule.title);
-                setShowUnlockToast(true);
-                setTimeout(() => setShowUnlockToast(false), 5000);
-            }
+        // If all quizzes in the module have a perfect score, unlock the next one
+        if (lessonsWithQuizzes.length > 0 && perfectScoreCount === lessonsWithQuizzes.length) {
+          const currentModuleIndex = course.modules.findIndex(m => m.id === moduleOfCompletedQuizId);
+          
+          if (currentModuleIndex !== -1 && currentModuleIndex + 1 < course.modules.length) {
+            const nextModule = course.modules[currentModuleIndex + 1];
+            setUnlockedModules(prev => {
+              const newUnlocked = new Set(prev);
+              newUnlocked.add(nextModule.id);
+              return newUnlocked;
+            });
+            setUnlockedModuleName(nextModule.title);
+            setShowUnlockToast(true);
+            setTimeout(() => setShowUnlockToast(false), 5000);
+          }
         }
+      }
     }
   }, [course, setCourse]);
 
@@ -259,19 +272,6 @@ const CourseDisplay = () => {
               }}
               lessonId={currentLesson.id}
               module={currentModule}
-              onModuleUpdate={(updatedModule) => {
-                const newModules = course.modules.map(m => m.id === updatedModule.id ? updatedModule : m);
-                setCourse({ ...course, modules: newModules });
-              }}
-              checkAndUnlockNextModule={() => {
-                const currentModuleIndex = course.modules.findIndex(m => m.id === activeModuleId);
-                if (currentModule.lessons.every(l => l.quizScore === 5)) {
-                  if (currentModuleIndex + 1 < course.modules.length) {
-                    const nextModule = course.modules[currentModuleIndex + 1];
-                    setUnlockedModules(prev => new Set(prev).add(nextModule.id));
-                  }
-                }
-              }}
             />
           ) : (
             currentLesson ? (

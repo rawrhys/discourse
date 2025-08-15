@@ -20,7 +20,7 @@ function shuffleQuestionsAndOptions(questions) {
   });
 }
 
-export default function QuizView({ questions = [], onComplete, lessonId, module, onModuleUpdate, checkAndUnlockNextModule }) {
+export default function QuizView({ questions = [], onComplete, lessonId }) {
   const [selectedAnswers, setSelectedAnswers] = useState({});
   const [showResult, setShowResult] = useState(false);
   const [score, setScore] = useState(0);
@@ -69,18 +69,6 @@ export default function QuizView({ questions = [], onComplete, lessonId, module,
 
     if (onComplete) {
       onComplete(finalScore);
-    }
-
-    if (finalScore === 5) {
-      if (module && onModuleUpdate) {
-        const updatedModule = { ...module };
-        if (!updatedModule.perfectQuizzes) updatedModule.perfectQuizzes = 0;
-        updatedModule.perfectQuizzes += 1;
-        onModuleUpdate(updatedModule);
-      }
-      if (checkAndUnlockNextModule) {
-        checkAndUnlockNextModule(lessonId);
-      }
     }
   };
 
