@@ -26,9 +26,8 @@ import { compressImage, getOptimalFormat, getFileExtension, formatFileSize } fro
 import sharp from 'sharp';
 import imageProxyHandler from './src/utils/proxy.js';
 // import { isValidFlashcardTerm } from './src/utils/flashcardUtils.js';
-import passport from 'passport';
-import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
+
+
 
 // Load environment variables from .env file
 dotenv.config();
