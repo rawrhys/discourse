@@ -26,6 +26,9 @@ import { compressImage, getOptimalFormat, getFileExtension, formatFileSize } fro
 import sharp from 'sharp';
 import imageProxyHandler from './src/utils/proxy.js';
 // import { isValidFlashcardTerm } from './src/utils/flashcardUtils.js';
+import passport from 'passport';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -34,7 +37,7 @@ const app = express();
 
 // --- CORE MIDDLEWARE ---
 // Apply compression to all responses
-app.use(compression());
+// app.use(compression());
 
 // Set reverse proxy trust for correct protocol/IP detection
 app.set('trust proxy', Number(process.env.TRUST_PROXY || 1));
