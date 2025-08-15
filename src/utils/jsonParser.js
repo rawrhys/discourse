@@ -356,3 +356,6 @@ export class RobustJsonParser {
 
 // Export a simple function for backward compatibility
 export const parseJson = (input, context) => RobustJsonParser.parse(input, context); 
+
+// Provide a default export for environments that prefer default imports
+export default { RobustJsonParser, parseJson };
