@@ -4,16 +4,71 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="preconnect" href="http://localhost:4003" />
   <title>LMS Generator - Create Learning Modules</title>
+  
+  <!-- Add Permissions Policy to allow payment -->
+  <meta http-equiv="Permissions-Policy" content="
+    payment=(self),
+    geolocation=(self),
+    microphone=(self),
+    camera=(self)
+  ">
+  
+  <!-- Removed problematic Stripe script that was causing CSP violations -->
   <script>
-    // Prevent Cloudflare Insights errors
+    // Prevent Cloudflare Insights errors and warnings
     window.addEventListener('error', function(e) {
+      // Check for Cloudflare Insights script errors
       if (e.target && e.target.src && e.target.src.includes('cloudflareinsights')) {
         e.preventDefault();
         e.stopPropagation();
         return true;
       }
+      // Check for feature collector deprecation warning
+      if (e.message && e.message.includes('feature_collector.js') && e.message.includes('deprecated')) {
+        e.preventDefault();
+        e.stopPropagation();
+        return true;
+      }
+      // Suppress Stripe-related errors that are blocked by ad blockers
+      if (e.target && e.target.src && (
+        e.target.src.includes('stripe.com') || 
+        e.target.src.includes('errors.stripe.com') ||
+        e.target.src.includes('r.stripe.com')
+      )) {
+        e.preventDefault();
+        e.stopPropagation();
+        console.warn('Stripe resource blocked by ad blocker:', e.target.src);
+        return true;
+      }
     }, true);
+    
+    // Filter noisy deprecation logs without silencing other errors
+    const originalConsoleError = console.error;
+    const originalConsoleWarn = console.warn;
+    console.error = function() {
+      const args = Array.from(arguments);
+      if (args.some(arg => 
+        typeof arg === 'string' && 
+        (arg.includes('feature_collector.js') || 
+         arg.includes('deprecated') ||
+         arg.includes('ERR_BLOCKED_BY_CLIENT'))
+      )) {
+        return; // Suppress the specific deprecation warning
+      }
+      originalConsoleError.apply(console, arguments);
+    };
+    console.warn = function() {
+      const args = Array.from(arguments);
+      if (args.some(arg => 
+        typeof arg === 'string' && 
+        (arg.includes('feature_collector.js') && arg.includes('deprecated'))
+      )) {
+        return;
+      }
+      originalConsoleWarn.apply(console, arguments);
+    };
   </script>
 </head>
 

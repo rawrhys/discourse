@@ -18,7 +18,8 @@ class Lesson {
     isCompleted = false,
     quiz = null,
     quizScore = undefined,
-    quizCompleted = false
+    quizCompleted = false,
+    flashcards = []
   } = {}) {
     this.id = id;
     this.title = title;
@@ -28,6 +29,7 @@ class Lesson {
     this.quiz = quiz;
     this.quizScore = quizScore;
     this.quizCompleted = quizCompleted;
+    this.flashcards = flashcards;
   }
 
   /**
@@ -56,7 +58,8 @@ class Lesson {
       isCompleted: this.isCompleted,
       quiz: this.quiz,
       quizScore: this.quizScore,
-      quizCompleted: this.quizCompleted
+      quizCompleted: this.quizCompleted,
+      flashcards: this.flashcards
     };
   }
 }

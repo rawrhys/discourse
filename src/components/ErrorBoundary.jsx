@@ -19,8 +19,39 @@ class ErrorBoundary extends React.Component {
     console.error('Error caught by boundary:', error, errorInfo);
   }
 
+  // Helper function to get user-friendly error message
+  getUserFriendlyErrorMessage(error) {
+    if (!error) return 'An unexpected error occurred';
+    
+    const message = error.message || '';
+    
+    // Handle JSON parsing errors
+    if (message.includes('Unexpected token') && message.includes('<!doctype')) {
+      return 'Server is not responding correctly. Please check your connection and try again.';
+    }
+    
+    // Handle network errors
+    if (message.includes('Failed to fetch') || message.includes('NetworkError')) {
+      return 'Unable to connect to the server. Please check your internet connection and try again.';
+    }
+    
+    // Handle API errors
+    if (message.includes('API') || message.includes('server')) {
+      return 'Server is temporarily unavailable. Please try again in a few moments.';
+    }
+    
+    // Return the original message if it's user-friendly, otherwise a generic message
+    if (message.length < 100 && !message.includes('Unexpected token')) {
+      return message;
+    }
+    
+    return 'Something went wrong. Please try again.';
+  }
+
   render() {
     if (this.state.hasError) {
+      const userFriendlyMessage = this.getUserFriendlyErrorMessage(this.state.error);
+      
       return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
           <div className="max-w-md w-full space-y-8">
@@ -29,7 +60,7 @@ class ErrorBoundary extends React.Component {
                 Something went wrong
               </h2>
               <p className="mt-2 text-center text-sm text-gray-600">
-                {this.state.error?.message || 'An unexpected error occurred'}
+                {userFriendlyMessage}
               </p>
             </div>
             <div className="mt-8 bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">

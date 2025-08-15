@@ -7,6 +7,7 @@ const Register = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [acceptedPolicy, setAcceptedPolicy] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { register } = useAuth();
@@ -20,13 +21,17 @@ const Register = () => {
       return setError('Passwords do not match');
     }
 
+    if (!acceptedPolicy) {
+      return setError('You must accept the Privacy Policy to create an account.');
+    }
+
     setIsLoading(true);
 
     try {
-      await register(email, password, name);
+      await register(email, password, name, { gdprConsent: true, policyVersion: '1.0' });
       navigate('/dashboard');
     } catch (error) {
-      setError('Failed to create an account. Please try again.');
+      setError(error?.message || 'Failed to create an account. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -115,6 +120,27 @@ const Register = () => {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
               />
+            </div>
+          </div>
+
+          <div className="flex items-start">
+            <div className="flex items-center h-5">
+              <input
+                id="privacy-policy"
+                name="privacy-policy"
+                type="checkbox"
+                checked={acceptedPolicy}
+                onChange={(e) => setAcceptedPolicy(e.target.checked)}
+                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                required
+              />
+            </div>
+            <div className="ml-2 text-sm text-gray-600">
+              I have read and accept the{' '}
+              <Link to="/privacy" className="text-indigo-600 hover:text-indigo-500" target="_blank" rel="noopener noreferrer">
+                Privacy Policy
+              </Link>
+              .
             </div>
           </div>
 

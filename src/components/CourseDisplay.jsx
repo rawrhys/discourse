@@ -1,83 +1,33 @@
 // src/components/CourseDisplay.jsx
-import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo, useRef } from 'react';
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
-import ModuleView from './ModuleView';
 import LessonView from './LessonView';
 import QuizView from './QuizView';
-import Flashcard from './Flashcard';
 import './CourseDisplay.css';
-import PropTypes from 'prop-types';
 import { useApiWrapper } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import AIService from '../services/AIService.js';
-import Lesson from '../models/Lesson';
-import Module from '../models/Module';
 import NewCourseButton from './NewCourseButton';
 import LoadingState from './LoadingState';
 import ErrorState from './ErrorState';
 import NoCourseState from './NoCourseState';
+// No need to import Module model if it's not used directly
 
-// Helper function to generate unique IDs
-const generateId = (prefix, index = 1) => {
-  const timestamp = Date.now().toString(36);
-  const random = Math.random().toString(36).substr(2, 6);
-  return `${prefix}_${index}_${timestamp}_${random}`;
-};
-
-// Memoized ModuleCard component
-const ModuleCard = memo(({ module, isActive, onSelect, isLocked }) => (
-  <button
-    onClick={() => !isLocked && onSelect()}
-    disabled={isLocked}
-    className={`flex-shrink-0 text-left px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150
-               ${isActive 
-                    ? 'bg-blue-100 text-blue-700' 
-                    : isLocked
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`}
-  >
-    <div className="flex items-center justify-between">
-      <span>{module.title}</span>
-      {isLocked && (
-        <svg 
-          className="h-4 w-4 text-gray-400" 
-          xmlns="http://www.w3.org/2000/svg" 
-          viewBox="0 0 20 20" 
-          fill="currentColor"
-        >
-          <path 
-            fillRule="evenodd" 
-            d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" 
-            clipRule="evenodd" 
-          />
-        </svg>
-      )}
-    </div>
-  </button>
-));
-
-// Memoized LessonCard component
-const LessonCard = memo(({ lesson, isActive, onClick }) => (
-  <button
-    onClick={onClick}
-    className={`block p-4 rounded-lg shadow-md transition-transform transform hover:scale-105
-               ${isActive 
-                    ? 'bg-blue-500 text-white' 
-                    : 'bg-white hover:bg-gray-50'}`}
-  >
-    <h4 className="text-md font-semibold">{lesson.title}</h4>
-  </button>
-));
+// Custom hook to get the previous value of a prop or state
+function usePrevious(value) {
+  const ref = useRef();
+  useEffect(() => {
+    ref.current = value;
+  });
+  return ref.current;
+}
 
 const CourseDisplay = () => {
   const context = useOutletContext();
   const { getQuizScoresForModule, saveCourse } = useApiWrapper();
+  const { user } = useAuth();
+  const { courseId, lessonId: activeLessonIdFromParam } = useParams();
+  const navigate = useNavigate();
 
-  // Fallback if context is not available
-  if (!context) {
-    return <NoCourseState />;
-  }
-  
   const {
     course,
     setCourse,
@@ -85,394 +35,333 @@ const CourseDisplay = () => {
     setActiveModuleId,
     activeLessonId,
     setActiveLessonId,
-    loading,
-    setLoading,
-    error,
-    setError,
-    clearCache,
-    handleUpdateLesson
+    handleUpdateLesson,
   } = context;
-
-  const { courseId } = useParams();
-  const navigate = useNavigate();
-
-  const [activeModule, setActiveModule] = useState(null);
-  const [activeLesson, setActiveLesson] = useState(null);
+  
+  // The useMemo hook that was here has been removed.
+  // The component will now directly use the `course` object from the context.
+  
+  const [showQuiz, setShowQuiz] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [unlockedModules, setUnlockedModules] = useState(new Set());
+  const [showPerfectScoreMessage, setShowPerfectScoreMessage] = useState(false);
+  const isInitialMount = React.useRef(true);
+  const prevCourse = usePrevious(course);
+  const prevUnlockedModules = usePrevious(unlockedModules);
+  const [showUnlockToast, setShowUnlockToast] = useState(false);
+  const [unlockedModuleName, setUnlockedModuleName] = useState('');
 
   useEffect(() => {
-    if (course && course.modules) {
-      const currentModule = course.modules.find(m => m.id === activeModuleId);
-      setActiveModule(currentModule || null);
-      if (currentModule) {
-        const currentLesson = currentModule.lessons.find(l => l.id === activeLessonId);
-        setActiveLesson(currentLesson || null);
-        // Debug: print all lesson quizScores in this module
-        console.log('[ActiveModule Lessons quizScores]', currentModule.lessons.map(l => ({ id: l.id, title: l.title, quizScore: l.quizScore })));
+    if (courseId) {
+      const savedUnlocked = localStorage.getItem(`unlockedModules_${courseId}`);
+      if (savedUnlocked) {
+        setUnlockedModules(new Set(JSON.parse(savedUnlocked)));
+      } else if (course && course.modules && course.modules.length > 0) {
+        // Unlock the first module by default
+          setUnlockedModules(new Set([course.modules[0].id]));
       }
     }
-  }, [course, activeModuleId, activeLessonId]);
+  }, [courseId, course]);
 
-  const [showQuiz, setShowQuiz] = useState(false);
-  const [unlockedModules, setUnlockedModules] = useState(() => {
-    const saved = localStorage.getItem('unlockedModules');
-    return saved ? JSON.parse(saved) : [];
-  });
+  // Native audio for unlock sound (avoids extra deps)
+  const unlockAudioRef = useRef(null);
+  useEffect(() => {
+    const audio = new Audio('/sounds/unlock.mp3');
+    audio.preload = 'auto';
+    audio.volume = 0.7;
+    unlockAudioRef.current = audio;
+    return () => {
+      if (unlockAudioRef.current) {
+        try { unlockAudioRef.current.pause(); } catch {}
+        unlockAudioRef.current = null;
+      }
+    };
+  }, []);
 
-  const [lockMessage, setLockMessage] = useState('');
-  const [shareCopied, setShareCopied] = useState(false);
+  // Play sound when a new module gets added to the unlocked set
+  useEffect(() => {
+    if (prevUnlockedModules && unlockedModules.size > prevUnlockedModules.size) {
+      const a = unlockAudioRef.current;
+      if (a) {
+        try {
+          a.currentTime = 0;
+          a.play().catch(() => {});
+        } catch {}
+      }
+    }
+  }, [unlockedModules, prevUnlockedModules]);
 
-  // Remove lock icon and make modules clickable if unlocked
-  const isModuleLocked = useCallback((moduleId) => {
-    if (!course?.modules) return true;
-    const moduleIndex = course.modules.findIndex(m => m.id === moduleId);
-    if (moduleIndex === 0) return false; // First module is never locked
-    return !unlockedModules.includes(moduleId);
-  }, [course?.modules, unlockedModules]);
+  const handleModuleUpdate = useCallback((moduleId, updatedData) => {
+    setCourse(prevCourse => {
+      const updatedModules = prevCourse.modules.map(m => 
+        m.id === moduleId ? { ...m, ...updatedData } : m
+      );
+      return { ...prevCourse, modules: updatedModules };
+    });
+  }, [setCourse]);
 
-  // Memoize module selection handler
   const handleModuleSelect = useCallback((moduleId) => {
     if (!course?.modules) return;
-
     const moduleData = course.modules.find(m => m.id === moduleId);
-    if (!moduleData) return;
+    if (!moduleData || !unlockedModules.has(moduleId)) return;
     
-    const module = Module.fromJSON(moduleData);
-
-    const isFirstModule = course.modules[0].id === moduleId;
-    const isLocked = isModuleLocked(moduleId);
-
-    // Clear any existing error and lock message
-    setError(null);
-    setLockMessage('');
-
-    // Check if module is locked
-    if (isLocked && !isFirstModule) {
-      setLockMessage('Get 5/5 on at least 3 quizzes in the previous module to unlock this module.');
-      return; // Don't proceed with navigation
-    }
-
-    // Module is not locked, proceed with navigation
     setActiveModuleId(moduleId);
-    if (module.lessons && module.lessons.length > 0) {
-      const firstLessonId = module.lessons[0].id;
+    if (moduleData.lessons.length > 0) {
+      const firstLessonId = moduleData.lessons[0].id;
       setActiveLessonId(firstLessonId);
       navigate(`/course/${courseId}/lesson/${firstLessonId}`);
     }
     setShowQuiz(false);
-  }, [course, setActiveModuleId, setActiveLessonId, courseId, navigate, setError, isModuleLocked]);
+  }, [course, unlockedModules, courseId, navigate, setActiveModuleId, setActiveLessonId]);
 
-  // Memoize lesson selection handler
-  const handleLessonSelect = useCallback((lessonId) => {
+  const handleQuizCompletion = useCallback((lessonId, score) => {
+    if (!course) return;
+
+    let updatedCourse = course;
+
+    // 1. Update quiz score in a new course object
+    const newModules = course.modules.map(module => {
+      const newLessons = module.lessons.map(lesson => {
+        if (lesson.id === lessonId) {
+          return { ...lesson, quizScore: score };
+        }
+        return lesson;
+      });
+      return { ...module, lessons: newLessons };
+    });
+    
+    updatedCourse = { ...course, modules: newModules };
+    setCourse(updatedCourse); // Update state with the new score
+
+    // Call the backend to check for module completion
+    fetch(`/api/lessons/${lessonId}/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ courseId }),
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.unlockedModuleId) {
+        const unlockedModule = course.modules.find(m => m.id === data.unlockedModuleId);
+        if (unlockedModule) {
+          setUnlockedModuleName(unlockedModule.title);
+          setShowUnlockToast(true);
+          setTimeout(() => setShowUnlockToast(false), 5000); // Hide after 5 seconds
+          
+          // Also update the local state to reflect the unlock
+          setUnlockedModules(prev => new Set(prev).add(data.unlockedModuleId));
+        }
+      } else if (data.courseCompleted) {
+        // Handle course completion feedback
+        setShowPerfectScoreMessage(true);
+        setTimeout(() => {
+          navigate(`/course/${courseId}/complete`);
+          setShowPerfectScoreMessage(false);
+        }, 3000);
+      }
+    });
+  }, [course, courseId, setCourse, unlockedModules, navigate]);
+
+  const [activeModule, setActiveModule] = useState(null);
+  const [activeLesson, setActiveLesson] = useState(null);
+  
+  const isModuleLocked = useCallback((moduleId) => {
+    return !unlockedModules.has(moduleId);
+  }, [unlockedModules]);
+  
+  const handleLessonClick = (lessonId) => {
     setActiveLessonId(lessonId);
     navigate(`/course/${courseId}/lesson/${lessonId}`);
     setShowQuiz(false);
-  }, [setActiveLessonId, courseId, navigate]);
-
-  const handleLessonUpdate = useCallback((lessonId, update) => {
-    setCourse(prevCourse => {
-      if (!prevCourse) return prevCourse;
-      // Update the lesson in ALL modules
-      const updatedModules = prevCourse.modules.map(module => {
-        const updatedLessons = module.lessons.map(lesson =>
-          lesson.id === lessonId ? { ...lesson, ...update } : lesson
-        );
-        return { ...module, lessons: updatedLessons };
-      });
-      const updatedCourse = { ...prevCourse, modules: updatedModules };
-      console.log('[handleLessonUpdate] Updated course:', updatedCourse);
-
-      // Unlock logic: unlock next module if AT LEAST 3 lessons in CURRENT module have quizScore === 5
-      updatedModules.forEach((module, index) => {
-        if (index === updatedModules.length - 1) return; // No next module to unlock
-        const perfectCount = module.lessons.filter(lesson => lesson.quizScore === 5).length;
-        const nextModule = updatedModules[index + 1];
-        if (perfectCount >= 3 && nextModule && !unlockedModules.includes(nextModule.id)) {
-          setUnlockedModules(prev => {
-            const newUnlocked = [...prev, nextModule.id];
-            localStorage.setItem('unlockedModules', JSON.stringify(newUnlocked));
-            console.log('[Unlock Debug] New unlockedModules:', newUnlocked);
-            return newUnlocked;
-          });
-        }
-      });
-
-      saveCourse(updatedCourse);
-      return updatedCourse;
-    });
-  }, [saveCourse, unlockedModules]);
-
-  // Memoize module update handler
-  const handleModuleUpdate = useCallback((updatedModule) => {
-    setCourse(prevCourse => {
-      if (!prevCourse) return null;
-      
-      // Update the module with new quiz completion data
-      const updatedModules = prevCourse.modules.map(m => {
-        if (m.id === updatedModule.id) {
-          const module = Module.fromJSON(m);
-          module.perfectQuizzes = updatedModule.perfectQuizzes;
-          module.updateProgress(updatedModule.progress);
-          if (updatedModule.isCompleted) {
-            module.setCompleted(true);
-          }
-          return module;
-        }
-        return m;
-      });
-
-      return {
-        ...prevCourse,
-        modules: updatedModules
-      };
-    });
-  }, [setCourse]);
-
-  const currentLessonIndex = useMemo(() => 
-    activeModule?.lessons?.findIndex(l => l.id === activeLessonId) ?? -1,
-    [activeModule?.lessons, activeLessonId]
-  );
-
-  const totalLessonsInModule = useMemo(() => 
-    activeModule?.lessons?.length ?? 0,
-    [activeModule?.lessons]
-  );
-
-  const handleNextLesson = useCallback(() => {
-    if (!activeModule?.lessons || currentLessonIndex === -1) return;
-    const nextLesson = activeModule.lessons[currentLessonIndex + 1];
-    if (nextLesson) {
-      handleLessonSelect(nextLesson.id);
-    }
-  }, [activeModule?.lessons, currentLessonIndex, handleLessonSelect]);
-
-  const handlePreviousLesson = useCallback(() => {
-    if (!activeModule?.lessons || currentLessonIndex === -1) return;
-    const prevLesson = activeModule.lessons[currentLessonIndex - 1];
-    if (prevLesson) {
-      handleLessonSelect(prevLesson.id);
-    }
-  }, [activeModule?.lessons, currentLessonIndex, handleLessonSelect]);
-
-  // Memoize retry handler
-  const handleRetry = useCallback(() => {
-    window.location.reload();
-  }, []);
-
-  // Memoize back handler
-  const handleCreateNewCourse = useCallback(() => {
-    if (clearCache) {
-      clearCache();
-    }
-  }, [clearCache]);
-
-  // Unlock and navigate to the next module
-  const onUnlockAndNavigateNextModule = useCallback((nextModuleId) => {
-    const nextModule = course.modules.find(m => m.id === nextModuleId);
-    if (!nextModule) return;
-    setActiveModuleId(nextModuleId);
-    if (nextModule.lessons && nextModule.lessons.length > 0) {
-      setActiveLessonId(nextModule.lessons[0].id);
-      navigate(`/course/${courseId}/lesson/${nextModule.lessons[0].id}`);
-    }
-    setShowQuiz(false);
-  }, [course, courseId, navigate]);
-
-  const handleLessonCompleted = useCallback((lessonId, status) => {
-    console.log(`Lesson ${lessonId} completed with status: ${status}`);
-    // In a real app, you'd update the lesson's completion status in the course state
-    // and maybe save it to the backend.
-    if (!setCourse) return;
-    setCourse(prevCourse => {
-      const newModules = prevCourse.modules.map(module => {
-        const newLessons = module.lessons.map(lesson => {
-          if (lesson.id === lessonId) {
-            return { ...lesson, completed: status };
-          }
-          return lesson;
-        });
-        // Check if all lessons in the module are complete
-        const allLessonsCompleted = newLessons.every(l => l.completed);
-        if (allLessonsCompleted) {
-          module.setCompleted(true);
-        }
-        return { ...module, lessons: newLessons };
-      });
-      return { ...prevCourse, modules: newModules };
-    });
-  }, [setCourse]);
-
-  // ADDED: Effect to ensure component re-renders when activeLesson is found
-  useEffect(() => {
-    // This effect exists to explicitly trigger a re-render when activeLesson is available.
-    // The dependency array ensures it runs when the calculated activeLesson changes.
-  }, [activeLesson]);
-
-  const handleSaveCourse = async () => {
-    try {
-      await saveCourse(course);
-      alert('Course saved successfully!');
-    } catch (err) {
-      console.error('Failed to save course:', err);
-      alert('Error saving course.');
+    if (isMobile) {
+      setSidebarOpen(false);
     }
   };
+  
+  const handleNextLesson = useCallback(() => {
+    if (!activeModule) return;
+    const currentLessonIndex = activeModule.lessons.findIndex(l => l.id === activeLessonId);
+    if (currentLessonIndex < activeModule.lessons.length - 1) {
+      const nextLesson = activeModule.lessons[currentLessonIndex + 1];
+      handleLessonClick(nextLesson.id);
+    }
+  }, [activeModule, activeLessonId, handleLessonClick]);
 
-  // Share button handler
-  const handleShare = useCallback(() => {
-    if (!course?.id) return;
-    const publicUrl = `${window.location.origin}/public/course/${course.id}`;
-    navigator.clipboard.writeText(publicUrl).then(() => {
-      setShareCopied(true);
-      setTimeout(() => setShareCopied(false), 2000);
-    });
-  }, [course?.id]);
+  const handlePreviousLesson = useCallback(() => {
+    if (!activeModule) return;
+    const currentLessonIndex = activeModule.lessons.findIndex(l => l.id === activeLessonId);
+    if (currentLessonIndex > 0) {
+      const previousLesson = activeModule.lessons[currentLessonIndex - 1];
+      handleLessonClick(previousLesson.id);
+    }
+  }, [activeModule, activeLessonId, handleLessonClick]);
+  
+  const handleShare = () => {
+    const publicUrl = `${window.location.origin}/public/course/${courseId}`;
+    navigator.clipboard.writeText(publicUrl);
+    setShareCopied(true);
+    setTimeout(() => setShareCopied(false), 2000);
+  };
 
-  // Render loading state
-  if (loading) {
-    return <LoadingState />;
-  }
+  if (!course) return <NoCourseState />;
 
-  // Render error state
-  if (error) {
-    return <ErrorState message={error} onRetry={handleRetry} />;
-  }
+  const currentModule = course.modules.find(m => m.id === activeModuleId);
+  const currentLesson = currentModule?.lessons.find(l => l.id === activeLessonId);
 
-  // Render no course state
-  if (!course) {
-    return <NoCourseState onCreateNew={handleCreateNewCourse} />;
-  }
+  const allImageUrls = useMemo(() => {
+    if (!course) return [];
+    return course.modules.flatMap(m => m.lessons.map(l => l.image?.imageUrl).filter(Boolean));
+  }, [course]);
 
-  // Main render
+  const allImageTitles = useMemo(() => {
+    if (!course) return [];
+    return course.modules.flatMap(m => m.lessons.map(l => l.image?.imageTitle).filter(Boolean));
+  }, [course]);
+
+  const imageUrlCounts = useMemo(() => {
+    return allImageUrls.reduce((acc, url) => {
+      acc[url] = (acc[url] || 0) + 1;
+      return acc;
+    }, {});
+  }, [allImageUrls]);
+
+  const imageTitleCounts = useMemo(() => {
+    return allImageTitles.reduce((acc, title) => {
+      acc[title] = (acc[title] || 0) + 1;
+      return acc;
+    }, {});
+  }, [allImageTitles]);
+
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <header className="bg-white shadow-sm p-4 flex justify-between items-center">
-        <div className="flex items-center min-w-0 gap-4">
-          <button
-            onClick={() => navigate('/dashboard')}
-            className="px-3 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-colors"
-            aria-label="Return Home"
-          >
-            &#8592; Home
-          </button>
-          <div className="flex items-center gap-2">
-            {/* Share button only if published */}
-            {course.published && (
-              <button
-                onClick={handleShare}
-                className="px-3 py-2 bg-green-100 text-green-800 rounded hover:bg-green-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 transition-colors relative"
-                title="Copy public course link"
-              >
-                <svg className="inline-block w-5 h-5 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 01-3 3H7a3 3 0 010-6h5a3 3 0 013 3zm0 0v1a3 3 0 003 3h1a3 3 0 000-6h-1a3 3 0 00-3 3v1z" />
-                </svg>
-                Share
-                {shareCopied && (
-                  <span className="absolute -top-7 left-1/2 -translate-x-1/2 bg-green-600 text-white text-xs rounded px-2 py-1 shadow">Link copied!</span>
-                )}
+    <div className="flex h-screen bg-gray-100">
+      <div className={`fixed inset-y-0 left-0 transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 transition-transform duration-200 ease-in-out bg-white w-80 shadow-lg z-30 flex flex-col`}>
+        <div className="p-5 border-b">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center space-x-4 min-w-0">
+              <button onClick={() => navigate('/dashboard')} className="flex-shrink-0 text-gray-500 hover:text-blue-600">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
               </button>
-            )}
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 truncate">{course.title}</h1>
-              <p className="text-sm text-gray-600">{course.subject}</p>
+              <h1 className="text-2xl font-bold text-gray-800 leading-tight">{course.title}</h1>
             </div>
           </div>
+          <p className="text-sm text-gray-500 mt-1">{course.subject}</p>
         </div>
-      </header>
-      {/* New Course Button below header */}
-      <div className="w-full flex justify-start px-4 py-2">
-        <NewCourseButton onNewCourse={handleCreateNewCourse} />
+        <nav className="flex-1 overflow-y-auto p-4 space-y-2">
+          {course.modules.map((module, index) => {
+            const isLocked = !unlockedModules.has(module.id);
+            return (
+              <div key={module.id}>
+                <h2 
+                  onClick={() => handleModuleSelect(module.id)}
+                  className={`text-lg font-semibold text-gray-700 cursor-pointer hover:text-blue-600 transition-colors flex items-center ${isLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  {isLocked && (
+                    <svg className="w-4 h-4 mr-2 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" />
+                    </svg>
+                  )}
+                  {module.title}
+                </h2>
+                {module.id === activeModuleId && !isLocked && (
+                  <ul className="mt-2 pl-4 border-l-2 border-blue-200 space-y-1">
+                    {module.lessons.map(lesson => (
+                      <li key={lesson.id}>
+                        <button
+                          onClick={() => handleLessonClick(lesson.id)}
+                          className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors duration-150
+                            ${lesson.id === activeLessonId 
+                              ? 'bg-blue-100 text-blue-700 font-medium' 
+                              : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}
+                          `}
+                        >
+                          {lesson.title}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            );
+          })}
+        </nav>
+        <div className="p-4 border-t space-y-2 flex justify-between items-center">
+          <button onClick={handleShare} className="w-full relative bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition flex items-center justify-center shadow">
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12s-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z"></path></svg>
+              Share
+              {shareCopied && <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-green-600 text-white text-xs rounded px-2 py-1 shadow-lg">Copied!</span>}
+          </button>
+        </div>
       </div>
 
-      {/* Main content area */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
-        <div className="w-64 bg-gray-50 p-4 overflow-y-auto border-r border-gray-200">
-          {lockMessage && (
-            <div className="mb-4 p-2 bg-yellow-100 text-yellow-800 rounded text-sm text-center">
-              {lockMessage}
-            </div>
-          )}
-          <div className="space-y-4">
-            {course?.modules?.map((module, index) => {
-              const isLocked = isModuleLocked(module.id);
-              const hasFailedLessons = module.lessons.some(lesson => {
-                const contentStr = typeof lesson.content === 'string'
-                  ? lesson.content
-                  : lesson.content?.main_content || '';
-                return !contentStr || contentStr.includes('Content generation failed');
-              });
-              
-              return (
-                <div key={module.id} className="space-y-2">
-                  <ModuleCard
-                    module={module}
-                    isActive={module.id === activeModuleId}
-                    onSelect={() => handleModuleSelect(module.id)}
-                    isLocked={isLocked}
-                  />
-                  {module.id === activeModuleId && (
-                    <div className="ml-4 space-y-2">
-                      {module.lessons.map((lesson) => {
-                        const contentStr = typeof lesson.content === 'string'
-                          ? lesson.content
-                          : lesson.content?.main_content || '';
-                        const hasError = !contentStr || contentStr.includes('Content generation failed');
-                        return (
-                          <div key={lesson.id} className="flex items-center space-x-2">
-                            <LessonCard
-                              lesson={lesson}
-                              isActive={lesson.id === activeLessonId}
-                              onClick={() => handleLessonSelect(lesson.id)}
-                            />
-                            {hasError && (
-                              <span className="text-red-500 text-sm">!</span>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <header className="flex justify-between items-center p-4 bg-white border-b shadow-sm">
+          <div className="flex items-center flex-1">
+            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="text-gray-500 mr-4 md:hidden">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+            </button>
           </div>
-        </div>
+          <div className="flex-1 text-center">
+            {currentLesson && <h1 className="text-2xl font-bold text-gray-900 truncate">{currentLesson.title}</h1>}
+          </div>
+          <div className="flex-1 flex justify-end">
+            <NewCourseButton />
+          </div>
+        </header>
 
-        {/* Main content */}
-        <div className="flex-1 overflow-hidden">
-          {loading ? (
-            <LoadingState />
-          ) : error ? (
-            <ErrorState message={error} />
-          ) : !course ? (
-            <NoCourseState />
+        <main className="flex-1 overflow-y-auto p-6 bg-gray-50">
+          {showQuiz && currentModule ? (
+            <QuizView
+              key={activeModuleId}
+              lessons={currentModule.lessons}
+              onComplete={(score) => {
+                handleQuizCompletion(activeLessonId, score);
+                setShowQuiz(false);
+              }}
+            />
           ) : (
-            <div className="h-full">
-              {activeLesson && (
-                <LessonView
-                  lesson={activeLesson}
-                  moduleTitle={activeModule?.title}
+            currentLesson ? (
+              <LessonView
+                  lesson={currentLesson}
+                  moduleTitle={currentModule?.title}
                   subject={course.subject}
+                  onUpdateLesson={handleUpdateLesson}
+                  usedImageTitles={allImageTitles}
+                  usedImageUrls={allImageUrls}
+                  imageTitleCounts={imageTitleCounts}
+                  imageUrlCounts={imageUrlCounts}
+                  courseId={courseId}
                   onNextLesson={handleNextLesson}
                   onPreviousLesson={handlePreviousLesson}
-                  currentLessonIndex={activeModule?.lessons.findIndex(l => l.id === activeLesson.id) ?? 0}
-                  totalLessonsInModule={activeModule?.lessons.length ?? 0}
-                  onUpdateLesson={handleLessonUpdate}
+                  currentLessonIndex={currentModule?.lessons.findIndex(l => l.id === activeLessonId)}
+                  totalLessonsInModule={currentModule?.lessons.length}
                   activeModule={activeModule}
                   handleModuleUpdate={handleModuleUpdate}
-                />
-              )}
+                  onQuizComplete={handleQuizCompletion}
+              />
+            ) : (
+              <div className="text-center text-gray-500 pt-10">
+                <p>Select a lesson to begin.</p>
+              </div>
+            )
+          )}
+          {showPerfectScoreMessage && (
+            <div className="fixed bottom-5 right-5 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg shadow-lg z-50">
+              <strong className="font-bold">Congratulations!</strong>
+              <span className="block sm:inline"> You've perfected this module. Unlocking the next one...</span>
             </div>
           )}
-        </div>
+          {showUnlockToast && (
+            <div className="fixed bottom-5 right-5 bg-green-500 text-white px-4 py-3 rounded-lg shadow-lg z-50">
+              <strong className="font-bold">Module Unlocked!</strong>
+              <span className="block sm:inline"> You can now access {unlockedModuleName}.</span>
+            </div>
+          )}
+        </main>
       </div>
     </div>
   );
-};
-
-CourseDisplay.propTypes = {
-  // PropTypes for CourseDisplay if it had them
 };
 
 export default memo(CourseDisplay);

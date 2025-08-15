@@ -45,4 +45,76 @@
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 1rem;
   padding: 1rem;
+}
+
+/* Mobile Responsive Design */
+@media (max-width: 767px) {
+  .course-display {
+    padding: 0.5rem;
+  }
+  
+  /* Header adjustments for mobile */
+  header {
+    padding: 0.75rem 1rem;
+  }
+  
+  /* Hamburger button styling */
+  .hamburger-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+  }
+  
+  /* NOTE: The sidebar panel is fully styled via Tailwind in JSX.
+     Previously, `.sidebar-mobile` here acted as a full-screen overlay
+     which conflicted with the new implementation and caused the menu
+     to appear as a blank screen. Those rules are intentionally removed. */
+}
+
+/* Tablet adjustments */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .course-display {
+    padding: 0.75rem;
+  }
+  
+  /* Hide hamburger on tablet/desktop */
+  .hamburger-button {
+    display: none;
+  }
+}
+
+/* Desktop styles */
+@media (min-width: 1024px) {
+  /* Hide hamburger on desktop */
+  .hamburger-button {
+    display: none;
+  }
+}
+
+/* Smooth transitions */
+.sidebar-mobile {
+  transition: all 0.3s ease-in-out;
+}
+
+/* Focus styles for accessibility */
+.hamburger-button:focus,
+.sidebar-mobile button:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .hamburger-button {
+    border: 1px solid #000;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-mobile {
+    transition: none;
+  }
 } 

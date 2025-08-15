@@ -1,8 +1,53 @@
 import React, { useState, useEffect } from 'react';
 import './QuizView.css'; // We'll create this for styling
-import AIService from '../services/AIService.js';
 
-function QuizView({ questions = [], onComplete, lessonContent, lessonTitle, onRetakeQuiz, lessonId, module, onModuleUpdate }) {
+// Helper to shuffle an array in place (Fisher-Yates)
+function shuffleArray(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+}
+
+// Shuffle questions and, for each question, shuffle options.
+// Ensures the correct answer position is not identical for all questions.
+function shuffleQuestionsAndOptions(questions) {
+  if (!Array.isArray(questions)) return [];
+
+  // Shuffle question order
+  const questionsShuffled = shuffleArray([...questions]);
+
+  // Shuffle options per question
+  const withShuffledOptions = questionsShuffled.map((q) => {
+    const options = Array.isArray(q.options) ? [...q.options] : [];
+    shuffleArray(options);
+    return { ...q, options };
+  });
+
+  // Ensure distribution: avoid all correct answers sharing the same index
+  const correctPositions = withShuffledOptions.map((q) => (Array.isArray(q.options) ? q.options.indexOf(q.answer) : -1));
+  const uniquePositions = new Set(correctPositions.filter((idx) => idx >= 0));
+
+  if (uniquePositions.size <= 1 && withShuffledOptions.length > 1) {
+    // Move at least one question's correct answer to a different index
+    for (let qi = 0; qi < withShuffledOptions.length; qi++) {
+      const q = withShuffledOptions[qi];
+      if (!Array.isArray(q.options) || q.options.length < 2) continue;
+      const currentIndex = q.options.indexOf(q.answer);
+      if (currentIndex < 0) continue;
+      const candidateIndexes = q.options.map((_, i) => i).filter((i) => i !== currentIndex);
+      if (candidateIndexes.length === 0) continue;
+      const newIndex = candidateIndexes[Math.floor(Math.random() * candidateIndexes.length)];
+      [q.options[currentIndex], q.options[newIndex]] = [q.options[newIndex], q.options[currentIndex]];
+      break; // One change is enough to break the uniformity
+    }
+  }
+
+  return withShuffledOptions;
+}
+
+function QuizView({ questions = [], onComplete, lessonContent, lessonTitle, onRetakeQuiz, lessonId, module, onModuleUpdate, checkAndUnlockNextModule }) {
   const [selectedAnswers, setSelectedAnswers] = useState({}); // Stores { questionIndex: selectedOptionIndex }
   const [showResult, setShowResult] = useState(false);
   const [score, setScore] = useState(0);
@@ -11,19 +56,38 @@ function QuizView({ questions = [], onComplete, lessonContent, lessonTitle, onRe
   const [incorrectAnswers, setIncorrectAnswers] = useState({}); // Store incorrect answers with feedback
   const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false);
 
+  // Debug logging
+  console.log('[QuizView] Component props:', {
+    questions,
+    questionsLength: questions?.length,
+    lessonTitle,
+    lessonId,
+    hasModule: !!module
+  });
+
   // Initialize shuffled questions
   useEffect(() => {
+    console.log('[QuizView] useEffect triggered with questions:', {
+      hasQuestions: !!questions,
+      questionsLength: questions?.length,
+      questions: questions
+    });
+    
     if (questions && questions.length > 0) {
-      const shuffled = [...questions];
-      for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-      }
+      const shuffled = shuffleQuestionsAndOptions(questions);
+      console.log('[QuizView] Questions shuffled successfully:', {
+        originalCount: questions.length,
+        shuffledCount: shuffled.length,
+        shuffled: shuffled
+      });
       setShuffledQuestions(shuffled);
       setSelectedAnswers({});
       setShowResult(false);
       setScore(0);
       setQuizStatus('pending');
+    } else {
+      console.warn('[QuizView] No questions provided or questions array is empty');
+      setShuffledQuestions([]);
     }
   }, [questions]);
 
@@ -61,7 +125,7 @@ function QuizView({ questions = [], onComplete, lessonContent, lessonTitle, onRe
     setScore(finalScore);
     setShowResult(true);
     setIncorrectAnswers(incorrect);
-    setQuizStatus(finalScore >= 4 ? 'passed' : 'failed');
+    setQuizStatus(finalScore === 5 ? 'passed' : 'failed');
 
     // Notify parent component of quiz completion
     if (onComplete) {
@@ -69,29 +133,41 @@ function QuizView({ questions = [], onComplete, lessonContent, lessonTitle, onRe
     }
 
     // Update module progress if score is perfect
-    if (finalScore === 5 && module && onModuleUpdate) {
-      const updatedModule = { ...module };
-      if (!updatedModule.perfectQuizzes) updatedModule.perfectQuizzes = 0;
-      updatedModule.perfectQuizzes += 1;
-      onModuleUpdate(updatedModule);
+    if (finalScore === 5) {
+      if (module && onModuleUpdate) {
+        const updatedModule = { ...module };
+        if (!updatedModule.perfectQuizzes) updatedModule.perfectQuizzes = 0;
+        updatedModule.perfectQuizzes += 1;
+        onModuleUpdate(updatedModule);
+      }
+      if (checkAndUnlockNextModule) {
+        checkAndUnlockNextModule(lessonId);
+      }
     }
   };
 
   const handleRetake = async () => {
     setIsGeneratingQuestions(true);
     try {
-      const newQuestions = await AIService.generateQuizQuestions(lessonContent, lessonTitle);
+      let newQuestions = null;
+      if (typeof AIService !== 'undefined' && AIService.generateQuizQuestions) {
+        newQuestions = await AIService.generateQuizQuestions(lessonContent, lessonTitle);
+      }
+
       if (newQuestions && newQuestions.length > 0) {
-        // Shuffle the new questions
-        const shuffled = [...newQuestions];
-        for (let i = shuffled.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-        }
+        // Shuffle questions and options for the new questions
+        const shuffled = shuffleQuestionsAndOptions(newQuestions);
         setShuffledQuestions(shuffled);
+      } else {
+        // Fallback: reshuffle current questions and options to vary positions
+        const reshuffled = shuffleQuestionsAndOptions(questions);
+        setShuffledQuestions(reshuffled);
       }
     } catch (error) {
       console.error('Error generating new questions:', error);
+      // Fallback on error: reshuffle current questions
+      const reshuffled = shuffleQuestionsAndOptions(questions);
+      setShuffledQuestions(reshuffled);
     } finally {
       setIsGeneratingQuestions(false);
     }
@@ -112,10 +188,23 @@ function QuizView({ questions = [], onComplete, lessonContent, lessonTitle, onRe
     );
   }
 
+  // Debug render conditions
+  console.log('[QuizView] Render conditions:', {
+    hasQuestions: !!questions,
+    questionsLength: questions?.length,
+    questionsType: typeof questions,
+    isArray: Array.isArray(questions),
+    shuffledQuestionsLength: shuffledQuestions.length,
+    showResult,
+    isGeneratingQuestions
+  });
+
   if (!questions || questions.length === 0) {
+    console.warn('[QuizView] Early return - no questions available');
     return (
       <div className="text-center p-8">
         <p className="text-gray-600">No quiz questions available for this lesson.</p>
+        <p className="text-sm text-gray-500 mt-2">Debug: questions={JSON.stringify(questions)}</p>
       </div>
     );
   }
@@ -178,8 +267,8 @@ function QuizView({ questions = [], onComplete, lessonContent, lessonTitle, onRe
                   Score: {score}/5
                   {score === 5 && <span className="ml-2 text-green-600">Perfect Score! 🎉</span>}
                 </p>
-                <p className={`text-sm ${score >= 4 ? 'text-green-600' : 'text-red-600'}`}>
-                  {score >= 4 ? 'Quiz passed!' : 'Try again to improve your score.'}
+                <p className={`text-sm ${score === 5 ? 'text-green-600' : 'text-red-600'}`}>
+                  {score === 5 ? 'Quiz passed!' : 'To move to the next module, you must score 5/5 on all quizzes within this module.'}
                 </p>
               </div>
               <button

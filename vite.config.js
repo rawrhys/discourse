@@ -1,20 +1,27 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import compression from 'vite-plugin-compression'
 import dotenv from 'dotenv'
 import path from 'path'
+import compression from 'vite-plugin-compression';
+
+dotenv.config();
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  // Use absolute base path so assets are referenced from the site root. This avoids
+  // broken paths like /images/assets/... when the SPA is served from a nested
+  // route (e.g., /course/123).
+  base: '/',
   plugins: [
     react(),
     compression({
-      algorithm: 'gzip',
-      ext: '.gz',
-      threshold: 10240, // Only compress files larger than 10kb
+      level: 9, 
+      threshold: 10240, 
       deleteOriginFile: false
     })
   ],
+  // Copy public files including .htaccess
+  publicDir: 'public',
   server: {
     port: 5173,
     open: true,
@@ -28,40 +35,62 @@ export default defineConfig({
       reconnect: true,
       retry: 5
     },
-    strictPort: true, // Force Vite to use port 4003
+    strictPort: true,
     fs: {
       deny: ['server.js', 'index.ts', '.env']
     },
     proxy: {
       '/api': {
-        target: 'http://localhost:4002',
+        target: 'http://localhost:4003',
         changeOrigin: true,
-        secure: false
+        secure: false, // Allow self-signed certificates
+        rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      '/cached-images': {
+        target: 'http://localhost:4003',
+        changeOrigin: true,
+        secure: false,
+      },
+      // Ensure saved images served by the backend are accessible in dev
+      '/images': {
+        target: 'http://localhost:4003',
+        changeOrigin: true,
+        secure: false,
       }
     }
   },
   build: {
     target: 'esnext',
+    // Enable minification for production
     minify: 'terser',
-    terserOptions: {
-      compress: {
-        drop_console: true,
-        drop_debugger: true
-      }
-    },
+    cssMinify: true,
+    outDir: 'dist',
+    assetsDir: 'assets',
+    sourcemap: true, // Enable sourcemaps for production
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          ai: ['./src/services/AIService.js']
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            return id.toString().split('node_modules/')[1].split('/')[0].toString();
+          }
         }
       }
     },
-    chunkSizeWarningLimit: 1000
+    chunkSizeWarningLimit: 1000,
+    // Copy .htaccess and other deployment files
+    copyPublicDir: true
+  },
+  resolve: {
+    alias: {
+      'node-fetch': 'isomorphic-fetch',
+      'https': 'https-browserify',
+    },
+  },
+  define: {
+    global: 'globalThis',
   },
   optimizeDeps: {
     include: ['react', 'react-dom', 'react-router-dom'],
-    exclude: ['@mistralai/mistralai']
-  },
-  envPrefix: 'VITE_'
+    exclude: ['node-fetch']
+  }
 })

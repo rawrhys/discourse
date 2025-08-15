@@ -114,18 +114,43 @@
 }
 
 .lesson-image-container {
-  margin: 1.5rem 0;
+  margin: 1.5rem auto;
   text-align: center;
   position: relative;
   min-height: 200px;
+  max-width: 800px;
+  width: 100%;
+  /* Ensure proper image display */
+  overflow: visible;
 }
 
 .lesson-image-container.loading {
-  visibility: hidden;
+  background: #f5f5f5;
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .lesson-image-container:not(.loading) {
   visibility: visible;
+}
+
+/* Ensure lesson images are always visible */
+.lesson-image-container img {
+  width: 100%;
+  height: auto;
+  display: block;
+  /* Override any opacity issues */
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.lesson-image-container .lesson-image {
+  /* Ensure lesson images are visible */
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: block !important;
 }
 
 .lesson-tabs {
@@ -213,12 +238,6 @@
 }
 
 /* Image container styles */
-.lesson-image-container img {
-  width: 100%;
-  height: auto;
-  display: block;
-}
-
 .lesson-image-container figcaption {
   padding: 1rem;
   background-color: #f8f9fa;
@@ -355,8 +374,8 @@
   bottom: 0;
   left: 0;
   right: 0;
-  background: rgba(0, 0, 0, 0.7);
-  color: white;
+  background: rgba(255, 255, 255, 0.9);
+  color: #000;
   padding: 0.5rem;
   font-size: 0.875rem;
   text-align: center;
@@ -372,10 +391,8 @@
 }
 
 .image-loading {
-  text-align: center;
-  padding: 2rem;
   color: #6b7280;
-  font-style: italic;
+  font-size: 0.875rem;
 }
 
 /* Prevent layout shifts during loading */
@@ -427,6 +444,41 @@
   box-shadow: none;
 }
 
+/* Mobile-specific button improvements */
+@media (max-width: 768px) {
+  .lesson-view button {
+    /* Ensure buttons are easily tappable on mobile */
+    min-height: 44px;
+    min-width: 44px;
+    /* Prevent text selection on tap */
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    /* Improve touch feedback */
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+  }
+  
+  .lesson-view button:active {
+    /* Visual feedback on mobile tap */
+    background-color: #e5e7eb;
+    transform: scale(0.98);
+  }
+  
+  /* Ensure tab buttons are properly spaced on mobile */
+  .lesson-view .flex.flex-col.space-y-2 button {
+    margin-bottom: 0.5rem;
+  }
+  
+  /* Full width buttons on mobile for better touch targets */
+  .lesson-view .flex.flex-col.space-y-2 button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
 /* View toggle buttons */
 .view-toggle-button {
   padding: 0.5rem 1rem;
@@ -450,4 +502,17 @@
 
 .view-toggle-button:not(.active):hover {
   background-color: #e5e7eb;
+} 
+
+.quiz-completed-message h4 {
+  margin-bottom: 0.5rem;
+}
+
+.flashcards-grid-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+  padding: 1rem;
+  height: 100%;
+  overflow-y: auto;
 } 

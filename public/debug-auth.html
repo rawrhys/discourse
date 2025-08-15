@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auth Debug Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .log { background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Authentication Debug Test</h1>
+    <button onclick="testRegistration()">Test Registration</button>
+    <button onclick="testCurrentUser()">Test Current User</button>
+    <button onclick="clearLogs()">Clear Logs</button>
+    <div id="logs"></div>
+
+    <script>
+        let currentToken = null;
+
+        function log(message, type = 'info') {
+            const logsDiv = document.getElementById('logs');
+            const logDiv = document.createElement('div');
+            logDiv.className = `log ${type}`;
+            logDiv.innerHTML = `<strong>${new Date().toLocaleTimeString()}:</strong> ${message}`;
+            logsDiv.appendChild(logDiv);
+            console.log(message);
+        }
+
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '';
+        }
+
+        async function testRegistration() {
+            log('=== Testing User Registration ===', 'info');
+            
+            try {
+                const response = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: 'debug@test.com',
+                        password: 'debug123',
+                        name: 'Debug User'
+                    })
+                });
+                
+                const data = await response.json();
+                log(`Registration Response Status: ${response.status}`, response.ok ? 'success' : 'error');
+                log(`Registration Response: ${JSON.stringify(data, null, 2)}`, response.ok ? 'success' : 'error');
+                
+                if (data.token) {
+                    currentToken = data.token;
+                    log('✅ Registration successful, token stored', 'success');
+                    localStorage.setItem('token', data.token);
+                } else {
+                    log('❌ Registration failed - no token received', 'error');
+                }
+            } catch (error) {
+                log(`❌ Registration error: ${error.message}`, 'error');
+            }
+        }
+
+        async function testCurrentUser() {
+            log('=== Testing Current User Endpoint ===', 'info');
+            
+            const token = currentToken || localStorage.getItem('token');
+            if (!token) {
+                log('❌ No token available. Please register first.', 'error');
+                return;
+            }
+            
+            log(`Using token: ${token.substring(0, 20)}...`, 'info');
+            
+            try {
+                const response = await fetch('/api/user/current', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const data = await response.json();
+                log(`Current User Response Status: ${response.status}`, response.ok ? 'success' : 'error');
+                log(`Current User Response: ${JSON.stringify(data, null, 2)}`, response.ok ? 'success' : 'error');
+                
+                if (response.ok) {
+                    log('✅ Current user endpoint works', 'success');
+                } else {
+                    log('❌ Current user endpoint failed', 'error');
+                }
+            } catch (error) {
+                log(`❌ Current user error: ${error.message}`, 'error');
+            }
+        }
+
+        // Auto-test on page load
+        window.onload = function() {
+            log('Debug page loaded. Click "Test Registration" to start.', 'info');
+        };
+    </script>
+</body>
+</html> 

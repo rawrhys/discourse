@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import ChatInterface from './ChatInterface';
-import CourseDisplay from './CourseDisplay';
+const CourseDisplay = lazy(() => import('./CourseDisplay'));
 
 const Home = () => {
   const {
@@ -12,7 +12,11 @@ const Home = () => {
   } = useOutletContext();
 
   if (course) {
-    return <CourseDisplay />;
+    return (
+      <Suspense fallback={<div>Loading...</div>}>
+        <CourseDisplay />
+      </Suspense>
+    );
   }
 
   return (

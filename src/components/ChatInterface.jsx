@@ -3,28 +3,139 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import PropTypes from 'prop-types';
 
-const ChatInterface = ({ onGenerateCourse, isGenerating }) => {
+const ChatInterface = ({ onGenerateCourse, isGenerating, generationProgress: parentGenerationProgress }) => {
   const [prompt, setPrompt] = useState('');
   const [difficultyLevel, setDifficultyLevel] = useState('intermediate');
   const [numModules, setNumModules] = useState(3);
-  const [learningObjectives, setLearningObjectives] = useState('');
-  const [debugMode, setDebugMode] = useState(false);
-  const [debugInfo, setDebugInfo] = useState(null);
-  const [showDebugModal, setShowDebugModal] = useState(false);
+  const [numLessonsPerModule, setNumLessonsPerModule] = useState(3);
   // Add a local loading state to ensure animations work correctly
   const [localLoading, setLocalLoading] = useState(false);
   const [streamingStatus, setStreamingStatus] = useState('');
   const [error, setError] = useState(null);
+  
+  // Use parent's generation progress if available, otherwise use local state
+  const [localGenerationProgress, setLocalGenerationProgress] = useState({
+    stage: 'idle', // idle, starting, generating, completed, error
+    currentModule: 0,
+    totalModules: 0,
+    currentLesson: 0,
+    totalLessons: 0,
+    message: '',
+    details: []
+  });
+  
+  const generationProgress = parentGenerationProgress || localGenerationProgress;
 
   // Sync the local loading state with the prop
   useEffect(() => {
-    setLocalLoading(isGenerating);
+    if (isGenerating) {
+      setLocalLoading(true);
+      setLocalGenerationProgress(prev => ({ 
+        ...prev, 
+        stage: 'starting', 
+        message: 'Initializing course generation...' 
+      }));
+    } else {
+      // Add a small delay before resetting states to ensure smooth transitions
+      setTimeout(() => {
+        setLocalLoading(false);
+        setLocalGenerationProgress({
+          stage: 'idle',
+          currentModule: 0,
+          totalModules: 0,
+          currentLesson: 0,
+          totalLessons: 0,
+          message: '',
+          details: []
+        });
+        // Clear any error messages when generation completes or is cancelled
+        setError(null);
+        setStreamingStatus('');
+      }, 500);
+    }
   }, [isGenerating]);
+
+  // Handle progress updates from streaming
+  const handleProgressUpdate = (data) => {
+    if (!data) return;
+
+    console.log('📡 [CHAT INTERFACE] Progress update:', data);
+
+    // Update streaming status
+    if (data.message) {
+      setStreamingStatus(data.message);
+    }
+
+    // Handle different update types
+    switch (data.type) {
+      case 'status':
+        setLocalGenerationProgress(prev => ({
+          ...prev,
+          stage: 'starting',
+          message: data.message
+        }));
+        break;
+      case 'progress':
+        setLocalGenerationProgress(prev => ({
+          ...prev,
+          stage: 'generating',
+          currentModule: data.currentModule || prev.currentModule,
+          totalModules: data.totalModules || prev.totalModules,
+          currentLesson: data.currentLesson || prev.currentLesson,
+          totalLessons: data.totalLessons || prev.totalLessons,
+          message: data.message || prev.message,
+          details: [...prev.details, { 
+            timestamp: new Date().toISOString(), 
+            message: data.message 
+          }]
+        }));
+        break;
+      case 'error':
+        setError(data.message || 'An error occurred during course generation');
+        setLocalGenerationProgress(prev => ({
+          ...prev,
+          stage: 'error',
+          message: data.message || 'Course generation failed'
+        }));
+        break;
+      case 'complete':
+        setLocalGenerationProgress(prev => ({
+          ...prev,
+          stage: 'completed',
+          message: 'Course generation completed successfully!'
+        }));
+        break;
+      default:
+        // Handle any other updates
+        setLocalGenerationProgress(prev => ({
+          ...prev,
+          details: [...prev.details, { 
+            timestamp: new Date().toISOString(), 
+            message: typeof data === 'string' ? data : JSON.stringify(data) 
+          }]
+        }));
+    }
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // No cleanup needed for streaming
+    };
+  }, []);
 
   const handleSubmit = async (e) => {
     if (e) e.preventDefault(); // Prevent default form submission if event exists
     
     if (!prompt.trim() || localLoading) return; // Prevent submission if prompt is empty or already loading
+
+    console.log('🎯 [CHAT INTERFACE] Starting course generation request', {
+      prompt: prompt,
+      difficultyLevel: difficultyLevel,
+      numModules: numModules,
+      numLessonsPerModule: numLessonsPerModule,
+      timestamp: new Date().toISOString()
+    });
 
     // Set local loading state immediately for better UX feedback
     setLocalLoading(true);
@@ -35,30 +146,137 @@ const ChatInterface = ({ onGenerateCourse, isGenerating }) => {
       prompt,
       difficultyLevel,
       numModules: parseInt(numModules),
-      learningObjectives: learningObjectives.split('\n').filter(obj => obj.trim() !== ''),
-      debug: debugMode,
+      numLessonsPerModule: parseInt(numLessonsPerModule),
       onStream: (chunk) => {
-        // The chunk is now an object, so we stringify it for display
-        const chunkString = typeof chunk === 'object' ? JSON.stringify(chunk, null, 2) : chunk;
-        setStreamingStatus(prev => prev + '\n' + chunkString);
+        // Handle different types of streaming updates
+        console.log('📡 [CHAT INTERFACE] Received streaming chunk:', {
+          chunk: chunk,
+          timestamp: new Date().toISOString()
+        });
+
+        if (typeof chunk === 'object' && chunk.type) {
+          // Handle structured progress updates
+          switch (chunk.type) {
+            case 'progress':
+              setLocalGenerationProgress(prev => ({
+                ...prev,
+                stage: 'generating',
+                currentModule: chunk.currentModule || prev.currentModule,
+                totalModules: chunk.totalModules || prev.totalModules,
+                currentLesson: chunk.currentLesson || prev.currentLesson,
+                totalLessons: chunk.totalLessons || prev.totalLessons,
+                message: chunk.message || prev.message,
+                details: [...prev.details, { timestamp: new Date().toISOString(), message: chunk.message }]
+              }));
+              break;
+            case 'module_start':
+              setLocalGenerationProgress(prev => ({
+                ...prev,
+                stage: 'generating',
+                currentModule: chunk.moduleIndex + 1,
+                totalModules: chunk.totalModules,
+                message: `Generating Module ${chunk.moduleIndex + 1}: ${chunk.moduleTitle}`,
+                details: [...prev.details, { timestamp: new Date().toISOString(), message: `Starting Module ${chunk.moduleIndex + 1}: ${chunk.moduleTitle}` }]
+              }));
+              break;
+            case 'lesson_start':
+              setLocalGenerationProgress(prev => ({
+                ...prev,
+                stage: 'generating',
+                currentLesson: chunk.lessonIndex + 1,
+                totalLessons: chunk.totalLessons,
+                message: `Generating Lesson ${chunk.lessonIndex + 1}: ${chunk.lessonTitle}`,
+                details: [...prev.details, { timestamp: new Date().toISOString(), message: `Starting Lesson ${chunk.lessonIndex + 1}: ${chunk.lessonTitle}` }]
+              }));
+              break;
+            case 'lesson_complete':
+              setLocalGenerationProgress(prev => ({
+                ...prev,
+                message: `Completed Lesson: ${chunk.lessonTitle}`,
+                details: [...prev.details, { timestamp: new Date().toISOString(), message: `✅ Completed: ${chunk.lessonTitle}` }]
+              }));
+              break;
+            case 'quiz_generating':
+              setLocalGenerationProgress(prev => ({
+                ...prev,
+                message: `Generating quiz for: ${chunk.lessonTitle}`,
+                details: [...prev.details, { timestamp: new Date().toISOString(), message: `🎯 Generating quiz for: ${chunk.lessonTitle}` }]
+              }));
+              break;
+            case 'quiz_complete':
+              setLocalGenerationProgress(prev => ({
+                ...prev,
+                message: `Quiz completed for: ${chunk.lessonTitle}`,
+                details: [...prev.details, { timestamp: new Date().toISOString(), message: `✅ Quiz completed for: ${chunk.lessonTitle}` }]
+              }));
+              break;
+            case 'flashcards_generating':
+              setLocalGenerationProgress(prev => ({
+                ...prev,
+                message: `Generating flashcards for: ${chunk.lessonTitle}`,
+                details: [...prev.details, { timestamp: new Date().toISOString(), message: `🧠 Generating flashcards for: ${chunk.lessonTitle}` }]
+              }));
+              break;
+            case 'flashcards_complete':
+              setLocalGenerationProgress(prev => ({
+                ...prev,
+                message: `Flashcards created for: ${chunk.lessonTitle}`,
+                details: [...prev.details, { timestamp: new Date().toISOString(), message: `✅ Flashcards created for: ${chunk.lessonTitle}` }]
+              }));
+              break;
+            case 'course_complete':
+              setLocalGenerationProgress(prev => ({
+                ...prev,
+                stage: 'completed',
+                message: 'Course generation completed successfully!',
+                details: [...prev.details, { timestamp: new Date().toISOString(), message: '🎉 Course generation completed successfully!' }]
+              }));
+              break;
+            default:
+              // Handle generic updates
+              const chunkString = JSON.stringify(chunk, null, 2);
+              setStreamingStatus(prev => prev + '\n' + chunkString);
+              setLocalGenerationProgress(prev => ({
+                ...prev,
+                details: [...prev.details, { timestamp: new Date().toISOString(), message: chunkString }]
+              }));
+          }
+        } else {
+          // Handle plain text updates
+          const chunkString = typeof chunk === 'object' ? JSON.stringify(chunk, null, 2) : chunk;
+          setStreamingStatus(prev => prev + '\n' + chunkString);
+          setLocalGenerationProgress(prev => ({
+            ...prev,
+            details: [...prev.details, { timestamp: new Date().toISOString(), message: chunkString }]
+          }));
+        }
       }
     };
     
+    console.log('📤 [CHAT INTERFACE] Sending course parameters to parent component:', courseParams);
+    
     try {
       const result = await onGenerateCourse(courseParams);
-      if (debugMode && result?.debugInfo) {
-        setDebugInfo(result.debugInfo);
-      }
+      console.log('✅ [CHAT INTERFACE] Course generation completed successfully:', {
+        result: result,
+        hasDebugInfo: !!result?.debugInfo,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Removed debugInfo handling
     } catch (error) {
-      console.error('Error generating course:', error);
+      console.error('💥 [CHAT INTERFACE] Course generation failed:', {
+        error: error.message,
+        stack: error.stack,
+        params: courseParams,
+        timestamp: new Date().toISOString()
+      });
       setError(error.message || 'Failed to generate course');
       setStreamingStatus(prev => prev + '\nError: ' + error.message);
     } finally {
-      // Ensure localLoading is reset even if there's an error from onGenerateCourse
-      // or if onGenerateCourse doesn't manage its parent's isGenerating state quickly enough.
-      // However, App.jsx should manage the primary isGenerating state.
-      // setLocalLoading(false); // This might be too quick if parent state is slow.
-      setLocalLoading(false);
+      console.log('🏁 [CHAT INTERFACE] Course generation request completed');
+      // Don't reset localLoading here - let the parent component handle it
+      // setLocalLoading(false);
       setStreamingStatus('');
     }
   };
@@ -97,7 +315,7 @@ const ChatInterface = ({ onGenerateCourse, isGenerating }) => {
             ></textarea>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label htmlFor="difficulty" className="block text-sm font-medium text-gray-700 mb-1">
                 Difficulty Level
@@ -130,47 +348,27 @@ const ChatInterface = ({ onGenerateCourse, isGenerating }) => {
                 disabled={localLoading} // Disable when loading
               />
             </div>
-          </div>
-          
-          <div>
-            <label htmlFor="objectives" className="block text-sm font-medium text-gray-700 mb-1">
-              Learning Objectives (Optional, one per line)
-            </label>
-            <textarea
-              id="objectives"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              rows="3"
-              value={learningObjectives}
-              onChange={(e) => setLearningObjectives(e.target.value)}
-              placeholder="E.g.,&#10;Understand the basics of machine learning&#10;Implement simple algorithms&#10;Evaluate model performance"
-              disabled={localLoading} // Disable when loading
-            ></textarea>
-          </div>
-          
-          <div className="flex justify-between items-center">
-            <div className="flex items-center">
+            
+            <div>
+              <label htmlFor="numLessonsPerModule" className="block text-sm font-medium text-gray-700 mb-1">
+                Lessons per Module
+              </label>
               <input
-                type="checkbox"
-                id="debugMode"
-                checked={debugMode}
-                onChange={() => setDebugMode(!debugMode)}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                type="number"
+                id="numLessonsPerModule"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                min="1"
+                max="5"
+                value={numLessonsPerModule}
+                onChange={(e) => setNumLessonsPerModule(e.target.value)}
                 disabled={localLoading} // Disable when loading
               />
-              <label htmlFor="debugMode" className="ml-2 block text-sm text-gray-700">
-                Debug Mode
-              </label>
-              {debugInfo && (
-                <button
-                  type="button"
-                  onClick={() => setShowDebugModal(true)}
-                  className="ml-2 text-xs text-blue-600 hover:text-blue-800"
-                  disabled={localLoading} // Disable when loading
-                >
-                  View Debug Info
-                </button>
-              )}
             </div>
+          </div>
+          
+          {/* Removed Learning Objectives and Debug Mode sections */}
+          
+          <div className="flex justify-center">
             <button
               type="submit"
               className="w-full bg-blue-600 text-white p-3 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-colors disabled:bg-gray-400"
@@ -182,77 +380,24 @@ const ChatInterface = ({ onGenerateCourse, isGenerating }) => {
         </form>
       </div>
 
-      {/* Enhanced loading overlay with streaming status */}
-      {localLoading && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 z-40 flex items-center justify-center pointer-events-none">
-          <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full pointer-events-auto">
-            <div className="flex items-center justify-center mb-4">
-              <svg className="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-            </div>
-            <h3 className="text-lg font-medium text-gray-900 text-center mb-2">Creating Your Course</h3>
-            
-            {/* Streaming status display */}
-            <div className="mb-4 p-4 bg-gray-50 rounded-lg max-h-40 overflow-y-auto">
-              <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono">
-                {streamingStatus || 'Initializing...'}
-              </pre>
-            </div>
-
-            <div className="mb-3 text-sm text-gray-500 text-center">
-              <p className="mb-2">Our AI is generating custom learning materials based on your specifications.</p>
-              <p className="italic">This process may take a minute or two. Please don't refresh the page.</p>
-            </div>
-            
-            {/* Progress bar animation */}
-            <div className="h-1 w-full bg-gray-200 rounded-full mt-4 overflow-hidden">
-              <div className="h-full bg-blue-600 rounded-full animate-progress"></div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showDebugModal && debugInfo && createPortal(
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl max-w-6xl w-full max-h-[80vh] overflow-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold">Debug Information</h3>
-              <button
-                onClick={() => setShowDebugModal(false)}
-                className="text-gray-600 hover:text-gray-800"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="mb-4">
-              <h4 className="font-semibold mb-2">API Responses:</h4>
-              <pre className="bg-gray-100 p-4 rounded overflow-x-auto">
-                {JSON.stringify(debugInfo.apiResponses || {}, null, 2)}
-              </pre>
-            </div>
-            {debugInfo.errors && debugInfo.errors.length > 0 && (
-              <div>
-                <h4 className="font-semibold mb-2">Errors:</h4>
-                <pre className="bg-red-50 text-red-700 p-4 rounded overflow-x-auto">
-                  {JSON.stringify(debugInfo.errors, null, 2)}
-                </pre>
-              </div>
-            )}
-          </div>
-        </div>,
-        document.body
-      )}
+      {/* Removed Debug Modal */}
     </div>
   );
 };
 
 ChatInterface.propTypes = {
   onGenerateCourse: PropTypes.func.isRequired,
-  isGenerating: PropTypes.bool.isRequired,
+  onCancel: PropTypes.func,
+  isGenerating: PropTypes.bool,
+  generationProgress: PropTypes.shape({
+    stage: PropTypes.string,
+    currentModule: PropTypes.number,
+    totalModules: PropTypes.number,
+    currentLesson: PropTypes.number,
+    totalLessons: PropTypes.number,
+    message: PropTypes.string,
+    details: PropTypes.array
+  })
 };
 
 export default ChatInterface;

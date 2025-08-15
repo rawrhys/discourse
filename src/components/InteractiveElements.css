@@ -1,0 +1,61 @@
+/* src/components/InteractiveElements.css */
+
+.interactive-element-container {
+  background-color: #f9fafb; /* Light gray background */
+  border: 1px solid #e5e7eb; /* Soft border */
+  border-radius: 0.75rem; /* Rounded corners */
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  transition: box-shadow 0.3s ease-in-out;
+}
+
+.interactive-element-container:hover {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.interactive-element-header {
+  margin-bottom: 1.5rem;
+}
+
+.interactive-element-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1f2937; /* Darker text for title */
+  border-bottom: 2px solid #d1d5db; /* Underline for emphasis */
+  padding-bottom: 0.5rem;
+}
+
+.interactive-element-body {
+  padding-top: 1rem;
+}
+
+.flashcards-grid-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 1200px; /* Max width for larger screens */
+  margin: 0 auto; /* Center the grid */
+}
+
+.no-content-message {
+  color: #6b7280; /* Gray text for messages */
+  font-style: italic;
+  text-align: center;
+  padding: 2rem;
+  background-color: #f3f4f6;
+  border-radius: 0.5rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .flashcards-grid-container {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .interactive-element-title {
+    font-size: 1.25rem;
+  }
+} 

@@ -1,0 +1,55 @@
+
+DirectoryIndex index.html
+RewriteEngine On
+RewriteBase /
+
+# Hostinger specific - Node.js applications
+# For Hostinger VPS Cloud plans with Node.js support
+# Commented out for shared hosting - use PHP proxy instead
+# RewriteCond %{REQUEST_URI} ^/api/
+# RewriteRule ^api/(.*)$ server.js?path=api/$1 [QSA,L]
+
+# For Hostinger shared hosting (fallback to PHP bridge)
+# This is the correct approach for shared hosting:
+RewriteCond %{REQUEST_URI} ^/api/
+RewriteRule ^api/(.*)$ api-proxy.php?path=api/$1 [QSA,L]
+
+# Route /api/* via PHP proxy
+RewriteCond %{REQUEST_URI} ^/api/
+RewriteRule ^api/(.*)$ api-proxy.php?path=api/$1 [QSA,L]
+
+# NEW: Support direct /api-proxy.php/api/* calls from old bundles
+RewriteCond %{REQUEST_URI} ^/api-proxy\.php/api/
+RewriteRule ^api-proxy\.php/api/(.*)$ api-proxy.php?path=api/$1 [QSA,L]
+
+# Handle React Router - serve index.html for non-file requests
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_URI} !^/api/
+RewriteCond %{REQUEST_URI} !^/images/
+RewriteRule ^(.*)$ /index.html [QSA,L]
+
+# Enable CORS for API requests
+<IfModule mod_headers.c>
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+</IfModule>
+
+# Hostinger specific settings
+# Force HTTPS only in production and when HTTPS is available
+RewriteCond %{HTTPS} off
+RewriteCond %{HTTP_HOST} !^localhost
+RewriteCond %{HTTP_HOST} !^127\.0\.0\.1
+RewriteCond %{HTTP_HOST} !^192\.168\.
+RewriteCond %{HTTP_HOST} !^10\.
+RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Set environment variables
+SetEnv NODE_ENV production
+SetEnv PORT 4003
+SetEnv HTTPS_PORT 4004
+
+# Hostinger Node.js specific
+# If you're using Node.js on Hostinger, uncomment this:
+# SetHandler application/x-httpd-ea-nodejs

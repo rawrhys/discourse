@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Public Course API</title>
+</head>
+<body>
+    <h1>Test Public Course API</h1>
+    <div id="result"></div>
+
+    <script>
+        async function testPublicCourse() {
+            const resultDiv = document.getElementById('result');
+            
+            // Test with the course ID from the URL (without timestamp)
+            const courseId = 'course_f662e43d-01a6-4722-a0fa-25cdd232cca7'; // Remove the timestamp
+            
+            try {
+                console.log('Testing public course API with ID:', courseId);
+                
+                const response = await fetch(`https://thediscourse.ai/api/public/courses/${courseId}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const courseData = await response.json();
+                
+                console.log('Course data received:', courseData);
+                
+                resultDiv.innerHTML = `
+                    <h2>✅ API Test Successful</h2>
+                    <p><strong>Course ID:</strong> ${courseData.id}</p>
+                    <p><strong>Title:</strong> ${courseData.title}</p>
+                    <p><strong>Published:</strong> ${courseData.published ? 'Yes' : 'No'}</p>
+                    <p><strong>Modules:</strong> ${courseData.modules?.length || 0}</p>
+                    <p><strong>Public URL:</strong> <a href="https://thediscourse.ai/public/course/${courseData.id}" target="_blank">https://thediscourse.ai/public/course/${courseData.id}</a></p>
+                `;
+                
+            } catch (error) {
+                console.error('API test failed:', error);
+                resultDiv.innerHTML = `
+                    <h2>❌ API Test Failed</h2>
+                    <p><strong>Error:</strong> ${error.message}</p>
+                    <p>This could indicate:</p>
+                    <ul>
+                        <li>The course doesn't exist</li>
+                        <li>The course is not published</li>
+                        <li>Server is not running</li>
+                        <li>CORS issues</li>
+                        <li>Network connectivity problems</li>
+                    </ul>
+                `;
+            }
+        }
+        
+        // Run the test when page loads
+        testPublicCourse();
+    </script>
+</body>
+</html> 

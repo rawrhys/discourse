@@ -1,0 +1,96 @@
+
+DirectoryIndex index.html
+RewriteEngine On
+RewriteBase /
+
+# Force proper MIME types for assets (critical for CSS loading)
+<IfModule mod_mime.c>
+    AddType text/css .css
+    AddType application/javascript .js
+    AddType application/json .json
+    AddType image/svg+xml .svg
+    AddType image/webp .webp
+    AddType font/woff2 .woff2
+    AddType font/woff .woff
+    AddType font/ttf .ttf
+</IfModule>
+
+# Enable compression for better performance
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/css
+    AddOutputFilterByType DEFLATE application/javascript
+    AddOutputFilterByType DEFLATE text/html
+    AddOutputFilterByType DEFLATE application/json
+    AddOutputFilterByType DEFLATE image/svg+xml
+</IfModule>
+
+# Cache static assets
+<IfModule mod_expires.c>
+    ExpiresActive on
+    ExpiresByType text/css "access plus 1 year"
+    ExpiresByType application/javascript "access plus 1 year"
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/jpg "access plus 1 year"
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/gif "access plus 1 year"
+    ExpiresByType image/svg+xml "access plus 1 year"
+    ExpiresByType font/woff2 "access plus 1 year"
+</IfModule>
+
+# Security headers for CSS and JS files
+<IfModule mod_headers.c>
+    # Allow CORS for assets
+    <FilesMatch "\.(css|js|woff|woff2|ttf|svg|png|jpg|jpeg|gif)$">
+        Header always set Access-Control-Allow-Origin "*"
+        Header always set Cache-Control "public, max-age=31536000"
+    </FilesMatch>
+    
+    # Security headers for HTML
+    <FilesMatch "\.(html|htm)$">
+        Header always set X-Frame-Options "SAMEORIGIN"
+        Header always set X-Content-Type-Options "nosniff"
+        Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    </FilesMatch>
+    # Cache built assets aggressively
+    Header always set Cache-Control "public, max-age=31536000, immutable"
+</IfModule>
+
+# Cache our cached-images aggressively as well
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType image/webp "access plus 1 year"
+  ExpiresByType image/jpeg "access plus 1 year"
+  ExpiresByType image/jpg  "access plus 1 year"
+  ExpiresByType image/png  "access plus 1 year"
+</IfModule>
+
+# Hostinger specific - Node.js applications
+# For Hostinger VPS Cloud plans with Node.js support
+# RewriteCond %{REQUEST_URI} ^/api/
+# RewriteRule ^api/(.*)$ server.js?path=api/$1 [QSA,L]
+
+# For Hostinger shared hosting (fallback to PHP bridge)
+# Uncomment these lines if Node.js doesn't work:
+RewriteCond %{REQUEST_URI} ^/api/
+RewriteRule ^api/(.*)$ api-proxy.php?path=api/$1 [QSA,L]
+
+# Handle React Router - serve index.html for non-file requests
+# But exclude assets directory from this rule
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_URI} !^/api/
+RewriteCond %{REQUEST_URI} !^/assets/
+RewriteRule ^(.*)$ /index.html [QSA,L]
+
+# Hostinger specific settings
+# Force HTTPS (recommended)
+RewriteCond %{HTTPS} off
+RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Set environment variables
+SetEnv NODE_ENV production
+SetEnv PORT 4003
+
+# Hostinger Node.js specific
+# If you're using Node.js on Hostinger, uncomment this:
+# SetHandler application/x-httpd-ea-nodejs

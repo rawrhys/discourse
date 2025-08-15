@@ -1,0 +1,32 @@
+# Frontend API Configuration
+VITE_API_BASE_URL=http://31.97.115.145:4003
+
+# Backend Server Configuration
+PORT=4003
+HOST=0.0.0.0
+
+# JWT Secret for authentication
+JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+
+# Mistral AI API Key (required for course generation)
+# Get your API key from: https://console.mistral.ai/
+# API keys should start with "mist-"
+MISTRAL_API_KEY=mist-your-actual-api-key-here
+
+# Supabase Configuration (optional - for user authentication)
+SUPABASE_URL=your-supabase-url-here
+SUPABASE_ANON_KEY=your-supabase-anon-key-here
+
+# Stripe Configuration (optional - for payments)
+STRIPE_SECRET_KEY=your-stripe-secret-key-here
+STRIPE_WEBHOOK_SECRET=your-stripe-webhook-secret-here
+
+# Build path for static files
+BUILD_PATH=./dist
+
+# Pixabay (optional fallback for images)
+PIXABAY_API_KEY=your-pixabay-api-key-here
+
+# Admin emails allowed to access maintenance endpoints (comma-separated)
+# Leave empty to allow any authenticated user
+ADMIN_EMAILS=admin@example.com 

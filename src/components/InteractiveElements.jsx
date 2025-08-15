@@ -1,7 +1,9 @@
 // src/components/InteractiveElements.jsx
 import React, { useState } from 'react';
+import Flashcard from './Flashcard';
+import './InteractiveElements.css';
 
-const InteractiveElements = ({ element }) => {
+const InteractiveElements = ({ element, lessonContext, lessonTitle }) => {
   const [userResponse, setUserResponse] = useState('');
   const [showAnswer, setShowAnswer] = useState(false);
   
@@ -39,65 +41,31 @@ const InteractiveElements = ({ element }) => {
   };
 
   return (
-    <div className="interactive-element bg-blue-50 p-4 rounded-md border border-blue-100">
-      <p className="font-medium text-blue-800 mb-3">{instructions}</p>
-      {renderElement()}
+    <div className="interactive-element-container">
+      <div className="interactive-element-header">
+        <h3 className="interactive-element-title">{instructions}</h3>
+      </div>
+      <div className="interactive-element-body">
+        {renderElement()}
+      </div>
     </div>
   );
 };
 
 export const FlashcardElement = ({ data }) => {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [flipped, setFlipped] = useState(false);
   const { cards } = data;
 
-  if (!cards || cards.length === 0) return <p>No flashcards available.</p>;
-
-  const currentCard = cards[currentIndex];
-  const totalCards = cards.length;
-
-  const nextCard = () => {
-    setFlipped(false);
-    setCurrentIndex((prevIndex) => (prevIndex + 1) % totalCards);
-  };
-
-  const prevCard = () => {
-    setFlipped(false);
-    setCurrentIndex((prevIndex) => (prevIndex - 1 + totalCards) % totalCards);
-  };
+  if (!cards || cards.length === 0) return <p className="no-content-message">No flashcards available for this lesson.</p>;
 
   return (
-    <div className="flashcards [perspective:1000px]">
-      <div 
-        className="relative cursor-pointer mb-4 bg-white rounded-lg shadow-md h-48 w-full transition-transform duration-500 [transform-style:preserve-3d]"
-        onClick={() => setFlipped(!flipped)}
-        style={{ transform: flipped ? 'rotateY(180deg)' : 'rotateY(0deg)' }}
-      >
-        {/* Front of the card */}
-        <div className="absolute w-full h-full bg-white rounded-lg p-6 flex items-center justify-center text-center [backface-visibility:hidden]">
-          <p className="text-xl">{currentCard.front}</p>
-        </div>
-        {/* Back of the card - pre-rotated */}
-        <div className="absolute w-full h-full bg-white rounded-lg p-6 flex items-center justify-center text-center [backface-visibility:hidden] [transform:rotateY(180deg)]">
-          <p className="text-xl">{currentCard.back}</p>
-        </div>
-      </div>
-      
-      <div className="flex justify-between items-center">
-        <button 
-          onClick={prevCard}
-          className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-        >
-          Previous
-        </button>
-        <span className="text-sm text-gray-600">Card {currentIndex + 1} of {totalCards}</span>
-        <button 
-          onClick={nextCard}
-          className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-        >
-          Next
-        </button>
-      </div>
+    <div className="flashcards-grid-container">
+      {cards.map((card, index) => (
+        <Flashcard
+          key={index}
+          term={card.term}
+          definition={card.definition}
+        />
+      ))}
     </div>
   );
 };
