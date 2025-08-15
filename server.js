@@ -2547,6 +2547,63 @@ app.post('/api/quizzes/submit', authenticateToken, async (req, res) => {
   }
 });
 
+// Endpoint to generate quiz questions for existing courses
+app.post('/api/courses/:courseId/generate-quizzes', authenticateToken, async (req, res) => {
+  const { courseId } = req.params;
+  const userId = req.user.id;
+
+  console.log(`[GENERATE_QUIZZES] Generating quizzes for course: ${courseId}`);
+
+  try {
+    await db.read();
+    const course = db.data.courses.find(c => c.id === courseId && c.userId === userId);
+
+    if (!course) {
+      return res.status(404).json({ error: 'Course not found' });
+    }
+
+    if (!global.aiService) {
+      return res.status(503).json({ error: 'AI service not available' });
+    }
+
+    let quizzesGenerated = 0;
+    let totalLessons = 0;
+
+    // Generate quiz questions for each lesson that doesn't have them
+    for (const module of course.modules) {
+      for (const lesson of module.lessons) {
+        totalLessons++;
+        if (!lesson.quiz || lesson.quiz.length === 0) {
+          try {
+            console.log(`[GENERATE_QUIZZES] Generating quiz for lesson: ${lesson.title}`);
+            const quizQuestions = await global.aiService.generateQuiz(lesson.content, lesson.title);
+            lesson.quiz = quizQuestions;
+            quizzesGenerated++;
+            console.log(`[GENERATE_QUIZZES] Generated ${quizQuestions.length} questions for lesson: ${lesson.title}`);
+          } catch (error) {
+            console.error(`[GENERATE_QUIZZES] Failed to generate quiz for lesson ${lesson.title}:`, error);
+          }
+        }
+      }
+    }
+
+    await db.write();
+
+    console.log(`[GENERATE_QUIZZES] Completed. Generated quizzes for ${quizzesGenerated}/${totalLessons} lessons`);
+
+    res.json({
+      message: 'Quiz generation completed',
+      quizzesGenerated,
+      totalLessons,
+      courseId
+    });
+
+  } catch (error) {
+    console.error('[GENERATE_QUIZZES] Error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // New image search endpoint (handler and aliases)
 async function imageSearchHandler(req, res) {
   console.log(`[ImageSearch] ${req.method} ${req.path} - Headers:`, req.headers);
