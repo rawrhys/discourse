@@ -750,4 +750,84 @@ const LessonView = ({
             disabled={!ttsStatus.isSupported}
             title={ttsStatus.isPlaying ? 'Pause reading' : ttsStatus.isPaused ? 'Resume reading' : 'Start reading aloud'}
           >
-            <i className={`
+            <i className={`mr-2 ${ttsStatus.isPlaying ? 'fas fa-pause' : ttsStatus.isPaused ? 'fas fa-play' : 'fas fa-volume-up'}`}></i>
+            {ttsStatus.isPlaying ? 'Pause' : ttsStatus.isPaused ? 'Resume' : 'Read Aloud'}
+          </button>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto">
+          <Suspense fallback={<LoadingSpinner />}>
+            {view === 'content' && (
+              <div>
+                {console.log('[LessonView] Rendering content view')}
+                {memoizedContent}
+              </div>
+            )}
+            {view === 'quiz' && (
+              <div>
+                {console.log('[LessonView] Rendering quiz view')}
+                {memoizedQuizView}
+              </div>
+            )}
+            {view === 'flashcards' && (
+              <div>
+                {console.log('[LessonView] Rendering flashcards view')}
+                {renderFlashcards()}
+              </div>
+            )}
+          </Suspense>
+        </div>
+        {!showFailMessage && (
+          <div className="p-3 mb-4 bg-yellow-100 text-yellow-800 rounded text-center text-sm">
+            To move to the next module, you must score 5/5 on all quizzes within this module.
+          </div>
+        )}
+      </div>
+
+      <footer className="mt-8 pt-6 border-t border-gray-200">
+        <div className="flex flex-col sm:flex-row items-center space-y-3 sm:space-y-0 sm:justify-between">
+          <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-2">
+            <button
+              onClick={handlePreviousLessonWithTTS}
+              disabled={currentLessonIndex === 0}
+              className="px-4 py-2 text-sm font-medium rounded-md bg-gray-200 text-gray-700 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
+            >
+              <i className="fas fa-arrow-left mr-2"></i>Previous
+            </button>
+            <span className="text-sm text-gray-600 text-center">
+              {currentLessonIndex + 1} / {totalLessonsInModule}
+            </span>
+            <button
+              onClick={handleNextLessonWithTTS}
+              disabled={currentLessonIndex >= totalLessonsInModule - 1}
+              className="px-4 py-2 text-sm font-medium rounded-md bg-gray-200 text-gray-700 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
+            >
+              Next<i className="fas fa-arrow-right ml-2"></i>
+            </button>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+LessonView.propTypes = {
+  lesson: PropTypes.object.isRequired,
+  moduleTitle: PropTypes.string,
+  subject: PropTypes.string,
+  onNextLesson: PropTypes.func,
+  onPreviousLesson: PropTypes.func,
+  currentLessonIndex: PropTypes.number,
+  totalLessonsInModule: PropTypes.number,
+  onUpdateLesson: PropTypes.func,
+  activeModule: PropTypes.object,
+  handleModuleUpdate: PropTypes.func,
+  usedImageTitles: PropTypes.array,
+  usedImageUrls: PropTypes.array,
+  imageTitleCounts: PropTypes.object,
+  imageUrlCounts: PropTypes.object,
+  courseId: PropTypes.string,
+  checkAndUnlockNextModule: PropTypes.func
+};
+
+export default memo(LessonView);
