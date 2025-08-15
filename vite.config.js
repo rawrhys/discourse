@@ -41,19 +41,19 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: 'http://localhost:4003',
+        target: 'http://localhost:3001',
         changeOrigin: true,
-        secure: false, // Allow self-signed certificates
-        rewrite: (path) => path.replace(/^\/api/, '')
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, ''),
       },
       '/cached-images': {
-        target: 'http://localhost:4003',
+        target: 'http://localhost:3001',
         changeOrigin: true,
         secure: false,
       },
       // Ensure saved images served by the backend are accessible in dev
       '/images': {
-        target: 'http://localhost:4003',
+        target: 'http://localhost:3001',
         changeOrigin: true,
         secure: false,
       }
