@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './QuizView.css';
-import { useApiWrapper } from '../../services/api';
+import { useApiWrapper } from '../services/api';
 
 // Helper to shuffle an array in place (Fisher-Yates)
 function shuffleArray(array) {
