@@ -90,7 +90,8 @@
             "thumbnailUrl": "https://upload.wikimedia.org/wikipedia/commons/f/fd/Armageddon%3B_or%2C_The_overthrow_of_Romanism_and_monarchy%3B_the_existence_of_the_United_States_foretold_in_the_Bible_.._%28IA_armageddonover00bald%29.pdf"
           }
         }
-      ]
+      ],
+      "isLocked": false
     },
     {
       "id": "module_1_plaehe",
@@ -173,7 +174,8 @@
             "thumbnailUrl": "https://upload.wikimedia.org/wikipedia/commons/8/87/Hannibal_and_the_Crisis_of_the_Struggle_between_Carthage_and_Rome.djvu"
           }
         }
-      ]
+      ],
+      "isLocked": true
     },
     {
       "id": "module_2_plaehe",
@@ -256,7 +258,8 @@
             "thumbnailUrl": "https://upload.wikimedia.org/wikipedia/commons/1/15/The_history_of_the_decline_and_fall_of_the_Roman_empire_%28IA_thehistoryofdecl12gibbiala%29.pdf"
           }
         }
-      ]
+      ],
+      "isLocked": true
     }
   ]
 }

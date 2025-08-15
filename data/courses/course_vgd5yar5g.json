@@ -90,7 +90,8 @@
             "thumbnailUrl": "https://upload.wikimedia.org/wikipedia/commons/d/d8/The_destruction_of_ancient_Rome_-_a_sketch_of_the_history_of_the_monuments_%28IA_destructionofan00lanc%29.pdf"
           }
         }
-      ]
+      ],
+      "isLocked": false
     },
     {
       "id": "module_1_pcrrej",
@@ -173,7 +174,8 @@
             "thumbnailUrl": "https://upload.wikimedia.org/wikipedia/commons/a/aa/The_Cambridge_Ancient_History_-_Volume_2.djvu"
           }
         }
-      ]
+      ],
+      "isLocked": true
     },
     {
       "id": "module_2_pcrrej",
@@ -256,7 +258,8 @@
             "thumbnailUrl": "https://upload.wikimedia.org/wikipedia/commons/1/15/The_history_of_the_decline_and_fall_of_the_Roman_empire_%28IA_thehistoryofdecl12gibbiala%29.pdf"
           }
         }
-      ]
+      ],
+      "isLocked": true
     }
   ]
 }

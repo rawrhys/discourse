@@ -90,7 +90,8 @@
             "thumbnailUrl": null
           }
         }
-      ]
+      ],
+      "isLocked": false
     },
     {
       "id": "module_1_tkpbgp",
@@ -173,7 +174,8 @@
             "thumbnailUrl": null
           }
         }
-      ]
+      ],
+      "isLocked": true
     },
     {
       "id": "module_2_tkpbgp",
@@ -256,7 +258,8 @@
             "thumbnailUrl": null
           }
         }
-      ]
+      ],
+      "isLocked": true
     }
   ]
 }

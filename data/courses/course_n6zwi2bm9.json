@@ -90,7 +90,8 @@
             "thumbnailUrl": "https://upload.wikimedia.org/wikipedia/commons/c/c1/A_history_of_Rome_for_high_schools_and_academies_%28IA_historyofromefor01bots%29.pdf"
           }
         }
-      ]
+      ],
+      "isLocked": false
     },
     {
       "id": "module_1_pk1z4x",
@@ -173,7 +174,8 @@
             "thumbnailUrl": "https://upload.wikimedia.org/wikipedia/commons/1/15/The_history_of_the_decline_and_fall_of_the_Roman_empire_%28IA_thehistoryofdecl12gibbiala%29.pdf"
           }
         }
-      ]
+      ],
+      "isLocked": true
     },
     {
       "id": "module_2_pk1z4x",
@@ -256,7 +258,8 @@
             "thumbnailUrl": "https://upload.wikimedia.org/wikipedia/commons/1/19/The_grandeur_that_was_Rome%3B_a_survey_of_Roman_culture_and_civilisation-_%281920%29_%2814765750862%29.jpg"
           }
         }
-      ]
+      ],
+      "isLocked": true
     }
   ]
 }

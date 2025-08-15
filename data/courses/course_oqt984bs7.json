@@ -90,7 +90,8 @@
             "thumbnailUrl": null
           }
         }
-      ]
+      ],
+      "isLocked": false
     },
     {
       "id": "module_1_qg9yza",
@@ -173,7 +174,8 @@
             "thumbnailUrl": null
           }
         }
-      ]
+      ],
+      "isLocked": true
     },
     {
       "id": "module_2_qg9yza",
@@ -256,7 +258,8 @@
             "thumbnailUrl": null
           }
         }
-      ]
+      ],
+      "isLocked": true
     }
   ]
 }

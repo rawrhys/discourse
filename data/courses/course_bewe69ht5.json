@@ -54,7 +54,8 @@
       "order": 0,
       "isCompleted": false,
       "perfectQuizzes": 0,
-      "progress": 0
+      "progress": 0,
+      "isLocked": false
     },
     {
       "id": "module_1_1750184071844",
@@ -101,7 +102,8 @@
       "order": 0,
       "isCompleted": false,
       "perfectQuizzes": 0,
-      "progress": 0
+      "progress": 0,
+      "isLocked": true
     },
     {
       "id": "module_2_1750184071844",
@@ -148,7 +150,8 @@
       "order": 0,
       "isCompleted": false,
       "perfectQuizzes": 0,
-      "progress": 0
+      "progress": 0,
+      "isLocked": true
     }
   ]
 }
