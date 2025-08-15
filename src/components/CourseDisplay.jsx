@@ -271,8 +271,32 @@ const CourseDisplay = () => {
     setTimeout(() => setShareCopied(false), 2000);
   };
 
-  const currentModule = course ? course.modules.find(m => m.id === activeModuleId) : null;
-  const currentLesson = currentModule?.lessons.find(l => l.id === activeLessonId);
+  // Find the current module - first try by activeModuleId, then fallback to finding module containing current lesson
+  let currentModule = course ? course.modules.find(m => m.id === activeModuleId) : null;
+  let currentLesson = currentModule?.lessons.find(l => l.id === activeLessonId);
+  
+  // If currentModule is null but we have activeLessonId, try to find the module containing this lesson
+  if (!currentModule && activeLessonId && course) {
+    currentModule = course.modules.find(m => m.lessons.some(l => l.id === activeLessonId));
+    if (currentModule) {
+      currentLesson = currentModule.lessons.find(l => l.id === activeLessonId);
+      // Update activeModuleId to match the found module
+      if (activeModuleId !== currentModule.id) {
+        console.log(`[CourseDisplay] Updating activeModuleId from ${activeModuleId} to ${currentModule.id}`);
+        setActiveModuleId(currentModule.id);
+      }
+    }
+  }
+  
+  // Debug logging to help identify the issue
+  console.log('[CourseDisplay] Module/Lesson Debug:', {
+    activeModuleId,
+    activeLessonId,
+    currentModule: currentModule ? { id: currentModule.id, title: currentModule.title } : null,
+    currentLesson: currentLesson ? { id: currentLesson.id, title: currentLesson.title } : null,
+    totalModules: course?.modules?.length,
+    moduleIds: course?.modules?.map(m => ({ id: m.id, title: m.title }))
+  });
 
   const allImageUrls = useMemo(() => {
     if (!course) return [];
@@ -364,6 +388,7 @@ const CourseDisplay = () => {
               key={currentLesson.id}
               questions={currentLesson.quiz}
               onComplete={(score) => {
+                console.log(`[CourseDisplay] Quiz completed with score: ${score} for lesson: ${currentLesson.id}`);
                 handleQuizCompletion(currentLesson.id, score);
                 setShowQuiz(false);
               }}
