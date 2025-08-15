@@ -32,9 +32,9 @@
     "react-router-dom": "^6.25.1",
     "react-window": "^1.8.11",
     "selfsigned": "^2.4.1",
+    "sharp": "^0.34.3",
     "stripe": "^17.1.0",
-    "ws": "^8.18.3",
-    "sharp": "^0.34.3"
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
@@ -44,6 +44,7 @@
     "supertest": "^7.0.0",
     "tailwindcss": "^3.4.7",
     "tape": "^5.8.1",
+    "terser": "^5.43.1",
     "vite": "^6.3.5",
     "vite-plugin-compression": "^0.5.1"
   },
