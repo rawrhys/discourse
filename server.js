@@ -3732,10 +3732,4 @@ app.post('/api/quizzes/submit', authenticateToken, async (req, res) => {
   }
 });
 
-// Image Proxy
-const imageProxyHandler = async (req, res) => {
-  const imageUrl = req.query.url;
-  // ... existing code ...
-};
-
 export { app, db, startServer };
