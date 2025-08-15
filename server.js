@@ -1474,10 +1474,49 @@ async function initializeDatabase() {
     db.data.courses = db.data.courses || [];
     db.data.imageCache = db.data.imageCache || [];
     db.data.images = db.data.images || [];
+    
+    // Load courses from individual files if they exist
+    await loadCoursesFromFiles();
+    
     console.log('[DB] Database initialized successfully at:', dbFilePath);
   } catch (error) {
     console.error('[DB_ERROR] Could not initialize database:', error);
     process.exit(1);
+  }
+}
+
+async function loadCoursesFromFiles() {
+  try {
+    const coursesDir = path.join(__dirname, 'data', 'courses');
+    if (!fs.existsSync(coursesDir)) {
+      console.log('[DB] No courses directory found, skipping course loading');
+      return;
+    }
+
+    const courseFiles = fs.readdirSync(coursesDir).filter(file => file.endsWith('.json') && file !== 'undefined.json');
+    console.log(`[DB] Found ${courseFiles.length} course files to load`);
+
+    for (const file of courseFiles) {
+      try {
+        const filePath = path.join(coursesDir, file);
+        const courseData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        
+        // Check if course already exists in database
+        const existingCourse = db.data.courses.find(c => c.id === courseData.id);
+        if (!existingCourse) {
+          db.data.courses.push(courseData);
+          console.log(`[DB] Loaded course: ${courseData.title} (${courseData.id})`);
+        } else {
+          console.log(`[DB] Course already exists: ${courseData.title} (${courseData.id})`);
+        }
+      } catch (error) {
+        console.error(`[DB_ERROR] Failed to load course file ${file}:`, error.message);
+      }
+    }
+
+    console.log(`[DB] Total courses in database: ${db.data.courses.length}`);
+  } catch (error) {
+    console.error('[DB_ERROR] Failed to load courses from files:', error);
   }
 }
 
