@@ -1,4 +1,4 @@
-name: Deploy to Shared Hosting
+name: Deploy to VPS and Shared Hosting
 
 on:
   push:
@@ -6,9 +6,27 @@ on:
       - main
 
 jobs:
-  build-and-deploy:
+  deploy-vps:
     runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
 
+    - name: Deploy to VPS
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USERNAME }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        script: |
+          cd /root/discourse-app
+          git pull origin main
+          npm install
+          npm run build
+          pm2 restart discourse-app
+
+  deploy-shared-hosting:
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
