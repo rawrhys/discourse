@@ -388,12 +388,16 @@ const LessonView = ({
         onUpdateLesson(propLesson.id, { quizScore: score });
       }
 
-      if (score < 5) {
+      if (score === 5) {
+        if (checkAndUnlockNextModule) {
+          checkAndUnlockNextModule(propLesson.id);
+        }
+      } else {
         setShowFailMessage(true);
         setTimeout(() => setShowFailMessage(false), 3000);
       }
     },
-    [activeModule, propLesson, onUpdateLesson]
+    [activeModule, propLesson, onUpdateLesson, checkAndUnlockNextModule]
   );
 
   // Memoized content to prevent unnecessary re-renders
