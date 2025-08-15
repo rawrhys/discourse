@@ -54,3 +54,5 @@ This will trigger the automatic credit addition process.
 ## Deployment
 
 See `DEPLOYMENT.md` for detailed deployment instructions.
+This is a template for a React application.
+Triggering deployment.
