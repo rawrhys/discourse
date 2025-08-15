@@ -1,4 +1,4 @@
-name: Deploy to VPS and Shared Hosting
+name: Deploy to VPS and Shared Hosting 
 
 on:
   push:
