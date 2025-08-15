@@ -7,39 +7,6 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const refreshUser = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      if (token) {
-        const currentUser = await api.getCurrentUser();
-        if (currentUser) {
-          setUser(currentUser);
-          return currentUser;
-        } else {
-          // If getCurrentUser returns null (401 error handled in apiClient), clear the token
-          console.warn('⚠️ [AUTH] getCurrentUser returned null, clearing token');
-          localStorage.removeItem('token');
-          setUser(null);
-          return null;
-        }
-      }
-      return null;
-    } catch (error) {
-      console.error('Failed to refresh user:', error);
-      
-      // Handle cases where the server returns a non-JSON response (e.g., HTML error page from a proxy)
-      // for what should be a JSON endpoint. This is a common issue with authentication checks.
-      if (error.message === 'Server returned invalid JSON response' || (error && (error.status === 401 || error.status === 403))) {
-        localStorage.removeItem('token');
-        setUser(null);
-      } else {
-        // Keep token; just log. The UI can handle retries for server-side (5xx) or network errors.
-        console.warn('Keeping auth token despite refresh error (likely a temporary server issue)');
-      }
-      return null;
-    }
-  };
-
   useEffect(() => {
     const checkUser = async () => {
       const token = localStorage.getItem('token');
@@ -103,7 +70,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, loading, refreshUser }}>
+    <AuthContext.Provider value={{ user, login, register, logout, loading }}>
       {children}
     </AuthContext.Provider>
   );
