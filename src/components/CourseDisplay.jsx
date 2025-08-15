@@ -43,6 +43,8 @@ const CourseDisplay = () => {
   const handleQuizCompletion = useCallback((lessonId, score) => {
     if (!course) return;
 
+    console.log(`[QuizCompletion] Received score: ${score} for lessonId: ${lessonId}`);
+
     let moduleOfCompletedQuizId = null;
 
     // Create a new version of the course state with the updated score
@@ -66,6 +68,7 @@ const CourseDisplay = () => {
 
     // If the quiz score was perfect, check if the module is complete
     if (score === 5 && moduleOfCompletedQuizId) {
+      console.log(`[QuizCompletion] Perfect score achieved for a lesson in module: ${moduleOfCompletedQuizId}. Checking for module completion...`);
       const completedModule = newModules.find(m => m.id === moduleOfCompletedQuizId);
       if (completedModule) {
         // Find all lessons in this module that have a quiz
@@ -73,12 +76,18 @@ const CourseDisplay = () => {
         // Count how many of them have a perfect score
         const perfectScoreCount = lessonsWithQuizzes.filter(l => l.quizScore === 5).length;
 
+        console.log(`[QuizCompletion] Module stats for '${completedModule.title}':`);
+        console.log(`  - Lessons with quizzes: ${lessonsWithQuizzes.length}`);
+        console.log(`  - Perfect scores so far: ${perfectScoreCount}`);
+
         // If all quizzes in the module have a perfect score, unlock the next one
         if (lessonsWithQuizzes.length > 0 && perfectScoreCount === lessonsWithQuizzes.length) {
+          console.log(`[QuizCompletion] All quizzes in module '${completedModule.title}' are perfect. Attempting to unlock next module.`);
           const currentModuleIndex = course.modules.findIndex(m => m.id === moduleOfCompletedQuizId);
           
           if (currentModuleIndex !== -1 && currentModuleIndex + 1 < course.modules.length) {
             const nextModule = course.modules[currentModuleIndex + 1];
+            console.log(`[QuizCompletion] Unlocking module: ${nextModule.title}`);
             setUnlockedModules(prev => {
               const newUnlocked = new Set(prev);
               newUnlocked.add(nextModule.id);
@@ -87,9 +96,15 @@ const CourseDisplay = () => {
             setUnlockedModuleName(nextModule.title);
             setShowUnlockToast(true);
             setTimeout(() => setShowUnlockToast(false), 5000);
+          } else {
+            console.log('[QuizCompletion] No more modules to unlock or module index not found.');
           }
+        } else {
+          console.log(`[QuizCompletion] Module '${completedModule.title}' is not yet complete. Conditions not met for unlock.`);
         }
       }
+    } else if (score < 5) {
+      console.log(`[QuizCompletion] Score of ${score} is not perfect. No unlock check needed.`);
     }
   }, [course, setCourse]);
 
