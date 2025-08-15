@@ -69,12 +69,19 @@ const CourseDisplay = () => {
     // If the quiz score was perfect, check if the module is complete
     if (score === 5 && moduleOfCompletedQuizId) {
       console.log(`[QuizCompletion] Perfect score achieved for a lesson in module: ${moduleOfCompletedQuizId}. Checking for module completion...`);
+      console.log(`[QuizCompletion] User ID: ${user.id}`);
+      console.log(`[QuizCompletion] Course state:`, {
+        courseId: course.id,
+        moduleId: moduleOfCompletedQuizId,
+        userId: user.id,
+        score
+      });
       const completedModule = newModules.find(m => m.id === moduleOfCompletedQuizId);
       if (completedModule) {
         // Find all lessons in this module that have a quiz
         const lessonsWithQuizzes = completedModule.lessons.filter(l => l.quiz && l.quiz.length > 0);
         // Count how many of them have a perfect score
-        const perfectScoreCount = lessonsWithQuizzes.filter(l => l.quizScore === 5).length;
+        const perfectScoreCount = lessonsWithQuizzes.filter(l => l.quizScores && l.quizScores[user.id] === 5).length;
 
         console.log(`[QuizCompletion] Module stats for '${completedModule.title}':`);
         console.log(`  - Lessons with quizzes: ${lessonsWithQuizzes.length}`);
