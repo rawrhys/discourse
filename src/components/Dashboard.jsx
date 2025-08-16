@@ -708,14 +708,22 @@ const Dashboard = () => {
               }]
             }));
             
-            // Wait a moment then refresh courses
-            setTimeout(() => {
-              fetchSavedCourses(true).then(() => {
-                setIsGenerating(false);
-                setShowNewCourseForm(false);
-                localStorage.removeItem('courseGenerationStartTime');
-              });
-            }, 3000);
+            // Navigate to the completed course if courseId is available
+            if (data.courseId) {
+              logger.info(`🎯 [GENERATION] Navigating to completed course: ${data.courseId}`);
+              setTimeout(() => {
+                window.location.href = `/course/${data.courseId}`;
+              }, 2000);
+            } else {
+              // Fallback: refresh courses and close modal
+              setTimeout(() => {
+                fetchSavedCourses(true).then(() => {
+                  setIsGenerating(false);
+                  setShowNewCourseForm(false);
+                  localStorage.removeItem('courseGenerationStartTime');
+                });
+              }, 3000);
+            }
             
           } else if (data.status === 'error') {
             clearInterval(pollInterval);

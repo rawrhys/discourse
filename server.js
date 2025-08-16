@@ -2453,14 +2453,62 @@ app.post('/api/courses/generate', authenticateToken, async (req, res, next) => {
             }];
           }
         }).then(async (course) => {
-          // Generation completed
-          const session = global.generationSessions.get(generationId);
-          if (session) {
-            session.status = 'completed';
-            session.course = course;
+          // Generation completed - save course and update session
+          try {
+            if (!course || !course.title) {
+              throw new Error('Failed to generate course structure');
+            }
+
+            // Final validation: ensure all modules have proper isLocked properties
+            if (course.modules && Array.isArray(course.modules)) {
+              course.modules.forEach((module, mIdx) => {
+                if (module.isLocked === undefined) {
+                  module.isLocked = mIdx > 0;
+                }
+              });
+            }
+
+            // Assign user ID to the course
+            course.userId = user.id;
+            course.id = `course_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            course.createdAt = new Date().toISOString();
+            course.published = false;
+
+            // Save the course to database
+            db.data.courses.push(course);
+            await db.write();
+
+            console.log(`[COURSE_GENERATION] Course saved with ID: ${course.id}`);
+
+            // Deduct credits after successful completion
+            user.courseCredits = Math.max(0, user.courseCredits - 1);
+            await db.write();
+            
+            console.log(`[COURSE_GENERATION] Deducted 1 credit from user ${user.id}. Remaining: ${user.courseCredits}`);
+
+            // Update session with completed course
+            const session = global.generationSessions.get(generationId);
+            if (session) {
+              session.status = 'completed';
+              session.course = course;
+              session.creditsRemaining = user.courseCredits;
+            }
+
+            console.log(`[COURSE_GENERATION] Course generation completed successfully for user ${user.id}`);
+            console.log(`[COURSE_GENERATION] Course ID: ${course.id}, Title: ${course.title}`);
+            console.log(`[COURSE_GENERATION] Credits remaining: ${user.courseCredits}`);
+
+          } catch (saveError) {
+            console.error(`[COURSE_GENERATION] Error saving course:`, saveError);
+            const session = global.generationSessions.get(generationId);
+            if (session) {
+              session.status = 'error';
+              session.error = saveError.message;
+            }
           }
         }).catch(async (error) => {
           // Generation failed
+          console.error(`[COURSE_GENERATION] Error generating course:`, error);
           const session = global.generationSessions.get(generationId);
           if (session) {
             session.status = 'error';
@@ -2491,59 +2539,6 @@ app.post('/api/courses/generate', authenticateToken, async (req, res, next) => {
 
         // Return early - don't await the generation
         return;
-        
-        if (!course || !course.title) {
-            throw new Error('Failed to generate course structure');
-        }
-
-        // Send validation signal
-        res.write(`data: ${JSON.stringify({ type: 'validating', message: 'Validating course structure...' })}\n\n`);
-
-        // Final validation: ensure all modules have proper isLocked properties
-        if (course.modules && Array.isArray(course.modules)) {
-          course.modules.forEach((module, mIdx) => {
-            if (module.isLocked === undefined) {
-              console.warn(`[COURSE_GENERATION] Module ${mIdx} missing isLocked - setting to ${mIdx > 0}`);
-              module.isLocked = mIdx > 0;
-            }
-          });
-        }
-
-        // Assign user ID to the course
-        course.userId = user.id;
-        course.id = `course_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        course.createdAt = new Date().toISOString();
-        course.published = false;
-
-        // Send saving signal
-        res.write(`data: ${JSON.stringify({ type: 'saving', message: 'Saving course to database...' })}\n\n`);
-
-        // Save the course to database
-        db.data.courses.push(course);
-        await db.write();
-
-        console.log(`[COURSE_GENERATION] Course saved with ID: ${course.id}`);
-
-        // NOW deduct credits after successful completion
-        user.courseCredits = Math.max(0, user.courseCredits - 1);
-        await db.write();
-        
-        console.log(`[COURSE_GENERATION] Deducted 1 credit from user ${user.id}. Remaining: ${user.courseCredits}`);
-
-        // Send completion event with course ID for proper redirect
-        const completionData = {
-            type: 'course_complete',
-            courseId: course.id,
-            courseTitle: course.title,
-            message: 'Course generation completed successfully!',
-            creditsRemaining: user.courseCredits
-        };
-
-        res.write(`data: ${JSON.stringify(completionData)}\n\n`);
-        
-        console.log(`[COURSE_GENERATION] Course generation completed successfully for user ${user.id}`);
-        console.log(`[COURSE_GENERATION] Course ID: ${course.id}, Title: ${course.title}`);
-        console.log(`[COURSE_GENERATION] Credits remaining: ${user.courseCredits}`);
 
     } catch (error) {
         console.error(`[COURSE_GENERATION] Error generating course for user ${user.id}:`, error);
@@ -2590,6 +2585,9 @@ app.get('/api/courses/generation-status/:generationId', authenticateToken, async
       progress: session.progress,
       startTime: session.startTime,
       course: session.course,
+      courseId: session.course?.id,
+      courseTitle: session.course?.title,
+      creditsRemaining: session.creditsRemaining,
       error: session.error
     });
   } catch (error) {
