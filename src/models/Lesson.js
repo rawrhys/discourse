@@ -19,7 +19,9 @@ class Lesson {
     quiz = null,
     quizScore = undefined,
     quizCompleted = false,
-    flashcards = []
+    flashcards = [],
+    quizScores = {},
+    lastQuizScore = null
   } = {}) {
     this.id = id;
     this.title = title;
@@ -30,6 +32,8 @@ class Lesson {
     this.quizScore = quizScore;
     this.quizCompleted = quizCompleted;
     this.flashcards = flashcards;
+    this.quizScores = quizScores;
+    this.lastQuizScore = lastQuizScore;
   }
 
   /**
@@ -41,7 +45,9 @@ class Lesson {
     return new Lesson({
       ...json,
       quizScore: json.quizScore,
-      quizCompleted: json.quizCompleted
+      quizCompleted: json.quizCompleted,
+      quizScores: json.quizScores || {}, // Preserve quizScores from backend
+      lastQuizScore: json.lastQuizScore
     });
   }
 
@@ -59,7 +65,9 @@ class Lesson {
       quiz: this.quiz,
       quizScore: this.quizScore,
       quizCompleted: this.quizCompleted,
-      flashcards: this.flashcards
+      flashcards: this.flashcards,
+      quizScores: this.quizScores,
+      lastQuizScore: this.lastQuizScore
     };
   }
 }
