@@ -177,7 +177,7 @@ const FlashcardRenderer = memo(({ flashcards }) => {
 
   // Deduplicate flashcards based on the term - memoized to prevent recalculation
   const uniqueFlashcards = useMemo(() => {
-    return Array.from(new Map(flashcards.map(card => [card.term.toLowerCase(), card])).values());
+    return Array.from(new Map(flashcards.map(card => [(card.term || '').toLowerCase(), card])).values());
   }, [flashcards]);
 
   // Only log deduplication once
@@ -194,8 +194,8 @@ const FlashcardRenderer = memo(({ flashcards }) => {
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
       {uniqueFlashcards.map((fc, index) => (
         <MemoizedFlashcard
-          key={`${fc.term}-${index}`}
-          term={fc.term}
+          key={`${fc.term || 'unknown'}-${index}`}
+          term={fc.term || 'Unknown Term'}
           definition={fc.definition || 'Definition not provided.'}
         />
       ))}
