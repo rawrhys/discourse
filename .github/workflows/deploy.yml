@@ -49,6 +49,8 @@ jobs:
         run: |
           npm run build
           date > dist/build-timestamp.txt
+          echo "Build completed at $(date)" > dist/build-info.txt
+          echo "Build completed at $(date)" > dist/build-info.txt
 
       - name: Prepare public folder
         run: |
@@ -56,6 +58,8 @@ jobs:
           mkdir -p public
           cp -r dist/* public/
           cp -r src public/src/
+          # Add cache-busting timestamp to index.html
+          sed -i "s|</head>|<meta name=\"build-time\" content=\"$(date)\" />\n</head>|" public/index.html
           echo "=== Public folder contents ==="
           ls -la public/
           echo "=== Public/src contents ==="
@@ -74,3 +78,25 @@ jobs:
 
       - name: Verify deployed build (optional)
         run: curl -s https://${{ secrets.FTP_SERVER }}/build-timestamp.txt || echo "Timestamp not found"
+        
+      - name: Clear browser cache headers
+        run: |
+          echo "=== Adding cache-busting headers ==="
+          # Create a .htaccess addition for cache busting
+          cat >> public/.htaccess << 'EOF'
+          
+          # Force cache refresh for development
+          <IfModule mod_headers.c>
+            <FilesMatch "\.(html|htm)$">
+              Header always set Cache-Control "no-cache, no-store, must-revalidate"
+              Header always set Pragma "no-cache"
+              Header always set Expires "0"
+            </FilesMatch>
+          </IfModule>
+          EOF
+
+      - name: Clear cache headers (optional)
+        run: |
+          echo "=== Clearing cache for main assets ==="
+          curl -X PURGE https://${{ secrets.FTP_SERVER }}/index.html || echo "PURGE not supported"
+          curl -X PURGE https://${{ secrets.FTP_SERVER }}/assets/ || echo "PURGE not supported"

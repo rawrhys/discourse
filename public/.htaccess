@@ -24,17 +24,17 @@ RewriteBase /
     AddOutputFilterByType DEFLATE image/svg+xml
 </IfModule>
 
-# Cache static assets
+# Cache static assets with shorter times for development
 <IfModule mod_expires.c>
     ExpiresActive on
-    ExpiresByType text/css "access plus 1 year"
-    ExpiresByType application/javascript "access plus 1 year"
-    ExpiresByType image/png "access plus 1 year"
-    ExpiresByType image/jpg "access plus 1 year"
-    ExpiresByType image/jpeg "access plus 1 year"
-    ExpiresByType image/gif "access plus 1 year"
-    ExpiresByType image/svg+xml "access plus 1 year"
-    ExpiresByType font/woff2 "access plus 1 year"
+    ExpiresByType text/css "access plus 1 hour"
+    ExpiresByType application/javascript "access plus 1 hour"
+    ExpiresByType image/png "access plus 1 day"
+    ExpiresByType image/jpg "access plus 1 day"
+    ExpiresByType image/jpeg "access plus 1 day"
+    ExpiresByType image/gif "access plus 1 day"
+    ExpiresByType image/svg+xml "access plus 1 day"
+    ExpiresByType font/woff2 "access plus 1 day"
 </IfModule>
 
 # Security headers for CSS and JS files
@@ -51,8 +51,8 @@ RewriteBase /
         Header always set X-Content-Type-Options "nosniff"
         Header always set Referrer-Policy "strict-origin-when-cross-origin"
     </FilesMatch>
-    # Cache built assets aggressively
-    Header always set Cache-Control "public, max-age=31536000, immutable"
+    # Cache built assets with shorter times for development
+    Header always set Cache-Control "public, max-age=3600, must-revalidate"
 </IfModule>
 
 # Cache our cached-images aggressively as well
