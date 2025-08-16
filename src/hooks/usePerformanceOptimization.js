@@ -124,7 +124,7 @@ export const useApiThrottle = (apiCall, cooldown = 1000) => {
     const now = Date.now();
     
     if (now - lastCallRef.current < cooldown) {
-      console.log('[API Throttle] Call blocked, cooldown active');
+      // API call blocked, cooldown active (logging disabled)
       return null;
     }
     
@@ -168,7 +168,7 @@ export const useOptimizedCalculation = (calculation, dependencies, maxCalls = 10
         const newResult = calculation();
         setResult(newResult);
       } catch (error) {
-        console.warn('[Optimized Calculation] Error:', error);
+        // Calculation error (logging disabled)
       }
     }
   }, dependencies);
@@ -180,32 +180,15 @@ export const useOptimizedCalculation = (calculation, dependencies, maxCalls = 10
  * Hook for preventing excessive console logging
  * @param {string} key - Unique key for this logger
  * @param {number} maxLogs - Maximum logs per second
- * @returns {Function} Throttled console.log function
+ * @returns {Function} No-op function (console logging disabled)
  */
 export const useThrottledLogger = (key, maxLogs = 2) => {
-  const logCountRef = useRef(0);
-  const lastResetRef = useRef(Date.now());
+  // Return a no-op function to disable console logging
+  const noOpLog = useCallback(() => {
+    // Console logging disabled to prevent overload
+  }, []);
   
-  const throttledLog = useCallback((...args) => {
-    const now = Date.now();
-    
-    // Reset log count every second
-    if (now - lastResetRef.current >= 1000) {
-      logCountRef.current = 0;
-      lastResetRef.current = now;
-    }
-    
-    // Only log if under the limit
-    if (logCountRef.current < maxLogs) {
-      logCountRef.current++;
-      console.log(`[${key}]`, ...args);
-    } else if (logCountRef.current === maxLogs) {
-      logCountRef.current++;
-      console.log(`[${key}] Logging throttled - too many logs per second`);
-    }
-  }, [key, maxLogs]);
-  
-  return throttledLog;
+  return noOpLog;
 };
 
 /**

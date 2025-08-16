@@ -502,13 +502,7 @@ const LessonView = ({
 
   // Memoized quiz view to prevent unnecessary re-renders
   const memoizedQuizView = useMemo(() => {
-    // Reduced logging frequency to prevent spam
-    if (process.env.NODE_ENV === 'development' && Math.random() < 0.1) {
-      console.log('[LessonView] Quiz data check:', {
-        hasQuiz: !!quizData,
-        quizLength: quizData?.length
-      });
-    }
+    // Console logging disabled to prevent overload
     
     if (!quizData || quizData.length === 0) {
       console.warn('[LessonView] No quiz data available for lesson:', propLesson?.title);
@@ -666,14 +660,11 @@ const LessonView = ({
     };
   }, []);
 
-  // Performance monitoring (reduced frequency)
+  // Performance monitoring (console logging disabled)
   useEffect(() => {
     const renderTime = performance.now() - renderStartTime.current;
     performanceMonitor.trackComponentRender('LessonView', renderTime);
-    // Only log every 10th render to reduce spam
-    if (Math.random() < 0.1) {
-      throttledLog('LessonView rendered in', renderTime.toFixed(2), 'ms');
-    }
+    // Console logging disabled to prevent overload
   }, [propLesson?.id, view]); // Only track when lesson or view changes
 
   // Early return if no lesson
@@ -686,19 +677,7 @@ const LessonView = ({
     );
   }
 
-  // Debug lesson data (only in development, reduced frequency)
-  if (process.env.NODE_ENV === 'development' && Math.random() < 0.05) {
-    console.log('[LessonView] Lesson data:', {
-      id: propLesson?.id,
-      title: propLesson?.title,
-      hasContent: !!propLesson?.content,
-      hasQuiz: !!propLesson?.quiz,
-      quizLength: propLesson?.quiz?.length,
-      hasFlashcards: !!propLesson?.flashcards,
-      flashcardLength: propLesson?.flashcards?.length,
-      view: view
-    });
-  }
+  // Console logging disabled to prevent overload
 
   // Loading state
   if (isLoading) {
