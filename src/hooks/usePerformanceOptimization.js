@@ -182,7 +182,7 @@ export const useOptimizedCalculation = (calculation, dependencies, maxCalls = 10
  * @param {number} maxLogs - Maximum logs per second
  * @returns {Function} Throttled console.log function
  */
-export const useThrottledLogger = (key, maxLogs = 5) => {
+export const useThrottledLogger = (key, maxLogs = 2) => {
   const logCountRef = useRef(0);
   const lastResetRef = useRef(Date.now());
   

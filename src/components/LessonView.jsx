@@ -425,7 +425,7 @@ const LessonView = ({
             'Authorization': `Bearer ${localStorage.getItem('token')}`
           },
           body: JSON.stringify({
-            courseId: activeModule.courseId || activeModule.course?.id,
+            courseId: courseId,
             moduleId: activeModule.id,
             lessonId: propLesson.id,
             score: score
@@ -502,7 +502,8 @@ const LessonView = ({
 
   // Memoized quiz view to prevent unnecessary re-renders
   const memoizedQuizView = useMemo(() => {
-    if (process.env.NODE_ENV === 'development') {
+    // Reduced logging frequency to prevent spam
+    if (process.env.NODE_ENV === 'development' && Math.random() < 0.1) {
       console.log('[LessonView] Quiz data check:', {
         hasQuiz: !!quizData,
         quizLength: quizData?.length
@@ -665,12 +666,15 @@ const LessonView = ({
     };
   }, []);
 
-  // Performance monitoring
+  // Performance monitoring (reduced frequency)
   useEffect(() => {
     const renderTime = performance.now() - renderStartTime.current;
     performanceMonitor.trackComponentRender('LessonView', renderTime);
-    throttledLog('LessonView rendered in', renderTime.toFixed(2), 'ms');
-  });
+    // Only log every 10th render to reduce spam
+    if (Math.random() < 0.1) {
+      throttledLog('LessonView rendered in', renderTime.toFixed(2), 'ms');
+    }
+  }, [propLesson?.id, view]); // Only track when lesson or view changes
 
   // Early return if no lesson
   if (!propLesson) {
@@ -682,8 +686,8 @@ const LessonView = ({
     );
   }
 
-  // Debug lesson data (only in development)
-  if (process.env.NODE_ENV === 'development') {
+  // Debug lesson data (only in development, reduced frequency)
+  if (process.env.NODE_ENV === 'development' && Math.random() < 0.05) {
     console.log('[LessonView] Lesson data:', {
       id: propLesson?.id,
       title: propLesson?.title,
