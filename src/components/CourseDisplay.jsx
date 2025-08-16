@@ -328,15 +328,6 @@ const CourseDisplay = () => {
     setTimeout(() => setShareCopied(false), 2000);
   };
 
-  // Handle module update callback
-  const handleModuleUpdate = useCallback(() => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[CourseDisplay] Module update triggered');
-    }
-    // Force a re-render of the course state
-    setCourse(prevCourse => ({ ...prevCourse }));
-  }, []);
-
   // Find the current module - first try by activeModuleId, then fallback to finding module containing current lesson
   let currentModule = course ? course.modules.find(m => m.id === activeModuleId) : null;
   let currentLesson = currentModule?.lessons.find(l => l.id === activeLessonId);
