@@ -17,6 +17,7 @@ const Dashboard = () => {
   const [error, setError] = useState(null);
   const [courseToDelete, setCourseToDelete] = useState(null);
   const [hoveredCourseId, setHoveredCourseId] = useState(null);
+  const [pollingInterval, setPollingInterval] = useState(null);
   const hasAttemptedFetch = useRef(false);
   const [isLoadingCourses, setIsLoadingCourses] = useState(false);
   const api = useApiWrapper();
@@ -312,6 +313,22 @@ const Dashboard = () => {
               details: [...prev.details, { 
                 timestamp: new Date().toISOString(), 
                 message: '⏳ Stream ended, waiting for AI service response...' 
+              }]
+            };
+            // Start polling for updates
+            if (data.generationId) {
+              startPollingForUpdates(data.generationId);
+            }
+            break;
+
+          case 'generation_session':
+            updatedState = {
+              ...prev,
+              stage: 'starting',
+              message: 'Generation session started...',
+              details: [...prev.details, { 
+                timestamp: new Date().toISOString(), 
+                message: `🆔 Generation session: ${data.generationId}` 
               }]
             };
             break;
@@ -622,6 +639,15 @@ const Dashboard = () => {
     }
   }, [user, fetchSavedCourses]); // Added refreshUserData dependency
 
+  // Cleanup polling interval on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+      }
+    };
+  }, [pollingInterval]);
+
   // Check for interrupted course generation and handle credit refunds
   const checkForInterruptedGeneration = useCallback(async () => {
     try {
@@ -653,6 +679,80 @@ const Dashboard = () => {
     } catch (error) {
       logger.error('❌ [DASHBOARD] Error checking for interrupted generation:', error);
     }
+  }, []);
+
+  const startPollingForUpdates = useCallback((generationId) => {
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/courses/generation-status/${generationId}`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          },
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          
+          if (data.status === 'completed') {
+            clearInterval(pollInterval);
+            logger.info('✅ [GENERATION] Course generation completed via polling');
+            
+            // Update progress to show completion
+            setGenerationProgress(prev => ({
+              ...prev,
+              stage: 'completed',
+              message: 'Course generation completed successfully!',
+              details: [...prev.details, { 
+                timestamp: new Date().toISOString(), 
+                message: '✅ Course generation completed!' 
+              }]
+            }));
+            
+            // Wait a moment then refresh courses
+            setTimeout(() => {
+              fetchSavedCourses(true).then(() => {
+                setIsGenerating(false);
+                setShowNewCourseForm(false);
+                localStorage.removeItem('courseGenerationStartTime');
+              });
+            }, 3000);
+            
+          } else if (data.status === 'error') {
+            clearInterval(pollInterval);
+            logger.error('❌ [GENERATION] Course generation failed via polling:', data.error);
+            
+            setGenerationProgress(prev => ({
+              ...prev,
+              stage: 'error',
+              message: data.error || 'Course generation failed',
+              details: [...prev.details, { 
+                timestamp: new Date().toISOString(), 
+                message: `❌ Generation failed: ${data.error}` 
+              }]
+            }));
+            
+            setIsGenerating(false);
+            setShowNewCourseForm(false);
+            localStorage.removeItem('courseGenerationStartTime');
+            
+          } else if (data.progress) {
+            // Update progress with latest data
+            setGenerationProgress(prev => ({
+              ...prev,
+              ...data.progress,
+              details: [...(prev.details || []), ...(data.progress.details || [])]
+            }));
+          }
+        }
+        
+      } catch (error) {
+        logger.error('❌ [POLLING] Error polling generation status:', error);
+        // Don't clear interval on error, keep trying
+      }
+    }, 2000); // Poll every 2 seconds
+    
+    // Store the interval ID so we can clear it if needed
+    setPollingInterval(pollInterval);
   }, []);
 
   const handlePaymentSuccess = async () => {

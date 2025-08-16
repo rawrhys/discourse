@@ -2421,11 +2421,85 @@ app.post('/api/courses/generate', authenticateToken, async (req, res, next) => {
           return res.end();
         }
 
-        // Generate the course with progress callback
-        const course = await global.aiService.generateCourse(topic, difficulty, numModules, numLessonsPerModule, (progressData) => {
-          // Send progress updates to frontend
-          res.write(`data: ${JSON.stringify(progressData)}\n\n`);
+        // Create a generation session for this user
+        const generationId = `gen_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        global.generationSessions = global.generationSessions || new Map();
+        global.generationSessions.set(generationId, {
+          userId: user.id,
+          status: 'generating',
+          progress: {
+            stage: 'generating',
+            message: 'Generating course content...',
+            currentModule: 0,
+            totalModules: numModules,
+            currentLesson: 0,
+            totalLessons: numModules * numLessonsPerModule,
+            details: []
+          },
+          startTime: new Date().toISOString(),
+          topic,
+          difficulty,
+          numModules,
+          numLessonsPerModule
         });
+
+        // Send generation session ID to frontend
+        res.write(`data: ${JSON.stringify({ 
+          type: 'generation_session', 
+          generationId,
+          message: 'Generation session started' 
+        })}\n\n`);
+
+        // Start generation in background
+        global.aiService.generateCourse(topic, difficulty, numModules, numLessonsPerModule, (progressData) => {
+          // Update session progress
+          const session = global.generationSessions.get(generationId);
+          if (session) {
+            session.progress = { ...session.progress, ...progressData };
+            session.progress.details = [...(session.progress.details || []), {
+              timestamp: new Date().toISOString(),
+              message: progressData.message || 'Progress update'
+            }];
+          }
+        }).then(async (course) => {
+          // Generation completed
+          const session = global.generationSessions.get(generationId);
+          if (session) {
+            session.status = 'completed';
+            session.course = course;
+          }
+        }).catch(async (error) => {
+          // Generation failed
+          const session = global.generationSessions.get(generationId);
+          if (session) {
+            session.status = 'error';
+            session.error = error.message;
+          }
+        });
+
+        // Send initial progress
+        res.write(`data: ${JSON.stringify({ 
+          type: 'progress', 
+          stage: 'generating',
+          message: 'Generating course content...',
+          currentModule: 0,
+          totalModules: numModules,
+          currentLesson: 0,
+          totalLessons: numModules * numLessonsPerModule
+        })}\n\n`);
+
+        // Keep connection alive for a short time to send initial updates
+        setTimeout(() => {
+          res.write(`data: ${JSON.stringify({ 
+            type: 'stream_ended', 
+            generationId,
+            message: 'Stream ended, use polling for updates' 
+          })}\n\n`);
+          res.end();
+        }, 2000);
+
+        // Return early - don't await the generation
+        return;
         
         if (!course || !course.title) {
             throw new Error('Failed to generate course structure');
@@ -2504,6 +2578,34 @@ function sendProgressUpdate(userId, progressData) {
     res.write(`data: ${JSON.stringify(progressData)}\n\n`);
   }
 }
+
+// Endpoint to check generation session status
+app.get('/api/courses/generation-status/:generationId', authenticateToken, async (req, res) => {
+  try {
+    const { generationId } = req.params;
+    const user = req.user;
+    
+    const session = global.generationSessions?.get(generationId);
+    if (!session) {
+      return res.status(404).json({ error: 'Generation session not found' });
+    }
+    
+    if (session.userId !== user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    res.json({
+      status: session.status,
+      progress: session.progress,
+      startTime: session.startTime,
+      course: session.course,
+      error: session.error
+    });
+  } catch (error) {
+    console.error('[GENERATION_STATUS] Error checking generation status:', error);
+    res.status(500).json({ error: 'Failed to check generation status' });
+  }
+});
 
 // Endpoint to check and refund credits if course generation was interrupted
 app.post('/api/courses/check-generation-status', authenticateToken, async (req, res) => {
