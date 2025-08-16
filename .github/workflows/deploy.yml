@@ -50,6 +50,12 @@ jobs:
           date > dist/build-timestamp.txt
           echo "Build completed at $(date)" > dist/build-info.txt
           echo "Build completed at $(date)" > dist/build-info.txt
+      
+      - name: Backup db.json before deployment
+        run: |
+          echo "Backing up db.json..."
+          curl -s -o db.json.backup "https://${{ secrets.FTP_SERVER }}/db.json" || echo "db.json not found or backup failed"
+      
       - name: Deploy to Shared Hosting via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.4
         with:
@@ -59,6 +65,15 @@ jobs:
           local-dir: ./dist/
           server-dir: /domains/thediscourse.ai/public_html/
           dangerous-clean-slate: true
+      
+      - name: Restore db.json after deployment
+        run: |
+          echo "Restoring db.json..."
+          if [ -f db.json.backup ]; then
+            curl -T db.json.backup "ftp://${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}@${{ secrets.FTP_SERVER }}/domains/thediscourse.ai/public_html/db.json" || echo "Failed to restore db.json"
+          else
+            echo "No db.json backup found to restore"
+          fi
 
       - name: Deploy src folder to Shared Hosting
         uses: SamKirkland/FTP-Deploy-Action@v4.3.4
