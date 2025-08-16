@@ -86,8 +86,8 @@ const api = {
     validateCourseStructure: aiService.validateCourseStructure,
     getUser: aiService.getUser,
 
-    generateCourse: (topic, difficulty, numModules, numLessonsPerModule, onProgress) => {
-        console.log('📡 [API SERVICE] Calling generateCourse API', {
+    generateCourse: (topic, difficulty, numModules, numLessonsPerModule) => {
+        console.log('📡 [API SERVICE] Calling simplified generateCourse API', {
             topic: topic,
             difficulty: difficulty,
             numModules: numModules,
@@ -98,7 +98,6 @@ const api = {
         return apiClient('/api/courses/generate', {
             method: 'POST',
             body: JSON.stringify({ topic, difficulty, numModules, numLessonsPerModule }),
-            onProgress,
         });
     },
     

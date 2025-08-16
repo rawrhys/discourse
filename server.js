@@ -1310,8 +1310,7 @@ Return only the JSON array, no other text.`;
                 global.progressCallback({ type: 'flashcards_complete', lessonTitle: lesson.title, message: `Flashcards created for: ${lesson.title}` });
             }
 
-            // Reduced delay for faster processing
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // Removed artificial delay for faster processing
             
           } catch (lessonError) {
             console.error(`[AIService] Lesson generation failed for "${lesson.title}":`, lessonError.message);
@@ -1745,7 +1744,15 @@ const requireAdminIfConfigured = (req, res, next) => {
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.status(200).json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    aiService: {
+      configured: !!global.aiService,
+      hasApiKey: !!(process.env.MISTRAL_API_KEY || process.env.VITE_MISTRAL_API_KEY),
+      ready: !!(global.aiService && global.aiService.apiKey)
+    }
+  });
 });
 
 // AI service test endpoint
@@ -2395,21 +2402,6 @@ app.post('/api/courses/generate', authenticateToken, async (req, res, next) => {
         return next(new ApiError(402, 'Insufficient course credits.'));
     }
 
-    // Set up streaming response
-    res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Cache-Control',
-        'X-Accel-Buffering': 'no'
-    });
-
-    // Define the progress callback for the AI service
-    global.progressCallback = (progressData) => {
-      // ... existing code ...
-    };
-
     try {
         const { topic, difficulty, numModules, numLessonsPerModule } = req.body;
         
@@ -2419,15 +2411,6 @@ app.post('/api/courses/generate', authenticateToken, async (req, res, next) => {
             numModules,
             numLessonsPerModule
         });
-
-        // Send initial status - DO NOT deduct credits yet
-        res.write(`data: ${JSON.stringify({ type: 'status', message: 'Starting course generation...' })}\n\n`);
-        
-        // Send AI service starting signal
-        res.write(`data: ${JSON.stringify({ type: 'ai_service_starting', message: 'Initializing AI service...' })}\n\n`);
-
-        // Send generation starting signal
-        res.write(`data: ${JSON.stringify({ type: 'generating', message: 'Generating course content...', currentModule: 0, totalModules: numModules })}\n\n`);
 
         // --- CONTENT MODERATION GATE ---
         const BLOCKLIST = [
@@ -2441,192 +2424,78 @@ app.post('/api/courses/generate', authenticateToken, async (req, res, next) => {
         const topicText = String(topic || '').toLowerCase();
         const containsBlocked = BLOCKLIST.some(term => topicText.includes(term));
         if (!topicText || containsBlocked) {
-          // Refund credit and stop
-          user.courseCredits = (user.courseCredits || 0) + 1;
-          await db.write();
           console.warn('[COURSE_GENERATION] Blocked by content policy. Topic:', topic);
-          const payload = {
-            type: 'error',
-            code: 'CONTENT_POLICY_BLOCKED',
-            message: 'The requested topic violates our content policy and cannot be generated.'
-          };
-          res.write(`data: ${JSON.stringify(payload)}\n\n`);
-          return res.end();
+          return next(new ApiError(400, 'The requested topic violates our content policy and cannot be generated.'));
         }
 
-        // Create a generation session for this user
-        const generationId = `gen_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        global.generationSessions = global.generationSessions || new Map();
-        global.generationSessions.set(generationId, {
-          userId: user.id,
-          status: 'generating',
-          progress: {
-            stage: 'generating',
-            message: 'Generating course content...',
-            currentModule: 0,
-            totalModules: numModules,
-            currentLesson: 0,
-            totalLessons: numModules * numLessonsPerModule,
-            details: []
-          },
-          startTime: new Date().toISOString(),
+        // Deduct credit before starting generation
+        user.courseCredits = Math.max(0, (user.courseCredits || 0) - 1);
+        await db.write();
+        
+        console.log(`[COURSE_GENERATION] Credit deducted for user ${user.id}. Remaining credits: ${user.courseCredits}`);
+
+        // Generate the course using the AI service
+        console.log(`[COURSE_GENERATION] Calling AI service to generate course...`);
+        
+        const course = await global.aiService.generateCourse(
           topic,
           difficulty,
           numModules,
           numLessonsPerModule
+        );
+
+        // Assign user ID and save course to database
+        course.userId = user.id;
+        course.id = `course_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        course.createdAt = new Date().toISOString();
+        course.published = false;
+
+        // Final validation: ensure all modules have proper isLocked properties
+        if (course.modules && Array.isArray(course.modules)) {
+          course.modules.forEach((module, mIdx) => {
+            if (module.isLocked === undefined) {
+              module.isLocked = mIdx > 0;
+            }
+          });
+        }
+
+        // Save the course to database
+        db.data.courses.push(course);
+        await db.write();
+
+        console.log(`[COURSE_GENERATION] Course generated and saved successfully for user ${user.id}:`, {
+          courseId: course.id,
+          courseTitle: course.title,
+          modulesCount: course.modules.length
         });
 
-        // Send generation session ID to frontend
-        res.write(`data: ${JSON.stringify({ 
-          type: 'generation_session', 
-          generationId,
-          message: 'Generation session started' 
-        })}\n\n`);
-
-        // Start generation in background with explicit user ID
-        const userId = user.id; // Capture user ID explicitly
-        global.aiService.generateCourse(topic, difficulty, numModules, numLessonsPerModule, generationId, (progressData) => {
-          // Update session progress
-          const session = global.generationSessions.get(generationId);
-          if (session) {
-            session.progress = { ...session.progress, ...progressData };
-            session.progress.details = [...(session.progress.details || []), {
-              timestamp: new Date().toISOString(),
-              message: progressData.message || 'Progress update'
-            }];
-          }
-        }).then(async (course) => {
-          // Generation completed - save course and update session
-          try {
-            if (!course || !course.title) {
-              throw new Error('Failed to generate course structure');
-            }
-
-            // Update session for validation stage
-            let session = global.generationSessions.get(generationId);
-              if (session) {
-                session.progress = {
-                  ...session.progress,
-                  stage: 'validating',
-                  message: 'Validating course structure...',
-                  details: [...(session.progress.details || []), {
-                    timestamp: new Date().toISOString(),
-                    message: '🔍 Validating course structure...'
-                  }]
-                };
-              }
-
-              // Final validation: ensure all modules have proper isLocked properties
-              if (course.modules && Array.isArray(course.modules)) {
-                course.modules.forEach((module, mIdx) => {
-                  if (module.isLocked === undefined) {
-                    module.isLocked = mIdx > 0;
-                  }
-                });
-              }
-
-            // Assign user ID to the course
-            course.userId = userId;
-            course.id = `course_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-            course.createdAt = new Date().toISOString();
-            course.published = false;
-
-            // Update session for saving stage
-            if (session) {
-              session.progress = {
-                ...session.progress,
-                stage: 'saving',
-                message: 'Saving course to database...',
-                details: [...(session.progress.details || []), {
-                  timestamp: new Date().toISOString(),
-                  message: '💾 Saving course to database...'
-                }]
-              };
-            }
-
-              // Save the course to database
-              db.data.courses.push(course);
-              await db.write();
-
-              console.log(`[COURSE_GENERATION] Course saved with ID: ${course.id}`);
-
-            // Deduct credits after successful completion
-            // Find the user in the database to ensure we have the latest data
-            const dbUser = db.data.users.find(u => u.id === userId);
-            if (dbUser) {
-              dbUser.courseCredits = Math.max(0, dbUser.courseCredits - 1);
-              await db.write();
-              console.log(`[COURSE_GENERATION] Deducted 1 credit from user ${userId}. Remaining: ${dbUser.courseCredits}`);
-            } else {
-              console.error(`[COURSE_GENERATION] User not found in database: ${userId}`);
-            }
-
-            // Update session with completed course
-            if (session) {
-              session.status = 'completed';
-              session.course = course;
-              session.creditsRemaining = dbUser ? dbUser.courseCredits : 0;
-            }
-
-            console.log(`[COURSE_GENERATION] Course generation completed successfully for user ${userId}`);
-            console.log(`[COURSE_GENERATION] Course ID: ${course.id}, Title: ${course.title}`);
-            console.log(`[COURSE_GENERATION] Credits remaining: ${dbUser ? dbUser.courseCredits : 0}`);
-
-          } catch (saveError) {
-            console.error(`[COURSE_GENERATION] Error saving course:`, saveError);
-            if (session) {
-              session.status = 'error';
-              session.error = saveError.message;
-            }
-          }
-        }).catch(async (error) => {
-          // Generation failed
-          console.error(`[COURSE_GENERATION] Error generating course:`, error);
-          let session = global.generationSessions.get(generationId);
-          if (session) {
-            session.status = 'error';
-            session.error = error.message;
-          }
+        // Return the generated course
+        res.json({
+          success: true,
+          course: course,
+          message: 'Course generated successfully',
+          creditsRemaining: user.courseCredits
         });
-
-        // Send initial progress
-        res.write(`data: ${JSON.stringify({ 
-          type: 'progress', 
-          stage: 'generating',
-          message: 'Generating course content...',
-          currentModule: 0,
-          totalModules: numModules,
-          currentLesson: 0,
-          totalLessons: numModules * numLessonsPerModule
-        })}\n\n`);
-
-        // Keep connection alive for a short time to send initial updates
-        setTimeout(() => {
-          res.write(`data: ${JSON.stringify({ 
-            type: 'stream_ended', 
-            generationId,
-            message: 'Stream ended, use polling for updates' 
-          })}\n\n`);
-          res.end();
-        }, 2000);
-
-        // Return early - don't await the generation
-        return;
 
     } catch (error) {
         console.error(`[COURSE_GENERATION] Error generating course for user ${user.id}:`, error);
         
-        // No credit refund needed since credits weren't deducted yet
-        const errorData = {
-            type: 'error',
-            message: error.message || 'Course generation failed',
-            creditsRefunded: false,
-            creditsRemaining: user.courseCredits
-        };
+        // Refund the credit on error
+        user.courseCredits = (user.courseCredits || 0) + 1;
+        await db.write();
         
-        res.write(`data: ${JSON.stringify(errorData)}\n\n`);
-    } finally {
-        res.end();
+        console.log(`[COURSE_GENERATION] Credit refunded for user ${user.id}. Credits: ${user.courseCredits}`);
+        
+        // Return appropriate error response
+        if (error.message.includes('Mistral API key is not configured')) {
+            return next(new ApiError(503, 'AI service is not configured. Please contact support to set up the AI service.'));
+        } else if (error.message.includes('Failed to fetch')) {
+            return next(new ApiError(503, 'Unable to connect to the AI service. Please check your internet connection and try again.'));
+        } else if (error.message.includes('rate limit') || error.message.includes('429')) {
+            return next(new ApiError(429, 'AI service is currently busy. Please try again in a few minutes.'));
+        } else {
+            return next(new ApiError(500, 'Course generation failed. Please try again.'));
+        }
     }
 });
 
@@ -4071,6 +3940,18 @@ const MISTRAL_KEY = process.env.MISTRAL_API_KEY || process.env.VITE_MISTRAL_API_
 try {
   global.aiService = new AIService(MISTRAL_KEY);
   console.log(`[SERVER] AI service ${MISTRAL_KEY ? 'initialized with API key' : 'initialized without API key (image search only)'}`);
+  
+  // Pre-warm the AI service by testing the connection
+  if (MISTRAL_KEY) {
+    console.log('[SERVER] Pre-warming AI service connection...');
+    try {
+      const testPrompt = 'Generate a simple test response. Just say "AI service is working correctly."';
+      const response = await global.aiService._makeApiRequest(testPrompt, 'search', false);
+      console.log('[SERVER] AI service pre-warm successful:', response.substring(0, 100) + '...');
+    } catch (warmError) {
+      console.warn('[SERVER] AI service pre-warm failed (this is normal for rate limits):', warmError.message);
+    }
+  }
 } catch (e) {
   console.error('[SERVER] Failed to initialize AI service:', e.message);
   global.aiService = new AIService('');

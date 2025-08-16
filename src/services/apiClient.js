@@ -39,9 +39,7 @@ const apiClient = async (url, options = {}) => {
   try {
     // Add timeout to prevent hanging requests
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
-    
-    // Use the fullUrl that was already constructed above
+    const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minute timeout for course generation
     
     const response = await fetch(fullUrl, {
       ...config,
@@ -131,117 +129,8 @@ const apiClient = async (url, options = {}) => {
       logger.info('✅ [API SUCCESS] No content response (204)');
       return null;
     }
-    // For course generation, handle streaming response
-    if (url.includes('/api/courses/generate')) {
-      logger.debug('🔄 [API STREAMING] Starting streaming response for course generation');
-      // Check if response is actually streaming
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('text/event-stream')) {
-        logger.warn('⚠️ [API STREAMING] Expected streaming response but got:', contentType);
-        // Fall back to robust JSON handling
-        const responseText = await response.text();
-        const responseData = JsonParser.RobustJsonParser.parse(responseText, 'Non-Streaming Fallback');
-        if (responseData) {
-          logger.info('✅ [API SUCCESS] Non-streaming response:', responseData);
-          return responseData;
-        } else {
-          throw new Error('Failed to parse non-streaming response');
-        }
-      }
-      // Read the response as a stream
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let chunkCount = 0;
-      let hasReceivedCompletion = false;
-      logger.debug('📡 [API STREAMING] Starting to read stream...');
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) {
-            logger.debug('✅ [API STREAMING] Stream completed after', chunkCount, 'chunks');
-            if (!hasReceivedCompletion) {
-              logger.warn('⚠️ [API STREAMING] Stream ended without completion event - this is normal during AI service initialization');
-              // Send a stream_ended signal to let frontend know stream ended but no completion yet
-              if (onProgress) {
-                onProgress({
-                  type: 'stream_ended',
-                  message: 'Stream ended, waiting for AI service response...'
-                });
-              }
-            }
-            break;
-          }
-          chunkCount++;
-          // Decode the chunk and add to buffer
-          buffer += decoder.decode(value, { stream: true });
-          logger.debug(`📡 [API STREAMING] Received chunk ${chunkCount}, buffer length: ${buffer.length}`);
-          // Process complete JSON objects from the buffer
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || ''; // Keep incomplete line in buffer
-          for (const line of lines) {
-            if (line.trim() && line.startsWith('data: ')) {
-              logger.debug(`📡 [API STREAMING] Processing line: ${line.substring(0, 100)}...`);
-              // Use robust JSON parser for streaming chunks
-              const data = JsonParser.RobustJsonParser.parse(line.slice(6), 'Streaming Chunk');
-              if (data) {
-                logger.debug('📡 [API STREAMING] Successfully parsed chunk:', data);
-                // Track completion events
-                if (data.type === 'course_complete' || data.type === 'error') {
-                  hasReceivedCompletion = true;
-                  logger.debug('🎯 [API STREAMING] Received completion event:', data.type);
-                }
-                // Special handling for course_complete
-                if (data.type === 'course_complete') {
-                  logger.debug('🎉 [API STREAMING] Course completion detected:', {
-                    courseId: data.courseId,
-                    courseTitle: data.courseTitle,
-                    hasCourseId: !!data.courseId,
-                    courseIdType: typeof data.courseId,
-                    courseIdLength: data.courseId ? data.courseId.length : 0
-                  });
-                }
-                // Emit the streaming data
-                if (onProgress) {
-                  logger.debug('📡 [API STREAMING] Calling streaming callback with data type:', data.type);
-                  onProgress(data);
-                } else {
-                  logger.warn('⚠️ [API STREAMING] No streaming callback available for data:', data);
-                }
-              } else {
-                logger.warn('⚠️ [API STREAMING] Failed to parse chunk:', line);
-              }
-            }
-          }
-        }
-        // Process any remaining data in buffer
-        if (buffer.trim() && buffer.startsWith('data: ')) {
-          logger.debug('📡 [API STREAMING] Processing final buffer:', buffer.substring(0, 100) + '...');
-          // Use robust JSON parser for final chunk
-          const data = JsonParser.RobustJsonParser.parse(buffer.slice(6), 'Final Streaming Chunk');
-          if (data) {
-            logger.debug('📡 [API STREAMING] Final chunk parsed successfully:', data);
-            if (data.type === 'course_complete' || data.type === 'error') {
-              hasReceivedCompletion = true;
-            }
-            if (onProgress) {
-              logger.debug('📡 [API STREAMING] Calling streaming callback with final data type:', data.type);
-              onProgress(data);
-            } else {
-              logger.warn('⚠️ [API STREAMING] No streaming callback available for final data:', data);
-            }
-          } else {
-            logger.warn('⚠️ [API STREAMING] Failed to parse final chunk:', buffer);
-          }
-        }
-        logger.debug('✅ [API STREAMING] Stream processing completed');
-        return { success: true, message: 'Course generation completed' };
-      } catch (streamError) {
-        logger.error('💥 [API STREAMING] Stream error:', streamError);
-        throw new Error('Streaming failed: ' + streamError.message);
-      }
-    }
-    // For non-streaming responses, use robust JSON parser
+
+    // For all responses, use robust JSON parser
     const responseText = await response.text();
 
     // Handle empty response body by treating it as a null response

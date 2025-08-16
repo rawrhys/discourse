@@ -5,7 +5,6 @@ import ChatInterface from './ChatInterface';
 import { useApiWrapper } from '../services/api';
 import { API_BASE_URL, debugApiConfig, testBackendConnection } from '../config/api';
 import LoadingIndicator from './LoadingIndicator';
-import CourseGenerationProgress from './CourseGenerationProgress';
 import logger from '../utils/logger';
 
 const Dashboard = () => {
@@ -17,7 +16,6 @@ const Dashboard = () => {
   const [error, setError] = useState(null);
   const [courseToDelete, setCourseToDelete] = useState(null);
   const [hoveredCourseId, setHoveredCourseId] = useState(null);
-  const [pollingInterval, setPollingInterval] = useState(null);
   const hasAttemptedFetch = useRef(false);
   const [isLoadingCourses, setIsLoadingCourses] = useState(false);
   const api = useApiWrapper();
@@ -28,15 +26,6 @@ const Dashboard = () => {
   // Connection diagnostic state
   const [connectionStatus, setConnectionStatus] = useState(null);
   const [showConnectionDiagnostic, setShowConnectionDiagnostic] = useState(false);
-  const [generationProgress, setGenerationProgress] = useState({
-    stage: 'idle', // idle, starting, generating, completed, error
-    currentModule: 0,
-    totalModules: 0,
-    currentLesson: 0,
-    totalLessons: 0,
-    message: '',
-    details: []
-  });
 
   // Get the user's name from the user object
   const userName = user?.name || user?.email || 'Guest';
@@ -98,40 +87,24 @@ const Dashboard = () => {
       // Clear any errors since we successfully fetched courses
       setError(null);
       
-      // If we have no courses and this was a forced refresh (like after deletion),
-      // ensure we don't show any error state
-      if (validCourses.length === 0 && force) {
-        logger.debug('📭 [DASHBOARD] No courses found after forced refresh - clearing any error state');
-        setError(null);
-      }
-      
     } catch (error) {
-      // Enhanced error handling to prevent stack trace issues
-      logger.warn('⚠️ [DASHBOARD] Could not fetch courses (likely new user or network issue):', {
+      logger.error('❌ [DASHBOARD] Error fetching saved courses:', {
         error: error.message,
-        errorType: error.constructor.name,
-        status: error.status,
+        stack: error.stack,
         timestamp: new Date().toISOString()
       });
       
-      // Always set empty array to prevent undefined errors
-      setSavedCourses([]);
+      // Set a user-friendly error message
+      setError('Failed to load courses. Please try refreshing the page.');
       
-      // Only set error for non-401 errors (401 is handled gracefully for new users)
-      if (error.status !== 401) {
-        setError(error.message || 'Failed to load courses');
-      } else {
-        setError(null); // Don't show error for 401 (new user or session issues)
-      }
-      
-      // Don't re-throw the error to prevent React error boundaries from triggering
+      // Don't clear existing courses on error, just show the error
     } finally {
       setIsLoadingCourses(false);
     }
   }, [api]);
 
   const handleGenerateCourse = useCallback(async (courseParams) => {
-    logger.debug('🎯 [COURSE GENERATION] Starting course generation process', {
+    logger.debug('🎯 [COURSE GENERATION] Starting simplified course generation process', {
       params: courseParams,
       timestamp: new Date().toISOString(),
       user: user?.id
@@ -140,302 +113,6 @@ const Dashboard = () => {
     setIsGenerating(true);
     setError(null);
     
-    // Store generation start time for crash recovery
-    localStorage.setItem('courseGenerationStartTime', new Date().toISOString());
-    
-    // Reset generation progress with more detailed initial state
-    setGenerationProgress({
-      stage: 'starting',
-      currentModule: 0,
-      totalModules: courseParams.numModules || 0,
-      currentLesson: 0,
-      totalLessons: (courseParams.numModules || 0) * (courseParams.numLessonsPerModule || 0),
-      message: 'Initializing course generation...',
-      details: [{
-        timestamp: new Date().toISOString(),
-        message: `🚀 Starting generation of "${courseParams.topic}" course (${courseParams.numModules} modules, ${courseParams.numLessonsPerModule} lessons per module)`
-      }]
-    });
-    
-    // Add a timeout to handle cases where course_complete might not be received
-    const generationTimeout = setTimeout(() => {
-      logger.warn('⏰ [COURSE GENERATION] Generation timeout reached, checking for completion...');
-      if (isGenerating) {
-        logger.debug('🔄 [COURSE GENERATION] Forcing completion check...');
-        
-        // Update progress to show we're checking for completion
-        setGenerationProgress(prev => ({
-          ...prev,
-          stage: 'checking',
-          message: 'Generation taking longer than expected, checking for completion...',
-          details: [...prev.details, { 
-            timestamp: new Date().toISOString(), 
-            message: '⏰ Generation timeout reached, checking for completion...' 
-          }]
-        }));
-        
-        // Wait a bit longer before forcing refresh to give AI service time
-        setTimeout(() => {
-          if (isGenerating) {
-            logger.debug('🔄 [COURSE GENERATION] Forcing final completion check...');
-            fetchSavedCourses(true).then(() => {
-              logger.debug('✅ [COURSE GENERATION] Forced refresh completed');
-              setIsGenerating(false);
-              setShowNewCourseForm(false);
-              // Clear generation start time
-              localStorage.removeItem('courseGenerationStartTime');
-            }).catch((error) => {
-              logger.error('❌ [COURSE_GENERATION] Error during forced refresh:', error);
-              setIsGenerating(false);
-              setShowNewCourseForm(false);
-              // Clear generation start time
-              localStorage.removeItem('courseGenerationStartTime');
-            });
-          }
-        }, 30000); // Wait 30 more seconds before forcing refresh
-      }
-    }, 900000); // 15 minutes timeout
-    
-    // Define the progress handler
-    const onProgress = (data) => {
-      logger.debug('📡 [DASHBOARD] Received streaming data:', data);
-      logger.debug('📡 [DASHBOARD] Data type:', data.type);
-      logger.debug('📡 [DASHBOARD] Current generation state:', {
-        stage: generationProgress.stage,
-        currentModule: generationProgress.currentModule,
-        totalModules: generationProgress.totalModules,
-        message: generationProgress.message
-      });
-      
-      setGenerationProgress(prev => {
-        let updatedState = { ...prev };
-
-        switch (data.type) {
-          case 'course_complete':
-            logger.debug('🎉 [DASHBOARD] Course generation completed:', data);
-            // Clear the timeout since we received completion
-            clearTimeout(generationTimeout);
-            
-            // Update credits immediately if provided
-            if (data.creditsRemaining !== undefined) {
-              logger.debug('💳 [DASHBOARD] Updating credits from completion data:', data.creditsRemaining);
-              setCredits(data.creditsRemaining);
-            }
-            
-            updatedState = {
-              ...prev,
-              stage: 'completed',
-              currentModule: prev.totalModules, // Ensure progress shows 100%
-              message: 'Course generation completed successfully! Your course has been saved.',
-              details: [...prev.details, { 
-                timestamp: new Date().toISOString(), 
-                message: '🎉 Course generation completed successfully!' 
-              }]
-            };
-            
-            // Immediately update the state
-            setGenerationProgress(updatedState);
-            
-            // Add a small delay to show completion message, then navigate
-            setTimeout(() => {
-              logger.debug('🚀 [DASHBOARD] Navigating to course:', data.courseId);
-              setIsGenerating(false);
-              setShowNewCourseForm(false);
-              
-              // Clear generation start time on successful completion
-              localStorage.removeItem('courseGenerationStartTime');
-              
-              if (data.courseId && typeof data.courseId === 'string' && data.courseId.trim()) {
-                logger.debug('📍 [DASHBOARD] Navigating to course page:', `/course/${data.courseId}`);
-                navigate(`/course/${data.courseId}`);
-              } else {
-                logger.debug('📋 [DASHBOARD] No courseId provided, refreshing saved courses');
-                fetchSavedCourses(true);
-              }
-            }, 3000); // Increased delay to show completion message
-            break;
-
-          case 'error':
-            logger.error('💥 [DASHBOARD] Course generation error:', data);
-            setError(data.message || 'Course generation failed. Please try again.');
-            
-            // Update credits if refunded
-            if (data.creditsRefunded && data.creditsRemaining !== undefined) {
-              logger.debug('💳 [DASHBOARD] Updating credits after error refund:', data.creditsRemaining);
-              setCredits(data.creditsRemaining);
-            }
-            
-            updatedState = {
-              ...prev,
-              stage: 'error',
-              message: data.message || 'Course generation failed. Please try again.',
-              details: [...prev.details, { 
-                timestamp: new Date().toISOString(), 
-                message: `💥 Error: ${data.message || 'Course generation failed'}` 
-              }]
-            };
-            setTimeout(() => {
-              setIsGenerating(false);
-              // Clear generation start time on error
-              localStorage.removeItem('courseGenerationStartTime');
-            }, 3000);
-            break;
-
-          case 'status':
-            updatedState = { 
-              ...prev, 
-              stage: 'starting', 
-              message: data.message,
-              details: [...prev.details, { 
-                timestamp: new Date().toISOString(), 
-                message: `📋 Status: ${data.message}` 
-              }]
-            };
-            break;
-
-          case 'ai_service_starting':
-            updatedState = {
-              ...prev,
-              stage: 'starting',
-              message: 'Initializing AI service...',
-              details: [...prev.details, { 
-                timestamp: new Date().toISOString(), 
-                message: '🤖 Initializing AI service...' 
-              }]
-            };
-            break;
-
-          case 'stream_ended':
-            updatedState = {
-              ...prev,
-              stage: 'waiting',
-              message: 'Waiting for AI service to process request...',
-              details: [...prev.details, { 
-                timestamp: new Date().toISOString(), 
-                message: '⏳ Stream ended, waiting for AI service response...' 
-              }]
-            };
-            // Start polling for updates
-            if (data.generationId) {
-              startPollingForUpdates(data.generationId);
-            }
-            break;
-
-          case 'generation_session':
-            updatedState = {
-              ...prev,
-              stage: 'starting',
-              message: 'Generation session started...',
-              details: [...prev.details, { 
-                timestamp: new Date().toISOString(), 
-                message: `🆔 Generation session: ${data.generationId}` 
-              }]
-            };
-            break;
-          
-          case 'progress':
-            updatedState = {
-              ...prev,
-              stage: 'generating',
-              currentModule: data.currentModule || prev.currentModule,
-              totalModules: data.totalModules || prev.totalModules,
-              currentLesson: data.currentLesson || prev.currentLesson,
-              totalLessons: data.totalLessons || prev.totalLessons,
-              message: data.message || prev.message,
-              details: [...prev.details, { timestamp: new Date().toISOString(), message: data.message }]
-            };
-            break;
-
-          case 'module_start':
-            updatedState = {
-              ...prev,
-              stage: 'generating',
-              currentModule: data.moduleIndex + 1,
-              totalModules: data.totalModules,
-              message: `Generating Module ${data.moduleIndex + 1}: ${data.moduleTitle}`,
-              details: [...prev.details, { timestamp: new Date().toISOString(), message: `Starting Module ${data.moduleIndex + 1}: ${data.moduleTitle}` }]
-            };
-            break;
-
-          case 'lesson_start':
-            updatedState = {
-              ...prev,
-              stage: 'generating',
-              currentLesson: data.lessonIndex + 1,
-              totalLessons: data.totalLessons,
-              message: `Generating Lesson ${data.lessonIndex + 1}: ${data.lessonTitle}`,
-              details: [...prev.details, { timestamp: new Date().toISOString(), message: `Starting Lesson ${data.lessonIndex + 1}: ${data.lessonTitle}` }]
-            };
-            break;
-
-          case 'lesson_complete':
-            updatedState = {
-              ...prev,
-              message: `Completed Lesson: ${data.lessonTitle}`,
-              details: [...prev.details, { timestamp: new Date().toISOString(), message: `✅ Completed: ${data.lessonTitle}` }]
-            };
-            break;
-
-          case 'quiz_generating':
-            updatedState = {
-              ...prev,
-              message: `Generating quiz for: ${data.lessonTitle}`,
-              details: [...prev.details, { timestamp: new Date().toISOString(), message: `🎯 Generating quiz for: ${data.lessonTitle}` }]
-            };
-            break;
-
-          case 'quiz_complete':
-            updatedState = {
-              ...prev,
-              message: `Quiz completed for: ${data.lessonTitle}`,
-              details: [...prev.details, { timestamp: new Date().toISOString(), message: `✅ Quiz completed for: ${data.lessonTitle}` }]
-            };
-            break;
-
-          case 'course_validating':
-            updatedState = {
-              ...prev,
-              stage: 'validating',
-              message: 'Validating course structure and saving to database...',
-              details: [...prev.details, { timestamp: new Date().toISOString(), message: '🔍 Validating course structure...' }]
-            };
-            break;
-
-          case 'course_saving':
-            updatedState = {
-              ...prev,
-              stage: 'saving',
-              message: 'Saving course to database...',
-              details: [...prev.details, { timestamp: new Date().toISOString(), message: '💾 Saving course to database...' }]
-            };
-            break;
-
-          case 'flashcards_generating':
-            updatedState = {
-              ...prev,
-              message: `Generating flashcards for: ${data.lessonTitle}`,
-              details: [...prev.details, { timestamp: new Date().toISOString(), message: `🧠 Generating flashcards for: ${data.lessonTitle}` }]
-            };
-            break;
-
-          case 'flashcards_complete':
-            updatedState = {
-              ...prev,
-              message: `Flashcards created for: ${data.lessonTitle}`,
-              details: [...prev.details, { timestamp: new Date().toISOString(), message: `✅ Flashcards created for: ${data.lessonTitle}` }]
-            };
-            break;
-
-          default:
-            updatedState = {
-              ...prev,
-              details: [...prev.details, { timestamp: new Date().toISOString(), message: JSON.stringify(data) }]
-            };
-        }
-        return updatedState;
-      });
-    };
-    
     try {
       logger.debug('📋 [COURSE GENERATION] Processing course parameters:', courseParams);
       
@@ -443,16 +120,25 @@ const Dashboard = () => {
       logger.debug('🔤 [COURSE GENERATION] Extracted prompt:', prompt);
       logger.debug('⚙️ [COURSE GENERATION] Additional parameters:', rest);
       
-      logger.debug('📡 [COURSE GENERATION] Making streaming API call to generate course...');
+      logger.debug('📡 [COURSE GENERATION] Making API call to generate course...');
       const result = await api.generateCourse(
         prompt, 
         rest.difficultyLevel || 'intermediate',
         rest.numModules || 3,
-        rest.numLessonsPerModule || 3,
-        onProgress
+        rest.numLessonsPerModule || 3
       );
       
-      logger.debug('✅ [COURSE GENERATION] Streaming API call completed:', result);
+      logger.debug('✅ [COURSE GENERATION] Course generation completed:', result);
+      
+      // Course generation completed successfully
+      setIsGenerating(false);
+      setShowNewCourseForm(false);
+      
+      // Refresh the courses list to show the new course
+      await fetchSavedCourses(true);
+      
+      // Show success message
+      logger.info('🎉 [COURSE GENERATION] Course generated successfully!');
       
     } catch (error) {
       logger.error('💥 [COURSE GENERATION] Course generation failed:', {
@@ -461,9 +147,6 @@ const Dashboard = () => {
         params: courseParams,
         timestamp: new Date().toISOString()
       });
-      
-      // Clear the timeout on error
-      clearTimeout(generationTimeout);
       
       // Show a more helpful error message
       let errorMessage = error.message || 'Failed to generate course';
@@ -478,15 +161,17 @@ const Dashboard = () => {
         errorMessage = 'You have no credits left. Please purchase more credits to generate courses.';
         logger.error('💳 [COURSE GENERATION] Insufficient credits');
       } else if (error.message.includes('NSFW') || error.message.includes('inappropriate') || error.message.includes('CONTENT_POLICY_BLOCKED')) {
-        errorMessage = 'The course topic contains inappropriate content and cannot be generated.';
+        errorMessage = 'The requested topic violates our content policy and cannot be generated. Please try a different topic.';
         logger.error('🚫 [COURSE GENERATION] Content policy violation');
+      } else if (error.message.includes('timeout')) {
+        errorMessage = 'The request timed out. Please try again with a simpler topic or fewer modules.';
+        logger.error('⏰ [COURSE GENERATION] Request timeout');
       }
       
-      logger.error('❌ [COURSE GENERATION] Setting error message:', errorMessage);
       setError(errorMessage);
       setIsGenerating(false);
     }
-  }, [api, navigate, fetchSavedCourses, user, isGenerating]);
+  }, [api, user?.id, fetchSavedCourses]);
 
   const handleLogout = () => {
     logout();
@@ -629,177 +314,12 @@ const Dashboard = () => {
           handlePaymentSuccess();
         }
         
-        // Check for any interrupted course generations
-        checkForInterruptedGeneration();
-        
       } catch (error) {
         logger.error('❌ [DASHBOARD] Error in initial data fetch:', error);
         // Don't let errors propagate - just log them
       }
     }
   }, [user, fetchSavedCourses]); // Added refreshUserData dependency
-
-  // Cleanup polling interval on unmount
-  useEffect(() => {
-    return () => {
-      if (pollingInterval) {
-        clearInterval(pollingInterval);
-      }
-    };
-  }, [pollingInterval]);
-
-  // Check for interrupted course generation and handle credit refunds
-  const checkForInterruptedGeneration = useCallback(async () => {
-    try {
-      const generationStartTime = localStorage.getItem('courseGenerationStartTime');
-      if (generationStartTime) {
-        logger.debug('🔍 [DASHBOARD] Checking for interrupted generation...');
-        
-        const response = await fetch('/api/courses/check-generation-status', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          },
-          body: JSON.stringify({ generationStartTime })
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          if (data.shouldRefund) {
-            logger.debug('💰 [DASHBOARD] Interrupted generation detected, refunding credit...');
-            // The server will handle the refund automatically
-            setError('Course generation was interrupted. Your credit has been refunded.');
-          }
-        }
-        
-        // Clear the generation start time
-        localStorage.removeItem('courseGenerationStartTime');
-      }
-    } catch (error) {
-      logger.error('❌ [DASHBOARD] Error checking for interrupted generation:', error);
-    }
-  }, []);
-
-  const startPollingForUpdates = useCallback((generationId) => {
-    const pollInterval = setInterval(async () => {
-      try {
-        const response = await fetch(`/api/courses/generation-status/${generationId}`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          },
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          
-          if (data.status === 'completed') {
-            clearInterval(pollInterval);
-            logger.info('✅ [GENERATION] Course generation completed via polling');
-            
-            // Update progress to show completion
-            setGenerationProgress(prev => ({
-              ...prev,
-              stage: 'completed',
-              message: 'Course generation completed successfully!',
-              details: [...prev.details, { 
-                timestamp: new Date().toISOString(), 
-                message: '✅ Course generation completed!' 
-              }]
-            }));
-            
-            // Navigate to the completed course if courseId is available
-            if (data.courseId) {
-              logger.info(`🎯 [GENERATION] Navigating to completed course: ${data.courseId}`);
-              setTimeout(() => {
-                window.location.href = `/course/${data.courseId}`;
-              }, 2000);
-            } else {
-              // Fallback: refresh courses and close modal
-              setTimeout(() => {
-                fetchSavedCourses(true).then(() => {
-                  setIsGenerating(false);
-                  setShowNewCourseForm(false);
-                  localStorage.removeItem('courseGenerationStartTime');
-                });
-              }, 3000);
-            }
-            
-          } else if (data.status === 'error') {
-            clearInterval(pollInterval);
-            logger.error('❌ [GENERATION] Course generation failed via polling:', data.error);
-            
-            setGenerationProgress(prev => ({
-              ...prev,
-              stage: 'error',
-              message: data.error || 'Course generation failed',
-              details: [...prev.details, { 
-                timestamp: new Date().toISOString(), 
-                message: `❌ Generation failed: ${data.error}` 
-              }]
-            }));
-            
-            setIsGenerating(false);
-            setShowNewCourseForm(false);
-            localStorage.removeItem('courseGenerationStartTime');
-            
-          } else if (data.progress) {
-            // Update progress with latest data from polling
-            setGenerationProgress(prev => ({
-              ...prev,
-              stage: data.progress.stage || prev.stage,
-              currentModule: data.progress.currentModule || prev.currentModule,
-              totalModules: data.progress.totalModules || prev.totalModules,
-              currentLesson: data.progress.currentLesson || prev.currentLesson,
-              totalLessons: data.progress.totalLessons || prev.totalLessons,
-              message: data.progress.message || prev.message,
-              details: [...(prev.details || []), ...(data.progress.details || [])]
-            }));
-          } else if (data.status === 'generating') {
-            // Update progress for ongoing generation
-            setGenerationProgress(prev => ({
-              ...prev,
-              stage: 'generating',
-              message: 'Generating course content...',
-              details: [...prev.details, { 
-                timestamp: new Date().toISOString(), 
-                message: '🔄 Course generation in progress...' 
-              }]
-            }));
-          } else if (data.status === 'validating') {
-            // Update progress for validation stage
-            setGenerationProgress(prev => ({
-              ...prev,
-              stage: 'validating',
-              message: 'Validating course structure...',
-              details: [...prev.details, { 
-                timestamp: new Date().toISOString(), 
-                message: '🔍 Validating course structure...' 
-              }]
-            }));
-          } else if (data.status === 'saving') {
-            // Update progress for saving stage
-            setGenerationProgress(prev => ({
-              ...prev,
-              stage: 'saving',
-              message: 'Saving course to database...',
-              details: [...prev.details, { 
-                timestamp: new Date().toISOString(), 
-                message: '💾 Saving course to database...' 
-              }]
-            }));
-          }
-        }
-        
-      } catch (error) {
-        logger.error('❌ [POLLING] Error polling generation status:', error);
-        // Don't clear interval on error, keep trying
-      }
-    }, 2000); // Poll every 2 seconds
-    
-    // Store the interval ID so we can clear it if needed
-    setPollingInterval(pollInterval);
-  }, []);
 
   const handlePaymentSuccess = async () => {
     try {
@@ -1246,25 +766,34 @@ const Dashboard = () => {
                   onGenerateCourse={handleGenerateCourse}
                   onCancel={() => setShowNewCourseForm(false)}
                   isGenerating={isGenerating}
-                  generationProgress={generationProgress}
                 />
               </div>
             </div>
           </div>
         )}
 
-        {/* Enhanced Course Generation Progress Modal */}
+        {/* Simple Course Generation Loading Modal */}
         {isGenerating && (
-          <CourseGenerationProgress
-            generationProgress={generationProgress}
-            isGenerating={isGenerating}
-            onCancel={() => {
-              logger.debug('🛑 [DASHBOARD] User cancelled course generation');
-              setIsGenerating(false);
-              setShowNewCourseForm(false);
-              setError(null);
-            }}
-          />
+          <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg p-8 max-w-md w-full text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Generating Your Course</h3>
+              <p className="text-sm text-gray-600 mb-6">
+                Please wait while we create your course. This may take a few minutes.
+              </p>
+              <button
+                onClick={() => {
+                  logger.debug('🛑 [DASHBOARD] User cancelled course generation');
+                  setIsGenerating(false);
+                  setShowNewCourseForm(false);
+                  setError(null);
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+              >
+                Cancel Generation
+              </button>
+            </div>
+          </div>
         )}
 
         {/* Delete Confirmation Modal */}
