@@ -15,23 +15,44 @@ import Flashcard from './Flashcard';
 import { useThrottledLogger, useDebounce, useStableValue } from '../hooks/usePerformanceOptimization';
 import performanceMonitor from '../services/PerformanceMonitorService';
 
+// Helper function to fix malformed markdown
+const fixMalformedMarkdown = (text) => {
+  if (!text) return text;
+  
+  // Fix unclosed bold formatting (e.g., "**Military Expansion and the Punic Wars" -> "**Military Expansion and the Punic Wars**")
+  let fixed = text.replace(/\*\*([^*]+)$/g, '**$1**');
+  
+  // Fix unclosed italic formatting
+  fixed = fixed.replace(/\*([^*]+)$/g, '*$1*');
+  
+  // Fix multiple consecutive asterisks that might be malformed
+  fixed = fixed.replace(/\*\*\*\*/g, '**');
+  
+  // Fix bold formatting that spans across line breaks
+  fixed = fixed.replace(/\*\*([^*\n]+)\n([^*\n]+)\*\*/g, '**$1 $2**');
+  
+  return fixed;
+};
+
 // Helper function to clean and combine lesson content
 const cleanAndCombineContent = (content) => {
   if (!content) return '';
   if (typeof content === 'string') {
-    return content.replace(/Content generation completed\./g, '')
-                  .replace(/\|\|\|---\|\|\|/g, '')
-                  .trim();
+    return fixMalformedMarkdown(
+      content.replace(/Content generation completed\./g, '')
+             .replace(/\|\|\|---\|\|\|/g, '')
+             .trim()
+    );
   }
   
   const { introduction, main_content, conclusion } = content;
   
   const cleanedIntro = introduction 
-    ? introduction.replace(/Content generation completed\./g, '').trim()
+    ? fixMalformedMarkdown(introduction.replace(/Content generation completed\./g, '').trim())
     : '';
 
-  const cleanedMain = main_content ? main_content.trim() : '';
-  const cleanedConclusion = conclusion ? conclusion.trim() : '';
+  const cleanedMain = main_content ? fixMalformedMarkdown(main_content.trim()) : '';
+  const cleanedConclusion = conclusion ? fixMalformedMarkdown(conclusion.trim()) : '';
   
   return [cleanedIntro, cleanedMain, cleanedConclusion]
     .filter(Boolean)
@@ -100,9 +121,12 @@ const Content = memo(({ content }) => {
     );
   }
 
+  // Apply markdown fix before rendering
+  const fixedContent = fixMalformedMarkdown(contentStr);
+
   return (
     <div className="prose max-w-none">
-      <ReactMarkdown>{contentStr}</ReactMarkdown>
+      <ReactMarkdown>{fixedContent}</ReactMarkdown>
     </div>
   );
 });
@@ -793,7 +817,7 @@ const LessonView = ({
             )}
           </Suspense>
         </div>
-        {!showFailMessage && (
+        {showFailMessage && (
           <div className="p-3 mb-4 bg-yellow-100 text-yellow-800 rounded text-center text-sm">
             To move to the next module, you must score 5/5 on all quizzes within this module.
           </div>
@@ -811,7 +835,7 @@ const LessonView = ({
               <i className="fas fa-arrow-left mr-2"></i>Previous
             </button>
             <span className="text-sm text-gray-600 text-center">
-              {currentLessonIndex + 1} / {totalLessonsInModule}
+              {currentLessonIndex + 1} / {Math.max(totalLessonsInModule, 1)}
             </span>
             <button
               onClick={handleNextLessonWithTTS}
