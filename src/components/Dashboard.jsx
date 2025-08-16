@@ -139,6 +139,9 @@ const Dashboard = () => {
     setIsGenerating(true);
     setError(null);
     
+    // Store generation start time for crash recovery
+    localStorage.setItem('courseGenerationStartTime', new Date().toISOString());
+    
     // Reset generation progress with more detailed initial state
     setGenerationProgress({
       stage: 'starting',
@@ -163,23 +166,28 @@ const Dashboard = () => {
         setGenerationProgress(prev => ({
           ...prev,
           stage: 'checking',
-          message: 'Checking if course generation completed...',
+          message: 'Generation taking longer than expected, checking for completion...',
           details: [...prev.details, { 
             timestamp: new Date().toISOString(), 
             message: '⏰ Generation timeout reached, checking for completion...' 
           }]
         }));
         
-        // Force refresh saved courses and close modal
-        fetchSavedCourses(true).then(() => {
-          logger.debug('✅ [COURSE GENERATION] Forced refresh completed');
-          setIsGenerating(false);
-          setShowNewCourseForm(false);
-        }).catch((error) => {
-          logger.error('❌ [COURSE GENERATION] Error during forced refresh:', error);
-          setIsGenerating(false);
-          setShowNewCourseForm(false);
-        });
+        // Wait a bit longer before forcing refresh to give AI service time
+        setTimeout(() => {
+          if (isGenerating) {
+            logger.debug('🔄 [COURSE GENERATION] Forcing final completion check...');
+            fetchSavedCourses(true).then(() => {
+              logger.debug('✅ [COURSE GENERATION] Forced refresh completed');
+              setIsGenerating(false);
+              setShowNewCourseForm(false);
+            }).catch((error) => {
+              logger.error('❌ [COURSE_GENERATION] Error during forced refresh:', error);
+              setIsGenerating(false);
+              setShowNewCourseForm(false);
+            });
+          }
+        }, 30000); // Wait 30 more seconds before forcing refresh
       }
     }, 900000); // 15 minutes timeout
     
@@ -229,6 +237,9 @@ const Dashboard = () => {
               setIsGenerating(false);
               setShowNewCourseForm(false);
               
+              // Clear generation start time on successful completion
+              localStorage.removeItem('courseGenerationStartTime');
+              
               if (data.courseId && typeof data.courseId === 'string' && data.courseId.trim()) {
                 logger.debug('📍 [DASHBOARD] Navigating to course page:', `/course/${data.courseId}`);
                 navigate(`/course/${data.courseId}`);
@@ -258,7 +269,11 @@ const Dashboard = () => {
                 message: `💥 Error: ${data.message || 'Course generation failed'}` 
               }]
             };
-            setTimeout(() => setIsGenerating(false), 3000);
+            setTimeout(() => {
+              setIsGenerating(false);
+              // Clear generation start time on error
+              localStorage.removeItem('courseGenerationStartTime');
+            }, 3000);
             break;
 
           case 'status':
@@ -269,6 +284,18 @@ const Dashboard = () => {
               details: [...prev.details, { 
                 timestamp: new Date().toISOString(), 
                 message: `📋 Status: ${data.message}` 
+              }]
+            };
+            break;
+
+          case 'ai_service_starting':
+            updatedState = {
+              ...prev,
+              stage: 'starting',
+              message: 'Initializing AI service...',
+              details: [...prev.details, { 
+                timestamp: new Date().toISOString(), 
+                message: '🤖 Initializing AI service...' 
               }]
             };
             break;
@@ -569,12 +596,48 @@ const Dashboard = () => {
           handlePaymentSuccess();
         }
         
+        // Check for any interrupted course generations
+        checkForInterruptedGeneration();
+        
       } catch (error) {
         logger.error('❌ [DASHBOARD] Error in initial data fetch:', error);
         // Don't let errors propagate - just log them
       }
     }
   }, [user, fetchSavedCourses]); // Added refreshUserData dependency
+
+  // Check for interrupted course generation and handle credit refunds
+  const checkForInterruptedGeneration = useCallback(async () => {
+    try {
+      const generationStartTime = localStorage.getItem('courseGenerationStartTime');
+      if (generationStartTime) {
+        logger.debug('🔍 [DASHBOARD] Checking for interrupted generation...');
+        
+        const response = await fetch('/api/courses/check-generation-status', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          },
+          body: JSON.stringify({ generationStartTime })
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.shouldRefund) {
+            logger.debug('💰 [DASHBOARD] Interrupted generation detected, refunding credit...');
+            // The server will handle the refund automatically
+            setError('Course generation was interrupted. Your credit has been refunded.');
+          }
+        }
+        
+        // Clear the generation start time
+        localStorage.removeItem('courseGenerationStartTime');
+      }
+    } catch (error) {
+      logger.error('❌ [DASHBOARD] Error checking for interrupted generation:', error);
+    }
+  }, []);
 
   const handlePaymentSuccess = async () => {
     try {

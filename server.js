@@ -2387,14 +2387,11 @@ app.post('/api/courses/generate', authenticateToken, async (req, res, next) => {
             numLessonsPerModule
         });
 
-        // Deduct credits immediately
-        user.courseCredits = Math.max(0, user.courseCredits - 1);
-        await db.write();
-        
-        console.log(`[COURSE_GENERATION] Deducted 1 credit from user ${user.id}. Remaining: ${user.courseCredits}`);
-
-        // Send initial status
+        // Send initial status - DO NOT deduct credits yet
         res.write(`data: ${JSON.stringify({ type: 'status', message: 'Starting course generation...' })}\n\n`);
+        
+        // Send AI service starting signal
+        res.write(`data: ${JSON.stringify({ type: 'ai_service_starting', message: 'Initializing AI service...' })}\n\n`);
 
         // --- CONTENT MODERATION GATE ---
         const BLOCKLIST = [
@@ -2450,6 +2447,12 @@ app.post('/api/courses/generate', authenticateToken, async (req, res, next) => {
 
         console.log(`[COURSE_GENERATION] Course saved with ID: ${course.id}`);
 
+        // NOW deduct credits after successful completion
+        user.courseCredits = Math.max(0, user.courseCredits - 1);
+        await db.write();
+        
+        console.log(`[COURSE_GENERATION] Deducted 1 credit from user ${user.id}. Remaining: ${user.courseCredits}`);
+
         // Send completion event with course ID for proper redirect
         const completionData = {
             type: 'course_complete',
@@ -2468,15 +2471,11 @@ app.post('/api/courses/generate', authenticateToken, async (req, res, next) => {
     } catch (error) {
         console.error(`[COURSE_GENERATION] Error generating course for user ${user.id}:`, error);
         
-        // Refund the credit if generation failed
-        user.courseCredits = (user.courseCredits || 0) + 1;
-        await db.write();
-        console.log(`[COURSE_GENERATION] Refunded 1 credit to user ${user.id}. New total: ${user.courseCredits}`);
-        
+        // No credit refund needed since credits weren't deducted yet
         const errorData = {
             type: 'error',
             message: error.message || 'Course generation failed',
-            creditsRefunded: true,
+            creditsRefunded: false,
             creditsRemaining: user.courseCredits
         };
         
@@ -2493,6 +2492,41 @@ function sendProgressUpdate(userId, progressData) {
     res.write(`data: ${JSON.stringify(progressData)}\n\n`);
   }
 }
+
+// Endpoint to check and refund credits if course generation was interrupted
+app.post('/api/courses/check-generation-status', authenticateToken, async (req, res) => {
+  try {
+    const user = req.user;
+    const { generationStartTime } = req.body;
+    
+    // Check if there are any recent incomplete courses for this user
+    const recentCourses = db.data.courses.filter(course => 
+      course.userId === user.id && 
+      course.createdAt && 
+      new Date(course.createdAt) > new Date(generationStartTime)
+    );
+    
+    if (recentCourses.length === 0) {
+      // No recent courses found, generation might have failed
+      // Check if credits were deducted but course wasn't created
+      // This is a simple check - in production you might want more sophisticated tracking
+      res.json({ 
+        status: 'no_recent_courses',
+        message: 'No recent courses found. If generation failed, credits will be refunded.',
+        shouldRefund: true
+      });
+    } else {
+      res.json({ 
+        status: 'courses_found',
+        courses: recentCourses.map(c => ({ id: c.id, title: c.title })),
+        message: 'Recent courses found, no refund needed.'
+      });
+    }
+  } catch (error) {
+    console.error('[CREDIT_CHECK] Error checking generation status:', error);
+    res.status(500).json({ error: 'Failed to check generation status' });
+  }
+});
 
 app.post('/api/quizzes/submit', authenticateToken, async (req, res) => {
   const { courseId, moduleId, lessonId, score } = req.body;

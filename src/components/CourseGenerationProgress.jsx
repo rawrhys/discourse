@@ -63,6 +63,8 @@ const CourseGenerationProgress = ({
         return '💾';
       case 'checking':
         return '🔍';
+      case 'ai_service_starting':
+        return '🤖';
       case 'completed':
         return '✅';
       case 'error':
@@ -82,6 +84,7 @@ const CourseGenerationProgress = ({
       case 'validating':
       case 'saving':
       case 'checking':
+      case 'ai_service_starting':
         return 'bg-blue-600';
       default:
         return 'bg-gray-600';
