@@ -63,6 +63,8 @@ const CourseGenerationProgress = ({
         return '💾';
       case 'checking':
         return '🔍';
+      case 'waiting':
+        return '⏳';
       case 'ai_service_starting':
         return '🤖';
       case 'completed':
@@ -84,6 +86,7 @@ const CourseGenerationProgress = ({
       case 'validating':
       case 'saving':
       case 'checking':
+      case 'waiting':
       case 'ai_service_starting':
         return 'bg-blue-600';
       default:
@@ -103,8 +106,18 @@ const CourseGenerationProgress = ({
     switch (generationProgress.stage) {
       case 'starting':
         return 5;
+      case 'ai_service_starting':
+        return 10;
+      case 'waiting':
+        return 15;
       case 'generating':
         return 50;
+      case 'validating':
+        return 80;
+      case 'saving':
+        return 90;
+      case 'checking':
+        return 95;
       default:
         return 0;
     }

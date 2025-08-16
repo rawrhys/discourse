@@ -181,10 +181,14 @@ const Dashboard = () => {
               logger.debug('✅ [COURSE GENERATION] Forced refresh completed');
               setIsGenerating(false);
               setShowNewCourseForm(false);
+              // Clear generation start time
+              localStorage.removeItem('courseGenerationStartTime');
             }).catch((error) => {
               logger.error('❌ [COURSE_GENERATION] Error during forced refresh:', error);
               setIsGenerating(false);
               setShowNewCourseForm(false);
+              // Clear generation start time
+              localStorage.removeItem('courseGenerationStartTime');
             });
           }
         }, 30000); // Wait 30 more seconds before forcing refresh
@@ -296,6 +300,18 @@ const Dashboard = () => {
               details: [...prev.details, { 
                 timestamp: new Date().toISOString(), 
                 message: '🤖 Initializing AI service...' 
+              }]
+            };
+            break;
+
+          case 'stream_ended':
+            updatedState = {
+              ...prev,
+              stage: 'waiting',
+              message: 'Waiting for AI service to process request...',
+              details: [...prev.details, { 
+                timestamp: new Date().toISOString(), 
+                message: '⏳ Stream ended, waiting for AI service response...' 
               }]
             };
             break;

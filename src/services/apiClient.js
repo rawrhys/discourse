@@ -161,13 +161,12 @@ const apiClient = async (url, options = {}) => {
           if (done) {
             logger.debug('✅ [API STREAMING] Stream completed after', chunkCount, 'chunks');
             if (!hasReceivedCompletion) {
-              logger.warn('⚠️ [API STREAMING] Stream ended without completion event');
-              // Send a completion event if we didn't receive one
+              logger.warn('⚠️ [API STREAMING] Stream ended without completion event - this is normal during AI service initialization');
+              // Send a stream_ended signal to let frontend know stream ended but no completion yet
               if (onProgress) {
                 onProgress({
-                  type: 'course_complete',
-                  message: 'Course generation completed (stream ended)',
-                  courseId: null
+                  type: 'stream_ended',
+                  message: 'Stream ended, waiting for AI service response...'
                 });
               }
             }
