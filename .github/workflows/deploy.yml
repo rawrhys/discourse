@@ -65,16 +65,14 @@ jobs:
           echo "=== Public/src contents ==="
           ls -la public/src/
 
-      - name: FTP Deploy
-        uses: SamKirkland/FTP-Deploy-Action@4.3.3
+      - name: Deploy to Shared Hosting via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
         with:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          local-dir: ./public/
-          server-dir: /home/u514166296/domains/thediscourse.ai/public_html/
-          port: 21
-          dangerous-clean-slate: true
+          local-dir: ./dist
+          server-dir: /public_html/
 
       - name: Verify deployed build (optional)
         run: curl -s https://${{ secrets.FTP_SERVER }}/build-timestamp.txt || echo "Timestamp not found"
