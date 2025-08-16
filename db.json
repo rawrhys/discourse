@@ -23,14 +23,33 @@
       "userId": "1750197348788",
       "modules": [
         {
-          "id": "module_1",
-          "title": "The Founding of Rome and the Monarchy",
-          "description": "Learn about the legendary founding of Rome and the early Roman monarchy period.",
+          "id": "module_0_z5xy00",
+          "title": "The Founding and Kingdom of Rome",
+          "description": "Discover the origins of Rome, its mythological beginnings, and the early monarchy.",
+          "sequenceNumber": 0,
+          "prerequisites": [],
+          "estimatedDuration": 60,
+          "quizScores": {},
+          "isCompleted": false,
+          "perfectQuizzes": 0,
+          "progress": 0,
+          "order": 0,
           "lessons": [
             {
-              "id": "lesson_1_1",
-              "title": "The Legend of Romulus and Remus",
-              "content": "According to Roman mythology, Rome was founded in 753 BCE by Romulus and Remus, twin brothers who were raised by a she-wolf. This lesson explores the legendary origins of Rome and the establishment of the city on the seven hills.",
+              "id": "lesson_0_0_z5xy00",
+              "title": "Mythological Origins and Founding",
+              "isCompleted": false,
+              "order": 0,
+              "quizScores": {},
+              "lastQuizScore": null,
+              "content": {
+                "introduction": "The founding of Rome is shrouded in myth and legend, with the most famous tale being that of Romulus and Remus. According to tradition, Rome was founded in 753 BC by Romulus, who became its first king. This lesson explores the mythological origins of Rome, the archaeological evidence, and the early settlement of the Palatine Hill. Understanding these origins is crucial for grasping the cultural and political identity that shaped Rome's future.",
+                "main_content": "The myth of Romulus and Remus is central to Rome's foundation story. Abandoned on the Tiber River, the twins were suckled by a she-wolf and later raised by a shepherd. Romulus eventually killed Remus and founded Rome, naming it after himself [1]. This myth, while fantastical, reflects the importance of kinship and conflict in Roman society. Archaeological evidence suggests that Rome was indeed founded around 753 BC, with settlements on the Palatine Hill dating back to the 8th century BC [2].\n\nThe early settlement of Rome was influenced by various cultures, including the Etruscans, Greeks, and Latins. The Etruscans, in particular, played a significant role in shaping Roman culture, religion, and political structures. The Etruscan kings, such as Tarquinius Priscus and Tarquinius Superbus, ruled Rome and introduced important innovations like the Cloaca Maxima, Rome's sewer system [3].\n\n**Key figures** in this period include Romulus, Numa Pompilius, and the Etruscan kings. **Important events** include the founding of Rome, the establishment of the Roman monarchy, and the construction of early infrastructure. The **cultural significance** of these events lies in their lasting impact on Roman identity and governance.\n\n## References\n[1] Livy. (27 BC). *The History of Rome*.\n[2] Cornell, T. J. (1995). *The Beginnings of Rome: Italy and Rome from the Bronze Age to the Punic Wars (c. 1000-264 BC)*. Routledge.\n[3] Forsythe, G. (2005). *A Critical History of Early Rome: From Prehistory to the First Punic War*. University of California Press.",
+                "conclusion": "The mythological origins and early history of Rome provide a fascinating glimpse into the cultural and political foundations of the city. The tales of Romulus and Remus, while mythical, highlight the importance of kinship and conflict in Roman society. The archaeological evidence supports the traditional founding date of 753 BC, and the influence of the Etruscans is evident in Rome's early development [1].\n\nUnderstanding these origins is crucial for grasping the broader context of Roman history. The early monarchy, with its Etruscan kings and innovations, set the stage for Rome's future as a republic and an empire. In the next lesson, we will explore the political structures and societal organization of the Roman Kingdom, building on the foundations laid in this lesson."
+              },
+              "sequenceNumber": 0,
+              "moduleId": null,
+              "moduleTitle": "",
               "quiz": [
                 {
                   "question": "According to Roman legend, who founded the city of Rome?",
@@ -43,9 +62,15 @@
                   "options": ["753 BCE", "509 BCE", "27 BCE", "44 BCE"],
                   "answer": "753 BCE",
                   "explanation": "The traditional date for the founding of Rome is 753 BCE, as established by the Roman historian Varro."
+                },
+                {
+                  "question": "Which culture significantly influenced early Roman development?",
+                  "options": ["The Greeks", "The Etruscans", "The Carthaginians", "The Gauls"],
+                  "answer": "The Etruscans",
+                  "explanation": "The Etruscans played a significant role in shaping Roman culture, religion, and political structures."
                 }
               ],
-              "flashcards": [
+              "key_terms": [
                 {
                   "term": "Romulus and Remus",
                   "definition": "Twin brothers in Roman mythology who were raised by a she-wolf and founded the city of Rome."
@@ -53,40 +78,203 @@
                 {
                   "term": "Seven Hills of Rome",
                   "definition": "The seven hills upon which the ancient city of Rome was built: Palatine, Aventine, Capitoline, Quirinal, Viminal, Esquiline, and Caelian."
+                },
+                {
+                  "term": "Etruscans",
+                  "definition": "An ancient civilization that significantly influenced early Roman culture, religion, and political structures."
                 }
-              ]
-            }
-          ],
-          "isLocked": false,
-          "isCompleted": false
-        },
-        {
-          "id": "module_2",
-          "title": "The Roman Republic",
-          "description": "Explore the rise and development of the Roman Republic and its political institutions.",
-          "lessons": [
+              ],
+              "important_dates": [],
+              "key_figures": [],
+              "imageData": {
+                "imageUrl": null,
+                "description": "",
+                "author": "",
+                "license": "",
+                "pageURL": "",
+                "thumbnailUrl": null
+              }
+            },
             {
-              "id": "lesson_2_1",
-              "title": "The Establishment of the Republic",
-              "content": "The Roman Republic was established in 509 BCE after the overthrow of the last Roman king, Tarquin the Proud. This lesson covers the transition from monarchy to republic and the development of Roman political institutions.",
+              "id": "lesson_0_1_z5xy00",
+              "title": "Political Structures and Society",
+              "isCompleted": false,
+              "order": 1,
+              "quizScores": {},
+              "lastQuizScore": null,
+              "content": {
+                "introduction": "The political structures and societal organization of the Roman Kingdom were fundamental to its development and eventual transition to a republic. This lesson delves into the governance, social hierarchy, and cultural practices of early Rome. Understanding these structures provides insight into the foundations of Roman political thought and societal norms that persisted throughout its history.",
+                "main_content": "The Roman Kingdom was governed by a monarchy, with the king (*rex*) serving as the chief executive, military leader, and religious authority. The king was advised by the Senate, a council of elders from the leading families (*patres*), which laid the groundwork for the future Roman Senate [1]. The **social hierarchy** of early Rome was divided into patricians, the aristocratic class, and plebeians, the common people. This division would later become a significant source of political and social conflict.\n\n**Key figures** in the political structures of the Roman Kingdom include the kings, such as Romulus, Numa Pompilius, and the Etruscan kings, as well as the members of the Senate. **Important events** include the establishment of the Senate, the development of early Roman law, and the construction of public works. The **cultural significance** of these events lies in their lasting impact on Roman governance and societal organization.\n\nThe **religious practices** of early Rome were closely tied to its political structures. The king served as the chief priest (*pontifex maximus*), and religious rituals were integral to the governance of the city. The **Etruscan influence** is evident in the religious practices, architectural styles, and political institutions of early Rome [2].\n\n## References\n[1] Cornell, T. J. (1995). *The Beginnings of Rome: Italy and Rome from the Bronze Age to the Punic Wars (c. 1000-264 BC)*. Routledge.\n[2] Forsythe, G. (2005). *A Critical History of Early Rome: From Prehistory to the First Punic War*. University of California Press.",
+                "conclusion": "The political structures and societal organization of the Roman Kingdom were fundamental to its development and eventual transition to a republic. The monarchy, with its king and Senate, laid the groundwork for future Roman governance. The social hierarchy, divided into patricians and plebeians, would later become a significant source of political and social conflict [1].\n\nUnderstanding these structures provides insight into the foundations of Roman political thought and societal norms that persisted throughout its history. The religious practices and Etruscan influence further enriched the cultural and political landscape of early Rome. In the next lesson, we will explore the transition from monarchy to republic, a pivotal moment in Roman history."
+              },
+              "sequenceNumber": 0,
+              "moduleId": null,
+              "moduleTitle": "",
+              "quiz": [
+                {
+                  "question": "What was the chief priest of Rome called?",
+                  "options": ["Rex", "Pontifex Maximus", "Consul", "Praetor"],
+                  "answer": "Pontifex Maximus",
+                  "explanation": "The king served as the chief priest (pontifex maximus) in early Rome."
+                },
+                {
+                  "question": "What were the two main social classes in early Rome?",
+                  "options": ["Patricians and Plebeians", "Senators and Knights", "Citizens and Slaves", "Nobles and Commoners"],
+                  "answer": "Patricians and Plebeians",
+                  "explanation": "The social hierarchy was divided into patricians (aristocratic class) and plebeians (common people)."
+                }
+              ],
+              "key_terms": [
+                {
+                  "term": "Rex",
+                  "definition": "The Latin word for king, the chief executive, military leader, and religious authority in the Roman Kingdom."
+                },
+                {
+                  "term": "Patricians",
+                  "definition": "The aristocratic class in early Rome, holding political and religious offices."
+                },
+                {
+                  "term": "Plebeians",
+                  "definition": "The common people in early Rome, who would later gain political rights through the Struggle of the Orders."
+                }
+              ],
+              "important_dates": [],
+              "key_figures": [],
+              "imageData": {
+                "imageUrl": null,
+                "description": "",
+                "author": "",
+                "license": "",
+                "pageURL": "",
+                "thumbnailUrl": null
+              }
+            },
+            {
+              "id": "lesson_0_2_z5xy00",
+              "title": "Transition to the Republic",
+              "isCompleted": false,
+              "order": 2,
+              "quizScores": {},
+              "lastQuizScore": null,
+              "content": {
+                "introduction": "The transition from monarchy to republic marked a pivotal moment in Roman history. This lesson examines the causes, key figures, and events that led to the overthrow of the monarchy and the establishment of the Roman Republic. Understanding this transition is crucial for grasping the political evolution of Rome and its lasting impact on Western governance.",
+                "main_content": "The overthrow of the Roman monarchy was driven by a combination of political unrest, social conflict, and the tyrannical rule of the last Etruscan king, Tarquinius Superbus. The **expulsion of the kings** in 509 BC marked the beginning of the Roman Republic, a new form of government characterized by elected officials, a Senate, and a system of checks and balances [1].\n\n**Key figures** in this transition include Lucius Junius Brutus, who led the revolt against Tarquinius Superbus, and the early consuls, who served as the chief executives of the Republic. **Important events** include the expulsion of the kings, the establishment of the Republic, and the creation of the office of consul. The **political significance** of these events lies in their lasting impact on Roman governance and the development of republican ideals.\n\nThe early Republic was marked by political struggles between the patricians and plebeians, as well as external conflicts with neighboring cities and tribes. The **Struggle of the Orders**, a series of conflicts between the patricians and plebeians, resulted in significant political reforms, including the establishment of the Tribune of the Plebs and the Twelve Tables, Rome's first written law code [2].\n\n## References\n[1] Livy. (27 BC). *The History of Rome*.\n[2] Cornell, T. J. (1995). *The Beginnings of Rome: Italy and Rome from the Bronze Age to the Punic Wars (c. 1000-264 BC)*. Routledge.",
+                "conclusion": "The transition from monarchy to republic marked a pivotal moment in Roman history. The overthrow of the monarchy and the establishment of the Republic laid the groundwork for a new form of government characterized by elected officials and a system of checks and balances. The political struggles and reforms of the early Republic further shaped the political landscape of Rome [1].\n\nUnderstanding this transition is crucial for grasping the political evolution of Rome and its lasting impact on Western governance. The republican ideals and institutions established during this period would continue to influence Roman politics for centuries to come. In the next module, we will explore the Roman Republic in greater detail, examining its political structures, societal organization, and key events."
+              },
+              "sequenceNumber": 0,
+              "moduleId": null,
+              "moduleTitle": "",
               "quiz": [
                 {
                   "question": "When was the Roman Republic established?",
                   "options": ["753 BCE", "509 BCE", "27 BCE", "44 BCE"],
                   "answer": "509 BCE",
                   "explanation": "The Roman Republic was established in 509 BCE after the overthrow of the last Roman king."
+                },
+                {
+                  "question": "Who led the revolt against Tarquinius Superbus?",
+                  "options": ["Julius Caesar", "Lucius Junius Brutus", "Scipio Africanus", "Cicero"],
+                  "answer": "Lucius Junius Brutus",
+                  "explanation": "Lucius Junius Brutus led the revolt against Tarquinius Superbus and helped establish the Republic."
                 }
               ],
-              "flashcards": [
+              "key_terms": [
                 {
                   "term": "Roman Republic",
                   "definition": "The period of ancient Roman civilization from 509 BCE to 27 BCE, characterized by a republican form of government."
+                },
+                {
+                  "term": "Struggle of the Orders",
+                  "definition": "A series of conflicts between the patricians and plebeians that resulted in significant political reforms."
+                },
+                {
+                  "term": "Twelve Tables",
+                  "definition": "Rome's first written law code, established during the Struggle of the Orders."
                 }
-              ]
+              ],
+              "important_dates": [],
+              "key_figures": [],
+              "imageData": {
+                "imageUrl": null,
+                "description": "",
+                "author": "",
+                "license": "",
+                "pageURL": "",
+                "thumbnailUrl": null
+              }
             }
           ],
-          "isLocked": true,
-          "isCompleted": false
+          "isLocked": false
+        },
+        {
+          "id": "module_1_z5xy00",
+          "title": "The Roman Republic",
+          "description": "Examine the political structures, societal organization, and key events of the Roman Republic.",
+          "sequenceNumber": 0,
+          "prerequisites": [],
+          "estimatedDuration": 60,
+          "quizScores": {},
+          "isCompleted": false,
+          "perfectQuizzes": 0,
+          "progress": 0,
+          "order": 1,
+          "lessons": [
+            {
+              "id": "lesson_1_0_z5xy00",
+              "title": "Political Structures and Institutions",
+              "isCompleted": false,
+              "order": 0,
+              "quizScores": {},
+              "lastQuizScore": null,
+              "content": {
+                "introduction": "The Roman Republic was characterized by a complex system of political structures and institutions that ensured a balance of power and representation. This lesson explores the key political offices, the role of the Senate, and the assemblies that shaped the governance of the Republic. Understanding these structures is essential for grasping the political dynamics and evolution of Rome during this period.",
+                "main_content": "The Roman Republic was governed by a system of elected officials, including consuls, praetors, and censors. The **consuls**, two in number, served as the chief executives of the Republic, commanding the army and presiding over the Senate [1]. The **Senate**, composed of former magistrates and elders, played a crucial role in advising the consuls and shaping policy. The **assemblies**, such as the Centuriate Assembly and the Tribal Assembly, were responsible for electing officials, passing laws, and declaring war.\n\n**Key figures** in the political structures of the Republic include notable consuls like Scipio Africanus and political reformers like the Gracchi brothers. **Important events** include the establishment of the Republic, the creation of political offices, and the development of the Senate's role. The **political significance** of these events lies in their lasting impact on Roman governance and the development of republican ideals.\n\nThe **Struggle of the Orders**, a series of conflicts between the patricians and plebeians, resulted in significant political reforms. The **Twelve Tables**, Rome's first written law code, was established in 451 BC, providing a foundation for Roman law [2]. The **Tribune of the Plebs**, created to represent the plebeians, became a powerful political office that could veto the actions of other magistrates.\n\n## References\n[1] Polybius. (150 BC). *The Histories*.\n[2] Cornell, T. J. (1995). *The Beginnings of Rome: Italy and Rome from the Bronze Age to the Punic Wars (c. 1000-264 BC)*. Routledge.",
+                "conclusion": "The political structures and institutions of the Roman Republic ensured a balance of power and representation. The system of elected officials, the role of the Senate, and the assemblies shaped the governance of the Republic. The political reforms and struggles of this period further shaped the political landscape of Rome, laying the groundwork for its future as an empire [1].\n\nUnderstanding these structures is essential for grasping the political dynamics and evolution of Rome during this period. The republican ideals and institutions established during this period would continue to influence Roman politics for centuries to come. In the next lesson, we will explore the societal organization and cultural practices of the Roman Republic."
+              },
+              "sequenceNumber": 0,
+              "moduleId": null,
+              "moduleTitle": "",
+              "quiz": [
+                {
+                  "question": "How many consuls served in the Roman Republic?",
+                  "options": ["One", "Two", "Three", "Four"],
+                  "answer": "Two",
+                  "explanation": "The Roman Republic had two consuls who served as chief executives and commanded the army."
+                },
+                {
+                  "question": "What was the main role of the Senate in the Republic?",
+                  "options": ["To make laws", "To command the army", "To advise consuls", "To collect taxes"],
+                  "answer": "To advise consuls",
+                  "explanation": "The Senate was composed of former magistrates and elders who advised the consuls and shaped policy."
+                }
+              ],
+              "key_terms": [
+                {
+                  "term": "Consuls",
+                  "definition": "The two chief executives of the Roman Republic who commanded the army and presided over the Senate."
+                },
+                {
+                  "term": "Senate",
+                  "definition": "A council of former magistrates and elders who advised the consuls and shaped policy in the Republic."
+                },
+                {
+                  "term": "Tribune of the Plebs",
+                  "definition": "A political office created to represent the plebeians, with the power to veto actions of other magistrates."
+                }
+              ],
+              "important_dates": [],
+              "key_figures": [],
+              "imageData": {
+                "imageUrl": null,
+                "description": "",
+                "author": "",
+                "license": "",
+                "pageURL": "",
+                "thumbnailUrl": null
+              }
+            }
+          ],
+          "isLocked": true
         }
       ]
     },

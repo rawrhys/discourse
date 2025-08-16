@@ -1417,9 +1417,21 @@ Return only the JSON array, no other text.`;
       module.id = `module_${mIdx}_${Date.now()}`;
       // Set module locking: first module is unlocked, others are locked
       module.isLocked = mIdx > 0;
+      // Add missing properties for module unlock system
+      module.isCompleted = false;
+      module.perfectQuizzes = 0;
+      module.progress = 0;
+      module.order = mIdx;
+      module.quizScores = {};
+      
       if (module.lessons && Array.isArray(module.lessons)) {
         module.lessons.forEach((lesson, lIdx) => {
           lesson.id = `lesson_${mIdx}_${lIdx}_${Date.now()}`;
+          // Add missing properties for lesson tracking
+          lesson.isCompleted = false;
+          lesson.order = lIdx;
+          lesson.quizScores = {};
+          lesson.lastQuizScore = null;
         });
       }
     });
@@ -1433,8 +1445,26 @@ Return only the JSON array, no other text.`;
   validateModuleLocking(courseData) {
     if (!courseData || !courseData.modules) return;
     
+    // Ensure all modules have required properties for unlock system
+    courseData.modules.forEach((module, mIdx) => {
+      if (module.isCompleted === undefined) module.isCompleted = false;
+      if (module.perfectQuizzes === undefined) module.perfectQuizzes = 0;
+      if (module.progress === undefined) module.progress = 0;
+      if (module.order === undefined) module.order = mIdx;
+      if (!module.quizScores) module.quizScores = {};
+      
+      if (module.lessons && Array.isArray(module.lessons)) {
+        module.lessons.forEach((lesson, lIdx) => {
+          if (lesson.isCompleted === undefined) lesson.isCompleted = false;
+          if (lesson.order === undefined) lesson.order = lIdx;
+          if (!lesson.quizScores) lesson.quizScores = {};
+          if (lesson.lastQuizScore === undefined) lesson.lastQuizScore = null;
+        });
+      }
+    });
+    
     // Module locking is now handled by the frontend unlock logic based on quiz scores
-    console.log(`[AIService] Course validation complete for ${courseData.modules.length} modules`);
+    console.log(`[AIService] Course validation complete for ${courseData.modules.length} modules with unlock system properties`);
   }
   
   constructQuizPrompt(content, lessonTitle) {
