@@ -1,6 +1,5 @@
-name: Deploy to VPS and Shared Hosting 
+name: Deploy to VPS and Shared Hosting
 
-# Trivial change to force cache clear
 on:
   push:
     branches:
@@ -10,21 +9,22 @@ jobs:
   deploy-vps:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Deploy to VPS
-      uses: appleboy/ssh-action@master
-      with:
-        host: ${{ secrets.VPS_HOST }}
-        username: ${{ secrets.VPS_USERNAME }}
-        key: ${{ secrets.VPS_SSH_KEY }}
-        script: |
-          cd /root/discourse-app
-          git pull origin main
-          npm install
-          npm run build
-          pm2 restart discourse-app
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd /root/discourse-app
+            git pull origin main
+            npm ci
+            rm -rf dist/*
+            npm run build
+            pm2 restart discourse-app
 
   deploy-shared-hosting:
     runs-on: ubuntu-latest
@@ -42,33 +42,24 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Verify latest changes
-        run: |
-          echo "=== Checking for latest changes ==="
-          git log --oneline -5
-          echo "=== Checking CourseDisplay.jsx ==="
-          grep -n "isLocked" src/components/CourseDisplay.jsx || echo "isLocked not found in CourseDisplay.jsx"
-          echo "=== Checking Module.js ==="
-          grep -n "isLocked" src/models/Module.js || echo "isLocked not found in Module.js"
+      - name: Clean previous build
+        run: rm -rf dist/* public/*
 
       - name: Build project
-        run: npm run build
-
-      - name: List dist contents
         run: |
-          echo "=== Dist folder contents ==="
-          ls -la dist/
-          echo "=== Assets folder contents ==="
-          ls -la dist/assets/
-          echo "=== Build completed successfully ==="
+          npm run build
+          date > dist/build-timestamp.txt
 
-      - name: Copy dist contents to public
+      - name: Prepare public folder
         run: |
-          echo "=== Copying dist contents to public folder ==="
+          echo "=== Preparing public folder ==="
           mkdir -p public
           cp -r dist/* public/
+          cp -r src public/src/
           echo "=== Public folder contents ==="
           ls -la public/
+          echo "=== Public/src contents ==="
+          ls -la public/src/
 
       - name: FTP Deploy
         uses: SamKirkland/FTP-Deploy-Action@4.3.3
@@ -77,6 +68,9 @@ jobs:
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           local-dir: ./public/
-          server-dir: ./
+          server-dir: home/u514166296/domains/thediscourse.ai/public_html/
           port: 21
           dangerous-clean-slate: true
+
+      - name: Verify deployed build (optional)
+        run: curl -s https://${{ secrets.FTP_SERVER }}/build-timestamp.txt || echo "Timestamp not found"
