@@ -56,8 +56,17 @@ jobs:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          local-dir: ./react_template/
+          local-dir: ./dist/
           server-dir: /domains/thediscourse.ai/public_html/
+
+      - name: Deploy src folder to Shared Hosting
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: ./src/
+          server-dir: /domains/thediscourse.ai/public_html/src/
 
       - name: Verify deployed build (optional)
         run: curl -s https://${{ secrets.FTP_SERVER }}/build-timestamp.txt || echo "Timestamp not found"
