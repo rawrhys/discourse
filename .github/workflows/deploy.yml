@@ -22,6 +22,10 @@ jobs:
             cd /root/discourse
             # Handle any local changes that might conflict
             git status
+            # Remove conflicting untracked files
+            rm -f discourse discourse.pub
+            # Clean up any other untracked files
+            git clean -fd
             # Stash any local changes to avoid conflicts
             git stash
             # Reset to clean state
