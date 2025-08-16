@@ -1,12 +1,12 @@
 {
   "users": [
     {
-      "id": "f662e43d-01a6-4722-a0fa-25cdd232cca7",
+      "id": "1750197348788",
       "email": "rhys.higgs@outlook.com",
-      "password": "$2a$10$DxNhSWMVqIRYeKOiCTif6uaus5WbCHDrWIhcf9JqNnKAKm4XtEaAW",
-      "name": "Rhys Higgs",
-      "createdAt": "2025-08-09T06:52:18.701899Z",
-      "courseCredits": 1
+      "password": "$2a$10$117wmSX1cGe4JspZJ60sDuXhQj9OgMNwFTYK7ZLwhz.hI549Mvuzu",
+      "name": "rhys",
+      "createdAt": "2025-06-17T21:55:48.788Z",
+      "courseCredits": 31
     }
   ],
   "courses": [
@@ -20,7 +20,88 @@
       "createdBy": "system",
       "createdAt": "2025-06-16T14:02:01.695Z",
       "updatedAt": "2025-06-16T14:02:01.695Z",
-      "userId": "f662e43d-01a6-4722-a0fa-25cdd232cca7"
+      "userId": "1750197348788",
+      "modules": [
+        {
+          "id": "module_1",
+          "title": "The Founding of Rome and the Monarchy",
+          "description": "Learn about the legendary founding of Rome and the early Roman monarchy period.",
+          "lessons": [
+            {
+              "id": "lesson_1_1",
+              "title": "The Legend of Romulus and Remus",
+              "content": "According to Roman mythology, Rome was founded in 753 BCE by Romulus and Remus, twin brothers who were raised by a she-wolf. This lesson explores the legendary origins of Rome and the establishment of the city on the seven hills.",
+              "quiz": [
+                {
+                  "question": "According to Roman legend, who founded the city of Rome?",
+                  "options": ["Julius Caesar", "Romulus and Remus", "Augustus", "Nero"],
+                  "answer": "Romulus and Remus",
+                  "explanation": "According to Roman mythology, Rome was founded by the twin brothers Romulus and Remus in 753 BCE."
+                },
+                {
+                  "question": "In what year was Rome traditionally founded?",
+                  "options": ["753 BCE", "509 BCE", "27 BCE", "44 BCE"],
+                  "answer": "753 BCE",
+                  "explanation": "The traditional date for the founding of Rome is 753 BCE, as established by the Roman historian Varro."
+                }
+              ],
+              "flashcards": [
+                {
+                  "term": "Romulus and Remus",
+                  "definition": "Twin brothers in Roman mythology who were raised by a she-wolf and founded the city of Rome."
+                },
+                {
+                  "term": "Seven Hills of Rome",
+                  "definition": "The seven hills upon which the ancient city of Rome was built: Palatine, Aventine, Capitoline, Quirinal, Viminal, Esquiline, and Caelian."
+                }
+              ]
+            }
+          ],
+          "isLocked": false,
+          "isCompleted": false
+        },
+        {
+          "id": "module_2",
+          "title": "The Roman Republic",
+          "description": "Explore the rise and development of the Roman Republic and its political institutions.",
+          "lessons": [
+            {
+              "id": "lesson_2_1",
+              "title": "The Establishment of the Republic",
+              "content": "The Roman Republic was established in 509 BCE after the overthrow of the last Roman king, Tarquin the Proud. This lesson covers the transition from monarchy to republic and the development of Roman political institutions.",
+              "quiz": [
+                {
+                  "question": "When was the Roman Republic established?",
+                  "options": ["753 BCE", "509 BCE", "27 BCE", "44 BCE"],
+                  "answer": "509 BCE",
+                  "explanation": "The Roman Republic was established in 509 BCE after the overthrow of the last Roman king."
+                }
+              ],
+              "flashcards": [
+                {
+                  "term": "Roman Republic",
+                  "definition": "The period of ancient Roman civilization from 509 BCE to 27 BCE, characterized by a republican form of government."
+                }
+              ]
+            }
+          ],
+          "isLocked": true,
+          "isCompleted": false
+        }
+      ]
+    },
+    {
+      "id": "course_0hq1tqwfp",
+      "title": "History of Ancient Rome: Intermediate Course",
+      "description": "Explore the rich history of Ancient Rome, from its founding to its fall, and its lasting impact on modern society.",
+      "subject": "history of ancient rome",
+      "difficultyLevel": "intermediate",
+      "learningObjectives": [],
+      "createdBy": "system",
+      "createdAt": "2025-06-16T14:02:01.695Z",
+      "updatedAt": "2025-06-16T14:02:01.695Z",
+      "userId": "f662e43d-01a6-4722-a0fa-25cdd232cca7",
+      "modules": []
     }
   ]
 }
