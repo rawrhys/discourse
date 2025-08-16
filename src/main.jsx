@@ -4,7 +4,6 @@ import { BrowserRouter as Router } from 'react-router-dom';
 import './index.css';
 import App from './App';
 import Home from './components/Home';
-import CourseDisplay from './components/CourseDisplay';
 import { AuthProvider } from './contexts/AuthContext';
 import ErrorHandler from './utils/errorHandler.js';
 import './utils/performanceDebug.js'; // Import performance debugger

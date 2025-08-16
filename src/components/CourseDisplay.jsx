@@ -1,13 +1,15 @@
-import React, { useState, useEffect, useCallback, useMemo, memo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo, useRef, Suspense, lazy } from 'react';
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import LessonView from './LessonView';
-import QuizView from './QuizView';
 import './CourseDisplay.css';
 import { useApiWrapper } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { API_BASE_URL } from '../config/api';
 import NewCourseButton from './NewCourseButton';
 import NoCourseState from './NoCourseState';
+
+// Lazy load QuizView
+const QuizView = lazy(() => import('./QuizView'));
 
 function usePrevious(value) {
   const ref = useRef();
@@ -558,19 +560,21 @@ const CourseDisplay = () => {
 
         <main className="flex-1 overflow-y-auto p-6 bg-gray-50">
           {showQuiz && currentLesson ? (
-            <QuizView
-              key={currentLesson.id}
-              questions={currentLesson.quiz}
-              onComplete={(score) => {
-                if (process.env.NODE_ENV === 'development') {
-                  console.log(`[CourseDisplay] Quiz completed with score: ${score} for lesson: ${currentLesson.id}`);
-                }
-                handleQuizCompletion(currentLesson.id, score);
-                setShowQuiz(false);
-              }}
-              lessonId={currentLesson.id}
-              module={currentModule}
-            />
+            <Suspense fallback={<div>Loading Quiz...</div>}>
+              <QuizView
+                key={currentLesson.id}
+                questions={currentLesson.quiz}
+                onComplete={(score) => {
+                  if (process.env.NODE_ENV === 'development') {
+                    console.log(`[CourseDisplay] Quiz completed with score: ${score} for lesson: ${currentLesson.id}`);
+                  }
+                  handleQuizCompletion(currentLesson.id, score);
+                  setShowQuiz(false);
+                }}
+                lessonId={currentLesson.id}
+                module={currentModule}
+              />
+            </Suspense>
           ) : (
             currentLesson ? (
               <LessonView

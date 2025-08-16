@@ -1,6 +1,8 @@
 // src/utils/debug.js
 'use strict';
 
+import { API_BASE_URL } from '../config/api.js';
+
 // Global debug utility for course generation
 window.debugCourseGeneration = {
   // Get current user info
@@ -247,8 +249,7 @@ window.debugCourseGeneration = {
         return;
       }
 
-      // Import API_BASE_URL to see what URL is being used
-      const { API_BASE_URL } = await import('../config/api.js');
+      // Use static import instead of dynamic import
       console.log('🔗 [DEBUG] API_BASE_URL:', API_BASE_URL);
       console.log('🌐 [DEBUG] Current window location:', window.location.href);
 

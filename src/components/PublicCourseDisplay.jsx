@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import LessonView from './LessonView';
-import QuizView from './QuizView';
 import './CourseDisplay.css';
 import { useApiWrapper } from '../services/api';
 import LoadingState from './LoadingState';

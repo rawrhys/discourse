@@ -1,0 +1,866 @@
+import React, { useState, useEffect, useCallback, useMemo, memo, useRef, Suspense, lazy } from 'react';
+import PropTypes from 'prop-types';
+import { useNavigate, useParams, useOutletContext } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import ChatInterface from './ChatInterface';
+import { useApiWrapper } from '../services/api';
+import { API_BASE_URL, debugApiConfig, testBackendConnection } from '../config/api';
+import LoadingIndicator from './LoadingIndicator';
+import logger from '../utils/logger';
+import SimpleImageService from '../services/SimpleImageService.js';
+import Image from './Image.jsx';
+import ReactMarkdown from 'react-markdown';
+import ttsService from '../services/TTSService.js';
+import Flashcard from './Flashcard';
+import { useThrottledLogger, useDebounce, useStableValue } from '../hooks/usePerformanceOptimization';
+import performanceMonitor from '../services/PerformanceMonitorService';
+
+// Helper function to fix malformed markdown
+const fixMalformedMarkdown = (text) => {
+  if (!text) return text;
+  
+  // Fix unclosed bold formatting (e.g., "**Military Expansion and the Punic Wars" -> "**Military Expansion and the Punic Wars**")
+  let fixed = text.replace(/\*\*([^*]+)$/g, '**$1**');
+  
+  // Fix unclosed italic formatting
+  fixed = fixed.replace(/\*([^*]+)$/g, '*$1*');
+  
+  // Fix multiple consecutive asterisks that might be malformed
+  fixed = fixed.replace(/\*\*\*\*/g, '**');
+  
+  // Fix bold formatting that spans across line breaks
+  fixed = fixed.replace(/\*\*([^*\n]+)\n([^*\n]+)\*\*/g, '**$1 $2**');
+  
+  return fixed;
+};
+
+// Helper function to clean and combine lesson content
+const cleanAndCombineContent = (content) => {
+  if (!content) return '';
+  if (typeof content === 'string') {
+    return fixMalformedMarkdown(
+      content.replace(/Content generation completed\./g, '')
+             .replace(/\|\|\|---\|\|\|/g, '')
+             .trim()
+    );
+  }
+  
+  const { introduction, main_content, conclusion } = content;
+  
+  const cleanedIntro = introduction 
+    ? fixMalformedMarkdown(introduction.replace(/Content generation completed\./g, '').trim())
+    : '';
+
+  const cleanedMain = main_content ? fixMalformedMarkdown(main_content.trim()) : '';
+  const cleanedConclusion = conclusion ? fixMalformedMarkdown(conclusion.trim()) : '';
+  
+  return [cleanedIntro, cleanedMain, cleanedConclusion]
+    .filter(Boolean)
+    .join('\n\n')
+    .replace(/\|\|\|---\|\|\|/g, '');
+};
+
+// Lazy load components
+const LazyQuizView = lazy(() => import('./QuizView'));
+
+// Memoized Loading component
+const LoadingSpinner = memo(() => (
+  <div className="flex justify-center items-center p-4">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+  </div>
+));
+
+// Memoized TTS Button component
+const TTSButton = memo(({ isPlaying, isPaused, onToggle, isSupported }) => {
+  if (!isSupported) {
+    return (
+      <button
+        disabled
+        className="px-4 py-2 text-sm font-medium rounded-md bg-gray-200 text-gray-500 cursor-not-allowed transition-colors"
+        title="Text-to-speech not supported in this browser"
+      >
+        <i className="fas fa-volume-mute mr-2"></i>Read Aloud
+      </button>
+    );
+  }
+
+  return (
+    <button
+      onClick={onToggle}
+      className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+        isPlaying || isPaused
+          ? 'bg-green-600 text-white hover:bg-green-700'
+          : 'bg-blue-600 text-white hover:bg-blue-700'
+      }`}
+      title={isPlaying ? 'Pause reading' : isPaused ? 'Resume reading' : 'Start reading aloud'}
+    >
+      <i className={`mr-2 ${isPlaying ? 'fas fa-pause' : isPaused ? 'fas fa-play' : 'fas fa-volume-up'}`}></i>
+      {isPlaying ? 'Pause' : isPaused ? 'Resume' : 'Read Aloud'}
+    </button>
+  );
+});
+
+TTSButton.propTypes = {
+  isPlaying: PropTypes.bool.isRequired,
+  isPaused: PropTypes.bool.isRequired,
+  onToggle: PropTypes.func.isRequired,
+  isSupported: PropTypes.bool.isRequired
+};
+
+// Memoized Content component to prevent unnecessary re-renders
+const Content = memo(({ content }) => {
+  const contentStr = typeof content === 'string' 
+    ? content 
+    : content?.main_content || '';
+
+  if (!contentStr || contentStr.includes('Content generation failed')) {
+    return (
+      <div className="text-center p-8">
+        <p className="text-red-600 mb-4">Content generation failed. Please try again.</p>
+      </div>
+    );
+  }
+
+  // Apply markdown fix before rendering
+  const fixedContent = fixMalformedMarkdown(contentStr);
+
+  return (
+    <div className="prose max-w-none">
+      <ReactMarkdown>{fixedContent}</ReactMarkdown>
+    </div>
+  );
+});
+
+Content.propTypes = {
+  content: PropTypes.oneOfType([PropTypes.string, PropTypes.object])
+};
+
+// Memoized Flashcard component to prevent unnecessary re-renders
+const MemoizedFlashcard = memo(Flashcard);
+
+// Memoized flashcard renderer with proper dependency tracking and performance monitoring
+const FlashcardRenderer = memo(({ flashcards }) => {
+  // Use throttled logger to prevent console spam
+  const throttledLog = useThrottledLogger('FlashcardRenderer', 2);
+  
+  // Track component renders for performance monitoring
+  useEffect(() => {
+    performanceMonitor.trackComponentRender('FlashcardRenderer');
+  });
+
+  // Only log once per render to reduce console spam
+  useEffect(() => {
+    if (flashcards?.length > 0) {
+      throttledLog('Rendering flashcards:', {
+        count: flashcards.length,
+        hasFlashcards: true
+      });
+    }
+  }, [flashcards?.length, throttledLog]);
+
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[FlashcardRenderer] Received flashcards:', {
+      hasFlashcards: !!flashcards,
+      count: flashcards?.length,
+      data: flashcards
+    });
+  }
+
+  if (!flashcards || flashcards.length === 0) {
+    return (
+      <div className="text-center p-8">
+        <p className="text-gray-600 mb-4">No flashcards available for this lesson.</p>
+        <p className="text-sm text-gray-500">Flashcard content will be generated automatically for new lessons.</p>
+      </div>
+    );
+  }
+
+  // Deduplicate flashcards based on the term - memoized to prevent recalculation
+  const uniqueFlashcards = useMemo(() => {
+    return Array.from(new Map(flashcards.map(card => [card.term.toLowerCase(), card])).values());
+  }, [flashcards]);
+
+  // Only log deduplication once
+  useEffect(() => {
+    if (uniqueFlashcards.length !== flashcards.length) {
+      throttledLog('Unique flashcards after deduplication:', {
+        originalCount: flashcards.length,
+        uniqueCount: uniqueFlashcards.length
+      });
+    }
+  }, [uniqueFlashcards.length, flashcards.length, throttledLog]);
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
+      {uniqueFlashcards.map((fc, index) => (
+        <MemoizedFlashcard
+          key={`${fc.term}-${index}`}
+          term={fc.term}
+          definition={fc.definition || 'Definition not provided.'}
+        />
+      ))}
+    </div>
+  );
+});
+
+FlashcardRenderer.propTypes = {
+  flashcards: PropTypes.array
+};
+
+// Main LessonView component with performance optimizations
+const LessonView = ({ 
+  lesson, 
+  moduleTitle, 
+  subject,
+  onNextLesson,
+  onPreviousLesson,
+  currentLessonIndex = 0,
+  totalLessonsInModule = 0,
+  onUpdateLesson,
+  activeModule, 
+  handleModuleUpdate,
+  usedImageTitles = [],
+  usedImageUrls = [],
+  imageTitleCounts = {},
+  imageUrlCounts = {},
+  courseId
+}) => {
+  const { lessonId: lessonIdFromParams } = useParams();
+  const lessonId = lesson?.id || lessonIdFromParams;
+  const [lessonState, setLessonState] = useState(lesson);
+  const [view, setView] = useState('content');
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const [imageFallbackTried, setImageFallbackTried] = useState(false);
+  
+  // Use the lesson prop as the main lesson data
+  const propLesson = lesson;
+  
+  // Performance monitoring
+  const renderStartTime = useRef(performance.now());
+  
+  // Use stable value hook to prevent unnecessary re-renders
+  const stableLessonId = useStableValue(propLesson?.id);
+  const stableFlashcardData = useStableValue(
+    propLesson?.flashcards || propLesson?.content?.flashcards || [],
+    (prev, curr) => {
+      if (!prev || !curr) return prev !== curr;
+      if (prev.length !== curr.length) return true;
+      // Deep comparison for flashcards
+      return prev.some((card, index) => 
+        card.term !== curr[index]?.term || 
+        card.definition !== curr[index]?.definition
+      );
+    }
+  );
+
+  // Use throttled logger for performance monitoring
+  const throttledLog = useThrottledLogger('LessonView', 3);
+
+  const normalizeImageUrl = useCallback((url) => {
+    if (!url || typeof url !== 'string') return url;
+    // Absolute URLs are used as-is
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+
+    let normalized = url;
+
+    // Prevent double-prefixing: if the URL already starts with the API base, leave it unchanged
+    const base = API_BASE_URL || '';
+    if (base && normalized.startsWith(base)) {
+      return normalized; // Already has prefix
+    }
+
+    // Ensure leading slash for root-relative paths
+    if (!normalized.startsWith('/')) normalized = `/${normalized}`;
+
+    return `${base}${normalized}`;
+  }, [API_BASE_URL]);
+  
+  // Reset image fallback flag when lesson changes
+  useEffect(() => {
+    setImageFallbackTried(false);
+  }, [propLesson?.id]);
+  
+  // If the lesson's current image fails to load (e.g., legacy /images/*.jpg that no longer exists),
+  // fetch a fresh remote image and update the lesson.
+  const handleImageError = useCallback(async () => {
+    if (imageFallbackTried) return;
+    setImageFallbackTried(true);
+    
+    // Create AbortController for this fallback request
+    const fallbackController = new AbortController();
+    
+    try {
+      const result = await SimpleImageService.searchWithContext(
+        propLesson?.title,
+        subject, // Pass the course subject here
+        propLesson?.content,
+        usedImageTitles,
+        usedImageUrls,
+        courseId,
+        propLesson?.id || lessonId,
+        fallbackController.signal
+      );
+      
+      // Check if request was aborted before setting state
+      if (!fallbackController.signal.aborted && result && result.url) {
+        setImageData({ ...result, url: normalizeImageUrl(result.url) });
+        if (onUpdateLesson && propLesson?.id) {
+          onUpdateLesson(propLesson.id, { image: {
+            imageTitle: result.title,
+            imageUrl: result.url,
+            pageURL: result.pageURL,
+            attribution: result.attribution,
+          }});
+        }
+      }
+    } catch (e) {
+      // Only handle errors if not aborted
+      if (!fallbackController.signal.aborted) {
+        console.warn('[LessonView] Image fallback error:', e);
+      }
+    }
+    
+    // Cleanup function to abort if component unmounts
+    return () => fallbackController.abort();
+  }, [imageFallbackTried, propLesson, usedImageTitles, usedImageUrls, courseId, lessonId, normalizeImageUrl, onUpdateLesson, subject]);
+  
+  const [imageData, setImageData] = useState(propLesson?.image ? {
+    url: normalizeImageUrl(propLesson.image.imageUrl || propLesson.image.url),
+    title: propLesson.image.imageTitle || propLesson.image.title,
+    pageURL: propLesson.image.pageURL,
+    attribution: propLesson.image.attribution,
+    uploader: undefined,
+  } : null);
+  const [imageLoading, setImageLoading] = useState(false);
+  const navigate = useNavigate();
+  const context = useOutletContext();
+  const [showFailMessage, setShowFailMessage] = useState(false);
+  
+  // TTS state
+  const [ttsStatus, setTtsStatus] = useState({
+    isPlaying: false,
+    isPaused: false,
+    isSupported: ttsService.isSupported()
+  });
+
+  // Comprehensive quiz and flashcard data extraction
+  const quizData = useMemo(() => {
+    // Check multiple possible locations for quiz data
+    const quiz = propLesson?.quiz || 
+                 propLesson?.content?.quiz || 
+                 propLesson?.questions ||
+                 propLesson?.assessment;
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[LessonView] Quiz data extraction:', {
+        directQuiz: propLesson?.quiz,
+        contentQuiz: propLesson?.content?.quiz,
+        questions: propLesson?.questions,
+        assessment: propLesson?.assessment,
+        finalQuiz: quiz
+      });
+    }
+    
+    return quiz;
+  }, [propLesson]);
+
+  const flashcardData = useMemo(() => {
+    // Check multiple possible locations for flashcard data
+    const flashcards = propLesson?.flashcards || 
+                      propLesson?.content?.flashcards || 
+                      propLesson?.cards ||
+                      propLesson?.studyCards;
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[LessonView] Flashcard data extraction:', {
+        directFlashcards: propLesson?.flashcards,
+        contentFlashcards: propLesson?.content?.flashcards,
+        cards: propLesson?.cards,
+        studyCards: propLesson?.studyCards,
+        finalFlashcards: flashcards
+      });
+    }
+    
+    return flashcards;
+  }, [propLesson]);
+
+  // Memoized renderFlashcards function to prevent recreation on every render
+  const renderFlashcards = useCallback(() => {
+    // Track flashcard rendering for performance monitoring
+    performanceMonitor.trackFlashcardRender();
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[LessonView] renderFlashcards called with data:', flashcardData);
+    }
+    return <FlashcardRenderer flashcards={flashcardData} />;
+  }, [flashcardData]);
+
+  // Update lesson state when prop changes
+  useEffect(() => {
+    if (!propLesson) return;
+    
+    setLessonState(propLesson);
+    setIsLoading(false);
+    
+    // Reset TTS if lesson changes
+    if (propLesson?.id && ttsService.getStatus().currentLessonId !== propLesson.id) {
+      ttsService.stop();
+      setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
+    }
+  }, [propLesson]);
+
+  // Handle quiz completion - simplified since unlock logic is handled in CourseDisplay
+  const handleQuizComplete = useCallback(
+    (score) => {
+      if (!activeModule || !propLesson) return;
+
+      if (onUpdateLesson) {
+        onUpdateLesson(propLesson.id, { quizScore: score });
+      }
+
+      if (score < 5) {
+        setShowFailMessage(true);
+        setTimeout(() => setShowFailMessage(false), 3000);
+      }
+    },
+    [activeModule, propLesson, onUpdateLesson]
+  );
+
+  // Memoized content to prevent unnecessary re-renders
+  const memoizedContent = useMemo(() => {
+    if (!propLesson) return null;
+    
+    const contentStr = cleanAndCombineContent(propLesson.content);
+    
+    if (!contentStr || contentStr.includes('Content generation failed')) {
+      return (
+        <div className="text-center p-8">
+          <p className="text-red-600 mb-4">Content generation failed. Please try again.</p>
+        </div>
+      );
+    }
+    
+    return <Content content={contentStr} />;
+  }, [propLesson]);
+
+  // Memoized quiz view to prevent unnecessary re-renders
+  const memoizedQuizView = useMemo(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[LessonView] Quiz data check:', {
+        hasQuiz: !!quizData,
+        quizLength: quizData?.length
+      });
+    }
+    
+    if (!quizData || quizData.length === 0) {
+      console.warn('[LessonView] No quiz data available for lesson:', propLesson?.title);
+      return (
+        <div className="text-center p-8">
+          <p className="text-gray-600 mb-4">No quiz questions available for this lesson.</p>
+          <p className="text-sm text-gray-500">Quiz content will be generated automatically for new lessons.</p>
+        </div>
+      );
+    }
+    
+    return (
+      <LazyQuizView
+        questions={quizData} // Use extracted quiz data
+        onComplete={handleQuizComplete}
+        lessonContent={propLesson.content}
+        lessonTitle={propLesson.title}
+        lessonId={propLesson.id}
+        module={activeModule}
+        onModuleUpdate={handleModuleUpdate}
+      />
+    );
+  }, [quizData, propLesson, activeModule, handleQuizComplete, handleModuleUpdate]);
+
+  // Handle TTS toggle
+  const handleTTSToggle = useCallback(() => {
+    if (!propLesson) return;
+    
+    const contentStr = cleanAndCombineContent(propLesson.content);
+    
+    if (ttsStatus.isPlaying) {
+      ttsService.pause();
+      setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: true }));
+    } else if (ttsStatus.isPaused) {
+      ttsService.resume();
+      setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
+    } else {
+      // Use readLesson instead of speak
+      ttsService.readLesson({ ...propLesson, content: contentStr }, propLesson.id);
+      setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
+    }
+  }, [propLesson, ttsStatus.isPlaying, ttsStatus.isPaused]);
+
+  // Handle next lesson with TTS cleanup
+  const handleNextLessonWithTTS = useCallback(() => {
+    ttsService.stop();
+    setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
+    if (onNextLesson) onNextLesson();
+  }, [onNextLesson]);
+
+  // Handle previous lesson with TTS cleanup
+  const handlePreviousLessonWithTTS = useCallback(() => {
+    ttsService.stop();
+    setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
+    if (onPreviousLesson) onPreviousLesson();
+  }, [onPreviousLesson]);
+
+  // Handle tab change
+  const handleTabChange = useCallback((newView) => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[LessonView] handleTabChange called with:', newView, 'current view:', view);
+    }
+    setView(newView);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[LessonView] View state updated to:', newView);
+    }
+  }, [view]);
+
+  // Image handling effect
+  useEffect(() => {
+    let ignore = false;
+    
+    // If image is already present on lesson, use it
+    if (propLesson?.image && (propLesson.image.imageUrl || propLesson.image.url)) {
+      const existing = {
+        url: normalizeImageUrl(propLesson.image.imageUrl || propLesson.image.url),
+        title: propLesson.image.imageTitle || propLesson.image.title,
+        pageURL: propLesson.image.pageURL,
+        attribution: propLesson.image.attribution,
+        uploader: undefined,
+      };
+      const currentTitle = existing.title;
+      const currentUrl = existing.url;
+      const appearsMoreThanOnce = (currentTitle && imageTitleCounts[currentTitle] > 1) || (currentUrl && imageUrlCounts[currentUrl] > 1);
+      if (!appearsMoreThanOnce) {
+        setImageData(existing);
+        setImageLoading(false);
+        return () => { ignore = true; };
+      }
+      // If duplicate, fall through to fetch a replacement
+    }
+    
+    setImageLoading(true);
+    setImageData(null);
+    
+    let abortController = new AbortController();
+    
+    async function fetchImage() {
+      if (propLesson?.title) {
+        try {
+          // Exclude all used titles/urls; if current image exists, it will also be excluded and force a new one
+          const result = await SimpleImageService.searchWithContext(
+            propLesson.title,
+            subject, // Pass the course subject here
+            propLesson.content,
+            usedImageTitles,
+            usedImageUrls,
+            courseId,
+            propLesson?.id || lessonId,
+            abortController.signal
+          );
+          
+          // Check if request was aborted before setting state
+          if (!ignore && !abortController.signal.aborted) {
+            setImageData(result ? { ...result, url: normalizeImageUrl(result.url) } : null);
+            // Persist replacement image into lesson if we fetched a new one
+            if (result && onUpdateLesson && propLesson?.id) {
+              onUpdateLesson(propLesson.id, { image: {
+                imageTitle: result.title,
+                imageUrl: result.url,
+                pageURL: result.pageURL,
+                attribution: result.attribution,
+              }});
+            }
+          }
+        } catch (e) {
+          // Only handle errors if not aborted
+          if (!ignore && !abortController.signal.aborted) {
+            console.warn('[LessonView] Image fetch error:', e);
+            setImageData(null);
+          }
+        } finally {
+          if (!ignore && !abortController.signal.aborted) {
+            setImageLoading(false);
+          }
+        }
+      } else {
+        if (!ignore) setImageLoading(false);
+      }
+    }
+    
+    // Run in background (non-blocking)
+    fetchImage();
+    
+    return () => { 
+      ignore = true;
+      // Abort any pending request
+      abortController.abort();
+    };
+  }, [propLesson, activeModule?.id, usedImageTitles, usedImageUrls, imageTitleCounts, imageUrlCounts, courseId, lessonId, normalizeImageUrl, onUpdateLesson, subject]);
+
+  // Cleanup TTS on unmount
+  useEffect(() => {
+    return () => {
+      ttsService.stop();
+    };
+  }, []);
+
+  // Performance monitoring
+  useEffect(() => {
+    const renderTime = performance.now() - renderStartTime.current;
+    performanceMonitor.trackComponentRender('LessonView', renderTime);
+    throttledLog('LessonView rendered in', renderTime.toFixed(2), 'ms');
+  });
+
+  // Early return if no lesson
+  if (!propLesson) {
+    console.warn('[LessonView] No lesson provided');
+    return (
+      <div className="flex items-center justify-center h-full">
+        <p className="text-gray-500">No lesson selected</p>
+      </div>
+    );
+  }
+
+  // Debug lesson data (only in development)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[LessonView] Lesson data:', {
+      id: propLesson?.id,
+      title: propLesson?.title,
+      hasContent: !!propLesson?.content,
+      hasQuiz: !!propLesson?.quiz,
+      quizLength: propLesson?.quiz?.length,
+      hasFlashcards: !!propLesson?.flashcards,
+      flashcardLength: propLesson?.flashcards?.length,
+      view: view
+    });
+  }
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <p className="text-red-600 mb-4">Error loading lesson: {error}</p>
+          <button
+            onClick={() => setRetryCount(prev => prev + 1)}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 flex flex-col p-6 bg-white overflow-y-auto">
+      <header className="mb-6">
+        <h2 className="text-3xl font-bold text-gray-900">{propLesson?.title}</h2>
+        <p className="text-md text-gray-600">{moduleTitle}</p>
+        {imageLoading && (
+          <div className="lesson-image-container loading">
+            <div className="image-loading">Loading image...</div>
+          </div>
+        )}
+        {imageData && imageData.url && !imageLoading && (
+          <figure className="lesson-image-container" style={{ maxWidth: 700, margin: '0 auto' }}>
+            <Image
+              src={imageData.url}
+              alt={propLesson?.title || 'Lesson illustration'}
+              className="lesson-image"
+              style={{ width: '100%', height: 'auto' }}
+            />
+            <figcaption className="image-description" style={{ 
+              textAlign: 'center', 
+              marginTop: '8px', 
+              fontSize: '14px', 
+              color: '#000',
+              fontStyle: 'italic'
+            }}>
+              {(() => {
+                const { uploader, attribution } = imageData || {};
+                // Prefer explicit uploader if present; strip leading 'User:'
+                if (typeof uploader === 'string' && uploader.trim()) {
+                  return uploader.replace(/^user:\s*/i, '').trim();
+                }
+                // Fallback: derive from attribution string
+                if (typeof attribution === 'string') {
+                  const withoutHtml = attribution.replace(/<[^>]*>/g, '');
+                  const byIdx = withoutHtml.toLowerCase().indexOf('image by ');
+                  if (byIdx !== -1) {
+                    const after = withoutHtml.substring(byIdx + 'image by '.length);
+                    const viaIdx = after.toLowerCase().indexOf(' via');
+                    const extracted = (viaIdx !== -1 ? after.substring(0, viaIdx) : after).trim();
+                    return extracted.replace(/^user:\s*/i, '').trim();
+                  }
+                }
+                return '';
+              })()}
+              {imageData?.pageURL ? (
+                <>
+                  <span style={{ margin: '0 6px' }}>·</span>
+                  <a href={imageData.pageURL} target="_blank" rel="noopener noreferrer" style={{ color: '#2563eb', fontStyle: 'normal' }}>
+                    Source
+                  </a>
+                </>
+              ) : null}
+            </figcaption>
+          </figure>
+        )}
+      </header>
+      <div className="flex-grow">
+        <div className="flex space-x-2 mb-4">
+          <button
+            onClick={() => {
+              if (process.env.NODE_ENV === 'development') {
+                console.log('[LessonView] Switching to content view');
+              }
+              handleTabChange('content');
+            }}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              view === 'content' 
+                ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            <i className="fas fa-book-open mr-2"></i>Lesson
+          </button>
+          <button
+            onClick={() => {
+              if (process.env.NODE_ENV === 'development') {
+                console.log('[LessonView] Switching to quiz view');
+              }
+              handleTabChange('quiz');
+            }}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              view === 'quiz' 
+                ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+            disabled={!quizData || quizData.length === 0}
+          >
+            <i className="fas fa-question-circle mr-2"></i>Quiz {quizData?.length ? `(${quizData.length})` : ''}
+          </button>
+          <button
+            onClick={() => {
+              if (process.env.NODE_ENV === 'development') {
+                console.log('[LessonView] Switching to flashcards view');
+              }
+              handleTabChange('flashcards');
+            }}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              view === 'flashcards' 
+                ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+            disabled={false}
+          >
+            <i className="fas fa-clone mr-2"></i>Flashcards {flashcardData?.length ? `(${flashcardData.length})` : ''}
+          </button>
+          <button
+            onClick={() => {
+              if (process.env.NODE_ENV === 'development') {
+                console.log('[LessonView] TTS toggle clicked');
+              }
+              handleTTSToggle();
+            }}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              ttsStatus.isPlaying || ttsStatus.isPaused
+                ? 'bg-green-600 text-white hover:bg-green-700'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
+            disabled={!ttsStatus.isSupported}
+            title={ttsStatus.isPlaying ? 'Pause reading' : ttsStatus.isPaused ? 'Resume reading' : 'Start reading aloud'}
+          >
+            <i className={`mr-2 ${ttsStatus.isPlaying ? 'fas fa-pause' : ttsStatus.isPaused ? 'fas fa-play' : 'fas fa-volume-up'}`}></i>
+            {ttsStatus.isPlaying ? 'Pause' : ttsStatus.isPaused ? 'Resume' : 'Read Aloud'}
+          </button>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto">
+          <Suspense fallback={<LoadingSpinner />}>
+            {view === 'content' && (
+              <div>
+                {memoizedContent}
+              </div>
+            )}
+            {view === 'quiz' && (
+              <div>
+                {memoizedQuizView}
+              </div>
+            )}
+            {view === 'flashcards' && (
+              <div>
+                {renderFlashcards()}
+              </div>
+            )}
+          </Suspense>
+        </div>
+        {showFailMessage && (
+          <div className="p-3 mb-4 bg-yellow-100 text-yellow-800 rounded text-center text-sm">
+            To move to the next module, you must score 5/5 on all quizzes within this module.
+          </div>
+        )}
+      </div>
+
+      <footer className="mt-8 pt-6 border-t border-gray-200">
+        <div className="flex flex-col sm:flex-row items-center space-y-3 sm:space-y-0 sm:justify-between">
+          <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-2">
+            <button
+              onClick={handlePreviousLessonWithTTS}
+              disabled={currentLessonIndex === 0}
+              className="px-4 py-2 text-sm font-medium rounded-md bg-gray-200 text-gray-700 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
+            >
+              <i className="fas fa-arrow-left mr-2"></i>Previous
+            </button>
+            <span className="text-sm text-gray-600 text-center">
+              {currentLessonIndex + 1} / {Math.max(totalLessonsInModule, 1)}
+            </span>
+            <button
+              onClick={handleNextLessonWithTTS}
+              disabled={currentLessonIndex >= totalLessonsInModule - 1}
+              className="px-4 py-2 text-sm font-medium rounded-md bg-gray-200 text-gray-700 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
+            >
+              Next<i className="fas fa-arrow-right ml-2"></i>
+            </button>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+LessonView.propTypes = {
+  lesson: PropTypes.object.isRequired,
+  moduleTitle: PropTypes.string,
+  subject: PropTypes.string,
+  onNextLesson: PropTypes.func,
+  onPreviousLesson: PropTypes.func,
+  currentLessonIndex: PropTypes.number,
+  totalLessonsInModule: PropTypes.number,
+  onUpdateLesson: PropTypes.func,
+  activeModule: PropTypes.object,
+  handleModuleUpdate: PropTypes.func,
+  usedImageTitles: PropTypes.array,
+  usedImageUrls: PropTypes.array,
+  imageTitleCounts: PropTypes.object,
+  imageUrlCounts: PropTypes.object,
+  courseId: PropTypes.string
+};
+
+export default memo(LessonView);
