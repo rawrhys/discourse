@@ -2054,6 +2054,9 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
+    console.log('[LOGIN] Login attempt for email:', email);
+    console.log('[LOGIN] Supabase configured:', !!supabase);
+
     // --- Supabase Login (or dev fallback) ---
     let data = { user: null, session: null };
     let error = null;
@@ -2087,6 +2090,14 @@ app.post('/api/auth/login', async (req, res) => {
         return res.status(401).json({ 
           error: 'Please confirm your email address before signing in. Check your inbox and spam folder for the confirmation link.',
           code: 'EMAIL_NOT_CONFIRMED'
+        });
+      }
+      
+      // Check for invalid credentials error
+      if (error.code === 'invalid_credentials' || error.message.includes('Invalid login credentials')) {
+        return res.status(401).json({ 
+          error: 'Invalid email or password. Please check your credentials and try again.',
+          code: 'INVALID_CREDENTIALS'
         });
       }
       
