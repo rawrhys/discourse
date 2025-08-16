@@ -55,7 +55,11 @@ const Dashboard = () => {
 
   
   const fetchSavedCourses = useCallback(async (force = false) => {
-    if (hasAttemptedFetch.current && !force) return; // Prevent duplicate calls unless forced
+    // Always allow forced refreshes, even if we've attempted before
+    if (hasAttemptedFetch.current && !force) {
+      logger.debug('⏳ [DASHBOARD] Skipping fetch - already attempted and not forced');
+      return;
+    }
     
     logger.debug('📚 [DASHBOARD] Fetching saved courses', {
       force: force,
@@ -75,12 +79,13 @@ const Dashboard = () => {
         setTimeout(() => reject(new Error('Request timeout')), 10000); // 10 second timeout
       });
       
+      logger.debug('📡 [DASHBOARD] Making API call to getSavedCourses...');
       const coursesPromise = api.getSavedCourses();
       const courses = await Promise.race([coursesPromise, timeoutPromise]);
       
       logger.debug('✅ [DASHBOARD] Successfully fetched saved courses', {
         coursesCount: Array.isArray(courses) ? courses.length : 0,
-        courses: Array.isArray(courses) ? courses : [],
+        courses: Array.isArray(courses) ? courses.map(c => ({ id: c.id, title: c.title })) : [],
         timestamp: new Date().toISOString()
       });
       
@@ -103,6 +108,7 @@ const Dashboard = () => {
       logger.warn('⚠️ [DASHBOARD] Could not fetch courses (likely new user or network issue):', {
         error: error.message,
         errorType: error.constructor.name,
+        status: error.status,
         timestamp: new Date().toISOString()
       });
       
@@ -387,15 +393,22 @@ const Dashboard = () => {
       const normalizedCourseId = String(courseId || '').replace(/_[0-9]{10,}$/, '');
       logger.debug('🗑️ [DASHBOARD] Deleting course:', courseId, 'normalized:', normalizedCourseId);
       
-      await api.deleteCourse(normalizedCourseId);
+      const deleteResult = await api.deleteCourse(normalizedCourseId);
+      logger.debug('✅ [DASHBOARD] Course deletion API call completed:', deleteResult);
       
       // Clear the course to delete state immediately
       setCourseToDelete(null);
       
+      // Show a brief success message
+      setError(null);
+      // You could add a success state here if needed
+      
       // Force refresh after deletion with a small delay to ensure backend has processed the deletion
       setTimeout(async () => {
         try {
+          logger.debug('🔄 [DASHBOARD] Starting post-deletion refresh...');
           await fetchSavedCourses(true);
+          logger.debug('✅ [DASHBOARD] Post-deletion refresh completed successfully');
           // Double-check that no error state persists after refresh
           setError(null);
         } catch (refreshError) {
@@ -423,6 +436,7 @@ const Dashboard = () => {
       // Always refresh the courses list to ensure UI is in sync
       setTimeout(async () => {
         try {
+          logger.debug('🔄 [DASHBOARD] Starting error-recovery refresh...');
           await fetchSavedCourses(true);
           setError(null);
         } catch (refreshError) {
@@ -685,12 +699,15 @@ const Dashboard = () => {
               <div className="flex items-center space-x-4">
                 <h2 className="text-2xl font-bold text-gray-900">Your Saved Courses</h2>
                 <button
-                  onClick={() => fetchSavedCourses(true)}
+                  onClick={() => {
+                    logger.debug('🔄 [DASHBOARD] Manual refresh triggered by user');
+                    fetchSavedCourses(true);
+                  }}
                   disabled={isLoadingCourses}
-                  className="text-sm text-gray-500 hover:text-gray-700 disabled:opacity-50"
+                  className="text-sm text-gray-500 hover:text-gray-700 disabled:opacity-50 transition-colors duration-200"
                   title="Refresh courses"
                 >
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className={`h-5 w-5 ${isLoadingCourses ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
                 </button>
