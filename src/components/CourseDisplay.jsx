@@ -323,6 +323,10 @@ const CourseDisplay = () => {
     }
   }
   
+  // Calculate lesson index and total lessons for navigation
+  const currentLessonIndex = currentModule?.lessons.findIndex(l => l.id === activeLessonId) ?? 0;
+  const totalLessonsInModule = currentModule?.lessons?.length ?? 0;
+  
   // Debug logging to help identify the issue (only log once per render cycle)
   if (process.env.NODE_ENV === 'development') {
     console.log('[CourseDisplay] Module/Lesson Debug:', {
@@ -330,7 +334,9 @@ const CourseDisplay = () => {
       activeLessonId,
       currentModule: currentModule ? { id: currentModule.id, title: currentModule.title } : null,
       currentLesson: currentLesson ? { id: currentLesson.id, title: currentLesson.title } : null,
-      totalModules: course?.modules?.length
+      totalModules: course?.modules?.length,
+      currentLessonIndex,
+      totalLessonsInModule
     });
   }
 
@@ -457,6 +463,8 @@ const CourseDisplay = () => {
                     // We pass a dummy score of 5 since this is only called for perfect scores
                     handleQuizCompletion(lessonId, 5);
                   }}
+                  currentLessonIndex={currentLessonIndex}
+                  totalLessonsInModule={totalLessonsInModule}
               />
             ) : (
               <div className="text-center text-gray-500 pt-10">
