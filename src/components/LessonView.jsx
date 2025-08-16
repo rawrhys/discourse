@@ -555,11 +555,11 @@ const LessonView = ({
       <Content 
         content={contentStr} 
         lessonTitle={propLesson.title}
-        courseSubject={course?.subject || 'history'}
+        courseSubject={subject || 'history'}
         bibliography={propLesson.bibliography}
       />
     );
-  }, [propLesson, course]);
+  }, [propLesson, subject]);
 
   // Memoized quiz view to prevent unnecessary re-renders
   const memoizedQuizView = useMemo(() => {
