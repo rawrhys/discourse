@@ -1132,6 +1132,24 @@ Context: "${context.substring(0, 1000)}..."`;
             });
           }
           
+          // Update session progress for real-time updates
+          const session = global.generationSessions.get(generationId);
+          if (session) {
+            session.progress = {
+              ...session.progress,
+              stage: 'generating',
+              currentModule: mIdx + 1,
+              totalModules: courseWithIds.modules.length,
+              currentLesson: lIdx + 1,
+              totalLessons: module.lessons.length,
+              message: `Generating Lesson ${lIdx + 1}: ${lesson.title}`,
+              details: [...(session.progress.details || []), {
+                timestamp: new Date().toISOString(),
+                message: `Starting Lesson ${lIdx + 1}: ${lesson.title}`
+              }]
+            };
+          }
+          
           try {
             // Generate lesson content with infinite retries
             const lessonPrompt = this.constructLessonPrompt(courseWithIds.title, module.title, lesson.title, lesson.key_terms || []);
@@ -1224,6 +1242,24 @@ Context: "${context.substring(0, 1000)}..."`;
                 lessonTitle: lesson.title,
                 message: `Completed: ${lesson.title}`
               });
+            }
+            
+            // Update session progress for lesson completion
+            const session = global.generationSessions.get(generationId);
+            if (session) {
+              session.progress = {
+                ...session.progress,
+                stage: 'generating',
+                currentModule: mIdx + 1,
+                totalModules: courseWithIds.modules.length,
+                currentLesson: lIdx + 1,
+                totalLessons: module.lessons.length,
+                message: `Completed Lesson: ${lesson.title}`,
+                details: [...(session.progress.details || []), {
+                  timestamp: new Date().toISOString(),
+                  message: `✅ Completed: ${lesson.title}`
+                }]
+              };
             }
             
             // Generate quiz with minimal delay
@@ -2453,20 +2489,34 @@ app.post('/api/courses/generate', authenticateToken, async (req, res, next) => {
             }];
           }
         }).then(async (course) => {
-          // Generation completed - save course and update session
-          try {
-            if (!course || !course.title) {
-              throw new Error('Failed to generate course structure');
-            }
+                      // Generation completed - save course and update session
+            try {
+              if (!course || !course.title) {
+                throw new Error('Failed to generate course structure');
+              }
 
-            // Final validation: ensure all modules have proper isLocked properties
-            if (course.modules && Array.isArray(course.modules)) {
-              course.modules.forEach((module, mIdx) => {
-                if (module.isLocked === undefined) {
-                  module.isLocked = mIdx > 0;
-                }
-              });
-            }
+              // Update session for validation stage
+              const session = global.generationSessions.get(generationId);
+              if (session) {
+                session.progress = {
+                  ...session.progress,
+                  stage: 'validating',
+                  message: 'Validating course structure...',
+                  details: [...(session.progress.details || []), {
+                    timestamp: new Date().toISOString(),
+                    message: '🔍 Validating course structure...'
+                  }]
+                };
+              }
+
+              // Final validation: ensure all modules have proper isLocked properties
+              if (course.modules && Array.isArray(course.modules)) {
+                course.modules.forEach((module, mIdx) => {
+                  if (module.isLocked === undefined) {
+                    module.isLocked = mIdx > 0;
+                  }
+                });
+              }
 
             // Assign user ID to the course
             course.userId = user.id;
@@ -2474,11 +2524,24 @@ app.post('/api/courses/generate', authenticateToken, async (req, res, next) => {
             course.createdAt = new Date().toISOString();
             course.published = false;
 
-            // Save the course to database
-            db.data.courses.push(course);
-            await db.write();
+                          // Update session for saving stage
+              if (session) {
+                session.progress = {
+                  ...session.progress,
+                  stage: 'saving',
+                  message: 'Saving course to database...',
+                  details: [...(session.progress.details || []), {
+                    timestamp: new Date().toISOString(),
+                    message: '💾 Saving course to database...'
+                  }]
+                };
+              }
 
-            console.log(`[COURSE_GENERATION] Course saved with ID: ${course.id}`);
+              // Save the course to database
+              db.data.courses.push(course);
+              await db.write();
+
+              console.log(`[COURSE_GENERATION] Course saved with ID: ${course.id}`);
 
             // Deduct credits after successful completion
             user.courseCredits = Math.max(0, user.courseCredits - 1);

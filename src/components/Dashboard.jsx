@@ -744,11 +744,49 @@ const Dashboard = () => {
             localStorage.removeItem('courseGenerationStartTime');
             
           } else if (data.progress) {
-            // Update progress with latest data
+            // Update progress with latest data from polling
             setGenerationProgress(prev => ({
               ...prev,
-              ...data.progress,
+              stage: data.progress.stage || prev.stage,
+              currentModule: data.progress.currentModule || prev.currentModule,
+              totalModules: data.progress.totalModules || prev.totalModules,
+              currentLesson: data.progress.currentLesson || prev.currentLesson,
+              totalLessons: data.progress.totalLessons || prev.totalLessons,
+              message: data.progress.message || prev.message,
               details: [...(prev.details || []), ...(data.progress.details || [])]
+            }));
+          } else if (data.status === 'generating') {
+            // Update progress for ongoing generation
+            setGenerationProgress(prev => ({
+              ...prev,
+              stage: 'generating',
+              message: 'Generating course content...',
+              details: [...prev.details, { 
+                timestamp: new Date().toISOString(), 
+                message: '🔄 Course generation in progress...' 
+              }]
+            }));
+          } else if (data.status === 'validating') {
+            // Update progress for validation stage
+            setGenerationProgress(prev => ({
+              ...prev,
+              stage: 'validating',
+              message: 'Validating course structure...',
+              details: [...prev.details, { 
+                timestamp: new Date().toISOString(), 
+                message: '🔍 Validating course structure...' 
+              }]
+            }));
+          } else if (data.status === 'saving') {
+            // Update progress for saving stage
+            setGenerationProgress(prev => ({
+              ...prev,
+              stage: 'saving',
+              message: 'Saving course to database...',
+              details: [...prev.details, { 
+                timestamp: new Date().toISOString(), 
+                message: '💾 Saving course to database...' 
+              }]
             }));
           }
         }
