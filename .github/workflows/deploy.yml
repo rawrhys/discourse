@@ -25,7 +25,6 @@ jobs:
             rm -rf dist/*
             npm run build
             pm2 restart discourse-app
-
   deploy-shared-hosting:
     runs-on: ubuntu-latest
     steps:
@@ -51,28 +50,14 @@ jobs:
           date > dist/build-timestamp.txt
           echo "Build completed at $(date)" > dist/build-info.txt
           echo "Build completed at $(date)" > dist/build-info.txt
-
-      - name: Prepare public folder
-        run: |
-          echo "=== Preparing public folder ==="
-          mkdir -p public
-          cp -r dist/* public/
-          cp -r src public/src/
-          # Add cache-busting timestamp to index.html
-          sed -i "s|</head>|<meta name=\"build-time\" content=\"$(date)\" />\n</head>|" public/index.html
-          echo "=== Public folder contents ==="
-          ls -la public/
-          echo "=== Public/src contents ==="
-          ls -la public/src/
-
       - name: Deploy to Shared Hosting via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.4
         with:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          local-dir: ./dist
-          server-dir: /public_html/
+          local-dir: ./react_template/
+          server-dir: /domains/thediscourse.ai/public_html/
 
       - name: Verify deployed build (optional)
         run: curl -s https://${{ secrets.FTP_SERVER }}/build-timestamp.txt || echo "Timestamp not found"
@@ -92,7 +77,6 @@ jobs:
             </FilesMatch>
           </IfModule>
           EOF
-
       - name: Clear cache headers (optional)
         run: |
           echo "=== Clearing cache for main assets ==="
