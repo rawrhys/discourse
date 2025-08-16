@@ -180,6 +180,11 @@ export default function QuizView({ questions = [], onComplete, lessonId, module 
                 <p className={`text-sm ${score === 5 ? 'text-green-600' : 'text-red-600'}`}>
                   {score === 5 ? 'Quiz passed!' : 'You must score 5/5 to unlock the next module.'}
                 </p>
+                {score < 5 && (
+                  <div className="mt-3 p-3 bg-yellow-100 text-yellow-800 rounded text-sm">
+                    To move to the next module, you must score 5/5 on all quizzes within this module.
+                  </div>
+                )}
               </div>
               <button
                 onClick={handleRetake}
