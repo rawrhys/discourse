@@ -66,6 +66,29 @@
   margin-top: 1.5rem;
 }
 
+/* Ensure bold text is properly displayed */
+.lesson-content strong,
+.lesson-content b,
+.lesson-content .prose strong,
+.lesson-content .prose b {
+  font-weight: 700 !important;
+  color: #1a1a1a !important;
+}
+
+/* Ensure markdown bold text is visible */
+.lesson-content .prose ** {
+  font-weight: 700 !important;
+}
+
+/* Fix any asterisk display issues */
+.lesson-content .prose {
+  font-weight: normal;
+}
+
+.lesson-content .prose strong {
+  font-weight: 700 !important;
+}
+
 .lesson-text-content {
   /* This class is now used just as a semantic container */
 }

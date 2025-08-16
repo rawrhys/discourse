@@ -19,10 +19,12 @@ import performanceMonitor from '../services/PerformanceMonitorService';
 const fixMalformedMarkdown = (text) => {
   if (!text) return text;
   
-  // Fix unclosed bold formatting (e.g., "**Military Expansion and the Punic Wars" -> "**Military Expansion and the Punic Wars**")
-  let fixed = text.replace(/\*\*([^*]+)$/g, '**$1**');
+  let fixed = text;
   
-  // Fix unclosed italic formatting
+  // Fix unclosed bold formatting at the end of text
+  fixed = fixed.replace(/\*\*([^*]+)$/g, '**$1**');
+  
+  // Fix unclosed italic formatting at the end of text
   fixed = fixed.replace(/\*([^*]+)$/g, '*$1*');
   
   // Fix multiple consecutive asterisks that might be malformed
@@ -30,6 +32,25 @@ const fixMalformedMarkdown = (text) => {
   
   // Fix bold formatting that spans across line breaks
   fixed = fixed.replace(/\*\*([^*\n]+)\n([^*\n]+)\*\*/g, '**$1 $2**');
+  
+  // Fix isolated asterisks that should be bold (e.g., "**term**" -> "**term**")
+  fixed = fixed.replace(/\*\*([^*\s]+)\*\*/g, '**$1**');
+  
+  // Fix bold terms that are missing closing asterisks in the middle of text
+  fixed = fixed.replace(/\*\*([^*\n]+?)(?=\s|$|\.|,|;|:)/g, '**$1**');
+  
+  // Fix italic terms that are missing closing asterisks in the middle of text
+  fixed = fixed.replace(/\*([^*\n]+?)(?=\s|$|\.|,|;|:)/g, '*$1*');
+  
+  // Fix bold formatting that's broken by punctuation
+  fixed = fixed.replace(/\*\*([^*]+?)([.,;:])\*\*/g, '**$1**$2');
+  
+  // Fix italic formatting that's broken by punctuation
+  fixed = fixed.replace(/\*([^*]+?)([.,;:])\*/g, '*$1*$2');
+  
+  // Remove any remaining malformed asterisk sequences
+  fixed = fixed.replace(/\*\*\*\*/g, '**');
+  fixed = fixed.replace(/\*\*\*/g, '**');
   
   return fixed;
 };
@@ -124,8 +145,18 @@ const Content = memo(({ content }) => {
   // Apply markdown fix before rendering
   const fixedContent = fixMalformedMarkdown(contentStr);
 
+  // Debug logging for markdown processing
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[LessonView] Content processing:', {
+      original: contentStr?.substring(0, 200) + '...',
+      fixed: fixedContent?.substring(0, 200) + '...',
+      hasAsterisks: contentStr?.includes('**'),
+      hasFixedAsterisks: fixedContent?.includes('**')
+    });
+  }
+
   return (
-    <div className="prose max-w-none">
+    <div className="prose max-w-none lesson-content">
       <ReactMarkdown>{fixedContent}</ReactMarkdown>
     </div>
   );
