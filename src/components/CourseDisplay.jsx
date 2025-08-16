@@ -102,159 +102,97 @@ const CourseDisplay = () => {
         console.log(`[QuizCompletion] Backend response:`, result);
       }
 
-      // Update local state with the backend response
-      const newModules = course.modules.map(module => {
-        let lessonFound = false;
-        const newLessons = module.lessons.map(lesson => {
-          if (lesson.id === lessonId) {
-            lessonFound = true;
+      // Update the lesson with the quiz score
+      if (handleUpdateLesson) {
+        handleUpdateLesson(lessonId, { quizScore: score });
+      }
 
-            return {
-              ...lesson,
-              quizScores: {
-                ...(lesson.quizScores || {}),
-                [user.id]: score
-              }
-            };
-          }
-          return lesson;
-        });
-        if (lessonFound) {
-          moduleOfCompletedQuizId = module.id;
+      // Check if all quizzes in the module are perfect (backend check)
+      const newModules = course.modules.map(m => {
+        if (m.id === moduleOfCompletedQuizId) {
+          return {
+            ...m,
+            lessons: m.lessons.map(l => 
+              l.id === lessonId ? { ...l, quizScore: score } : l
+            )
+          };
         }
-        return { ...module, lessons: newLessons };
+        return m;
       });
 
       const updatedCourse = { ...course, modules: newModules };
-      setCourse(updatedCourse);
-      
-      // Also store in localStorage for debugging purposes
-      if (process.env.NODE_ENV === 'development') {
-        const existingScores = JSON.parse(localStorage.getItem('quizScores') || '{}');
-        existingScores[`${course.id}_${lessonId}`] = {
-          score,
-          userId: user.id,
-          timestamp: new Date().toISOString()
-        };
-        localStorage.setItem('quizScores', JSON.stringify(existingScores));
-        console.log('[QuizCompletion] Stored quiz score in localStorage:', existingScores);
-      }
-
-      // NOW calculate if all quizzes are perfect with the updated course state
       const updatedModule = newModules.find(m => m.id === moduleOfCompletedQuizId);
       const lessonsWithQuizzes = updatedModule?.lessons.filter(l => l.quiz && l.quiz.length > 0) || [];
-      const perfectScores = lessonsWithQuizzes.filter(l => 
-        l.quizScores && l.quizScores[user.id] === 5
-      );
-      const allQuizzesPerfect = lessonsWithQuizzes.length > 0 && perfectScores.length === lessonsWithQuizzes.length;
+      const perfectScores = lessonsWithQuizzes.filter(l => l.quizScore === 5);
 
       if (process.env.NODE_ENV === 'development') {
         console.log('[QuizCompletion] Updated module completion check:', {
           moduleId: moduleOfCompletedQuizId,
           moduleTitle: updatedModule?.title,
-          lessonsWithQuizzes: lessonsWithQuizzes.length,
+          totalLessonsWithQuizzes: lessonsWithQuizzes.length,
           perfectScores: perfectScores.length,
-          allQuizzesPerfect,
           lessonScores: updatedModule?.lessons.map(l => ({
-            lessonId: l.id,
-            lessonTitle: l.title,
-            hasQuiz: !!(l.quiz && l.quiz.length > 0),
-            score: l.quizScores ? l.quizScores[user.id] : undefined
+            id: l.id,
+            title: l.title,
+            score: l.quizScore
           }))
         });
       }
 
-      // Check if the backend unlocked the next module OR if frontend detects all quizzes perfect
-      if (result.unlockedNextModule || allQuizzesPerfect) {
+      // If all quizzes in the module are perfect, unlock the next module
+      if (perfectScores.length === lessonsWithQuizzes.length && lessonsWithQuizzes.length > 0) {
         if (process.env.NODE_ENV === 'development') {
-          console.log(`[QuizCompletion] ${result.unlockedNextModule ? 'Backend' : 'Frontend'} detected module completion!`);
+          console.log('[QuizCompletion] All quizzes perfect! Unlocking next module.');
         }
-        const currentModuleIndex = course.modules.findIndex(m => m.id === moduleOfCompletedQuizId);
-        
-        if (currentModuleIndex !== -1 && currentModuleIndex + 1 < course.modules.length) {
-          const nextModule = course.modules[currentModuleIndex + 1];
-          if (process.env.NODE_ENV === 'development') {
-            console.log(`[QuizCompletion] Unlocking module: ${nextModule.title}`);
-          }
-          
-          // Update unlocked modules state
-          setUnlockedModules(prev => {
-            const newUnlocked = new Set(prev);
-            newUnlocked.add(nextModule.id);
-            return newUnlocked;
-          });
-          
-          // Update course state to mark the current module as completed and next module as unlocked
-          const updatedCourseWithCompletion = {
-            ...updatedCourse,
-            modules: updatedCourse.modules.map((m, index) => {
-              if (m.id === moduleOfCompletedQuizId) {
-                return { ...m, isCompleted: true };
-              }
-              if (index === currentModuleIndex + 1) {
-                return { ...m, isLocked: false };
-              }
-              return m;
-            })
-          };
-          setCourse(updatedCourseWithCompletion);
-          
-          setUnlockedModuleName(nextModule.title);
-          setShowUnlockToast(true);
-          setTimeout(() => setShowUnlockToast(false), 5000);
-        } else {
-          if (process.env.NODE_ENV === 'development') {
-            console.log(`[QuizCompletion] No next module to unlock or module index not found`);
-          }
-        }
-      } else if (result.moduleCompleted) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`[QuizCompletion] Module completed but no next module to unlock.`);
-        }
-      } else {
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`[QuizCompletion] Module not yet complete.`);
-        }
-      }
 
-      // Force a complete re-render to ensure UI updates
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[QuizCompletion] Forcing complete re-render');
-        setTimeout(() => {
-          setCourse(prev => ({ ...prev }));
-          setUnlockedModules(prev => new Set(prev));
-        }, 200);
+        // Find the current module index
+        const currentModuleIndex = course.modules.findIndex(m => m.id === moduleOfCompletedQuizId);
+        const nextModuleIndex = currentModuleIndex + 1;
+
+        // Update unlocked modules state
+        const newUnlockedModules = new Set(unlockedModules);
+        if (nextModuleIndex < course.modules.length) {
+          const nextModule = course.modules[nextModuleIndex];
+          newUnlockedModules.add(nextModule.id);
+          setUnlockedModules(newUnlockedModules);
+          setShowUnlockToast(true);
+          setUnlockedModuleName(nextModule.title);
+          setTimeout(() => setShowUnlockToast(false), 5000);
+        }
+
+        // Update course state to mark the current module as completed and next module as unlocked
+        const finalUpdatedCourse = {
+          ...updatedCourse,
+          modules: updatedCourse.modules.map((m, index) => {
+            if (index === currentModuleIndex) {
+              return { ...m, completed: true };
+            } else if (index === nextModuleIndex) {
+              return { ...m, unlocked: true };
+            }
+            return m;
+          })
+        };
+
+        setCourse(finalUpdatedCourse);
       }
 
     } catch (error) {
-      console.error(`[QuizCompletion] Error submitting quiz score:`, error);
-      // Still update local state even if backend call fails
-      const newModules = course.modules.map(module => {
-        let lessonFound = false;
-        const newLessons = module.lessons.map(lesson => {
-          if (lesson.id === lessonId) {
-            lessonFound = true;
-
-            return {
-              ...lesson,
-              quizScores: {
-                ...(lesson.quizScores || {}),
-                [user.id]: score
-              }
-            };
-          }
-          return lesson;
-        });
-        if (lessonFound) {
-          moduleOfCompletedQuizId = module.id;
-        }
-        return { ...module, lessons: newLessons };
-      });
-
-      const updatedCourse = { ...course, modules: newModules };
-      setCourse(updatedCourse);
+      console.error('[QuizCompletion] Error submitting quiz score:', error);
+      // Fallback to local state update
+      if (handleUpdateLesson) {
+        handleUpdateLesson(lessonId, { quizScore: score });
+      }
     }
-  }, [course, setCourse]);
+  }, [course, handleUpdateLesson, unlockedModules]);
+
+  // Handle module update callback
+  const handleModuleUpdate = useCallback(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[CourseDisplay] Module update triggered');
+    }
+    // Force a re-render of the course state
+    setCourse(prevCourse => ({ ...prevCourse }));
+  }, []);
 
 
   const unlockAudioRef = useRef(null);
@@ -389,6 +327,15 @@ const CourseDisplay = () => {
     setShareCopied(true);
     setTimeout(() => setShareCopied(false), 2000);
   };
+
+  // Handle module update callback
+  const handleModuleUpdate = useCallback(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[CourseDisplay] Module update triggered');
+    }
+    // Force a re-render of the course state
+    setCourse(prevCourse => ({ ...prevCourse }));
+  }, []);
 
   // Find the current module - first try by activeModuleId, then fallback to finding module containing current lesson
   let currentModule = course ? course.modules.find(m => m.id === activeModuleId) : null;
@@ -590,6 +537,8 @@ const CourseDisplay = () => {
                   onTakeQuiz={() => setShowQuiz(true)}
                   currentLessonIndex={currentLessonIndex}
                   totalLessonsInModule={totalLessonsInModule}
+                  handleModuleUpdate={handleModuleUpdate}
+                  activeModule={currentModule}
               />
             ) : (
               <div className="text-center text-gray-500 pt-10">
