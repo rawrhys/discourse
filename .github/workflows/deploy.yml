@@ -19,11 +19,21 @@ jobs:
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            cd /root/discourse-app
+            cd /root/discourse
+            # Handle any local changes that might conflict
+            git status
+            # Stash any local changes to avoid conflicts
+            git stash
+            # Reset to clean state
+            git reset --hard HEAD
+            # Pull the latest changes
             git pull origin main
+            # Install dependencies
             npm ci
+            # Clean and build
             rm -rf dist/*
             npm run build
+            # Restart the application
             pm2 restart discourse-app
   deploy-shared-hosting:
     runs-on: ubuntu-latest
