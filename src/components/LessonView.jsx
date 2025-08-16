@@ -337,6 +337,7 @@ const LessonView = ({
   const navigate = useNavigate();
   const context = useOutletContext();
   const [showFailMessage, setShowFailMessage] = useState(false);
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   
   // TTS state
   const [ttsStatus, setTtsStatus] = useState({
@@ -410,21 +411,76 @@ const LessonView = ({
     }
   }, [propLesson]);
 
-  // Handle quiz completion - simplified since unlock logic is handled in CourseDisplay
+  // Handle quiz completion with API submission and module unlock
   const handleQuizComplete = useCallback(
-    (score) => {
+    async (score) => {
       if (!activeModule || !propLesson) return;
 
-      if (onUpdateLesson) {
-        onUpdateLesson(propLesson.id, { quizScore: score });
-      }
+      try {
+        // Submit quiz score to backend
+        const response = await fetch('/api/quizzes/submit', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({
+            courseId: activeModule.courseId || activeModule.course?.id,
+            moduleId: activeModule.id,
+            lessonId: propLesson.id,
+            score: score
+          })
+        });
 
-      if (score < 5) {
-        setShowFailMessage(true);
-        setTimeout(() => setShowFailMessage(false), 3000);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[LessonView] Quiz submission result:', result);
+        }
+
+        // Update local lesson state
+        if (onUpdateLesson) {
+          onUpdateLesson(propLesson.id, { quizScore: score });
+        }
+
+        // Handle module completion
+        if (result.moduleCompleted) {
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[LessonView] Module completed! Next module unlocked.');
+          }
+          // Trigger module update to refresh the course state
+          if (onModuleUpdate) {
+            onModuleUpdate();
+          }
+        }
+
+        // Show success/failure message
+        if (score === 5) {
+          setShowSuccessMessage(true);
+          setTimeout(() => setShowSuccessMessage(false), 3000);
+        } else {
+          setShowFailMessage(true);
+          setTimeout(() => setShowFailMessage(false), 3000);
+        }
+
+      } catch (error) {
+        console.error('[LessonView] Error submitting quiz score:', error);
+        // Fallback to local state update
+        if (onUpdateLesson) {
+          onUpdateLesson(propLesson.id, { quizScore: score });
+        }
+        
+        if (score < 5) {
+          setShowFailMessage(true);
+          setTimeout(() => setShowFailMessage(false), 3000);
+        }
       }
     },
-    [activeModule, propLesson, onUpdateLesson]
+    [activeModule, propLesson, onUpdateLesson, onModuleUpdate]
   );
 
   // Memoized content to prevent unnecessary re-renders
@@ -814,6 +870,11 @@ const LessonView = ({
         {showFailMessage && (
           <div className="p-3 mb-4 bg-yellow-100 text-yellow-800 rounded text-center text-sm">
             To move to the next module, you must score 5/5 on all quizzes within this module.
+          </div>
+        )}
+        {showSuccessMessage && (
+          <div className="p-3 mb-4 bg-green-100 text-green-800 rounded text-center text-sm">
+            Perfect Score! 🎉 Module progress updated successfully.
           </div>
         )}
       </div>
