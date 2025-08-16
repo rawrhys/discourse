@@ -2300,7 +2300,16 @@ app.get('/api/courses/:courseId', authenticateToken, (req, res) => {
       courseId: courseId,
       totalCourses: db.data.courses.length,
       courseIds: db.data.courses.map(c => c.id),
-      allCourses: db.data.courses.map(c => ({ id: c.id, userId: c.userId, title: c.title }))
+      allCourses: db.data.courses.map(c => ({ id: c.id, userId: c.userId, title: c.title })),
+      quizScoresInfo: course ? course.modules?.map(m => ({
+        moduleTitle: m.title,
+        lessonsWithScores: m.lessons?.map(l => ({
+          lessonTitle: l.title,
+          hasQuizScores: !!l.quizScores,
+          userScore: l.quizScores?.[req.user.id],
+          allScores: l.quizScores
+        }))
+      })) : null
     });
     
     if (!course) {

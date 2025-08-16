@@ -121,6 +121,15 @@ const CourseLayout = () => {
             modulesCount: courseData?.modules?.length,
             hasModules: !!courseData?.modules,
             userId: courseData?.userId,
+            quizScoresInfo: courseData?.modules?.map(m => ({
+              moduleTitle: m.title,
+              lessonsWithScores: m.lessons?.map(l => ({
+                lessonTitle: l.title,
+                hasQuizScores: !!l.quizScores,
+                userScore: l.quizScores?.[user?.id],
+                allScores: l.quizScores
+              }))
+            })),
             timestamp: new Date().toISOString()
           });
         }
