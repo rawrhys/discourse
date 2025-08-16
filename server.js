@@ -2306,6 +2306,8 @@ app.get('/api/courses/saved', authenticateToken, async (req, res) => {
     }
     
     console.log(`[API] Returning ${userCourses.length} courses for user ${userId}`);
+    console.log(`[API] All courses in database:`, db.data.courses.map(c => ({ id: c.id, userId: c.userId, title: c.title })));
+    console.log(`[API] User courses found:`, userCourses.map(c => ({ id: c.id, userId: c.userId, title: c.title })));
     res.json(userCourses);
   } catch (error) {
     console.error(`[API_ERROR] Failed to fetch saved courses for user ${req.user.id}:`, error);
@@ -2481,7 +2483,8 @@ app.post('/api/courses/generate', authenticateToken, async (req, res, next) => {
           message: 'Generation session started' 
         })}\n\n`);
 
-        // Start generation in background
+        // Start generation in background with explicit user ID
+        const userId = user.id; // Capture user ID explicitly
         global.aiService.generateCourse(topic, difficulty, numModules, numLessonsPerModule, generationId, (progressData) => {
           // Update session progress
           const session = global.generationSessions.get(generationId);
@@ -2523,7 +2526,7 @@ app.post('/api/courses/generate', authenticateToken, async (req, res, next) => {
               }
 
             // Assign user ID to the course
-            course.userId = user.id;
+            course.userId = userId;
             course.id = `course_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             course.createdAt = new Date().toISOString();
             course.published = false;
@@ -2548,21 +2551,26 @@ app.post('/api/courses/generate', authenticateToken, async (req, res, next) => {
               console.log(`[COURSE_GENERATION] Course saved with ID: ${course.id}`);
 
             // Deduct credits after successful completion
-            user.courseCredits = Math.max(0, user.courseCredits - 1);
-            await db.write();
-            
-            console.log(`[COURSE_GENERATION] Deducted 1 credit from user ${user.id}. Remaining: ${user.courseCredits}`);
+            // Find the user in the database to ensure we have the latest data
+            const dbUser = db.data.users.find(u => u.id === userId);
+            if (dbUser) {
+              dbUser.courseCredits = Math.max(0, dbUser.courseCredits - 1);
+              await db.write();
+              console.log(`[COURSE_GENERATION] Deducted 1 credit from user ${userId}. Remaining: ${dbUser.courseCredits}`);
+            } else {
+              console.error(`[COURSE_GENERATION] User not found in database: ${userId}`);
+            }
 
             // Update session with completed course
             if (session) {
               session.status = 'completed';
               session.course = course;
-              session.creditsRemaining = user.courseCredits;
+              session.creditsRemaining = dbUser ? dbUser.courseCredits : 0;
             }
 
-            console.log(`[COURSE_GENERATION] Course generation completed successfully for user ${user.id}`);
+            console.log(`[COURSE_GENERATION] Course generation completed successfully for user ${userId}`);
             console.log(`[COURSE_GENERATION] Course ID: ${course.id}, Title: ${course.title}`);
-            console.log(`[COURSE_GENERATION] Credits remaining: ${user.courseCredits}`);
+            console.log(`[COURSE_GENERATION] Credits remaining: ${dbUser ? dbUser.courseCredits : 0}`);
 
           } catch (saveError) {
             console.error(`[COURSE_GENERATION] Error saving course:`, saveError);
