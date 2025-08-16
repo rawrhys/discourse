@@ -1,24 +1,25 @@
 // src/config/api.js
 
-// Simple API configuration - use correct endpoints
+// Dynamic API_BASE_URL based on environment
 const inferDefaultBaseUrl = () => {
   try {
     if (typeof window !== 'undefined') {
       const hostname = window.location.hostname;
       const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
-      if (isLocalhost) return '';
-
-      // For production, use the correct API endpoint
-      return '';
+      
+      if (isLocalhost) {
+        return ''; // Use relative URLs for local development
+      }
+      
+      // For production, use the same domain as the frontend
+      // This assumes the backend is running on the same domain
+      return `https://${hostname}`;
     }
   } catch (_) {}
   return '';
 };
 
-// Force API_BASE_URL to use correct endpoint for production (no trailing /api)
-let resolvedBaseUrl = 'https://thediscourse.ai';
-
-export const API_BASE_URL = resolvedBaseUrl;
+export const API_BASE_URL = inferDefaultBaseUrl();
 
 export const debugApiConfig = () => {
   console.log('🔧 [API CONFIG DEBUG] Current API Configuration:', {

@@ -234,6 +234,56 @@ window.debugCourseGeneration = {
   forceRefreshCourse: function() {
     console.log('🔄 [DEBUG] Forcing course refresh...');
     window.location.reload();
+  },
+
+  // Test quiz submission endpoint
+  testQuizEndpoint: async function() {
+    console.log('🧪 [DEBUG] Testing quiz submission endpoint...');
+    
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('❌ [DEBUG] No authentication token found');
+        return;
+      }
+
+      // Import API_BASE_URL to see what URL is being used
+      const { API_BASE_URL } = await import('../config/api.js');
+      console.log('🔗 [DEBUG] API_BASE_URL:', API_BASE_URL);
+      console.log('🌐 [DEBUG] Current window location:', window.location.href);
+
+      const testData = {
+        courseId: 'test-course-id',
+        moduleId: 'test-module-id', 
+        lessonId: 'test-lesson-id',
+        score: 5
+      };
+
+      const endpointUrl = `${API_BASE_URL}/api/quizzes/submit`;
+      console.log('📡 [DEBUG] Making request to:', endpointUrl);
+
+      const response = await fetch(endpointUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(testData)
+      });
+
+      console.log('📡 [DEBUG] Quiz endpoint response status:', response.status);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ [DEBUG] Quiz endpoint working:', data);
+      } else {
+        const errorText = await response.text();
+        console.error('❌ [DEBUG] Quiz endpoint error:', response.status, errorText);
+      }
+    } catch (error) {
+      console.error('💥 [DEBUG] Quiz endpoint test failed:', error);
+      console.error('💥 [DEBUG] Error details:', error.message);
+    }
   }
 };
 
