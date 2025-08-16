@@ -527,10 +527,10 @@ const Dashboard = () => {
 
       // Debug API configuration
       debugApiConfig();
-      logger.debug('📡 [PAYMENT] Making request to:', `${API_BASE_URL}/api/payment-success`);
+      logger.debug('📡 [PAYMENT] Making request to: /api/payment-success');
 
       // Call backend to process payment success and add tokens
-      const response = await fetch(`${API_BASE_URL}/api/payment-success`, {
+      const response = await fetch('/api/payment-success', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -578,7 +578,7 @@ const Dashboard = () => {
         throw new Error('Authentication required. Please log in again.');
       }
 
-      const response = await fetch('/api-proxy.php/api/create-checkout-session', {
+      const response = await fetch('/api/create-checkout-session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

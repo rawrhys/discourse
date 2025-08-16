@@ -5,10 +5,13 @@ const inferDefaultBaseUrl = () => {
   try {
     if (typeof window !== 'undefined') {
       const hostname = window.location.hostname;
+      const port = window.location.port;
       const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+      const isDevServer = port === '5173' || port === '3000' || port === '8080';
       
-      if (isLocalhost) {
-        return 'https://thediscourse.ai/api-proxy.php'; // Use production API through PHP proxy for local development
+      if (isLocalhost && isDevServer) {
+        // In development, use the Vite dev server proxy
+        return ''; // Empty string means use relative URLs, which will be handled by Vite's proxy
       }
       
       // For production, use the same domain as the frontend

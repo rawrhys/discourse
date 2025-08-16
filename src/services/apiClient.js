@@ -24,7 +24,7 @@ const apiClient = async (url, options = {}) => {
   };
 
   // Construct the full URL by prepending API_BASE_URL if it's a relative path
-  const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
+  const fullUrl = url.startsWith('http') ? url : (API_BASE_URL ? `${API_BASE_URL}${url}` : url);
   
   // Log the outgoing request (info level)
   logger.info('📡 [API REQUEST]', {
@@ -41,8 +41,7 @@ const apiClient = async (url, options = {}) => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
     
-    // Construct the full URL by prepending API_BASE_URL if it's a relative path
-    const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
+    // Use the fullUrl that was already constructed above
     
     const response = await fetch(fullUrl, {
       ...config,
