@@ -414,6 +414,7 @@ const CourseDisplay = () => {
   // Debug logging to help identify the issue (only log once per render cycle)
   if (process.env.NODE_ENV === 'development') {
     console.log('[CourseDisplay] Module/Lesson Debug:', {
+      courseId: course?.id,
       activeModuleId,
       activeLessonId,
       currentModule: currentModule ? { id: currentModule.id, title: currentModule.title } : null,
@@ -422,6 +423,16 @@ const CourseDisplay = () => {
       currentLessonIndex,
       totalLessonsInModule
     });
+    
+    // Expose course data to window for debugging
+    window.currentCourseData = {
+      courseId: course?.id,
+      courseTitle: course?.title,
+      activeModuleId,
+      activeLessonId,
+      currentModule: currentModule ? { id: currentModule.id, title: currentModule.title } : null,
+      currentLesson: currentLesson ? { id: currentLesson.id, title: currentLesson.title } : null
+    };
   }
 
   const allImageUrls = useMemo(() => {

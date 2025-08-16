@@ -252,34 +252,112 @@ window.debugCourseGeneration = {
       console.log('🔗 [DEBUG] API_BASE_URL:', API_BASE_URL);
       console.log('🌐 [DEBUG] Current window location:', window.location.href);
 
-      const testData = {
-        courseId: 'test-course-id',
-        moduleId: 'test-module-id', 
-        lessonId: 'test-lesson-id',
-        score: 5
-      };
+      // Try to get the actual course ID from the current page
+      let actualCourseId = null;
+      let actualModuleId = null;
+      let actualLessonId = null;
 
-      const endpointUrl = `${API_BASE_URL}/api/quizzes/submit`;
-      console.log('📡 [DEBUG] Making request to:', endpointUrl);
-
-      const response = await fetch(endpointUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(testData)
-      });
-
-      console.log('📡 [DEBUG] Quiz endpoint response status:', response.status);
-      
-      if (response.ok) {
-        const data = await response.json();
-        console.log('✅ [DEBUG] Quiz endpoint working:', data);
-      } else {
-        const errorText = await response.text();
-        console.error('❌ [DEBUG] Quiz endpoint error:', response.status, errorText);
+      // First, try to get from React state (most reliable)
+      if (window.currentCourseData) {
+        actualCourseId = window.currentCourseData.courseId;
+        actualModuleId = window.currentCourseData.activeModuleId;
+        actualLessonId = window.currentCourseData.activeLessonId;
+        console.log('📋 [DEBUG] Found course data from React state:', window.currentCourseData);
       }
+
+      // Fallback: Check if we're on a course page and can extract IDs
+      if (!actualCourseId) {
+        const courseElement = document.querySelector('[data-course-id]');
+        if (courseElement) {
+          actualCourseId = courseElement.dataset.courseId;
+          console.log('📋 [DEBUG] Found course ID from DOM:', actualCourseId);
+        }
+      }
+
+      // Fallback: Try to get from URL params
+      if (!actualCourseId) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const courseIdFromUrl = urlParams.get('courseId');
+        if (courseIdFromUrl) {
+          actualCourseId = courseIdFromUrl;
+          console.log('📋 [DEBUG] Found course ID from URL:', actualCourseId);
+        }
+      }
+
+      // If we still don't have a course ID, try to get it from localStorage or React state
+      if (!actualCourseId) {
+        console.log('⚠️ [DEBUG] No course ID found, using test data');
+        const testData = {
+          courseId: 'test-course-id',
+          moduleId: 'test-module-id', 
+          lessonId: 'test-lesson-id',
+          score: 5
+        };
+
+        const endpointUrl = `${API_BASE_URL}/api/quizzes/submit`;
+        console.log('📡 [DEBUG] Making test request to:', endpointUrl);
+
+        const response = await fetch(endpointUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(testData)
+        });
+
+        console.log('📡 [DEBUG] Quiz endpoint response status:', response.status);
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('✅ [DEBUG] Quiz endpoint working:', data);
+        } else {
+          const errorText = await response.text();
+          console.error('❌ [DEBUG] Quiz endpoint error:', response.status, errorText);
+        }
+        return;
+      }
+
+      // Use actual course data if available
+      if (actualCourseId && actualModuleId && actualLessonId) {
+        console.log('✅ [DEBUG] Using actual course data for test');
+        console.log('📋 [DEBUG] Course ID:', actualCourseId);
+        console.log('📋 [DEBUG] Module ID:', actualModuleId);
+        console.log('📋 [DEBUG] Lesson ID:', actualLessonId);
+
+        const realTestData = {
+          courseId: actualCourseId,
+          moduleId: actualModuleId,
+          lessonId: actualLessonId,
+          score: 5
+        };
+
+        const endpointUrl = `${API_BASE_URL}/api/quizzes/submit`;
+        console.log('📡 [DEBUG] Making real test request to:', endpointUrl);
+        console.log('📡 [DEBUG] Request data:', realTestData);
+
+        const response = await fetch(endpointUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(realTestData)
+        });
+
+        console.log('📡 [DEBUG] Quiz endpoint response status:', response.status);
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('✅ [DEBUG] Quiz endpoint working with real data:', data);
+        } else {
+          const errorText = await response.text();
+          console.error('❌ [DEBUG] Quiz endpoint error with real data:', response.status, errorText);
+        }
+      } else {
+        console.log('⚠️ [DEBUG] Missing course data, cannot test with real IDs');
+      }
+
     } catch (error) {
       console.error('💥 [DEBUG] Quiz endpoint test failed:', error);
       console.error('💥 [DEBUG] Error details:', error.message);
