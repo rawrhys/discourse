@@ -208,6 +208,32 @@ window.debugCourseGeneration = {
     } catch (error) {
       console.error('💥 [DEBUG] Error clearing quiz scores from backend:', error);
     }
+  },
+
+  // Debug function to check current course state
+  debugCourseState: function() {
+    console.log('🔍 [DEBUG] Current Course State Debug:');
+    console.log('localStorage quizScores:', localStorage.getItem('quizScores'));
+    
+    // Try to get course data from the current page
+    const courseElement = document.querySelector('[data-course-id]');
+    if (courseElement) {
+      console.log('Course element found:', courseElement.dataset);
+    }
+    
+    // Check for any React components with course data
+    const reactRoot = document.querySelector('#root');
+    if (reactRoot && reactRoot._reactInternalFiber) {
+      console.log('React root found, checking for course state...');
+    }
+    
+    console.log('🔍 [DEBUG] End Course State Debug');
+  },
+
+  // Force refresh the course display
+  forceRefreshCourse: function() {
+    console.log('🔄 [DEBUG] Forcing course refresh...');
+    window.location.reload();
   }
 };
 

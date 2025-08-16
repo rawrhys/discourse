@@ -57,28 +57,12 @@ const CourseDisplay = () => {
     }
 
     // Check if all quizzes in the module are perfect (frontend check)
-    const lessonsWithQuizzes = module.lessons.filter(l => l.quiz && l.quiz.length > 0);
-    const perfectScores = lessonsWithQuizzes.filter(l => 
-      l.quizScores && l.quizScores[user.id] === 5
-    );
-    
-    // Module is complete if all lessons with quizzes have perfect scores
-    const allQuizzesPerfect = lessonsWithQuizzes.length > 0 && perfectScores.length === lessonsWithQuizzes.length;
-
     if (process.env.NODE_ENV === 'development') {
-      console.log(`[QuizCompletion] Frontend module completion check:`, {
+      console.log(`[QuizCompletion] Starting quiz submission for lesson:`, {
+        lessonId,
+        score,
         moduleId: moduleOfCompletedQuizId,
-        moduleTitle: module?.title,
-        totalLessons: module?.lessons.length,
-        lessonsWithQuizzes: lessonsWithQuizzes.length,
-        perfectScores: perfectScores.length,
-        allQuizzesPerfect,
-        lessonScores: module?.lessons.map(l => ({
-          lessonId: l.id,
-          lessonTitle: l.title,
-          hasQuiz: !!(l.quiz && l.quiz.length > 0),
-          score: l.quizScores ? l.quizScores[user.id] : undefined
-        }))
+        moduleTitle: module?.title
       });
     }
 
@@ -142,15 +126,6 @@ const CourseDisplay = () => {
       const updatedCourse = { ...course, modules: newModules };
       setCourse(updatedCourse);
       
-      // Force a re-render to ensure UI updates
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[QuizCompletion] Course state updated, forcing re-render');
-        // Trigger a small state change to force re-render
-        setTimeout(() => {
-          setCourse(prev => ({ ...prev }));
-        }, 100);
-      }
-      
       // Also store in localStorage for debugging purposes
       if (process.env.NODE_ENV === 'development') {
         const existingScores = JSON.parse(localStorage.getItem('quizScores') || '{}');
@@ -163,7 +138,31 @@ const CourseDisplay = () => {
         console.log('[QuizCompletion] Stored quiz score in localStorage:', existingScores);
       }
 
-          // Check if the backend unlocked the next module OR if frontend detects all quizzes perfect
+      // NOW calculate if all quizzes are perfect with the updated course state
+      const updatedModule = newModules.find(m => m.id === moduleOfCompletedQuizId);
+      const lessonsWithQuizzes = updatedModule?.lessons.filter(l => l.quiz && l.quiz.length > 0) || [];
+      const perfectScores = lessonsWithQuizzes.filter(l => 
+        l.quizScores && l.quizScores[user.id] === 5
+      );
+      const allQuizzesPerfect = lessonsWithQuizzes.length > 0 && perfectScores.length === lessonsWithQuizzes.length;
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[QuizCompletion] Updated module completion check:', {
+          moduleId: moduleOfCompletedQuizId,
+          moduleTitle: updatedModule?.title,
+          lessonsWithQuizzes: lessonsWithQuizzes.length,
+          perfectScores: perfectScores.length,
+          allQuizzesPerfect,
+          lessonScores: updatedModule?.lessons.map(l => ({
+            lessonId: l.id,
+            lessonTitle: l.title,
+            hasQuiz: !!(l.quiz && l.quiz.length > 0),
+            score: l.quizScores ? l.quizScores[user.id] : undefined
+          }))
+        });
+      }
+
+      // Check if the backend unlocked the next module OR if frontend detects all quizzes perfect
       if (result.unlockedNextModule || allQuizzesPerfect) {
         if (process.env.NODE_ENV === 'development') {
           console.log(`[QuizCompletion] ${result.unlockedNextModule ? 'Backend' : 'Frontend'} detected module completion!`);
@@ -183,7 +182,7 @@ const CourseDisplay = () => {
             return newUnlocked;
           });
           
-          // Update course state to mark the current module as completed
+          // Update course state to mark the current module as completed and next module as unlocked
           const updatedCourseWithCompletion = {
             ...updatedCourse,
             modules: updatedCourse.modules.map((m, index) => {
@@ -214,6 +213,15 @@ const CourseDisplay = () => {
         if (process.env.NODE_ENV === 'development') {
           console.log(`[QuizCompletion] Module not yet complete.`);
         }
+      }
+
+      // Force a complete re-render to ensure UI updates
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[QuizCompletion] Forcing complete re-render');
+        setTimeout(() => {
+          setCourse(prev => ({ ...prev }));
+          setUnlockedModules(prev => new Set(prev));
+        }, 200);
       }
 
     } catch (error) {
