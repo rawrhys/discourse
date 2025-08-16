@@ -2517,20 +2517,20 @@ app.post('/api/quizzes/submit', authenticateToken, async (req, res) => {
     // Check if the module is now complete.
     // A lesson is considered "passed" for progression if it either has no quiz,
     // or if the user has achieved a perfect score on its quiz.
-    const allQuizzesPerfect = module.lessons.every(l => {
-      if (l.quiz && l.quiz.length > 0) {
-        // If there is a quiz, a perfect score is required.
-        return l.quizScores && l.quizScores[userId] === 5;
-      }
-      // If there is no quiz, it doesn't block progression.
-      return true;
-    });
+    const lessonsWithQuizzes = module.lessons.filter(l => l.quiz && l.quiz.length > 0);
+    const perfectScores = lessonsWithQuizzes.filter(l => 
+      l.quizScores && l.quizScores[userId] === 5
+    );
+    
+    // Module is complete if all lessons with quizzes have perfect scores
+    const allQuizzesPerfect = lessonsWithQuizzes.length > 0 && perfectScores.length === lessonsWithQuizzes.length;
 
     console.log(`[QUIZ_SUBMIT] Module completion check:`, {
       moduleId,
       moduleTitle: module.title,
       totalLessons: module.lessons.length,
-      lessonsWithQuizzes: module.lessons.filter(l => l.quiz && l.quiz.length > 0).length,
+      lessonsWithQuizzes: lessonsWithQuizzes.length,
+      perfectScores: perfectScores.length,
       allQuizzesPerfect,
       lessonScores: module.lessons.map(l => ({
         lessonId: l.id,

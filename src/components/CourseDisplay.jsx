@@ -57,21 +57,21 @@ const CourseDisplay = () => {
     }
 
     // Check if all quizzes in the module are perfect (frontend check)
-    const allQuizzesPerfect = module.lessons.every(l => {
-      if (l.quiz && l.quiz.length > 0) {
-        // If there is a quiz, check if user has perfect score
-        return l.quizScores && l.quizScores[user.id] === 5;
-      }
-      // If there is no quiz, it doesn't block progression
-      return true;
-    });
+    const lessonsWithQuizzes = module.lessons.filter(l => l.quiz && l.quiz.length > 0);
+    const perfectScores = lessonsWithQuizzes.filter(l => 
+      l.quizScores && l.quizScores[user.id] === 5
+    );
+    
+    // Module is complete if all lessons with quizzes have perfect scores
+    const allQuizzesPerfect = lessonsWithQuizzes.length > 0 && perfectScores.length === lessonsWithQuizzes.length;
 
     if (process.env.NODE_ENV === 'development') {
       console.log(`[QuizCompletion] Frontend module completion check:`, {
         moduleId: moduleOfCompletedQuizId,
         moduleTitle: module?.title,
         totalLessons: module?.lessons.length,
-        lessonsWithQuizzes: module?.lessons.filter(l => l.quiz && l.quiz.length > 0).length,
+        lessonsWithQuizzes: lessonsWithQuizzes.length,
+        perfectScores: perfectScores.length,
         allQuizzesPerfect,
         lessonScores: module?.lessons.map(l => ({
           lessonId: l.id,
@@ -166,11 +166,29 @@ const CourseDisplay = () => {
           if (process.env.NODE_ENV === 'development') {
             console.log(`[QuizCompletion] Unlocking module: ${nextModule.title}`);
           }
+          
+          // Update unlocked modules state
           setUnlockedModules(prev => {
             const newUnlocked = new Set(prev);
             newUnlocked.add(nextModule.id);
             return newUnlocked;
           });
+          
+          // Update course state to mark the current module as completed
+          const updatedCourseWithCompletion = {
+            ...updatedCourse,
+            modules: updatedCourse.modules.map((m, index) => {
+              if (m.id === moduleOfCompletedQuizId) {
+                return { ...m, isCompleted: true };
+              }
+              if (index === currentModuleIndex + 1) {
+                return { ...m, isLocked: false };
+              }
+              return m;
+            })
+          };
+          setCourse(updatedCourseWithCompletion);
+          
           setUnlockedModuleName(nextModule.title);
           setShowUnlockToast(true);
           setTimeout(() => setShowUnlockToast(false), 5000);
@@ -257,14 +275,39 @@ const CourseDisplay = () => {
     if (course && course.modules) {
       const initialUnlocked = new Set();
       course.modules.forEach((module, index) => {
-        // First module is always unlocked, others are unlocked if isLocked is false or undefined
-        if (index === 0 || module.isLocked === false) {
+        // First module is always unlocked
+        if (index === 0) {
           initialUnlocked.add(module.id);
+        } else {
+          // For subsequent modules, check if they should be unlocked based on previous module completion
+          const previousModule = course.modules[index - 1];
+          if (previousModule) {
+            // Check if previous module has all quizzes completed with perfect scores
+            const lessonsWithQuizzes = previousModule.lessons.filter(l => l.quiz && l.quiz.length > 0);
+            const perfectScores = lessonsWithQuizzes.filter(l => 
+              l.quizScores && l.quizScores[user?.id] === 5
+            );
+            
+            // Unlock if all lessons with quizzes have perfect scores
+            if (lessonsWithQuizzes.length > 0 && perfectScores.length === lessonsWithQuizzes.length) {
+              initialUnlocked.add(module.id);
+            }
+          }
         }
       });
       setUnlockedModules(initialUnlocked);
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[CourseDisplay] Module unlock status:', course.modules.map((module, index) => ({
+          index,
+          title: module.title,
+          isUnlocked: initialUnlocked.has(module.id),
+          lessonsWithQuizzes: module.lessons.filter(l => l.quiz && l.quiz.length > 0).length,
+          perfectScores: module.lessons.filter(l => l.quiz && l.quiz.length > 0 && l.quizScores && l.quizScores[user?.id] === 5).length
+        })));
+      }
     }
-  }, [course]);
+  }, [course, user?.id]);
   
   const handleModuleSelect = useCallback((moduleId) => {
     if (!course?.modules) return;
@@ -377,20 +420,37 @@ const CourseDisplay = () => {
           <p className="text-sm text-gray-500 mt-1">{course.subject}</p>
         </div>
         <nav className="flex-1 overflow-y-auto p-4 space-y-2">
-          {course.modules.map((module) => {
+          {course.modules.map((module, moduleIndex) => {
             const isLocked = !unlockedModules.has(module.id);
+            const lessonsWithQuizzes = module.lessons.filter(l => l.quiz && l.quiz.length > 0);
+            const perfectScores = lessonsWithQuizzes.filter(l => 
+              l.quizScores && l.quizScores[user?.id] === 5
+            );
+            const quizProgress = lessonsWithQuizzes.length > 0 ? `${perfectScores.length}/${lessonsWithQuizzes.length}` : null;
+            
             return (
               <div key={module.id}>
                 <h2 
                   onClick={() => handleModuleSelect(module.id)}
-                  className={`text-lg font-semibold text-gray-700 cursor-pointer hover:text-blue-600 transition-colors flex items-center ${isLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  className={`text-lg font-semibold text-gray-700 cursor-pointer hover:text-blue-600 transition-colors flex items-center justify-between ${isLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
-                  {isLocked && (
-                    <svg className="w-4 h-4 mr-2 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" />
-                    </svg>
+                  <div className="flex items-center">
+                    {isLocked && (
+                      <svg className="w-4 h-4 mr-2 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                    {module.title}
+                  </div>
+                  {quizProgress && (
+                    <span className={`text-xs px-2 py-1 rounded-full ${
+                      perfectScores.length === lessonsWithQuizzes.length 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-blue-100 text-blue-800'
+                    }`}>
+                      {quizProgress}
+                    </span>
                   )}
-                  {module.title}
                 </h2>
                 {module.id === activeModuleId && !isLocked && (
                   <ul className="mt-2 pl-4 border-l-2 border-blue-200 space-y-1">
@@ -398,13 +458,18 @@ const CourseDisplay = () => {
                       <li key={lesson.id}>
                         <button
                           onClick={() => handleLessonClick(lesson.id)}
-                          className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors duration-150
+                          className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors duration-150 flex items-center justify-between
                             ${lesson.id === activeLessonId 
                               ? 'bg-blue-100 text-blue-700 font-medium' 
                               : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}
                           `}
                         >
-                          {lesson.title}
+                          <span>{lesson.title}</span>
+                          {lesson.quiz && lesson.quiz.length > 0 && lesson.quizScores && lesson.quizScores[user?.id] === 5 && (
+                            <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          )}
                         </button>
                       </li>
                     ))}
