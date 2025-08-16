@@ -9,5 +9,18 @@
       "courseCredits": 31
     }
   ],
-  "courses": []
+  "courses": [
+    {
+      "id": "course_0hq1tqwfp",
+      "title": "History of Ancient Rome: Intermediate Course",
+      "description": "Explore the rich history of Ancient Rome, from its founding to its fall, and its lasting impact on modern society.",
+      "subject": "history of ancient rome",
+      "difficultyLevel": "intermediate",
+      "learningObjectives": [],
+      "createdBy": "system",
+      "createdAt": "2025-06-16T14:02:01.695Z",
+      "updatedAt": "2025-06-16T14:02:01.695Z",
+      "userId": "1750197348788"
+    }
+  ]
 }
