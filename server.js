@@ -3864,6 +3864,57 @@ app.get('*', (req, res, next) => {
   }
 });
 
+// Endpoint to clear quiz scores for a course
+app.post('/api/courses/:courseId/clear-quiz-scores', authenticateToken, async (req, res) => {
+  const { courseId } = req.params;
+  const userId = req.user.id;
 
+  console.log(`[CLEAR_QUIZ_SCORES] Clearing quiz scores for course: ${courseId}, user: ${userId}`);
+
+  try {
+    await db.read();
+    const course = db.data.courses.find(c => c.id === courseId && c.userId === userId);
+
+    if (!course) {
+      return res.status(404).json({ error: 'Course not found' });
+    }
+
+    let clearedScores = 0;
+
+    // Clear quiz scores for all lessons in all modules
+    for (const module of course.modules) {
+      for (const lesson of module.lessons) {
+        if (lesson.quizScores) {
+          delete lesson.quizScores[userId];
+          clearedScores++;
+        }
+        if (lesson.lastQuizScore) {
+          delete lesson.lastQuizScore;
+        }
+      }
+      // Reset module completion status
+      if (module.isCompleted) {
+        module.isCompleted = false;
+      }
+      if (module.isLocked === false && module !== course.modules[0]) {
+        module.isLocked = true;
+      }
+    }
+
+    await db.write();
+
+    console.log(`[CLEAR_QUIZ_SCORES] Cleared ${clearedScores} quiz scores for course: ${courseId}`);
+
+    res.json({
+      message: 'Quiz scores cleared successfully',
+      clearedScores,
+      courseId
+    });
+
+  } catch (error) {
+    console.error('[CLEAR_QUIZ_SCORES] Error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 export { app, db, startServer };

@@ -136,6 +136,78 @@ window.debugCourseGeneration = {
     } catch (error) {
       console.error('💥 [DEBUG] Error resetting quiz scores:', error);
     }
+  },
+
+  // Clear all quiz scores from localStorage
+  clearQuizScoresFromLocalStorage: function() {
+    localStorage.removeItem('quizScores');
+    console.log('✅ [DEBUG] Quiz scores cleared from localStorage');
+  },
+
+  // View all quiz scores from localStorage
+  viewQuizScoresFromLocalStorage: function() {
+    const scores = localStorage.getItem('quizScores');
+    if (scores) {
+      console.log('📊 [DEBUG] Quiz scores in localStorage:', JSON.parse(scores));
+    } else {
+      console.log('📊 [DEBUG] No quiz scores found in localStorage');
+    }
+  },
+
+  // Clear quiz scores for a specific course
+  clearQuizScoresForCourse: function(courseId) {
+    const scores = JSON.parse(localStorage.getItem('quizScores') || '{}');
+    const courseKey = `${courseId}_`;
+    
+    Object.keys(scores).forEach(key => {
+      if (key.startsWith(courseKey)) {
+        delete scores[key];
+      }
+    });
+    
+    localStorage.setItem('quizScores', JSON.stringify(scores));
+    console.log(`✅ [DEBUG] Quiz scores cleared for course: ${courseId}`);
+  },
+
+  // Clear quiz scores from backend database
+  clearQuizScoresFromBackend: async function(courseId) {
+    if (!courseId) {
+      console.error('❌ [DEBUG] No courseId provided.');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('❌ [DEBUG] No authentication token found.');
+        return;
+      }
+
+      const response = await fetch(`/api/courses/${courseId}/clear-quiz-scores`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('✅ [DEBUG] Quiz scores cleared from backend:', result);
+      
+      // Also clear from localStorage
+      this.clearQuizScoresForCourse(courseId);
+      
+      // Reload the page to refresh the course state
+      console.log('🔄 [DEBUG] Reloading page to refresh course state...');
+      window.location.reload();
+      
+    } catch (error) {
+      console.error('💥 [DEBUG] Error clearing quiz scores from backend:', error);
+    }
   }
 };
 

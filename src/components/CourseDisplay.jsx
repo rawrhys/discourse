@@ -141,6 +141,18 @@ const CourseDisplay = () => {
 
       const updatedCourse = { ...course, modules: newModules };
       setCourse(updatedCourse);
+      
+      // Also store in localStorage for debugging purposes
+      if (process.env.NODE_ENV === 'development') {
+        const existingScores = JSON.parse(localStorage.getItem('quizScores') || '{}');
+        existingScores[`${course.id}_${lessonId}`] = {
+          score,
+          userId: user.id,
+          timestamp: new Date().toISOString()
+        };
+        localStorage.setItem('quizScores', JSON.stringify(existingScores));
+        console.log('[QuizCompletion] Stored quiz score in localStorage:', existingScores);
+      }
 
           // Check if the backend unlocked the next module OR if frontend detects all quizzes perfect
       if (result.unlockedNextModule || allQuizzesPerfect) {
