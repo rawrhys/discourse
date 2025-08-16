@@ -287,14 +287,15 @@ const CourseDisplay = () => {
     if (moduleData.lessons.length > 0) {
       const firstLessonId = moduleData.lessons[0].id;
       setActiveLessonId(firstLessonId);
-      navigate(`/course/${courseId}/lesson/${firstLessonId}`);
+      navigate(`/course/${courseId}/lesson/${firstLessonId}`, { replace: true });
     }
     setShowQuiz(false);
   }, [course, unlockedModules, courseId, navigate, setActiveModuleId, setActiveLessonId]);
 
   const handleLessonClick = (lessonId) => {
     setActiveLessonId(lessonId);
-    navigate(`/course/${courseId}/lesson/${lessonId}`);
+    // Use replace: true to avoid adding to browser history and prevent full page refresh
+    navigate(`/course/${courseId}/lesson/${lessonId}`, { replace: true });
     setShowQuiz(false);
     if (window.innerWidth < 768) { // isMobile
       setSidebarOpen(false);

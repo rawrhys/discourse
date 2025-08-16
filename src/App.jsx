@@ -204,7 +204,7 @@ const CourseLayout = () => {
     };
 
     fetchCourse();
-  }, [courseId, navigate, location.key]);
+  }, [courseId, navigate]); // Removed location.key to prevent re-fetching on lesson navigation
 
   const handleUpdateLesson = (lessonId, updates) => {
     setCourse(prev => {
