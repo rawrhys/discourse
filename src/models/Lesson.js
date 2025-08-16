@@ -21,7 +21,8 @@ class Lesson {
     quizCompleted = false,
     flashcards = [],
     quizScores = {},
-    lastQuizScore = null
+    lastQuizScore = null,
+    bibliography = [] // Add bibliography field for academic references
   } = {}) {
     this.id = id;
     this.title = title;
@@ -34,6 +35,7 @@ class Lesson {
     this.flashcards = flashcards;
     this.quizScores = quizScores;
     this.lastQuizScore = lastQuizScore;
+    this.bibliography = bibliography; // Store academic references
   }
 
   /**
@@ -47,7 +49,8 @@ class Lesson {
       quizScore: json.quizScore,
       quizCompleted: json.quizCompleted,
       quizScores: json.quizScores || {}, // Preserve quizScores from backend
-      lastQuizScore: json.lastQuizScore
+      lastQuizScore: json.lastQuizScore,
+      bibliography: json.bibliography || [] // Preserve bibliography from backend
     });
   }
 
@@ -67,7 +70,8 @@ class Lesson {
       quizCompleted: this.quizCompleted,
       flashcards: this.flashcards,
       quizScores: this.quizScores,
-      lastQuizScore: this.lastQuizScore
+      lastQuizScore: this.lastQuizScore,
+      bibliography: this.bibliography // Include bibliography in JSON output
     };
   }
 }

@@ -14,6 +14,7 @@ import ttsService from '../services/TTSService.js';
 import Flashcard from './Flashcard';
 import { useThrottledLogger, useDebounce, useStableValue } from '../hooks/usePerformanceOptimization';
 import performanceMonitor from '../services/PerformanceMonitorService';
+import BibliographyService from '../services/BibliographyService.js';
 
 // Helper function to fix malformed markdown
 const fixMalformedMarkdown = (text) => {
@@ -134,7 +135,7 @@ TTSButton.propTypes = {
 };
 
 // Memoized Content component to prevent unnecessary re-renders
-const Content = memo(({ content }) => {
+const Content = memo(({ content, bibliography, lessonTitle, courseSubject }) => {
   const contentStr = typeof content === 'string' 
     ? content 
     : content?.main_content || '';
@@ -147,8 +148,20 @@ const Content = memo(({ content }) => {
     );
   }
 
+  // Generate bibliography if not provided
+  let finalBibliography = bibliography;
+  if (!finalBibliography || finalBibliography.length === 0) {
+    finalBibliography = BibliographyService.generateBibliography(lessonTitle, courseSubject, 5);
+  }
+
   // Apply markdown fix before rendering
-  const fixedContent = fixMalformedMarkdown(contentStr);
+  let fixedContent = fixMalformedMarkdown(contentStr);
+
+  // Append bibliography to the content if we have references
+  if (finalBibliography && finalBibliography.length > 0) {
+    const bibliographyMarkdown = BibliographyService.formatBibliographyAsMarkdown(finalBibliography);
+    fixedContent += bibliographyMarkdown;
+  }
 
   // Debug logging for markdown processing
   if (process.env.NODE_ENV === 'development') {
@@ -156,7 +169,8 @@ const Content = memo(({ content }) => {
       original: contentStr?.substring(0, 200) + '...',
       fixed: fixedContent?.substring(0, 200) + '...',
       hasAsterisks: contentStr?.includes('**'),
-      hasFixedAsterisks: fixedContent?.includes('**')
+      hasFixedAsterisks: fixedContent?.includes('**'),
+      bibliographyCount: finalBibliography?.length || 0
     });
   }
 
@@ -168,7 +182,10 @@ const Content = memo(({ content }) => {
 });
 
 Content.propTypes = {
-  content: PropTypes.oneOfType([PropTypes.string, PropTypes.object])
+  content: PropTypes.oneOfType([PropTypes.string, PropTypes.object]),
+  bibliography: PropTypes.array,
+  lessonTitle: PropTypes.string,
+  courseSubject: PropTypes.string
 };
 
 // Memoized Flashcard component to prevent unnecessary re-renders
@@ -534,8 +551,15 @@ const LessonView = ({
       );
     }
     
-    return <Content content={contentStr} />;
-  }, [propLesson]);
+    return (
+      <Content 
+        content={contentStr} 
+        lessonTitle={propLesson.title}
+        courseSubject={course?.subject || 'history'}
+        bibliography={propLesson.bibliography}
+      />
+    );
+  }, [propLesson, course]);
 
   // Memoized quiz view to prevent unnecessary re-renders
   const memoizedQuizView = useMemo(() => {
