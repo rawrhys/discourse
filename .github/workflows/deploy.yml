@@ -19,7 +19,7 @@ jobs:
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            cd /root/discourse-app
+            cd /root/discourse
             git pull origin main
             npm ci
             rm -rf dist/*
