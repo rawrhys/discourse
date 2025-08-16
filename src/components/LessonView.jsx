@@ -453,8 +453,8 @@ const LessonView = ({
             console.log('[LessonView] Module completed! Next module unlocked.');
           }
           // Trigger module update to refresh the course state
-          if (onModuleUpdate) {
-            onModuleUpdate();
+          if (handleModuleUpdate) {
+            handleModuleUpdate();
           }
         }
 
@@ -480,7 +480,7 @@ const LessonView = ({
         }
       }
     },
-    [activeModule, propLesson, onUpdateLesson, onModuleUpdate]
+    [activeModule, propLesson, onUpdateLesson, handleModuleUpdate]
   );
 
   // Memoized content to prevent unnecessary re-renders
@@ -527,10 +527,9 @@ const LessonView = ({
         lessonTitle={propLesson.title}
         lessonId={propLesson.id}
         module={activeModule}
-        onModuleUpdate={handleModuleUpdate}
       />
     );
-  }, [quizData, propLesson, activeModule, handleQuizComplete, handleModuleUpdate]);
+  }, [quizData, propLesson, activeModule, handleQuizComplete]);
 
   // Handle TTS toggle
   const handleTTSToggle = useCallback(() => {
