@@ -1089,7 +1089,7 @@ Context: "${context.substring(0, 1000)}..."`;
     return wiki || pixa;
   }
   
-  async generateCourse(topic, difficulty, numModules, numLessonsPerModule = 3) {
+  async generateCourse(topic, difficulty, numModules, numLessonsPerModule = 3, generationId = null) {
     let courseWithIds;
     const usedImageTitles = new Set(); // Track used image titles for this course
     const usedImageUrls = new Set();   // Track used image URLs for this course
@@ -1133,21 +1133,23 @@ Context: "${context.substring(0, 1000)}..."`;
           }
           
           // Update session progress for real-time updates
-          const session = global.generationSessions.get(generationId);
-          if (session) {
-            session.progress = {
-              ...session.progress,
-              stage: 'generating',
-              currentModule: mIdx + 1,
-              totalModules: courseWithIds.modules.length,
-              currentLesson: lIdx + 1,
-              totalLessons: module.lessons.length,
-              message: `Generating Lesson ${lIdx + 1}: ${lesson.title}`,
-              details: [...(session.progress.details || []), {
-                timestamp: new Date().toISOString(),
-                message: `Starting Lesson ${lIdx + 1}: ${lesson.title}`
-              }]
-            };
+          if (generationId) {
+            const session = global.generationSessions.get(generationId);
+            if (session) {
+              session.progress = {
+                ...session.progress,
+                stage: 'generating',
+                currentModule: mIdx + 1,
+                totalModules: courseWithIds.modules.length,
+                currentLesson: lIdx + 1,
+                totalLessons: module.lessons.length,
+                message: `Generating Lesson ${lIdx + 1}: ${lesson.title}`,
+                details: [...(session.progress.details || []), {
+                  timestamp: new Date().toISOString(),
+                  message: `Starting Lesson ${lIdx + 1}: ${lesson.title}`
+                }]
+              };
+            }
           }
           
           try {
@@ -1245,21 +1247,23 @@ Context: "${context.substring(0, 1000)}..."`;
             }
             
             // Update session progress for lesson completion
-            const session = global.generationSessions.get(generationId);
-            if (session) {
-              session.progress = {
-                ...session.progress,
-                stage: 'generating',
-                currentModule: mIdx + 1,
-                totalModules: courseWithIds.modules.length,
-                currentLesson: lIdx + 1,
-                totalLessons: module.lessons.length,
-                message: `Completed Lesson: ${lesson.title}`,
-                details: [...(session.progress.details || []), {
-                  timestamp: new Date().toISOString(),
-                  message: `✅ Completed: ${lesson.title}`
-                }]
-              };
+            if (generationId) {
+              const session = global.generationSessions.get(generationId);
+              if (session) {
+                session.progress = {
+                  ...session.progress,
+                  stage: 'generating',
+                  currentModule: mIdx + 1,
+                  totalModules: courseWithIds.modules.length,
+                  currentLesson: lIdx + 1,
+                  totalLessons: module.lessons.length,
+                  message: `Completed Lesson: ${lesson.title}`,
+                  details: [...(session.progress.details || []), {
+                    timestamp: new Date().toISOString(),
+                    message: `✅ Completed: ${lesson.title}`
+                  }]
+                };
+              }
             }
             
             // Generate quiz with minimal delay
@@ -2478,7 +2482,7 @@ app.post('/api/courses/generate', authenticateToken, async (req, res, next) => {
         })}\n\n`);
 
         // Start generation in background
-        global.aiService.generateCourse(topic, difficulty, numModules, numLessonsPerModule, (progressData) => {
+        global.aiService.generateCourse(topic, difficulty, numModules, numLessonsPerModule, generationId, (progressData) => {
           // Update session progress
           const session = global.generationSessions.get(generationId);
           if (session) {
