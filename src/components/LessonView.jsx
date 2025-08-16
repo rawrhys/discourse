@@ -21,50 +21,41 @@ const fixMalformedMarkdown = (text) => {
   
   let fixed = text;
   
-  // Step 1: Fix patterns where bold formatting includes punctuation incorrectly
-  // Pattern: **word,** -> **word**, (move punctuation outside bold)
+  // Simple approach: Hide problematic asterisks using CSS classes
+  // This is much more reliable than complex regex parsing
+  
+  // Step 1: Fix the specific pattern at the end of the text
+  // Pattern: *.* -> **
+  fixed = fixed.replace(/\*\.\*$/g, '**');
+  
+  // Step 2: Add CSS classes to hide problematic single asterisks
+  // Pattern: *word -> <span class="hidden-asterisk">*</span>word
+  const problematicPatterns = [
+    '*Polis', '*Acropolis', '*Agora', '*Poleis', '*Citizens', '*Tyranny',
+    '*Cultural', '*Religious', '*Challenges', '*Conflicts', '*Geography',
+    '*Social', '*Economic', '*Political', '*Population', '*Trade', '*Military', '*Oligarchy'
+  ];
+  
+  problematicPatterns.forEach(pattern => {
+    const word = pattern.substring(1); // Remove the asterisk
+    const regex = new RegExp(pattern.replace(/\*/g, '\\*'), 'g');
+    fixed = fixed.replace(regex, `<span class="hidden-asterisk">*</span>${word}`);
+  });
+  
+  // Step 3: Fix basic markdown issues that are easy to handle
+  // Fix patterns where bold formatting includes punctuation incorrectly
   fixed = fixed.replace(/\*\*([^*]+?)([.,;:])\*\*/g, '**$1**$2');
   
-  // Step 2: Fix patterns where italic formatting includes punctuation incorrectly
-  // Pattern: *word,* -> *word*, (move punctuation outside italic)
+  // Fix patterns where italic formatting includes punctuation incorrectly
   fixed = fixed.replace(/\*([^*]+?)([.,;:])\*/g, '*$1*$2');
   
-  // Step 3: Fix patterns where bold formatting has exactly 3 asterisks at the end
-  // Pattern: **word*** -> **word**
-  fixed = fixed.replace(/\*\*([^*]+)\*\*\*/g, '**$1**');
-  
-  // Step 4: Fix patterns where italic formatting has exactly 2 asterisks at the end
-  // Pattern: *word** -> *word*
-  fixed = fixed.replace(/\*([^*]+)\*\*/g, '*$1*');
-  
-  // Step 5: Fix patterns where bold formatting is broken by spaces
-  // Pattern: **word ** -> **word**
-  fixed = fixed.replace(/\*\*([^*\s]+)\s+\*\*/g, '**$1**');
-  
-  // Step 6: Fix patterns where italic formatting is broken by spaces
-  // Pattern: *word * -> *word*
-  fixed = fixed.replace(/\*([^*\s]+)\s+\*/g, '*$1*');
-  
-  // Step 7: Fix multiple consecutive asterisks that are clearly malformed (4+ asterisks)
+  // Fix multiple consecutive asterisks that are clearly malformed
   fixed = fixed.replace(/\*\*\*\*\*/g, '**');
   fixed = fixed.replace(/\*\*\*\*/g, '**');
   
-  // Step 8: Fix unclosed bold formatting at the very end of text
+  // Fix unclosed formatting at the end of text
   fixed = fixed.replace(/\*\*([^*]+)$/g, '**$1**');
-  
-  // Step 9: Fix unclosed italic formatting at the very end of text
   fixed = fixed.replace(/\*([^*]+)$/g, '*$1*');
-  
-  // Step 10: Fix specific patterns found in the problematic text
-  // Pattern: ProperNoun** -> **ProperNoun** (for capitalized terms)
-  fixed = fixed.replace(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\*\*/g, '**$1**');
-  
-  // Step 11: Fix patterns where bold formatting spans across line breaks
-  fixed = fixed.replace(/\*\*([^*\n]+)\n([^*\n]+)\*\*/g, '**$1 $2**');
-  
-  // Step 12: Fix patterns where words have comma and asterisks
-  // Pattern: word,** -> **word**, (for capitalized terms with comma)
-  fixed = fixed.replace(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*),\*\*/g, '**$1**,');
   
   return fixed;
 };
