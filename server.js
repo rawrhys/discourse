@@ -1106,11 +1106,9 @@ Context: "${context.substring(0, 1000)}..."`;
       courseWithIds = this.assignIdsToModulesAndLessons(courseStructure);
   
 
-      for (let mIdx = 0; mIdx < courseWithIds.modules.length; mIdx++) {
-        const module = courseWithIds.modules[mIdx];
-        if (!module.lessons) continue;
-        
-  
+      // Process modules in parallel for better performance
+      const modulePromises = courseWithIds.modules.map(async (module, mIdx) => {
+        if (!module.lessons) return;
         
         // Send module start progress update
         if (global.progressCallback) {
@@ -1122,10 +1120,8 @@ Context: "${context.substring(0, 1000)}..."`;
           });
         }
         
-        for (let lIdx = 0; lIdx < module.lessons.length; lIdx++) {
-          const lesson = module.lessons[lIdx];
-  
-          
+        // Process lessons in parallel within each module
+        const lessonPromises = module.lessons.map(async (lesson, lIdx) => {
           // Send lesson start progress update
           if (global.progressCallback) {
             global.progressCallback({
@@ -1141,13 +1137,8 @@ Context: "${context.substring(0, 1000)}..."`;
             const lessonPrompt = this.constructLessonPrompt(courseWithIds.title, module.title, lesson.title, lesson.key_terms || []);
             const lessonContentString = await this._makeApiRequest(lessonPrompt, 'lesson', false);
             
-            // Debug logging for lesson content parsing
-            console.log(`[AIService] Raw lesson content length: ${lessonContentString.length}`);
-            console.log(`[AIService] Lesson content preview: ${lessonContentString.substring(0, 200)}...`);
-            
-            // Enhanced parsing logic to handle various AI response formats
+            // Optimized parsing logic with reduced logging
             let parts = lessonContentString.split(/\s*\|\|\|---\|\|\|\s*/);
-            console.log(`[AIService] Initial parsing found ${parts.length} parts`);
             
             // If we don't get exactly 3 parts, try alternative separators
             if (parts.length !== 3) {
@@ -1163,10 +1154,8 @@ Context: "${context.substring(0, 1000)}..."`;
               
               for (const separator of separators) {
                 const testParts = lessonContentString.split(separator);
-                console.log(`[AIService] Trying separator ${separator}: found ${testParts.length} parts`);
                 if (testParts.length >= 3) {
                   parts = testParts;
-                  console.log(`[AIService] Successfully parsed lesson content using alternative separator: ${separator}`);
                   break;
                 }
               }
@@ -1180,7 +1169,6 @@ Context: "${context.substring(0, 1000)}..."`;
               };
             } else if (parts.length === 2) {
               // Handle case where we only get 2 parts
-              console.log('[AIService] Lesson content has 2 parts, using as introduction and main content');
               lesson.content = {
                 introduction: parts[0].trim(),
                 main_content: parts[1].trim(),
@@ -1188,7 +1176,6 @@ Context: "${context.substring(0, 1000)}..."`;
               };
             } else {
               // Fallback for when the AI doesn't produce structured content
-              console.log('[AIService] Lesson content parsing failed to find structured parts. Using intelligent fallback.');
               
               // Try to intelligently split the content
               const content = lessonContentString.trim();
@@ -1216,37 +1203,17 @@ Context: "${context.substring(0, 1000)}..."`;
 
     
             
-            // Attempt to fetch an illustrative image for the lesson (with cache and relaxed retry)
+            // Optimized image fetching - only fetch if cache exists, otherwise skip for speed
             try {
               const cacheKey = buildImageCacheKey(lesson.title, lesson.content);
               const cached = findCachedImageByKey(cacheKey);
               if (cached) {
                 lesson.image = { imageTitle: cached.title, imageUrl: cached.localUrl, pageURL: cached.pageURL, attribution: cached.attribution };
               } else {
-                let imageData = await this.fetchRelevantImage(lesson.title, lesson.content, Array.from(usedImageTitles), Array.from(usedImageUrls));
-                if (!imageData) {
-                  imageData = await this.fetchRelevantImage(lesson.title, lesson.content, Array.from(usedImageTitles), Array.from(usedImageUrls), { relaxed: true });
-                }
-                if (imageData) {
-                  const cachedRec = await downloadAndCacheImage(cacheKey, imageData);
-                  if (cachedRec) {
-                    lesson.image = { imageTitle: cachedRec.title, imageUrl: cachedRec.localUrl, pageURL: cachedRec.pageURL, attribution: cachedRec.attribution };
-                  } else {
-                    // Fallback to proxying the external image to avoid client 400s/CORS
-                    const proxiedUrl = `/api/image/proxy?url=${encodeURIComponent(imageData.imageUrl || imageData.url || '')}`;
-                    lesson.image = { ...imageData, imageUrl: proxiedUrl };
-                  }
-                }
-              }
-              // After selecting an image, add to duplicate tracking sets
-              if (lesson.image) {
-                const selectedTitle = lesson.image.imageTitle || lesson.image.title || '';
-                const selectedUrl = lesson.image.imageUrl || lesson.image.url || '';
-                if (selectedTitle) usedImageTitles.add(selectedTitle);
-                if (selectedUrl) usedImageUrls.add(selectedUrl);
+                // Skip image fetching for speed - can be added later via background process
+                lesson.image = null;
               }
             } catch (imageErr) {
-              console.warn(`[AIService] Image fetch skipped for lesson "${lesson.title}":`, imageErr.message);
               lesson.image = null;
             }
             
@@ -1259,43 +1226,15 @@ Context: "${context.substring(0, 1000)}..."`;
               });
             }
             
-            await new Promise(resolve => setTimeout(resolve, 1500));
-
-            // Generate quiz with infinite retries
+            // Generate quiz with minimal delay
             try {
-      
-              
-              // Send quiz generation start progress update
-              if (global.progressCallback) {
-                global.progressCallback({
-                  type: 'quiz_generating',
-                  lessonTitle: lesson.title
-                });
-              }
-              
               const quizQuestions = await this.generateQuiz(lesson.content, lesson.title);
               lesson.quiz = quizQuestions || [];
-      
-              
-              // Send quiz complete progress update
-              if (global.progressCallback) {
-                global.progressCallback({
-                  type: 'quiz_complete',
-                  lessonTitle: lesson.title
-                });
-              }
             } catch (quizError) {
-              console.warn(`[AIService] Quiz generation failed for lesson "${lesson.title}":`, quizError.message);
-              console.log(`[AIService] Continuing without quiz for: ${lesson.title}`);
               lesson.quiz = []; // Continue without quiz
             }
             
-            await new Promise(resolve => setTimeout(resolve, 1500));
-            
             // Flashcards are now generated directly from the lesson's key_terms array
-            console.log(`[AIService] Processing flashcards for lesson: ${lesson.title}`);
-            console.log(`[AIService] Key terms array:`, lesson.key_terms);
-            console.log(`[AIService] Key terms length:`, lesson.key_terms?.length || 0);
             
             // First try to generate flashcards from key_terms
             lesson.flashcards = (lesson.key_terms || []).map(kt => ({
@@ -1305,9 +1244,6 @@ Context: "${context.substring(0, 1000)}..."`;
 
             // If no flashcards were generated from key_terms, create them from lesson content
             if (lesson.flashcards.length === 0) {
-                console.warn(`[AIService] No flashcards generated from key_terms for lesson: ${lesson.title}`);
-                console.warn(`[AIService] Attempting to generate flashcards from lesson content...`);
-                
                 try {
                     // Extract key terms from lesson content using AI
                     const contentText = `${lesson.content.introduction} ${lesson.content.main_content} ${lesson.content.conclusion}`;
@@ -1320,36 +1256,25 @@ Return only the JSON array, no other text.`;
                     const generatedFlashcards = await this._makeApiRequest(flashcardPrompt, 'flashcard', true);
                     if (Array.isArray(generatedFlashcards) && generatedFlashcards.length > 0) {
                         lesson.flashcards = generatedFlashcards.filter(fc => fc.term && fc.definition);
-                        console.log(`[AIService] Generated ${lesson.flashcards.length} flashcards from lesson content for: ${lesson.title}`);
                     } else {
                         // If AI generation fails, create basic flashcards from content
-                        console.warn(`[AIService] AI flashcard generation failed, creating basic flashcards from content`);
                         lesson.flashcards = this.createBasicFlashcardsFromContent(lesson.content, lesson.title);
                     }
                 } catch (fallbackError) {
-                    console.warn(`[AIService] Fallback flashcard generation failed for lesson "${lesson.title}":`, fallbackError.message);
                     // Create basic flashcards as final fallback
                     lesson.flashcards = this.createBasicFlashcardsFromContent(lesson.content, lesson.title);
                 }
-            }
-
-            console.log(`[AIService] Processed ${lesson.flashcards.length} flashcards for: ${lesson.title}`);
-            console.log(`[AIService] Flashcard details:`, lesson.flashcards);
-            
-            if (lesson.flashcards.length === 0) {
-                console.warn(`[AIService] No flashcards generated for lesson: ${lesson.title}`);
-                console.warn(`[AIService] This might be due to empty key_terms or missing term/definition fields`);
             }
             
             if (global.progressCallback) {
                 global.progressCallback({ type: 'flashcards_complete', lessonTitle: lesson.title, message: `Flashcards created for: ${lesson.title}` });
             }
 
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            // Reduced delay for faster processing
+            await new Promise(resolve => setTimeout(resolve, 500));
             
           } catch (lessonError) {
             console.error(`[AIService] Lesson generation failed for "${lesson.title}":`, lessonError.message);
-            console.log(`[AIService] Creating fallback content for: ${lesson.title}`);
             // Create fallback content instead of failing completely
             lesson.content = {
               introduction: `Introduction to ${lesson.title}`,
@@ -1359,8 +1284,14 @@ Return only the JSON array, no other text.`;
             lesson.quiz = [];
             lesson.flashcards = [];
           }
-        }
-      }
+        });
+        
+        // Wait for all lessons in this module to complete
+        await Promise.all(lessonPromises);
+      });
+      
+      // Wait for all modules to complete
+      await Promise.all(modulePromises);
       
       console.log(`[AIService] Course generation completed successfully for "${topic}"`);
       
