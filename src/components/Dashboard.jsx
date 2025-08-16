@@ -5,6 +5,7 @@ import ChatInterface from './ChatInterface';
 import { useApiWrapper } from '../services/api';
 import { API_BASE_URL, debugApiConfig, testBackendConnection } from '../config/api';
 import LoadingIndicator from './LoadingIndicator';
+import CourseGenerationProgress from './CourseGenerationProgress';
 import logger from '../utils/logger';
 
 const Dashboard = () => {
@@ -138,15 +139,18 @@ const Dashboard = () => {
     setIsGenerating(true);
     setError(null);
     
-    // Reset generation progress
+    // Reset generation progress with more detailed initial state
     setGenerationProgress({
       stage: 'starting',
       currentModule: 0,
-      totalModules: 0,
+      totalModules: courseParams.numModules || 0,
       currentLesson: 0,
-      totalLessons: 0,
+      totalLessons: (courseParams.numModules || 0) * (courseParams.numLessonsPerModule || 0),
       message: 'Initializing course generation...',
-      details: []
+      details: [{
+        timestamp: new Date().toISOString(),
+        message: `🚀 Starting generation of "${courseParams.topic}" course (${courseParams.numModules} modules, ${courseParams.numLessonsPerModule} lessons per module)`
+      }]
     });
     
     // Add a timeout to handle cases where course_complete might not be received
@@ -154,10 +158,28 @@ const Dashboard = () => {
       logger.warn('⏰ [COURSE GENERATION] Generation timeout reached, checking for completion...');
       if (isGenerating) {
         logger.debug('🔄 [COURSE GENERATION] Forcing completion check...');
+        
+        // Update progress to show we're checking for completion
+        setGenerationProgress(prev => ({
+          ...prev,
+          stage: 'checking',
+          message: 'Checking if course generation completed...',
+          details: [...prev.details, { 
+            timestamp: new Date().toISOString(), 
+            message: '⏰ Generation timeout reached, checking for completion...' 
+          }]
+        }));
+        
         // Force refresh saved courses and close modal
-        fetchSavedCourses(true);
-        setIsGenerating(false);
-        setShowNewCourseForm(false);
+        fetchSavedCourses(true).then(() => {
+          logger.debug('✅ [COURSE GENERATION] Forced refresh completed');
+          setIsGenerating(false);
+          setShowNewCourseForm(false);
+        }).catch((error) => {
+          logger.error('❌ [COURSE GENERATION] Error during forced refresh:', error);
+          setIsGenerating(false);
+          setShowNewCourseForm(false);
+        });
       }
     }, 900000); // 15 minutes timeout
     
@@ -190,6 +212,7 @@ const Dashboard = () => {
             updatedState = {
               ...prev,
               stage: 'completed',
+              currentModule: prev.totalModules, // Ensure progress shows 100%
               message: 'Course generation completed successfully! Your course has been saved.',
               details: [...prev.details, { 
                 timestamp: new Date().toISOString(), 
@@ -213,7 +236,7 @@ const Dashboard = () => {
                 logger.debug('📋 [DASHBOARD] No courseId provided, refreshing saved courses');
                 fetchSavedCourses(true);
               }
-            }, 2000); // Increased delay to show completion message
+            }, 3000); // Increased delay to show completion message
             break;
 
           case 'error':
@@ -239,7 +262,15 @@ const Dashboard = () => {
             break;
 
           case 'status':
-            updatedState = { ...prev, stage: 'starting', message: data.message };
+            updatedState = { 
+              ...prev, 
+              stage: 'starting', 
+              message: data.message,
+              details: [...prev.details, { 
+                timestamp: new Date().toISOString(), 
+                message: `📋 Status: ${data.message}` 
+              }]
+            };
             break;
           
           case 'progress':
@@ -298,6 +329,24 @@ const Dashboard = () => {
               ...prev,
               message: `Quiz completed for: ${data.lessonTitle}`,
               details: [...prev.details, { timestamp: new Date().toISOString(), message: `✅ Quiz completed for: ${data.lessonTitle}` }]
+            };
+            break;
+
+          case 'course_validating':
+            updatedState = {
+              ...prev,
+              stage: 'validating',
+              message: 'Validating course structure and saving to database...',
+              details: [...prev.details, { timestamp: new Date().toISOString(), message: '🔍 Validating course structure...' }]
+            };
+            break;
+
+          case 'course_saving':
+            updatedState = {
+              ...prev,
+              stage: 'saving',
+              message: 'Saving course to database...',
+              details: [...prev.details, { timestamp: new Date().toISOString(), message: '💾 Saving course to database...' }]
             };
             break;
 
@@ -979,35 +1028,18 @@ const Dashboard = () => {
           </div>
         )}
 
-        {/* Course Generation Progress Modal */}
+        {/* Enhanced Course Generation Progress Modal */}
         {isGenerating && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white p-6 rounded-lg max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
-              <h3 className="text-lg font-semibold mb-4">Creating Your Course</h3>
-              
-              <LoadingIndicator 
-                message={generationProgress.message}
-                progress={generationProgress.totalModules > 0 ? 
-                  (generationProgress.currentModule / generationProgress.totalModules) * 100 : 0}
-                showSpinner={generationProgress.stage !== 'completed'}
-              />
-              
-              {/* Progress Details */}
-              <div className="mt-4 space-y-2">
-                {generationProgress.details.map((detail, index) => (
-                  <div key={`${detail.timestamp}-${index}`} className="text-sm text-gray-600">
-                    {detail.message}
-                  </div>
-                ))}
-              </div>
-
-              {error && (
-                <div className="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
-                  {error}
-                </div>
-              )}
-            </div>
-          </div>
+          <CourseGenerationProgress
+            generationProgress={generationProgress}
+            isGenerating={isGenerating}
+            onCancel={() => {
+              logger.debug('🛑 [DASHBOARD] User cancelled course generation');
+              setIsGenerating(false);
+              setShowNewCourseForm(false);
+              setError(null);
+            }}
+          />
         )}
 
         {/* Delete Confirmation Modal */}
