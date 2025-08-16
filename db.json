@@ -1,12 +1,12 @@
 {
   "users": [
     {
-      "id": "1750197348788",
+      "id": "f662e43d-01a6-4722-a0fa-25cdd232cca7",
       "email": "rhys.higgs@outlook.com",
-      "password": "$2a$10$117wmSX1cGe4JspZJ60sDuXhQj9OgMNwFTYK7ZLwhz.hI549Mvuzu",
-      "name": "rhys",
-      "createdAt": "2025-06-17T21:55:48.788Z",
-      "courseCredits": 31
+      "password": "$2a$10$DxNhSWMVqIRYeKOiCTif6uaus5WbCHDrWIhcf9JqNnKAKm4XtEaAW",
+      "name": "Rhys Higgs",
+      "createdAt": "2025-08-09T06:52:18.701899Z",
+      "courseCredits": 1
     }
   ],
   "courses": [
@@ -20,7 +20,7 @@
       "createdBy": "system",
       "createdAt": "2025-06-16T14:02:01.695Z",
       "updatedAt": "2025-06-16T14:02:01.695Z",
-      "userId": "1750197348788"
+      "userId": "f662e43d-01a6-4722-a0fa-25cdd232cca7"
     }
   ]
 }

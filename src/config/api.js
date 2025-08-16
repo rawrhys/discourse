@@ -8,15 +8,15 @@ const inferDefaultBaseUrl = () => {
       const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
       
       if (isLocalhost) {
-        return ''; // Use relative URLs for local development
+        return 'https://thediscourse.ai/api-proxy.php'; // Use production API through PHP proxy for local development
       }
       
       // For production, use the same domain as the frontend
       // This assumes the backend is running on the same domain
-      return `https://${hostname}`;
+      return `https://${hostname}/api-proxy.php`;
     }
   } catch (_) {}
-  return '';
+  return 'https://thediscourse.ai/api-proxy.php'; // Default to production API through PHP proxy
 };
 
 export const API_BASE_URL = inferDefaultBaseUrl();

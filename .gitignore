@@ -22,3 +22,13 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Database files
+db.json
+db.json.backup
+
+# Production files (should be preserved on server)
+public/api-proxy.php
+public/.htaccess
+public/sw.js
+public/manifest.json

@@ -51,12 +51,20 @@ jobs:
           echo "Build completed at $(date)" > dist/build-info.txt
           echo "Build completed at $(date)" > dist/build-info.txt
       
-      - name: Backup db.json before deployment
+      - name: Backup critical files before deployment
         run: |
           echo "Backing up db.json..."
           curl -s -o db.json.backup "https://${{ secrets.FTP_SERVER }}/db.json" || echo "db.json not found or backup failed"
+          echo "Backing up api-proxy.php..."
+          curl -s -o api-proxy.php.backup "https://${{ secrets.FTP_SERVER }}/api-proxy.php" || echo "api-proxy.php not found or backup failed"
+          echo "Backing up .htaccess..."
+          curl -s -o .htaccess.backup "https://${{ secrets.FTP_SERVER }}/.htaccess" || echo ".htaccess not found or backup failed"
+          echo "Backing up sw.js..."
+          curl -s -o sw.js.backup "https://${{ secrets.FTP_SERVER }}/sw.js" || echo "sw.js not found or backup failed"
+          echo "Backing up manifest.json..."
+          curl -s -o manifest.json.backup "https://${{ secrets.FTP_SERVER }}/manifest.json" || echo "manifest.json not found or backup failed"
       
-      - name: Deploy to Shared Hosting via FTP
+      - name: Deploy to Shared Hosting via FTP (excluding critical files)
         uses: SamKirkland/FTP-Deploy-Action@v4.3.4
         with:
           server: ${{ secrets.FTP_SERVER }}
@@ -64,15 +72,46 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           local-dir: ./dist/
           server-dir: /domains/thediscourse.ai/public_html/
-          dangerous-clean-slate: true
+          dangerous-clean-slate: false
+          exclude: |
+            **/db.json
+            **/db.json.backup
+            **/api-proxy.php
+            **/.htaccess
+            **/sw.js
+            **/manifest.json
       
-      - name: Restore db.json after deployment
+      - name: Restore critical files after deployment
         run: |
           echo "Restoring db.json..."
           if [ -f db.json.backup ]; then
             curl -T db.json.backup "ftp://${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}@${{ secrets.FTP_SERVER }}/domains/thediscourse.ai/public_html/db.json" || echo "Failed to restore db.json"
           else
             echo "No db.json backup found to restore"
+          fi
+          echo "Restoring api-proxy.php..."
+          if [ -f api-proxy.php.backup ]; then
+            curl -T api-proxy.php.backup "ftp://${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}@${{ secrets.FTP_SERVER }}/domains/thediscourse.ai/public_html/api-proxy.php" || echo "Failed to restore api-proxy.php"
+          else
+            echo "No api-proxy.php backup found to restore"
+          fi
+          echo "Restoring .htaccess..."
+          if [ -f .htaccess.backup ]; then
+            curl -T .htaccess.backup "ftp://${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}@${{ secrets.FTP_SERVER }}/domains/thediscourse.ai/public_html/.htaccess" || echo "Failed to restore .htaccess"
+          else
+            echo "No .htaccess backup found to restore"
+          fi
+          echo "Restoring sw.js..."
+          if [ -f sw.js.backup ]; then
+            curl -T sw.js.backup "ftp://${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}@${{ secrets.FTP_SERVER }}/domains/thediscourse.ai/public_html/sw.js" || echo "Failed to restore sw.js"
+          else
+            echo "No sw.js backup found to restore"
+          fi
+          echo "Restoring manifest.json..."
+          if [ -f manifest.json.backup ]; then
+            curl -T manifest.json.backup "ftp://${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}@${{ secrets.FTP_SERVER }}/domains/thediscourse.ai/public_html/manifest.json" || echo "Failed to restore manifest.json"
+          else
+            echo "No manifest.json backup found to restore"
           fi
 
       - name: Deploy src folder to Shared Hosting
