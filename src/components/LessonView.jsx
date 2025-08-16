@@ -225,6 +225,7 @@ const LessonView = ({
   imageUrlCounts = {},
   courseId
 }) => {
+  const { user } = useAuth(); // Add this line to get the user
   const { lessonId: lessonIdFromParams } = useParams();
   const lessonId = lesson?.id || lessonIdFromParams;
   const [lessonState, setLessonState] = useState(lesson);
