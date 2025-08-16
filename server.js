@@ -969,7 +969,9 @@ Context: "${context.substring(0, 1000)}..."`;
               pageURL,
               uploader: undefined
             });
-            candidates.push({ ...candidate, score });
+            // Add a small bias to Wikipedia images to prioritize them
+            const biasedScore = score + 3;
+            candidates.push({ ...candidate, score: biasedScore });
           }
         }
 
@@ -977,6 +979,7 @@ Context: "${context.substring(0, 1000)}..."`;
           candidates.sort((a, b) => b.score - a.score);
           const best = candidates[0];
           console.log(`[AIService] Selected Wikipedia image for "${subject}" (score ${best.score}): ${best.imageUrl}`);
+          console.log(`[AIService] Wikipedia candidates found: ${candidates.length}, best score: ${best.score}`);
           const originalUrl = best.imageUrl;
           // Return proxied URL to avoid client-side 400s/CORS, but preserve original for caching
           return { ...best, imageUrl: `/api/image/proxy?url=${encodeURIComponent(originalUrl)}`, sourceUrlForCaching: originalUrl };
@@ -1066,6 +1069,8 @@ Context: "${context.substring(0, 1000)}..."`;
       if (candidates.length > 0) {
         candidates.sort((a, b) => b.score - a.score);
         const best = candidates[0];
+        console.log(`[AIService] Selected Pixabay image for "${subject}" (score ${best.score}): ${best.imageUrl}`);
+        console.log(`[AIService] Pixabay candidates found: ${candidates.length}, best score: ${best.score}`);
         const originalUrl = best.imageUrl;
         // Return proxied URL so clients fetch via our server (avoids 400s/CORS), but preserve original for caching
         return { ...best, imageUrl: `/api/image/proxy?url=${encodeURIComponent(originalUrl)}`, sourceUrlForCaching: originalUrl };
@@ -1083,10 +1088,34 @@ Context: "${context.substring(0, 1000)}..."`;
   async fetchRelevantImage(subject, content = '', usedImageTitles = [], usedImageUrls = [], options = { relaxed: false }) {
     const wiki = await this.fetchWikipediaImage(subject, content, usedImageTitles, usedImageUrls, { relaxed: !!options.relaxed });
     const pixa = await this.fetchPixabayImage(subject, content, usedImageTitles, usedImageUrls, { relaxed: !!options.relaxed });
+    
+    // Prioritize Wikipedia over Pixabay
     if (wiki && pixa) {
-      return (Number(pixa.score || 0) > Number(wiki.score || 0)) ? pixa : wiki;
+      // Only choose Pixabay if it has a significantly higher score (more than 2 points higher)
+      const wikiScore = Number(wiki.score || 0);
+      const pixaScore = Number(pixa.score || 0);
+      
+      if (pixaScore > wikiScore + 2) {
+        console.log(`[AIService] Selected Pixabay image (score ${pixaScore}) over Wikipedia (score ${wikiScore}) due to significantly higher score`);
+        return pixa;
+      } else {
+        console.log(`[AIService] Selected Wikipedia image (score ${wikiScore}) over Pixabay (score ${pixaScore}) - prioritizing Wikipedia`);
+        return wiki;
+      }
     }
-    return wiki || pixa;
+    
+    // If only one service returned results, use that
+    if (wiki) {
+      console.log(`[AIService] Using Wikipedia image only (score ${wiki.score || 0})`);
+      return wiki;
+    }
+    if (pixa) {
+      console.log(`[AIService] Using Pixabay image only (score ${pixa.score || 0}) - Wikipedia failed`);
+      return pixa;
+    }
+    
+    console.log(`[AIService] No images found from either service`);
+    return null;
   }
   
   async generateCourse(topic, difficulty, numModules, numLessonsPerModule = 3, generationId = null) {
