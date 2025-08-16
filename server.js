@@ -2393,6 +2393,9 @@ app.post('/api/courses/generate', authenticateToken, async (req, res, next) => {
         // Send AI service starting signal
         res.write(`data: ${JSON.stringify({ type: 'ai_service_starting', message: 'Initializing AI service...' })}\n\n`);
 
+        // Send generation starting signal
+        res.write(`data: ${JSON.stringify({ type: 'generating', message: 'Generating course content...', currentModule: 0, totalModules: numModules })}\n\n`);
+
         // --- CONTENT MODERATION GATE ---
         const BLOCKLIST = [
           // NSFW and explicit sexual content
@@ -2418,12 +2421,18 @@ app.post('/api/courses/generate', authenticateToken, async (req, res, next) => {
           return res.end();
         }
 
-        // Generate the course (AI prompt will include safety guardrails)
-        const course = await global.aiService.generateCourse(topic, difficulty, numModules, numLessonsPerModule);
+        // Generate the course with progress callback
+        const course = await global.aiService.generateCourse(topic, difficulty, numModules, numLessonsPerModule, (progressData) => {
+          // Send progress updates to frontend
+          res.write(`data: ${JSON.stringify(progressData)}\n\n`);
+        });
         
         if (!course || !course.title) {
             throw new Error('Failed to generate course structure');
         }
+
+        // Send validation signal
+        res.write(`data: ${JSON.stringify({ type: 'validating', message: 'Validating course structure...' })}\n\n`);
 
         // Final validation: ensure all modules have proper isLocked properties
         if (course.modules && Array.isArray(course.modules)) {
@@ -2440,6 +2449,9 @@ app.post('/api/courses/generate', authenticateToken, async (req, res, next) => {
         course.id = `course_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         course.createdAt = new Date().toISOString();
         course.published = false;
+
+        // Send saving signal
+        res.write(`data: ${JSON.stringify({ type: 'saving', message: 'Saving course to database...' })}\n\n`);
 
         // Save the course to database
         db.data.courses.push(course);
