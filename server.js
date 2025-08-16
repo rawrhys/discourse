@@ -1433,24 +1433,8 @@ Return only the JSON array, no other text.`;
   validateModuleLocking(courseData) {
     if (!courseData || !courseData.modules) return;
     
-    courseData.modules.forEach((module, mIdx) => {
-      if (module.isLocked === undefined) {
-        console.warn(`[AIService] Module ${mIdx} missing isLocked property - fixing automatically`);
-        module.isLocked = mIdx > 0;
-      }
-      
-      if (mIdx === 0 && module.isLocked !== false) {
-        console.warn(`[AIService] First module should be unlocked - fixing automatically`);
-        module.isLocked = false;
-      }
-      
-      if (mIdx > 0 && module.isLocked !== true) {
-        console.warn(`[AIService] Module ${mIdx} should be locked - fixing automatically`);
-        module.isLocked = true;
-      }
-    });
-    
-    console.log(`[AIService] Module locking validation complete for ${courseData.modules.length} modules`);
+    // Module locking is now handled by the frontend unlock logic based on quiz scores
+    console.log(`[AIService] Course validation complete for ${courseData.modules.length} modules`);
   }
   
   constructQuizPrompt(content, lessonTitle) {

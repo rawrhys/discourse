@@ -223,8 +223,7 @@ const LessonView = ({
   usedImageUrls = [],
   imageTitleCounts = {},
   imageUrlCounts = {},
-  courseId,
-  checkAndUnlockNextModule 
+  courseId
 }) => {
   const { lessonId: lessonIdFromParams } = useParams();
   const lessonId = lesson?.id || lessonIdFromParams;
@@ -411,7 +410,7 @@ const LessonView = ({
     }
   }, [propLesson]);
 
-  // Handle quiz completion
+  // Handle quiz completion - simplified since unlock logic is handled in CourseDisplay
   const handleQuizComplete = useCallback(
     (score) => {
       if (!activeModule || !propLesson) return;
@@ -420,16 +419,12 @@ const LessonView = ({
         onUpdateLesson(propLesson.id, { quizScore: score });
       }
 
-      if (score === 5) {
-        if (checkAndUnlockNextModule) {
-          checkAndUnlockNextModule(propLesson.id);
-        }
-      } else {
+      if (score < 5) {
         setShowFailMessage(true);
         setTimeout(() => setShowFailMessage(false), 3000);
       }
     },
-    [activeModule, propLesson, onUpdateLesson, checkAndUnlockNextModule]
+    [activeModule, propLesson, onUpdateLesson]
   );
 
   // Memoized content to prevent unnecessary re-renders
@@ -477,10 +472,9 @@ const LessonView = ({
         lessonId={propLesson.id}
         module={activeModule}
         onModuleUpdate={handleModuleUpdate}
-        checkAndUnlockNextModule={checkAndUnlockNextModule}
       />
     );
-  }, [quizData, propLesson, activeModule, handleQuizComplete, handleModuleUpdate, checkAndUnlockNextModule]);
+  }, [quizData, propLesson, activeModule, handleQuizComplete, handleModuleUpdate]);
 
   // Handle TTS toggle
   const handleTTSToggle = useCallback(() => {
@@ -866,8 +860,7 @@ LessonView.propTypes = {
   usedImageUrls: PropTypes.array,
   imageTitleCounts: PropTypes.object,
   imageUrlCounts: PropTypes.object,
-  courseId: PropTypes.string,
-  checkAndUnlockNextModule: PropTypes.func
+  courseId: PropTypes.string
 };
 
 export default memo(LessonView);

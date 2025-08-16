@@ -529,17 +529,6 @@ const CourseDisplay = () => {
                   onNextLesson={handleNextLesson}
                   onPreviousLesson={handlePreviousLesson}
                   onTakeQuiz={() => setShowQuiz(true)}
-                  checkAndUnlockNextModule={(lessonId) => {
-                    // This function is called when a perfect score is achieved in LessonView
-                    // We need to trigger the same unlock logic as handleQuizCompletion
-                    if (process.env.NODE_ENV === 'development') {
-                      console.log(`[CourseDisplay] checkAndUnlockNextModule called for lesson: ${lessonId}`);
-                    }
-                    
-                    // Call handleQuizCompletion to ensure consistent unlock logic
-                    // We pass a dummy score of 5 since this is only called for perfect scores
-                    handleQuizCompletion(lessonId, 5);
-                  }}
                   currentLessonIndex={currentLessonIndex}
                   totalLessonsInModule={totalLessonsInModule}
               />

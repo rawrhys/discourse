@@ -86,21 +86,8 @@ class Module {
     }
   }
 
-  unlock() {
-    this.isLocked = false;
-  }
-
-  lock() {
-    this.isLocked = true;
-  }
-
-  // Static method to create a module with proper locking based on index
-  static createWithLocking(moduleData, index) {
-    return new Module({
-      ...moduleData,
-      isLocked: index > 0 // First module (index 0) unlocked, others locked
-    });
-  }
+  // Module unlocking is now handled by the frontend based on quiz scores
+  // These methods are kept for backward compatibility but not used in the new system
 }
 
 export { Module as default, generateId };
