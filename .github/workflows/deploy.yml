@@ -58,6 +58,7 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           local-dir: ./dist/
           server-dir: /domains/thediscourse.ai/public_html/
+          dangerous-clean-slate: true
 
       - name: Deploy src folder to Shared Hosting
         uses: SamKirkland/FTP-Deploy-Action@v4.3.4
