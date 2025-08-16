@@ -810,15 +810,20 @@ Final JSON structure must follow this model: {"title":"...","description":"...",
   constructLessonPrompt(courseTitle, moduleTitle, lessonTitle, keyTerms) {
     const keyTermsString = keyTerms.map(kt => `"${kt.term}"`).join(', ');
     return `Generate rich, detailed content for a lesson titled "${lessonTitle}" within the module "${moduleTitle}" for the course "${courseTitle}".
-+Safety rules: Do not produce NSFW/sexual content, illegal instruction, hate speech, or extremist/terrorist propaganda. If requested content violates policy, respond only with: "REFUSED: Content policy violation".
-+For sensitive topics, write neutrally, factually, and age-appropriately. Do not include graphic details.
-Your response should contain three distinct parts separated ONLY by "|||---|||":
-1.  **introduction**: A brief, engaging overview of the lesson's topic and objectives.
-2.  **main_content**: The core lesson material. Use newline characters (
-) for new paragraphs. You MUST naturally incorporate and explain the following key terms: ${keyTermsString}. Wrap all instances of these key terms with double asterisks (**key term**).
-3.  **conclusion**: A summary of the key takeaways and a brief look ahead.
-Example: Introduction text.|||---|||Main content with **key concepts** like **${keyTerms[0]?.term || 'Etruscans'}**.|||---|||Conclusion text.
-Do NOT use JSON or any other formatting.`;
+
+Safety rules: Do not produce NSFW/sexual content, illegal instruction, hate speech, or extremist/terrorist propaganda. If requested content violates policy, respond only with: "REFUSED: Content policy violation".
+For sensitive topics, write neutrally, factually, and age-appropriately. Do not include graphic details.
+
+IMPORTANT: Your response MUST contain exactly three parts separated by "|||---|||" (three pipes, three dashes, three pipes):
+
+1. INTRODUCTION: A brief, engaging overview of the lesson's topic and objectives (2-3 sentences)
+2. MAIN CONTENT: The core lesson material with detailed explanations. Use newline characters for paragraphs. You MUST naturally incorporate and explain these key terms: ${keyTermsString}. Wrap all instances of these key terms with double asterisks (**key term**).
+3. CONCLUSION: A summary of the key takeaways and a brief look ahead (2-3 sentences)
+
+FORMAT EXAMPLE:
+Introduction text here.|||---|||Main content with **key concepts** like **${keyTerms[0]?.term || 'Etruscans'}** and detailed explanations.|||---|||Conclusion text here.
+
+Do NOT use JSON, markdown headers, or any other formatting. Only use the exact separator "|||---|||" between the three parts.`;
   }
   
   constructDefinitionPrompt(lessonContext, lessonTitle, term) {
@@ -1135,23 +1140,78 @@ Context: "${context.substring(0, 1000)}..."`;
             // Generate lesson content with infinite retries
             const lessonPrompt = this.constructLessonPrompt(courseWithIds.title, module.title, lesson.title, lesson.key_terms || []);
             const lessonContentString = await this._makeApiRequest(lessonPrompt, 'lesson', false);
-            const parts = lessonContentString.split(/\s*\|\|\|---\|\|\|\s*/);
-            if (parts.length === 3) {
+            
+            // Debug logging for lesson content parsing
+            console.log(`[AIService] Raw lesson content length: ${lessonContentString.length}`);
+            console.log(`[AIService] Lesson content preview: ${lessonContentString.substring(0, 200)}...`);
+            
+            // Enhanced parsing logic to handle various AI response formats
+            let parts = lessonContentString.split(/\s*\|\|\|---\|\|\|\s*/);
+            console.log(`[AIService] Initial parsing found ${parts.length} parts`);
+            
+            // If we don't get exactly 3 parts, try alternative separators
+            if (parts.length !== 3) {
+              // Try different separator patterns
+              const separators = [
+                /\s*---\s*/,
+                /\s*\|\|\|\s*/,
+                /\s*###\s*/,
+                /\s*##\s*/,
+                /\s*\*\*\*Introduction\*\*\*|\s*\*\*\*Main Content\*\*\*|\s*\*\*\*Conclusion\*\*\*/,
+                /\s*Introduction:|\s*Main Content:|\s*Conclusion:/
+              ];
+              
+              for (const separator of separators) {
+                const testParts = lessonContentString.split(separator);
+                console.log(`[AIService] Trying separator ${separator}: found ${testParts.length} parts`);
+                if (testParts.length >= 3) {
+                  parts = testParts;
+                  console.log(`[AIService] Successfully parsed lesson content using alternative separator: ${separator}`);
+                  break;
+                }
+              }
+            }
+            
+            if (parts.length >= 3) {
               lesson.content = {
                 introduction: parts[0].trim(),
                 main_content: parts[1].trim(),
                 conclusion: parts[2].trim(),
               };
-            } else {
-              // Fallback for when the AI doesn't produce exactly 3 parts.
-              // Clean the string of separators and place it all in main_content.
-              console.warn('[AIService] Lesson content parsing failed to find 3 parts. Using fallback.');
-              const cleanedContent = lessonContentString.replace(/\|\|\|---\|\|\|/g, '\n\n').trim();
+            } else if (parts.length === 2) {
+              // Handle case where we only get 2 parts
+              console.log('[AIService] Lesson content has 2 parts, using as introduction and main content');
               lesson.content = {
-                introduction: `Overview of ${lesson.title}`,
-                main_content: cleanedContent,
+                introduction: parts[0].trim(),
+                main_content: parts[1].trim(),
                 conclusion: `Summary of ${lesson.title}`
               };
+            } else {
+              // Fallback for when the AI doesn't produce structured content
+              console.log('[AIService] Lesson content parsing failed to find structured parts. Using intelligent fallback.');
+              
+              // Try to intelligently split the content
+              const content = lessonContentString.trim();
+              const sentences = content.split(/[.!?]+/).filter(s => s.trim().length > 10);
+              
+              if (sentences.length >= 3) {
+                const introEnd = Math.ceil(sentences.length * 0.2);
+                const mainEnd = Math.ceil(sentences.length * 0.8);
+                
+                lesson.content = {
+                  introduction: sentences.slice(0, introEnd).join('. ') + '.',
+                  main_content: sentences.slice(introEnd, mainEnd).join('. ') + '.',
+                  conclusion: sentences.slice(mainEnd).join('. ') + '.'
+                };
+              } else {
+                // Last resort: clean the string and place it all in main_content
+                const cleanedContent = lessonContentString.replace(/[|\-*#]/g, ' ').replace(/\s+/g, ' ').trim();
+                lesson.content = {
+                  introduction: `Overview of ${lesson.title}`,
+                  main_content: cleanedContent,
+                  conclusion: `Summary of ${lesson.title}`
+                };
+              }
             }
 
     
