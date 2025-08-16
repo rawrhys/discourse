@@ -142,6 +142,15 @@ const CourseDisplay = () => {
       const updatedCourse = { ...course, modules: newModules };
       setCourse(updatedCourse);
       
+      // Force a re-render to ensure UI updates
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[QuizCompletion] Course state updated, forcing re-render');
+        // Trigger a small state change to force re-render
+        setTimeout(() => {
+          setCourse(prev => ({ ...prev }));
+        }, 100);
+      }
+      
       // Also store in localStorage for debugging purposes
       if (process.env.NODE_ENV === 'development') {
         const existingScores = JSON.parse(localStorage.getItem('quizScores') || '{}');
@@ -240,20 +249,32 @@ const CourseDisplay = () => {
 
   const unlockAudioRef = useRef(null);
   useEffect(() => {
-    // Only create audio if the file exists to prevent errors
-    const audio = new Audio('/sounds/unlock.mp3');
-    audio.preload = 'auto';
-    audio.volume = 0.7;
-    
-    // Handle audio loading errors gracefully
-    audio.addEventListener('error', (e) => {
-      console.warn('[CourseDisplay] Unlock sound file not found, audio disabled');
+    // Try to load unlock sound, but don't fail if it doesn't exist
+    try {
+      const audio = new Audio('/sounds/unlock.mp3');
+      audio.preload = 'auto';
+      audio.volume = 0.7;
+      
+      // Handle audio loading errors gracefully
+      audio.addEventListener('error', (e) => {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[CourseDisplay] Unlock sound file not found, audio disabled');
+        }
+        unlockAudioRef.current = null;
+      });
+      
+      audio.addEventListener('canplaythrough', () => {
+        unlockAudioRef.current = audio;
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[CourseDisplay] Unlock sound loaded successfully');
+        }
+      });
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[CourseDisplay] Could not load unlock sound:', error.message);
+      }
       unlockAudioRef.current = null;
-    });
-    
-    audio.addEventListener('canplaythrough', () => {
-      unlockAudioRef.current = audio;
-    });
+    }
   }, []);
 
   const prevUnlockedModules = usePrevious(unlockedModules);
@@ -427,6 +448,21 @@ const CourseDisplay = () => {
               l.quizScores && l.quizScores[user?.id] === 5
             );
             const quizProgress = lessonsWithQuizzes.length > 0 ? `${perfectScores.length}/${lessonsWithQuizzes.length}` : null;
+            
+            // Debug logging for quiz progress
+            if (process.env.NODE_ENV === 'development' && moduleIndex === 0) {
+              console.log('[CourseDisplay] Quiz Progress Debug:', {
+                moduleTitle: module.title,
+                lessonsWithQuizzes: lessonsWithQuizzes.length,
+                perfectScores: perfectScores.length,
+                quizProgress,
+                lessonScores: module.lessons.map(l => ({
+                  title: l.title,
+                  hasQuiz: !!(l.quiz && l.quiz.length > 0),
+                  score: l.quizScores ? l.quizScores[user?.id] : undefined
+                }))
+              });
+            }
             
             return (
               <div key={module.id}>

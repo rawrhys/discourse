@@ -1,0 +1,2 @@
+This is a placeholder for the unlock sound file.
+Replace this file with an actual MP3 file named "unlock.mp3" for the unlock sound to work.

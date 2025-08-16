@@ -33,13 +33,14 @@ class Module {
   }
 
   static fromJSON(json) {
-    // Ensure isLocked is always set correctly
+    // Ensure isLocked is always set correctly based on module order
     let isLocked = json.isLocked;
     if (isLocked === undefined) {
-      // If isLocked is undefined, we can't determine the correct value from JSON alone
-      // This should be set during course generation, but we'll default to false for safety
-      console.warn('[Module] isLocked property missing from JSON, defaulting to false');
-      isLocked = false;
+      // If isLocked is undefined, determine based on order (first module unlocked, others locked)
+      isLocked = (json.order || 0) > 0;
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[Module] isLocked property missing from JSON, setting to ${isLocked} based on order ${json.order}`);
+      }
     }
     
     return new Module({
