@@ -2,25 +2,3 @@
 .lesson-content b {
   color: #000000 !important; /* Ensure text is black */
 } 
-
-/* Hide problematic asterisks from view */
-.hidden-asterisk {
-  opacity: 0;
-  color: transparent;
-  font-size: 0;
-  width: 0;
-  height: 0;
-  display: inline-block;
-  overflow: hidden;
-}
-
-/* Alternative approach: make asterisks invisible but preserve spacing */
-.hidden-asterisk {
-  color: transparent;
-  background: transparent;
-  border: none;
-  outline: none;
-  text-decoration: none;
-  pointer-events: none;
-  user-select: none;
-} 

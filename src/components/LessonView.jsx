@@ -22,41 +22,70 @@ const fixMalformedMarkdown = (text) => {
   
   let fixed = text;
   
-  // Simple approach: Hide problematic asterisks using CSS classes
-  // This is much more reliable than complex regex parsing
+  // Remove any existing hidden-asterisk spans that didn't work
+  fixed = fixed.replace(/<span class="hidden-asterisk">\*<\/span>/g, '');
   
   // Step 1: Fix the specific pattern at the end of the text
   // Pattern: *.* -> **
   fixed = fixed.replace(/\*\.\*$/g, '**');
   
-  // Step 2: Add CSS classes to hide problematic single asterisks
-  // Pattern: *word -> <span class="hidden-asterisk">*</span>word
-  const problematicPatterns = [
-    '*Polis', '*Acropolis', '*Agora', '*Poleis', '*Citizens', '*Tyranny',
-    '*Cultural', '*Religious', '*Challenges', '*Conflicts', '*Geography',
-    '*Social', '*Economic', '*Political', '*Population', '*Trade', '*Military', '*Oligarchy'
+  // Step 2: Fix malformed bold patterns - single asterisk followed by word and double asterisk
+  // Pattern: *word** -> **word**
+  fixed = fixed.replace(/\*([a-zA-Z]+)\*\*/g, '**$1**');
+  
+  // Step 3: Fix patterns where single asterisk is followed by word and then double asterisk
+  // Pattern: *Polis** -> **Polis**
+  fixed = fixed.replace(/\*([A-Z][a-zA-Z]*)\*\*/g, '**$1**');
+  
+  // Step 4: Fix patterns where word is followed by double asterisk but should be bold
+  // Pattern: word** -> **word**
+  const boldWords = [
+    'Polis', 'Acropolis', 'Agora', 'Poleis', 'Citizens', 'Tyranny',
+    'Cultural', 'Religious', 'Challenges', 'Conflicts', 'Geography',
+    'Social', 'Economic', 'Political', 'Population', 'Trade', 'Military', 'Oligarchy'
   ];
   
-  problematicPatterns.forEach(pattern => {
-    const word = pattern.substring(1); // Remove the asterisk
-    const regex = new RegExp(pattern.replace(/\*/g, '\\*'), 'g');
-    fixed = fixed.replace(regex, `<span class="hidden-asterisk">*</span>${word}`);
+  boldWords.forEach(word => {
+    const regex = new RegExp(`\\b${word}\\*\\*`, 'g');
+    fixed = fixed.replace(regex, `**${word}**`);
   });
   
-  // Step 3: Fix basic markdown issues that are easy to handle
-  // Fix patterns where bold formatting includes punctuation incorrectly
+  // Step 5: Fix patterns where single asterisk is followed by word
+  // Pattern: *word -> **word** (for specific words that should be bold)
+  boldWords.forEach(word => {
+    const regex = new RegExp(`\\*${word}\\b`, 'g');
+    fixed = fixed.replace(regex, `**${word}**`);
+  });
+  
+  // Step 6: Fix patterns where bold formatting includes punctuation incorrectly
   fixed = fixed.replace(/\*\*([^*]+?)([.,;:])\*\*/g, '**$1**$2');
   
-  // Fix patterns where italic formatting includes punctuation incorrectly
+  // Step 7: Fix patterns where italic formatting includes punctuation incorrectly
   fixed = fixed.replace(/\*([^*]+?)([.,;:])\*/g, '*$1*$2');
   
-  // Fix multiple consecutive asterisks that are clearly malformed
+  // Step 8: Fix multiple consecutive asterisks that are clearly malformed
   fixed = fixed.replace(/\*\*\*\*\*/g, '**');
   fixed = fixed.replace(/\*\*\*\*/g, '**');
   
-  // Fix unclosed formatting at the end of text
+  // Step 9: Fix unclosed formatting at the end of text
   fixed = fixed.replace(/\*\*([^*]+)$/g, '**$1**');
   fixed = fixed.replace(/\*([^*]+)$/g, '*$1*');
+  
+  // Step 10: Remove any remaining single asterisks that are clearly malformed
+  // Look for patterns like *word where word should be bold
+  const remainingBoldWords = [
+    'Polis', 'Acropolis', 'Agora', 'Poleis', 'Citizens', 'Tyranny',
+    'Cultural', 'Religious', 'Challenges', 'Conflicts', 'Geography',
+    'Social', 'Economic', 'Political', 'Population', 'Trade', 'Military', 'Oligarchy'
+  ];
+  
+  remainingBoldWords.forEach(word => {
+    const regex = new RegExp(`\\*${word}\\b`, 'g');
+    fixed = fixed.replace(regex, `**${word}**`);
+  });
+  
+  // Step 11: Clean up any double asterisks that are too close together
+  fixed = fixed.replace(/\*\*\*\*/g, '**');
   
   return fixed;
 };
