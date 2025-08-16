@@ -2489,14 +2489,14 @@ app.post('/api/courses/generate', authenticateToken, async (req, res, next) => {
             }];
           }
         }).then(async (course) => {
-                      // Generation completed - save course and update session
-            try {
-              if (!course || !course.title) {
-                throw new Error('Failed to generate course structure');
-              }
+          // Generation completed - save course and update session
+          try {
+            if (!course || !course.title) {
+              throw new Error('Failed to generate course structure');
+            }
 
-              // Update session for validation stage
-              const session = global.generationSessions.get(generationId);
+            // Update session for validation stage
+            let session = global.generationSessions.get(generationId);
               if (session) {
                 session.progress = {
                   ...session.progress,
@@ -2524,18 +2524,18 @@ app.post('/api/courses/generate', authenticateToken, async (req, res, next) => {
             course.createdAt = new Date().toISOString();
             course.published = false;
 
-                          // Update session for saving stage
-              if (session) {
-                session.progress = {
-                  ...session.progress,
-                  stage: 'saving',
-                  message: 'Saving course to database...',
-                  details: [...(session.progress.details || []), {
-                    timestamp: new Date().toISOString(),
-                    message: '💾 Saving course to database...'
-                  }]
-                };
-              }
+            // Update session for saving stage
+            if (session) {
+              session.progress = {
+                ...session.progress,
+                stage: 'saving',
+                message: 'Saving course to database...',
+                details: [...(session.progress.details || []), {
+                  timestamp: new Date().toISOString(),
+                  message: '💾 Saving course to database...'
+                }]
+              };
+            }
 
               // Save the course to database
               db.data.courses.push(course);
@@ -2550,7 +2550,6 @@ app.post('/api/courses/generate', authenticateToken, async (req, res, next) => {
             console.log(`[COURSE_GENERATION] Deducted 1 credit from user ${user.id}. Remaining: ${user.courseCredits}`);
 
             // Update session with completed course
-            const session = global.generationSessions.get(generationId);
             if (session) {
               session.status = 'completed';
               session.course = course;
@@ -2563,7 +2562,6 @@ app.post('/api/courses/generate', authenticateToken, async (req, res, next) => {
 
           } catch (saveError) {
             console.error(`[COURSE_GENERATION] Error saving course:`, saveError);
-            const session = global.generationSessions.get(generationId);
             if (session) {
               session.status = 'error';
               session.error = saveError.message;
@@ -2572,7 +2570,7 @@ app.post('/api/courses/generate', authenticateToken, async (req, res, next) => {
         }).catch(async (error) => {
           // Generation failed
           console.error(`[COURSE_GENERATION] Error generating course:`, error);
-          const session = global.generationSessions.get(generationId);
+          let session = global.generationSessions.get(generationId);
           if (session) {
             session.status = 'error';
             session.error = error.message;
