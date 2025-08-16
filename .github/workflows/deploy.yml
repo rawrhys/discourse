@@ -72,7 +72,7 @@ jobs:
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           local-dir: ./public/
-          server-dir: home/u514166296/domains/thediscourse.ai/public_html/
+          server-dir: 1348c95c57c67fc0/files/domains/thediscourse.ai/public_html/
           port: 21
           dangerous-clean-slate: true
 
