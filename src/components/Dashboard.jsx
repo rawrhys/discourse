@@ -67,6 +67,9 @@ const Dashboard = () => {
     hasAttemptedFetch.current = true;
     
     try {
+      // Clear any existing errors before fetching
+      setError(null);
+      
       // Add timeout to prevent hanging requests
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error('Request timeout')), 10000); // 10 second timeout
@@ -81,8 +84,20 @@ const Dashboard = () => {
         timestamp: new Date().toISOString()
       });
       
-      setSavedCourses(Array.isArray(courses) ? courses : []);
+      // Ensure we always set a valid array
+      const validCourses = Array.isArray(courses) ? courses : [];
+      setSavedCourses(validCourses);
+      
+      // Clear any errors since we successfully fetched courses
       setError(null);
+      
+      // If we have no courses and this was a forced refresh (like after deletion),
+      // ensure we don't show any error state
+      if (validCourses.length === 0 && force) {
+        logger.debug('📭 [DASHBOARD] No courses found after forced refresh - clearing any error state');
+        setError(null);
+      }
+      
     } catch (error) {
       // Enhanced error handling to prevent stack trace issues
       logger.warn('⚠️ [DASHBOARD] Could not fetch courses (likely new user or network issue):', {
@@ -93,7 +108,13 @@ const Dashboard = () => {
       
       // Always set empty array to prevent undefined errors
       setSavedCourses([]);
-      setError(null); // Don't show error for failed course fetching
+      
+      // Only set error for non-401 errors (401 is handled gracefully for new users)
+      if (error.status !== 401) {
+        setError(error.message || 'Failed to load courses');
+      } else {
+        setError(null); // Don't show error for 401 (new user or session issues)
+      }
       
       // Don't re-throw the error to prevent React error boundaries from triggering
     } finally {
@@ -359,14 +380,57 @@ const Dashboard = () => {
 
   const handleDeleteCourse = useCallback(async (courseId) => {
     try {
+      // Clear any existing errors first, especially "Course not found" errors
+      setError(null);
+      
       // Normalize course ID to remove timestamp suffix
       const normalizedCourseId = String(courseId || '').replace(/_[0-9]{10,}$/, '');
       logger.debug('🗑️ [DASHBOARD] Deleting course:', courseId, 'normalized:', normalizedCourseId);
+      
       await api.deleteCourse(normalizedCourseId);
-      await fetchSavedCourses(true); // Force refresh after deletion
+      
+      // Clear the course to delete state immediately
       setCourseToDelete(null);
+      
+      // Force refresh after deletion with a small delay to ensure backend has processed the deletion
+      setTimeout(async () => {
+        try {
+          await fetchSavedCourses(true);
+          // Double-check that no error state persists after refresh
+          setError(null);
+        } catch (refreshError) {
+          logger.warn('⚠️ [DASHBOARD] Error during post-deletion refresh:', refreshError);
+          // Don't set error for refresh issues, just ensure courses are cleared
+          setSavedCourses([]);
+          setError(null);
+        }
+      }, 100);
+      
     } catch (error) {
-      setError(error.message || 'Failed to delete course');
+      logger.error('❌ [DASHBOARD] Error deleting course:', error);
+      
+      // Clear the course to delete state even on error
+      setCourseToDelete(null);
+      
+      // Only set error for actual deletion failures, not for "course not found"
+      if (error.message && !error.message.includes('Course not found')) {
+        setError(error.message || 'Failed to delete course');
+      } else {
+        // If it's a "Course not found" error, just refresh to show empty state
+        setError(null);
+      }
+      
+      // Always refresh the courses list to ensure UI is in sync
+      setTimeout(async () => {
+        try {
+          await fetchSavedCourses(true);
+          setError(null);
+        } catch (refreshError) {
+          logger.warn('⚠️ [DASHBOARD] Error during post-deletion refresh:', refreshError);
+          setSavedCourses([]);
+          setError(null);
+        }
+      }, 100);
     }
   }, [api, fetchSavedCourses]);
 
@@ -419,10 +483,21 @@ const Dashboard = () => {
     }
   }, [isGenerating]);
 
+  // Effect to automatically clear "Course not found" errors when courses list is empty
+  useEffect(() => {
+    if (savedCourses.length === 0 && error && error.includes('Course not found')) {
+      logger.debug('🧹 [DASHBOARD] Clearing "Course not found" error since courses list is empty');
+      setError(null);
+    }
+  }, [savedCourses.length, error]);
+
   // Fetch saved courses on component mount
   useEffect(() => {
     if (user) {
       try {
+        // Clear any existing errors when component mounts
+        setError(null);
+        
         // Automatically fetch saved courses for existing users
         fetchSavedCourses();
         
