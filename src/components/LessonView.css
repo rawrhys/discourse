@@ -538,4 +538,65 @@
   padding: 1rem;
   height: 100%;
   overflow-y: auto;
+}
+
+/* ===== REFERENCES SECTION STYLING ===== */
+
+/* Target References headers specifically */
+.references-header {
+  font-size: 1.5rem !important;
+  font-weight: 600 !important;
+  color: #1a1a1a !important;
+  margin: 2rem 0 1rem 0 !important;
+  padding-bottom: 0.5rem !important;
+  border-bottom: 2px solid #e5e7eb !important;
+  clear: both !important;
+}
+
+/* Style citation paragraphs */
+.citation-item {
+  margin: 0.75rem 0 !important;
+  padding: 0.75rem !important;
+  background-color: #f8f9fa !important;
+  border-left: 4px solid #3b82f6 !important;
+  border-radius: 0.25rem !important;
+  font-size: 0.95rem !important;
+  line-height: 1.6 !important;
+  color: #374151 !important;
+  font-family: 'Georgia', serif !important;
+}
+
+/* Style italicized book titles in citations */
+.citation-item em {
+  font-style: italic !important;
+  font-weight: 500 !important;
+  color: #1f2937 !important;
+  background-color: rgba(59, 130, 246, 0.1) !important;
+  padding: 0.1rem 0.2rem !important;
+  border-radius: 0.2rem !important;
+}
+
+/* Force proper spacing for References sections */
+.references-header + p {
+  margin-top: 1rem !important;
+}
+
+/* Ensure proper spacing around References sections */
+.lesson-content:has(.references-header),
+.lesson-content .prose:has(.references-header) {
+  margin-bottom: 2rem !important;
+}
+
+/* Mobile responsive styling for References */
+@media (max-width: 768px) {
+  .citation-item {
+    font-size: 0.9rem !important;
+    padding: 0.5rem !important;
+    margin: 0.5rem 0 !important;
+  }
+  
+  .references-header {
+    font-size: 1.25rem !important;
+    margin: 1.5rem 0 0.75rem 0 !important;
+  }
 } 

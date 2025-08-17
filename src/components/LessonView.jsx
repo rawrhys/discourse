@@ -37,6 +37,32 @@ const fixMalformedMarkdown = (text) => {
   return markdownService.parse(text);
 };
 
+// Frontend-level fix for malformed References sections
+const fixMalformedReferencesAtFrontend = (text) => {
+  if (!text || typeof text !== 'string') {
+    return text;
+  }
+
+  let fixedText = text
+    // Fix the specific problematic pattern: "## References [1] ... [2] ..."
+    .replace(/## References\s*\[(\d+)\]/g, '\n## References\n\n[$1]')
+    // Ensure each citation is on its own line
+    .replace(/\]\s*\[(\d+)\]/g, '.\n\n[$1]')
+    // Add proper line breaks between citations
+    .replace(/\.\s*\[(\d+)\]/g, '.\n\n[$1]')
+    // Clean up any remaining issues
+    .replace(/\n{3,}/g, '\n\n'); // Normalize multiple line breaks
+
+  // Add CSS classes for styling
+  fixedText = fixedText
+    // Add class to References headers
+    .replace(/<h2>References<\/h2>/g, '<h2 class="references-header">References</h2>')
+    // Add class to citation paragraphs
+    .replace(/<p>\[(\d+)\]/g, '<p class="citation-item">[$1]');
+
+  return fixedText;
+};
+
 // Additional cleanup function for any remaining malformed asterisks
 const cleanupRemainingAsterisks = (text) => {
   if (!text) return text;
@@ -159,6 +185,9 @@ const Content = memo(({ content, bibliography, lessonTitle, courseSubject }) => 
   let fixedContent = contentStr.includes('## References') 
     ? markdownService.parseWithBibliography(contentStr)
     : fixMalformedMarkdown(contentStr);
+
+  // Frontend-level fix for malformed References sections
+  fixedContent = fixMalformedReferencesAtFrontend(fixedContent);
 
   // Append bibliography to the content if we have references and it's not already in the content
   if (finalBibliography && finalBibliography.length > 0 && !contentStr.includes('## References')) {
