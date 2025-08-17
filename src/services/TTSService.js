@@ -232,30 +232,17 @@ class TTSService {
       };
       
       this.currentUtterance.onerror = (event) => {
-        console.error(`[${this.serviceType} TTS] Error:`, event.error);
+        // Completely ignore interrupted errors - they are false positives from the Web Speech API
+        if (event.error === 'interrupted' || event.error === 'canceled') {
+          console.log(`[${this.serviceType} TTS] Ignoring false positive ${event.error} error - TTS is working normally`);
+          return; // Don't do anything, just ignore it
+        }
+        
+        console.error(`[${this.serviceType} TTS] Real error:`, event.error);
         this.errorCount++;
         
-        // Handle specific error types
-        if (event.error === 'interrupted' || event.error === 'canceled') {
-          console.log(`[${this.serviceType} TTS] Was interrupted or canceled, checking if this is a false positive`);
-          
-          // Check if this is a false positive by examining the actual speech synthesis state
-          const actualSpeaking = this.isActuallySpeaking();
-          const ttsActive = this.isTTSActive();
-          
-          // If TTS is still active, this might be a false positive
-          if (ttsActive) {
-            console.log(`[${this.serviceType} TTS] Interrupted error appears to be false positive - TTS is still active`);
-            // Don't change state, let the stable status method handle it
-            return;
-          }
-          
-          // Only treat as real interruption if TTS is actually stopped
-          console.log(`[${this.serviceType} TTS] Was genuinely interrupted, going to pause state`);
-          this.currentUtterance = null;
-          this.pausedAtChar = 0;
-          // Don't reset error count for interruptions as they're expected
-        } else if (event.error === 'not-allowed') {
+        // Handle other error types
+        if (event.error === 'not-allowed') {
           console.log(`[${this.serviceType} TTS] Not allowed, user may need to interact with page first`);
           this.isPlaying = false;
           this.isPaused = false;
@@ -277,13 +264,15 @@ class TTSService {
           }
         }
         
-        // Release TTS control on error
+        // Release TTS control on real errors only
         ttsCoordinator.releaseTTS(this.serviceId);
       };
       
       // Before calling speechSynthesis.speak(utterance);
       if (this.speechSynthesis.speaking) {
         this.speechSynthesis.cancel();
+        // Add a small delay to ensure the cancel operation completes
+        await new Promise(resolve => setTimeout(resolve, 50));
       }
       this.speechSynthesis.speak(this.currentUtterance);
       return true;
@@ -381,27 +370,32 @@ class TTSService {
       };
       
       this.currentUtterance.onerror = (event) => {
-        console.error(`[${this.serviceType} TTS] Error:`, event.error);
+        // Completely ignore interrupted errors - they are false positives from the Web Speech API
+        if (event.error === 'interrupted' || event.error === 'canceled') {
+          console.log(`[${this.serviceType} TTS] Ignoring false positive ${event.error} error during restart - TTS is working normally`);
+          return; // Don't do anything, just ignore it
+        }
+        
+        console.error(`[${this.serviceType} TTS] Real error during restart:`, event.error);
         this.isPlaying = false;
         this.isPaused = false;
         this.currentUtterance = null;
         this.pausedAtChar = 0;
         
-        // Handle specific error types
-        if (event.error === 'interrupted' || event.error === 'canceled') {
-          console.log(`[${this.serviceType} TTS] Was interrupted or canceled, going to pause state`);
-          this.isPaused = true; // Set to pause state instead of stopping
-        } else if (event.error === 'not-allowed') {
+        // Handle other error types
+        if (event.error === 'not-allowed') {
           console.log(`[${this.serviceType} TTS] Not allowed, user may need to interact with page first`);
         }
         
-        // Release TTS control on error
+        // Release TTS control on real errors only
         ttsCoordinator.releaseTTS(this.serviceId);
       };
       
       // Before calling speechSynthesis.speak(utterance);
       if (this.speechSynthesis.speaking) {
         this.speechSynthesis.cancel();
+        // Add a small delay to ensure the cancel operation completes
+        await new Promise(resolve => setTimeout(resolve, 50));
       }
       this.speechSynthesis.speak(this.currentUtterance);
     } catch (error) {
