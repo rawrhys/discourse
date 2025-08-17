@@ -371,6 +371,14 @@ class TTSService {
         return;
       }
 
+      // Cancel any ongoing speech synthesis before starting new one
+      if (window.speechSynthesis && window.speechSynthesis.speaking) {
+        console.log(`[${this.serviceType} TTS] Canceling ongoing speech synthesis`);
+        window.speechSynthesis.cancel();
+        // Small delay to ensure cancel completes
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+
       // Create a promise that wraps the speak-tts library call
       const speakPromise = new Promise((resolve) => {
         try {
@@ -401,34 +409,34 @@ class TTSService {
                 this.isPlaying = true;
                 console.log(`[${this.serviceType} TTS] Resumed`);
               },
-                             'onerror': (event) => {
-                 console.warn(`[${this.serviceType} TTS] Speech error occurred:`, event);
-                 this.isPlaying = false;
-                 this.isPaused = false;
-                 
-                 // Handle interrupted errors more gracefully
-                 if (event.error === 'interrupted' || event.error === 'canceled') {
-                   console.log(`[${this.serviceType} TTS] Speech was interrupted/canceled, not counting as error`);
-                   // Don't increment error count for interruptions
-                   ttsCoordinator.releaseTTS(this.serviceId);
-                   resolve(); // Resolve gracefully for interruptions
-                   return;
-                 }
-                 
-                 this.errorCount++;
-                 
-                 // Don't throw the error, handle it gracefully
-                 if (this.errorCount < this.maxRetries) {
-                   console.log(`[${this.serviceType} TTS] Retrying... (${this.errorCount}/${this.maxRetries})`);
-                   setTimeout(() => {
-                     this.speak(this.fullText).then(resolve); // Always use fullText for retries
-                   }, 1000);
-                 } else {
-                   console.log(`[${this.serviceType} TTS] Max retries exceeded, stopping gracefully`);
-                   ttsCoordinator.releaseTTS(this.serviceId);
-                   resolve(); // Always resolve, never reject
-                 }
-               }
+              'onerror': (event) => {
+                console.warn(`[${this.serviceType} TTS] Speech error occurred:`, event);
+                this.isPlaying = false;
+                this.isPaused = false;
+                
+                // Handle interrupted errors more gracefully
+                if (event.error === 'interrupted' || event.error === 'canceled') {
+                  console.log(`[${this.serviceType} TTS] Speech was interrupted/canceled, not counting as error`);
+                  // Don't increment error count for interruptions
+                  ttsCoordinator.releaseTTS(this.serviceId);
+                  resolve(); // Resolve gracefully for interruptions
+                  return;
+                }
+                
+                this.errorCount++;
+                
+                // Don't throw the error, handle it gracefully
+                if (this.errorCount < this.maxRetries) {
+                  console.log(`[${this.serviceType} TTS] Retrying... (${this.errorCount}/${this.maxRetries})`);
+                  setTimeout(() => {
+                    this.speak(this.fullText).then(resolve); // Always use fullText for retries
+                  }, 1000);
+                } else {
+                  console.log(`[${this.serviceType} TTS] Max retries exceeded, stopping gracefully`);
+                  ttsCoordinator.releaseTTS(this.serviceId);
+                  resolve(); // Always resolve, never reject
+                }
+              }
             }
           };
 
@@ -441,33 +449,33 @@ class TTSService {
               .then(() => {
                 console.log(`[${this.serviceType} TTS] Speak promise resolved successfully`);
               })
-                             .catch((error) => {
-                 console.warn(`[${this.serviceType} TTS] Speak promise rejected:`, error);
-                 this.isPlaying = false;
-                 this.isPaused = false;
-                 
-                 // Handle interrupted errors more gracefully
-                 if (error && (error.error === 'interrupted' || error.error === 'canceled')) {
-                   console.log(`[${this.serviceType} TTS] Promise was interrupted/canceled, not counting as error`);
-                   // Don't increment error count for interruptions
-                   ttsCoordinator.releaseTTS(this.serviceId);
-                   resolve(); // Resolve gracefully for interruptions
-                   return;
-                 }
-                 
-                 this.errorCount++;
-                 
-                 if (this.errorCount < this.maxRetries) {
-                   console.log(`[${this.serviceType} TTS] Retrying after promise rejection... (${this.errorCount}/${this.maxRetries})`);
-                   setTimeout(() => {
-                     this.speak(this.fullText).then(resolve); // Always use fullText for retries
-                   }, 1000);
-                 } else {
-                   console.log(`[${this.serviceType} TTS] Max retries exceeded after promise rejection`);
-                   ttsCoordinator.releaseTTS(this.serviceId);
-                   resolve(); // Always resolve, never reject
-                 }
-               });
+              .catch((error) => {
+                console.warn(`[${this.serviceType} TTS] Speak promise rejected:`, error);
+                this.isPlaying = false;
+                this.isPaused = false;
+                
+                // Handle interrupted errors more gracefully
+                if (error && (error.error === 'interrupted' || error.error === 'canceled')) {
+                  console.log(`[${this.serviceType} TTS] Promise was interrupted/canceled, not counting as error`);
+                  // Don't increment error count for interruptions
+                  ttsCoordinator.releaseTTS(this.serviceId);
+                  resolve(); // Resolve gracefully for interruptions
+                  return;
+                }
+                
+                this.errorCount++;
+                
+                if (this.errorCount < this.maxRetries) {
+                  console.log(`[${this.serviceType} TTS] Retrying after promise rejection... (${this.errorCount}/${this.maxRetries})`);
+                  setTimeout(() => {
+                    this.speak(this.fullText).then(resolve); // Always use fullText for retries
+                  }, 1000);
+                } else {
+                  console.log(`[${this.serviceType} TTS] Max retries exceeded after promise rejection`);
+                  ttsCoordinator.releaseTTS(this.serviceId);
+                  resolve(); // Always resolve, never reject
+                }
+              });
           }
           
         } catch (speakError) {
@@ -476,16 +484,16 @@ class TTSService {
           this.isPaused = false;
           this.errorCount++;
           
-                                                     if (this.errorCount < this.maxRetries) {
-                   console.log(`[${this.serviceType} TTS] Retrying after speak error... (${this.errorCount}/${this.maxRetries})`);
-                   setTimeout(() => {
-                     this.speak(this.fullText).then(resolve); // Always use fullText for retries
-                   }, 1000);
-                 } else {
-                   console.log(`[${this.serviceType} TTS] Max retries exceeded after speak error`);
-                   ttsCoordinator.releaseTTS(this.serviceId);
-                   resolve(); // Always resolve, never reject
-                 }
+          if (this.errorCount < this.maxRetries) {
+            console.log(`[${this.serviceType} TTS] Retrying after speak error... (${this.errorCount}/${this.maxRetries})`);
+            setTimeout(() => {
+              this.speak(this.fullText).then(resolve); // Always use fullText for retries
+            }, 1000);
+          } else {
+            console.log(`[${this.serviceType} TTS] Max retries exceeded after speak error`);
+            ttsCoordinator.releaseTTS(this.serviceId);
+            resolve(); // Always resolve, never reject
+          }
         }
       });
 
