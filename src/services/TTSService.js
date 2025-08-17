@@ -603,15 +603,24 @@ class TTSService {
     }
 
     try {
+      // Stop any current reading BEFORE setting the new text
+      this.stop();
+      
+      // Set the new text properties
       this.currentText = text;
       this.currentLessonId = lessonId;
       this.fullText = text;
       this.errorCount = 0;
       
-      // Stop any current reading (without releasing control) AFTER setting the text
-      this.stop();
-      
       console.log(`[${this.serviceType} TTS] Starting to read lesson:`, lesson.title);
+      console.log(`[${this.serviceType} TTS] Full text length before speak: ${this.fullText.length}`);
+      
+      // Ensure we have the text before speaking
+      if (!this.fullText || this.fullText.length === 0) {
+        console.warn(`[${this.serviceType} TTS] Full text was cleared, using original extracted text`);
+        this.fullText = text; // Restore the text
+      }
+      
       await this.speak(this.fullText); // Use fullText to ensure we always have the original text
       return true;
       
@@ -627,8 +636,14 @@ class TTSService {
   // Enhanced speak method with better error handling
   async speak(text) {
     try {
-      console.log(`[${this.serviceType} TTS] Attempting to speak text (length: ${text.length})`);
-      console.log(`[${this.serviceType} TTS] Text preview:`, text.substring(0, 100) + '...');
+      console.log(`[${this.serviceType} TTS] Attempting to speak text (length: ${text ? text.length : 'undefined'})`);
+      console.log(`[${this.serviceType} TTS] Text type:`, typeof text);
+      console.log(`[${this.serviceType} TTS] Text preview:`, text ? text.substring(0, 100) + '...' : 'NO TEXT');
+      
+      // Additional debugging for text validation
+      if (text && typeof text === 'string') {
+        console.log(`[${this.serviceType} TTS] Text validation: length=${text.length}, trimmed=${text.trim().length}, isEmpty=${text.trim().length === 0}`);
+      }
       
       // Check if speech is already initialized and working
       if (!this.speech || !this.isInitialized) {
