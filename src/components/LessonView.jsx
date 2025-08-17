@@ -721,7 +721,8 @@ const LessonView = ({
 
   // Clean up any remaining malformed asterisks after content is rendered
   useEffect(() => {
-    if (lessonContent) {
+    if (propLesson?.content) {
+      const lessonContent = cleanAndCombineContent(propLesson.content);
       // Use a timeout to ensure the DOM is updated
       const timer = setTimeout(() => {
         const markdownElements = document.querySelectorAll('.lesson-content .markdown-body');
@@ -741,7 +742,7 @@ const LessonView = ({
       
       return () => clearTimeout(timer);
     }
-  }, [lessonContent]);
+  }, [propLesson?.content]);
 
   // Performance monitoring (console logging disabled)
   useEffect(() => {
