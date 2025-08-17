@@ -661,6 +661,27 @@ const Dashboard = () => {
                               >
                                 Continue Learning →
                               </button>
+                              {course.published && (
+                                <button
+                                  onClick={() => {
+                                    const publicUrl = `${window.location.origin}/public/course/${course.id}`;
+                                    navigator.clipboard.writeText(publicUrl);
+                                    // Show a brief success message
+                                    const originalText = 'Share';
+                                    const button = event.target;
+                                    button.textContent = 'Copied!';
+                                    button.className = 'text-sm font-medium text-white bg-green-600 hover:bg-green-700 px-3 py-2 rounded-md transition-colors duration-200';
+                                    setTimeout(() => {
+                                      button.textContent = originalText;
+                                      button.className = 'text-sm font-medium text-blue-600 hover:text-blue-500 bg-blue-50 hover:bg-blue-100 px-3 py-2 rounded-md transition-colors duration-200';
+                                    }, 2000);
+                                  }}
+                                  className="text-sm font-medium text-blue-600 hover:text-blue-500 bg-blue-50 hover:bg-blue-100 px-3 py-2 rounded-md transition-colors duration-200"
+                                  title="Copy public course link"
+                                >
+                                  Share
+                                </button>
+                              )}
                               <button
                                 onClick={async () => {
                                   try {

@@ -115,10 +115,15 @@ const api = {
     getCourse: (courseId) => 
         apiClient(`/api/courses/${courseId}`),
 
-    getPublicCourse: (courseId) => {
+    getPublicCourse: (courseId, sessionId = null) => {
         // Normalize: strip optional trailing _<timestamp> (e.g., _1754750525562)
         const normalizedId = String(courseId || '').replace(/_[0-9]{10,}$/,'');
-        const fullUrl = `${API_BASE_URL}/api/public/courses/${normalizedId}`;
+        let fullUrl = `${API_BASE_URL}/api/public/courses/${normalizedId}`;
+        
+        // Add sessionId as query parameter if provided
+        if (sessionId) {
+            fullUrl += `?sessionId=${encodeURIComponent(sessionId)}`;
+        }
         
         console.log('📡 [API SERVICE] Fetching public course:', fullUrl);
         

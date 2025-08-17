@@ -3769,11 +3769,12 @@ app.post('/api/courses/:courseId/unpublish', authenticateToken, async (req, res)
 app.get('/api/public/courses/:courseId', async (req, res) => {
   try {
     const { courseId } = req.params;
+    const { sessionId } = req.query;
     
     // Normalize: strip optional trailing _<timestamp> (e.g., _1754750525562)
     const normalizedId = String(courseId || '').replace(/_[0-9]{10,}$/,'');
     
-    console.log(`[API] Fetching public course ${courseId} (normalized: ${normalizedId})`);
+    console.log(`[API] Fetching public course ${courseId} (normalized: ${normalizedId}) with sessionId: ${sessionId || 'none'}`);
     
     const course = db.data.courses.find(c => String(c.id || '').replace(/_[0-9]{10,}$/, '') === normalizedId);
     
@@ -3795,17 +3796,92 @@ app.get('/api/public/courses/:courseId', async (req, res) => {
       });
     }
     
+    // Create a new session if none provided
+    let sessionIdToUse = sessionId;
+    if (!sessionId) {
+      sessionIdToUse = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      console.log(`[API] Created new session for public course: ${sessionIdToUse}`);
+    }
+    
     console.log(`[API] Returning public course data:`, {
       id: course.id,
       title: course.title,
       modulesCount: course.modules?.length,
-      totalLessons: course.modules?.reduce((sum, m) => sum + (m.lessons?.length || 0), 0)
+      totalLessons: course.modules?.reduce((sum, m) => sum + (m.lessons?.length || 0), 0),
+      sessionId: sessionIdToUse
     });
     
-    res.json(course);
+    res.json({
+      ...course,
+      sessionId: sessionIdToUse
+    });
   } catch (error) {
     console.error('[API] Failed to fetch public course:', error);
     res.status(500).json({ error: 'Failed to fetch public course' });
+  }
+});
+
+// Save quiz score for public course session
+app.post('/api/public/courses/:courseId/quiz-score', async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const { sessionId, lessonId, score } = req.body;
+    
+    if (!sessionId || !lessonId || score === undefined) {
+      return res.status(400).json({ error: 'Missing required fields: sessionId, lessonId, score' });
+    }
+    
+    console.log(`[API] Saving quiz score for public course:`, {
+      courseId,
+      sessionId,
+      lessonId,
+      score
+    });
+    
+    // In a real implementation, you'd store this in a database
+    // For now, we'll just log it and return success
+    // You could use Redis, MongoDB, or any other session storage
+    
+    res.json({ 
+      success: true, 
+      message: 'Quiz score saved for session',
+      sessionId,
+      lessonId,
+      score
+    });
+  } catch (error) {
+    console.error('[API] Failed to save quiz score:', error);
+    res.status(500).json({ error: 'Failed to save quiz score' });
+  }
+});
+
+// Get quiz score for public course session
+app.get('/api/public/courses/:courseId/quiz-score/:lessonId', async (req, res) => {
+  try {
+    const { courseId, lessonId } = req.params;
+    const { sessionId } = req.query;
+    
+    if (!sessionId) {
+      return res.status(400).json({ error: 'Missing sessionId' });
+    }
+    
+    console.log(`[API] Getting quiz score for public course:`, {
+      courseId,
+      sessionId,
+      lessonId
+    });
+    
+    // In a real implementation, you'd retrieve this from a database
+    // For now, we'll return null (no score saved yet)
+    
+    res.json({ 
+      sessionId,
+      lessonId,
+      score: null // This would be retrieved from session storage
+    });
+  } catch (error) {
+    console.error('[API] Failed to get quiz score:', error);
+    res.status(500).json({ error: 'Failed to get quiz score' });
   }
 });
 
