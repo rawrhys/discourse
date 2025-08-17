@@ -6,6 +6,7 @@ import { useApiWrapper } from '../services/api';
 import { API_BASE_URL, debugApiConfig, testBackendConnection } from '../config/api';
 import LoadingIndicator from './LoadingIndicator';
 import logger from '../utils/logger';
+import ConfettiAnimation from './ConfettiAnimation';
 
 const Dashboard = () => {
   const { user, logout } = useAuth();
@@ -21,6 +22,9 @@ const Dashboard = () => {
   const api = useApiWrapper();
   const [isBuying, setIsBuying] = useState(false);
   const [credits, setCredits] = useState(1); // Default to 1 credit for all users
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [showSuccessToast, setShowSuccessToast] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
   const urlParams = new URLSearchParams(window.location.search);
   
   // Connection diagnostic state
@@ -420,6 +424,24 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-100">
+      {/* Confetti Animation */}
+      <ConfettiAnimation 
+        isActive={showConfetti} 
+        onComplete={() => setShowConfetti(false)} 
+      />
+      
+      {/* Success Toast Notification */}
+      {showSuccessToast && (
+        <div className="fixed top-4 right-4 z-50 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg transform transition-all duration-300 ease-in-out">
+          <div className="flex items-center space-x-2">
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+            <span className="font-medium">{successMessage}</span>
+          </div>
+        </div>
+      )}
+      
       {/* Remove problematic Stripe script tag */}
       
       <nav className="bg-white shadow-sm">
@@ -695,13 +717,19 @@ const Dashboard = () => {
                                       logger.debug('Attempting to unpublish course:', course.id);
                                       const updated = await api.unpublishCourse(course.id);
                                       await fetchSavedCourses(true); // Force refresh after unpublishing
-                                      alert('Course unpublished!');
+                                      setSuccessMessage('Course unpublished successfully!');
+                                      setShowSuccessToast(true);
+                                      setTimeout(() => setShowSuccessToast(false), 3000);
                                     } else {
                                       // Publish the course
                                       logger.debug('Attempting to publish course:', course.id);
                                       const updated = await api.publishCourse(course.id);
                                       await fetchSavedCourses(true); // Force refresh after publishing
-                                      alert('Course published!');
+                                      // Trigger confetti animation
+                                      setShowConfetti(true);
+                                      setSuccessMessage('Course published successfully! 🎉');
+                                      setShowSuccessToast(true);
+                                      setTimeout(() => setShowSuccessToast(false), 3000);
                                     }
                                   } catch (err) {
                                     logger.error('❌ [DASHBOARD] Error with course publish/unpublish:', err);
@@ -713,29 +741,20 @@ const Dashboard = () => {
                                 disabled={!course.id}
                                 className={`text-sm font-medium rounded px-3 py-2 transition-colors duration-200 ${
                                   course.published 
-                                    ? hoveredCourseId === course.id 
-                                      ? 'bg-red-600 text-white hover:bg-red-700' 
-                                      : 'bg-green-100 text-green-800 border border-green-300 hover:bg-green-200'
+                                    ? 'bg-green-100 text-green-800 border border-green-300 hover:bg-green-200'
                                     : !course.id 
                                       ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
                                       : 'bg-green-600 text-white hover:bg-green-700'
                                 }`}
                                 title={
                                   course.published 
-                                    ? hoveredCourseId === course.id 
-                                      ? 'Click to unpublish this course' 
-                                      : 'Course is published - hover to unpublish'
+                                    ? 'Click to unpublish this course'
                                     : !course.id 
                                       ? 'Cannot publish: missing course ID' 
                                       : 'Publish this course to share publicly'
                                 }
                               >
-                                {course.published 
-                                  ? hoveredCourseId === course.id 
-                                    ? 'Unpublish' 
-                                    : 'Published'
-                                  : 'Publish'
-                                }
+                                {course.published ? 'Unpublish' : 'Publish'}
                               </button>
                             </div>
                           </div>
