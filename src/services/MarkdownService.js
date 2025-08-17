@@ -41,12 +41,7 @@ class MarkdownService {
   // Pre-process content to fix malformed patterns
   preprocessContent(content) {
     return content
-      // Fix malformed bold patterns
-      .replace(/\*\*([^*\n]+?)\*\*/g, '**$1**')  // Fix unclosed bold
-      .replace(/\*\*([^*\n]+?)$/gm, '**$1**')    // Fix unclosed bold at end
-      .replace(/^([^*\n]+?)\*\*/gm, '**$1**')    // Fix unclosed bold at start
-      
-      // Fix malformed headers
+      // Fix malformed headers (more conservative)
       .replace(/^\*\*##\s*/gm, '## ')  // Fix malformed headers
       .replace(/^\*##\s*/gm, '## ')    // Fix malformed headers
       .replace(/^##\s*\*\*/gm, '## ')  // Fix malformed headers
@@ -55,7 +50,7 @@ class MarkdownService {
       .replace(/^([^*]+?)\*\s*$/gm, '- $1')  // Fix list items with asterisks
       .replace(/^([^*]+?)\*\*\s*$/gm, '- $1') // Fix list items with double asterisks
       
-      // Fix specific Greek content patterns
+      // Fix specific Greek content patterns (only for known terms)
       .replace(/\bPolis\*\*/g, '**Polis**')
       .replace(/\bAcropolis\*\*/g, '**Acropolis**')
       .replace(/\bAgora\*\*/g, '**Agora**')
@@ -66,7 +61,7 @@ class MarkdownService {
       .replace(/\bstasis\*\*/g, '**stasis**')
       .replace(/\bGerousia\*\*/g, '**Gerousia**')
       
-      // Fix patterns with single asterisk
+      // Fix patterns with single asterisk (only for known terms)
       .replace(/\*Polis\b/g, '**Polis**')
       .replace(/\*Acropolis\b/g, '**Acropolis**')
       .replace(/\*Agora\b/g, '**Agora**')
@@ -77,7 +72,7 @@ class MarkdownService {
       .replace(/\*stasis\b/g, '**stasis**')
       .replace(/\*Gerousia\b/g, '**Gerousia**')
       
-      // Fix patterns with asterisk at end
+      // Fix patterns with asterisk at end (only for known terms)
       .replace(/\bPolis\*/g, '**Polis**')
       .replace(/\bAcropolis\*/g, '**Acropolis**')
       .replace(/\bAgora\*/g, '**Agora**')
@@ -102,10 +97,6 @@ class MarkdownService {
       .replace(/<em>\s*<\/em>/g, '')          // Remove empty em tags
       .replace(/<p>\s*<\/p>/g, '')            // Remove empty p tags
       .replace(/<li>\s*<\/li>/g, '')          // Remove empty li tags
-      
-      // Clean up any remaining asterisks in HTML
-      .replace(/\*\*/g, '')
-      .replace(/\*/g, '')
       
       // Fix any malformed HTML
       .replace(/<([^>]+)\s*\/>/g, '<$1 />')   // Fix self-closing tags

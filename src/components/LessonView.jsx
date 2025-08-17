@@ -773,13 +773,8 @@ const LessonView = ({
       const timer = setTimeout(() => {
         const markdownElements = document.querySelectorAll('.lesson-content .markdown-body');
         markdownElements.forEach(element => {
-          // Clean up any remaining malformed asterisks
+          // Only clean up obvious malformed patterns, not entire paragraphs
           element.innerHTML = element.innerHTML
-            .replace(/\*\*([^*\n]+?)\*\*/g, '**$1**')  // Fix unclosed bold
-            .replace(/\*\*([^*\n]+?)$/gm, '**$1**')    // Fix unclosed bold at end
-            .replace(/^([^*\n]+?)\*\*/gm, '**$1**')    // Fix unclosed bold at start
-            .replace(/\*\*(?!\w)/g, '')                // Remove ** not followed by word
-            .replace(/(?<!\w)\*\*/g, '')               // Remove ** not preceded by word
             .replace(/\*\*\*\*/g, '**')                // Clean up multiple asterisks
             .replace(/\*\*\*\*\*/g, '**')
             .replace(/\*\*\*\*\*\*/g, '**');
