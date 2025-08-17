@@ -39,6 +39,42 @@ const PublicCourseDisplay = () => {
   const [showUnlockToast, setShowUnlockToast] = useState(false);
   const [unlockedModuleName, setUnlockedModuleName] = useState('');
   
+  // Load quiz scores from session and apply to course data
+  const loadSessionQuizScores = useCallback(async (courseData, sessionId) => {
+    if (!courseData || !sessionId) return courseData;
+    
+    try {
+      // Fetch quiz scores from session
+      const response = await fetch(`/api/public/courses/${courseId}/quiz-scores?sessionId=${sessionId}`);
+      if (response.ok) {
+        const sessionData = await response.json();
+        const quizScores = sessionData.quizScores || {};
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[PublicCourseDisplay] Loaded session quiz scores:', quizScores);
+        }
+        
+        // Apply quiz scores to course data
+        const updatedCourseData = {
+          ...courseData,
+          modules: courseData.modules.map(module => ({
+            ...module,
+            lessons: module.lessons.map(lesson => ({
+              ...lesson,
+              quizScore: quizScores[lesson.id] || lesson.quizScore
+            }))
+          }))
+        };
+        
+        return updatedCourseData;
+      }
+    } catch (error) {
+      console.warn('[PublicCourseDisplay] Failed to load session quiz scores:', error);
+    }
+    
+    return courseData;
+  }, [courseId]);
+
   const handleQuizCompletion = useCallback(async (lessonId, score) => {
     if (!course || !sessionId) return;
     
@@ -133,7 +169,7 @@ const PublicCourseDisplay = () => {
     } catch (error) {
       console.error('[PublicCourseDisplay] Failed to save quiz score:', error);
     }
-  }, [course, sessionId, courseId, unlockedModules]);
+  }, [course, sessionId, courseId, unlockedModules, loadSessionQuizScores]);
 
   useEffect(() => {
     const fetchCourse = async () => {
@@ -162,7 +198,9 @@ const PublicCourseDisplay = () => {
           courseData.modules = courseData.modules.map(m => Module.fromJSON(m));
         }
 
-        setCourse(courseData);
+        // Load and apply session quiz scores
+        const courseDataWithScores = await loadSessionQuizScores(courseData, currentSessionId);
+        setCourse(courseDataWithScores);
         if (courseData.modules && courseData.modules.length > 0) {
           const firstModule = courseData.modules[0];
           setActiveModuleId(firstModule.id);

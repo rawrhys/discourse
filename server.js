@@ -26,6 +26,7 @@ import { compressImage, getOptimalFormat, getFileExtension, formatFileSize } fro
 import sharp from 'sharp';
 import imageProxyHandler from './server/utils/proxy.js';
 import enhancedImageProxy from './server/utils/enhancedImageProxy.js';
+import PublicCourseSessionService from './src/services/PublicCourseSessionService.js';
 // import { isValidFlashcardTerm } from './src/utils/flashcardUtils.js';
 
 
@@ -34,6 +35,9 @@ import enhancedImageProxy from './server/utils/enhancedImageProxy.js';
 dotenv.config();
 
 const app = express();
+
+// Initialize PublicCourseSessionService
+const publicCourseSessionService = new PublicCourseSessionService();
 
 // --- CORE MIDDLEWARE ---
 // Apply compression to all responses
@@ -3882,6 +3886,44 @@ app.get('/api/public/courses/:courseId/quiz-score/:lessonId', async (req, res) =
   } catch (error) {
     console.error('[API] Failed to get quiz score:', error);
     res.status(500).json({ error: 'Failed to get quiz score' });
+  }
+});
+
+// Get all quiz scores for public course session
+app.get('/api/public/courses/:courseId/quiz-scores', async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const { sessionId } = req.query;
+    
+    if (!sessionId) {
+      return res.status(400).json({ error: 'Missing sessionId' });
+    }
+    
+    console.log(`[API] Getting all quiz scores for public course session:`, {
+      courseId,
+      sessionId
+    });
+    
+    // Get session data from PublicCourseSessionService
+    const session = publicCourseSessionService.getSession(sessionId);
+    
+    if (!session) {
+      console.log(`[API] Session not found: ${sessionId}`);
+      return res.json({ 
+        sessionId,
+        quizScores: {}
+      });
+    }
+    
+    console.log(`[API] Found session quiz scores:`, session.quizScores);
+    
+    res.json({ 
+      sessionId,
+      quizScores: session.quizScores || {}
+    });
+  } catch (error) {
+    console.error('[API] Failed to get quiz scores:', error);
+    res.status(500).json({ error: 'Failed to get quiz scores' });
   }
 });
 
