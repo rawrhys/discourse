@@ -47,11 +47,25 @@ function fixMalformedBold(text) {
   // First, protect already properly formatted bold text
   text = text.replace(/\*\*([^*]+?)\*\*/g, '___BOLD_PROTECTED___$1___BOLD_PROTECTED___');
   
-  // Fix patterns like "*text**" -> "**text**" (single asterisk followed by double)
-  text = text.replace(/\*([^*\n]+?)\*\*/g, '**$1**');
-  
-  // Fix patterns like "**text*" -> "**text**" (double asterisk followed by single)
-  text = text.replace(/\*\*([^*\n]+?)\*/g, '**$1**');
+  // Fix specific malformed patterns found in the content
+  text = text
+    // Fix patterns like "Polis*" -> "**Polis**"
+    .replace(/\bPolis\*/g, '**Polis**')
+    .replace(/\bAcropolis\*/g, '**Acropolis**')
+    .replace(/\bAgora\*/g, '**Agora**')
+    .replace(/\bPoleis\*/g, '**Poleis**')
+    .replace(/\bTyranny\*\*/g, '**Tyranny**')
+    
+    // Fix patterns like "*hoplite" -> "**hoplite**"
+    .replace(/\*hoplite\b/g, '**hoplite**')
+    .replace(/\*stasis\b/g, '**stasis**')
+    .replace(/\*Gerousia\b/g, '**Gerousia**')
+    
+    // Fix patterns like "*text**" -> "**text**" (single asterisk followed by double)
+    .replace(/\*([^*\n]+?)\*\*/g, '**$1**')
+    
+    // Fix patterns like "**text*" -> "**text**" (double asterisk followed by single)
+    .replace(/\*\*([^*\n]+?)\*/g, '**$1**');
   
   // Fix patterns like "*text*" -> "**text**" (single asterisk on both sides)
   // But only for specific words that should be bold
@@ -59,7 +73,7 @@ function fixMalformedBold(text) {
     'Polis', 'Acropolis', 'Agora', 'Poleis', 'Citizens', 'Tyranny',
     'Cultural', 'Religious', 'Challenges', 'Conflicts', 'Geography',
     'Social', 'Economic', 'Political', 'Population', 'Trade', 'Military', 'Oligarchy',
-    'hoplite', 'stasis', 'Dark Age', 'Archaic Period', 'Mycenaean'
+    'hoplite', 'stasis', 'Dark Age', 'Archaic Period', 'Mycenaean', 'Gerousia'
   ];
   
   boldWords.forEach(word => {
@@ -165,13 +179,20 @@ export function parseGreekCityStatesContent(rawText) {
     .replace(/^Oligarchy:/gm, '### Oligarchy')
     .replace(/^Tyranny:/gm, '### Tyranny')
     
-    // Fix malformed bold text
-    .replace(/\*Polis\*/g, '**Polis**')
-    .replace(/\*Acropolis\*/g, '**Acropolis**')
-    .replace(/\*Agora\*/g, '**Agora**')
-    .replace(/\*hoplite\*/g, '**hoplite**')
-    .replace(/\*Tyranny\*/g, '**Tyranny**')
-    .replace(/\*stasis\*/g, '**stasis**')
+    // Fix specific malformed bold patterns found in the content
+    .replace(/\bPolis\*/g, '**Polis**')
+    .replace(/\bAcropolis\*/g, '**Acropolis**')
+    .replace(/\bAgora\*/g, '**Agora**')
+    .replace(/\bPoleis\*/g, '**Poleis**')
+    .replace(/\*hoplite\b/g, '**hoplite**')
+    .replace(/\*stasis\b/g, '**stasis**')
+    .replace(/\*Gerousia\b/g, '**Gerousia**')
+    .replace(/\bTyranny\*\*/g, '**Tyranny**')
+    
+    // Fix additional malformed patterns
+    .replace(/\bChallenges and Conflicts\b/g, '## Challenges and Conflicts')
+    .replace(/\bCultural and Religious Unity\b/g, '## Cultural and Religious Unity')
+    .replace(/\bPolitical Evolution: From Kings to Citizens\b/g, '## Political Evolution: From Kings to Citizens')
     
     // Fix malformed references
     .replace(/References\s*\n\s*\[1\]/g, '\n## References\n\n[1]')
