@@ -22,10 +22,10 @@ import { createServer as createHttpServer } from 'http';
 import { exec } from 'child_process';
 import selfsigned from 'selfsigned';
 import crypto from 'crypto';
-import { compressImage, getOptimalFormat, getFileExtension, formatFileSize } from './src/utils/imageCompression.js';
+import { compressImage, getOptimalFormat, getFileExtension, formatFileSize } from './server/utils/imageCompression.js';
 import sharp from 'sharp';
-import imageProxyHandler from './src/utils/proxy.js';
-import enhancedImageProxy from './src/utils/enhancedImageProxy.js';
+import imageProxyHandler from './server/utils/proxy.js';
+import enhancedImageProxy from './server/utils/enhancedImageProxy.js';
 // import { isValidFlashcardTerm } from './src/utils/flashcardUtils.js';
 
 

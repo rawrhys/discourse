@@ -18,7 +18,7 @@ const Dashboard = lazy(() => import('./components/Dashboard'));
 const CourseDisplay = lazy(() => import('./components/CourseDisplay'));
 const PublicCourseDisplay = lazy(() => import('./components/PublicCourseDisplay'));
 const PrivacyPolicy = lazy(() => import('./components/legal/PrivacyPolicy.jsx'));
-const ImageTest = lazy(() => import('./components/ImageTest'));
+
 
 
 const ProtectedRoute = ({ children }) => {
@@ -317,7 +317,7 @@ function App() {
                 <Route path="lesson/:lessonId" element={<CourseDisplay />} />
             </Route>
             <Route path="/public/course/:courseId/*" element={<PublicCourseDisplay />} />
-            <Route path="/image-test" element={<ImageTest />} />
+    
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
