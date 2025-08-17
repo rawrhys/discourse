@@ -162,9 +162,21 @@ class TTSService {
         
         // Handle specific error types
         if (event.error === 'interrupted' || event.error === 'canceled') {
-          console.log('TTS was interrupted or canceled, going to pause state');
-          this.isPlaying = false;
-          this.isPaused = true; // Set to pause state instead of stopping
+          console.log('TTS was interrupted or canceled, checking if this is a false positive');
+          
+          // Check if this is a false positive by examining the actual speech synthesis state
+          const actualSpeaking = this.isActuallySpeaking();
+          const ttsActive = this.isTTSActive();
+          
+          // If TTS is still active, this might be a false positive
+          if (ttsActive) {
+            console.log('TTS interrupted error appears to be false positive - TTS is still active');
+            // Don't change state, let the stable status method handle it
+            return;
+          }
+          
+          // Only treat as real interruption if TTS is actually stopped
+          console.log('TTS was genuinely interrupted, going to pause state');
           this.currentUtterance = null;
           this.pausedAtChar = 0;
           // Don't reset error count for interruptions as they're expected
@@ -339,6 +351,74 @@ class TTSService {
       isSupported: this.isSupported(),
       errorCount: this.errorCount
     };
+  }
+
+  // Check if TTS is actually speaking (more reliable than just checking state)
+  isActuallySpeaking() {
+    return this.speechSynthesis.speaking;
+  }
+
+  // More robust check for TTS activity
+  isTTSActive() {
+    const speaking = this.speechSynthesis.speaking;
+    const paused = this.speechSynthesis.paused;
+    const pending = this.speechSynthesis.pending;
+    
+    // TTS is active if it's speaking, paused, or has pending utterances
+    return speaking || paused || pending || this.currentUtterance !== null;
+  }
+
+  // Get a more stable status that considers the actual speech synthesis state
+  getStableStatus() {
+    const actualSpeaking = this.isActuallySpeaking();
+    const ttsActive = this.isTTSActive();
+    const status = this.getStatus();
+    
+    // If the speech synthesis is actually speaking, we should be in playing state
+    if (actualSpeaking && !status.isPlaying && !status.isPaused) {
+      this.isPlaying = true;
+      this.isPaused = false;
+      return {
+        ...status,
+        isPlaying: true,
+        isPaused: false
+      };
+    }
+    
+    // If TTS is active but not speaking, we might be paused
+    if (ttsActive && !actualSpeaking && status.isPlaying) {
+      // If we have full text and current lesson, we're probably paused
+      if (this.fullText && this.currentLessonId) {
+        // Double-check that we're not in a false positive state
+        // Wait a bit longer before assuming we're paused
+        setTimeout(() => {
+          const stillNotSpeaking = !this.isActuallySpeaking();
+          if (stillNotSpeaking && this.isPlaying) {
+            this.isPlaying = false;
+            this.isPaused = true;
+          }
+        }, 500);
+        
+        return {
+          ...status,
+          isPlaying: false,
+          isPaused: true
+        };
+      }
+    }
+    
+    // If TTS is not active at all, we're stopped
+    if (!ttsActive && (status.isPlaying || status.isPaused)) {
+      this.isPlaying = false;
+      this.isPaused = false;
+      return {
+        ...status,
+        isPlaying: false,
+        isPaused: false
+      };
+    }
+    
+    return status;
   }
 }
 

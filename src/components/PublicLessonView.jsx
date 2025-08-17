@@ -41,6 +41,7 @@ const PublicLessonView = ({
   const performanceMonitor = useRef(PerformanceMonitorService);
   const renderStartTime = useRef(performance.now());
   const abortControllerRef = useRef(null);
+  const ttsStateUpdateTimeoutRef = useRef(null); // For debouncing state updates
 
   // Get flashcards data
   const flashcardData = lesson?.flashcards || lesson?.content?.flashcards || [];
@@ -105,28 +106,49 @@ const PublicLessonView = ({
   useEffect(() => {
     const interval = setInterval(() => {
       try {
-        if (ttsService.current && typeof ttsService.current.getStatus === 'function') {
-          const serviceStatus = ttsService.current.getStatus();
-          if (serviceStatus.isPlaying !== ttsStatus.isPlaying || serviceStatus.isPaused !== ttsStatus.isPaused) {
-            console.log('[PublicLessonView] TTS state changed:', {
-              wasPlaying: ttsStatus.isPlaying,
-              wasPaused: ttsStatus.isPaused,
-              nowPlaying: serviceStatus.isPlaying,
-              nowPaused: serviceStatus.isPaused
-            });
-            setTtsStatus(prev => ({
-              ...prev,
-              isPlaying: serviceStatus.isPlaying,
-              isPaused: serviceStatus.isPaused
-            }));
+        if (ttsService.current && typeof ttsService.current.getStableStatus === 'function') {
+          const serviceStatus = ttsService.current.getStableStatus();
+          
+          // Only update state if there's an actual meaningful change
+          const hasSignificantChange = (
+            serviceStatus.isPlaying !== ttsStatus.isPlaying || 
+            serviceStatus.isPaused !== ttsStatus.isPaused
+          );
+          
+          if (hasSignificantChange) {
+            // Clear any pending state update
+            if (ttsStateUpdateTimeoutRef.current) {
+              clearTimeout(ttsStateUpdateTimeoutRef.current);
+            }
+            
+            // Debounce the state update to prevent rapid changes
+            ttsStateUpdateTimeoutRef.current = setTimeout(() => {
+              console.log('[PublicLessonView] TTS state changed:', {
+                wasPlaying: ttsStatus.isPlaying,
+                wasPaused: ttsStatus.isPaused,
+                nowPlaying: serviceStatus.isPlaying,
+                nowPaused: serviceStatus.isPaused
+              });
+              
+              setTtsStatus(prev => ({
+                ...prev,
+                isPlaying: serviceStatus.isPlaying,
+                isPaused: serviceStatus.isPaused
+              }));
+            }, 500); // Increased debounce to 500ms
           }
         }
       } catch (error) {
         console.warn('[PublicLessonView] TTS state sync error:', error);
       }
-    }, 500); // Check more frequently for better responsiveness
+    }, 2000); // Increased to 2 seconds to reduce rapid changes
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      if (ttsStateUpdateTimeoutRef.current) {
+        clearTimeout(ttsStateUpdateTimeoutRef.current);
+      }
+    };
   }, [ttsStatus.isPlaying, ttsStatus.isPaused]);
 
   // Handle image loading for public courses (simplified)
