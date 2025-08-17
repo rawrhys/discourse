@@ -18,6 +18,7 @@ const Dashboard = lazy(() => import('./components/Dashboard'));
 const CourseDisplay = lazy(() => import('./components/CourseDisplay'));
 const PublicCourseDisplay = lazy(() => import('./components/PublicCourseDisplay'));
 const PrivacyPolicy = lazy(() => import('./components/legal/PrivacyPolicy.jsx'));
+const UserAgreement = lazy(() => import('./components/legal/UserAgreement.jsx'));
 
 
 
@@ -311,6 +312,7 @@ function App() {
             <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
             <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/terms" element={<UserAgreement />} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/course/:courseId" element={<ProtectedRoute><CourseLayout /></ProtectedRoute>}>
                 <Route index element={<CourseDisplay />} />

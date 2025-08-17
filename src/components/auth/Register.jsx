@@ -8,6 +8,7 @@ const Register = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [acceptedPolicy, setAcceptedPolicy] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { register } = useAuth();
@@ -23,6 +24,10 @@ const Register = () => {
 
     if (!acceptedPolicy) {
       return setError('You must accept the Privacy Policy to create an account.');
+    }
+
+    if (!acceptedTerms) {
+      return setError('You must accept the User Agreement to create an account.');
     }
 
     setIsLoading(true);
@@ -146,6 +151,27 @@ const Register = () => {
                 Privacy Policy
               </Link>
               .
+            </div>
+          </div>
+
+          <div className="flex items-start">
+            <div className="flex items-center h-5">
+              <input
+                id="user-agreement"
+                name="user-agreement"
+                type="checkbox"
+                checked={acceptedTerms}
+                onChange={(e) => setAcceptedTerms(e.target.checked)}
+                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                required
+              />
+            </div>
+            <div className="ml-2 text-sm text-gray-600">
+              I have read and accept the{' '}
+              <Link to="/terms" className="text-indigo-600 hover:text-indigo-500" target="_blank" rel="noopener noreferrer">
+                User Agreement & Terms of Service
+              </Link>
+              , including the AI content disclaimers.
             </div>
           </div>
 
