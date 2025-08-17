@@ -87,6 +87,8 @@ class TTSService {
   // Initialize the speech engine
   async initSpeech() {
     try {
+      console.log(`[${this.serviceType} TTS] Starting speech engine initialization...`);
+      
       await this.speech.init({
         'volume': 1,
         'lang': 'en-GB',
@@ -97,6 +99,10 @@ class TTSService {
         'listeners': {
           'onvoiceschanged': (voices) => {
             console.log(`[${this.serviceType} TTS] Voices loaded:`, voices.length);
+            if (voices.length === 0) {
+              console.warn(`[${this.serviceType} TTS] No voices available, trying fallback initialization`);
+              this.tryFallbackInit();
+            }
           },
           'onstart': () => {
             this.isPlaying = true;
@@ -141,8 +147,77 @@ class TTSService {
       
       this.isInitialized = true;
       console.log(`[${this.serviceType} TTS] Speech engine initialized successfully`);
+      
     } catch (error) {
       console.error(`[${this.serviceType} TTS] Failed to initialize speech engine:`, error);
+      this.isInitialized = false;
+      
+      // Try fallback initialization
+      this.tryFallbackInit();
+    }
+  }
+
+  // Try fallback initialization with different settings
+  async tryFallbackInit() {
+    try {
+      console.log(`[${this.serviceType} TTS] Trying fallback initialization...`);
+      
+      await this.speech.init({
+        'volume': 1,
+        'lang': 'en-US', // Try US English as fallback
+        'rate': 1.0,     // Normal rate
+        'pitch': 1,
+        'voice': null,   // Let it choose default voice
+        'splitSentences': false,
+        'listeners': {
+          'onvoiceschanged': (voices) => {
+            console.log(`[${this.serviceType} TTS] Fallback voices loaded:`, voices.length);
+          },
+          'onstart': () => {
+            this.isPlaying = true;
+            this.isPaused = false;
+            console.log(`[${this.serviceType} TTS] Started speaking (fallback)`);
+          },
+          'onend': () => {
+            this.isPlaying = false;
+            this.isPaused = false;
+            console.log(`[${this.serviceType} TTS] Finished speaking (fallback)`);
+            ttsCoordinator.releaseTTS(this.serviceId);
+          },
+          'onpause': () => {
+            this.isPaused = true;
+            this.isPlaying = false;
+            console.log(`[${this.serviceType} TTS] Paused (fallback)`);
+          },
+          'onresume': () => {
+            this.isPaused = false;
+            this.isPlaying = true;
+            console.log(`[${this.serviceType} TTS] Resumed (fallback)`);
+          },
+          'onerror': (event) => {
+            console.error(`[${this.serviceType} TTS] Fallback error:`, event);
+            this.isPlaying = false;
+            this.isPaused = false;
+            this.errorCount++;
+            
+            if (this.errorCount < this.maxRetries) {
+              console.log(`[${this.serviceType} TTS] Fallback retrying... (${this.errorCount}/${this.maxRetries})`);
+              setTimeout(() => {
+                this.speak(this.currentText);
+              }, 1000);
+            } else {
+              console.log(`[${this.serviceType} TTS] Fallback max retries exceeded`);
+              ttsCoordinator.releaseTTS(this.serviceId);
+            }
+          }
+        }
+      });
+      
+      this.isInitialized = true;
+      console.log(`[${this.serviceType} TTS] Fallback speech engine initialized successfully`);
+      
+    } catch (fallbackError) {
+      console.error(`[${this.serviceType} TTS] Fallback initialization also failed:`, fallbackError);
       this.isInitialized = false;
     }
   }
@@ -221,7 +296,7 @@ class TTSService {
     await ttsCoordinator.requestTTS(this.serviceId);
     console.log(`[${this.serviceType} TTS] Got TTS control for reading lesson`);
     
-    // Stop any current reading
+    // Stop any current reading (without releasing control)
     this.stop();
     
     if (!lesson || !lesson.content) {
@@ -259,6 +334,9 @@ class TTSService {
   // Speak text using speak-tts
   async speak(text) {
     try {
+      console.log(`[${this.serviceType} TTS] Attempting to speak text (length: ${text.length})`);
+      console.log(`[${this.serviceType} TTS] Text preview:`, text.substring(0, 100) + '...');
+      
       await this.speech.speak({
         text: text,
         queue: false, // Don't queue, replace current speech
@@ -302,6 +380,8 @@ class TTSService {
           }
         }
       });
+      
+      console.log(`[${this.serviceType} TTS] Speak command completed successfully`);
     } catch (error) {
       console.error(`[${this.serviceType} TTS] Error speaking:`, error);
       this.isPlaying = false;
@@ -350,8 +430,11 @@ class TTSService {
         console.warn(`[${this.serviceType} TTS] Stop failed:`, error);
       }
     }
-    
-    // Release TTS control
+  }
+
+  // Stop and release TTS control (for external use)
+  stopAndRelease() {
+    this.stop();
     ttsCoordinator.releaseTTS(this.serviceId);
   }
 
@@ -413,7 +496,7 @@ class TTSServiceFactory {
     const service = this.services.get(key);
     
     if (service) {
-      service.stop();
+      service.stopAndRelease();
       this.services.delete(key);
       console.log(`[TTS Factory] Cleaned up TTS service for ${key}`);
     }
@@ -423,7 +506,7 @@ class TTSServiceFactory {
   cleanupAllSessions() {
     for (const [key, service] of this.services.entries()) {
       if (key.startsWith('session_')) {
-        service.stop();
+        service.stopAndRelease();
         this.services.delete(key);
       }
     }
