@@ -406,7 +406,7 @@ const PublicCourseDisplay = () => {
                     console.log(`[PublicCourseDisplay] Quiz completed with score: ${score} for lesson: ${currentLesson.id}`);
                   }
                   handleQuizCompletion(currentLesson.id, score);
-                  setShowQuiz(false);
+                  // Don't automatically switch back to content - let user choose
                 }}
                 lessonId={currentLesson.id}
                 module={currentModule}

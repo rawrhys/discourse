@@ -349,26 +349,6 @@ const PublicLessonView = ({
           </div>
           
           <div className="flex items-center space-x-3">
-                         <button
-               onClick={isPlaying || isPaused ? handleStopAudio : handlePlayAudio}
-               className="p-2 rounded-full bg-white bg-opacity-20 hover:bg-opacity-30 transition-all"
-               title={isPlaying ? "Pause audio" : isPaused ? "Resume audio" : "Play audio"}
-             >
-               {isPlaying ? (
-                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                 </svg>
-               ) : isPaused ? (
-                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                 </svg>
-               ) : (
-                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-                 </svg>
-               )}
-             </button>
-            
             {lesson.quiz && lesson.quiz.length > 0 && (
               <button
                 onClick={onTakeQuiz}
@@ -397,29 +377,41 @@ const PublicLessonView = ({
          </div>
        </div>
 
-       {/* Tab Navigation */}
-       <div className="flex space-x-2 mb-4 p-6 pb-0">
-         <button
-           onClick={() => handleTabChange('content')}
-           className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-             view === 'content' 
-               ? 'bg-blue-600 text-white hover:bg-blue-700' 
-               : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-           }`}
-         >
-           <i className="fas fa-book mr-2"></i>Content
-         </button>
-         <button
-           onClick={() => handleTabChange('flashcards')}
-           className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-             view === 'flashcards'
-               ? 'bg-blue-600 text-white hover:bg-blue-700'
-               : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-           }`}
-         >
-           <i className="fas fa-clone mr-2"></i>Flashcards {flashcardData?.length ? `(${flashcardData.length})` : ''}
-         </button>
-       </div>
+               {/* Tab Navigation */}
+        <div className="flex space-x-2 mb-4 p-6 pb-0">
+          <button
+            onClick={() => handleTabChange('content')}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              view === 'content' 
+                ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            <i className="fas fa-book mr-2"></i>Content
+          </button>
+          <button
+            onClick={() => handleTabChange('flashcards')}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              view === 'flashcards'
+                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            <i className="fas fa-clone mr-2"></i>Flashcards {flashcardData?.length ? `(${flashcardData.length})` : ''}
+          </button>
+          <button
+            onClick={isPlaying || isPaused ? handleStopAudio : handlePlayAudio}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              isPlaying || isPaused
+                ? 'bg-green-600 text-white hover:bg-green-700'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
+            title={isPlaying ? 'Pause reading' : isPaused ? 'Resume reading' : 'Start reading aloud'}
+          >
+            <i className={`mr-2 ${isPlaying ? 'fas fa-pause' : isPaused ? 'fas fa-play' : 'fas fa-volume-up'}`}></i>
+            {isPlaying ? 'Pause' : isPaused ? 'Resume' : 'Read Aloud'}
+          </button>
+        </div>
 
        {/* Content View */}
        {view === 'content' && (
