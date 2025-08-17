@@ -10,7 +10,7 @@ import logger from '../utils/logger';
 import SimpleImageService from '../services/SimpleImageService.js';
 import Image from './Image.jsx';
 
-import ttsService from '../services/TTSService.js';
+import { privateTTSService } from '../services/TTSService.js';
 import Flashcard from './Flashcard';
 import { useThrottledLogger, useDebounce, useStableValue } from '../hooks/usePerformanceOptimization';
 import performanceMonitor from '../services/PerformanceMonitorService';
@@ -438,7 +438,7 @@ const LessonView = ({
   const [ttsStatus, setTtsStatus] = useState({
     isPlaying: false,
     isPaused: false,
-    isSupported: ttsService.isSupported()
+    isSupported: privateTTSService.isSupported()
   });
 
   // Comprehensive quiz and flashcard data extraction
@@ -500,8 +500,8 @@ const LessonView = ({
     setIsLoading(false);
     
     // Reset TTS if lesson changes
-    if (propLesson?.id && ttsService.getStatus().currentLessonId !== propLesson.id) {
-      ttsService.stop();
+    if (propLesson?.id && privateTTSService.getStatus().currentLessonId !== propLesson.id) {
+      privateTTSService.stop();
       setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
     }
   }, [propLesson]);
@@ -638,28 +638,28 @@ const LessonView = ({
     const contentStr = cleanAndCombineContent(propLesson.content);
     
     if (ttsStatus.isPlaying) {
-      ttsService.pause();
+      privateTTSService.pause();
       setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: true }));
     } else if (ttsStatus.isPaused) {
-      ttsService.resume();
+      privateTTSService.resume();
       setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
     } else {
       // Use readLesson instead of speak
-      ttsService.readLesson({ ...propLesson, content: contentStr }, propLesson.id);
+      privateTTSService.readLesson({ ...propLesson, content: contentStr }, propLesson.id);
       setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
     }
   }, [propLesson, ttsStatus.isPlaying, ttsStatus.isPaused]);
 
   // Handle next lesson with TTS cleanup
   const handleNextLessonWithTTS = useCallback(() => {
-    ttsService.stop();
+    privateTTSService.stop();
     setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
     if (onNextLesson) onNextLesson();
   }, [onNextLesson]);
 
   // Handle previous lesson with TTS cleanup
   const handlePreviousLessonWithTTS = useCallback(() => {
-    ttsService.stop();
+    privateTTSService.stop();
     setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
     if (onPreviousLesson) onPreviousLesson();
   }, [onPreviousLesson]);
@@ -761,7 +761,7 @@ const LessonView = ({
   // Cleanup TTS on unmount
   useEffect(() => {
     return () => {
-      ttsService.stop();
+      privateTTSService.stop();
     };
   }, []);
 

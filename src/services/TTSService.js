@@ -1,7 +1,7 @@
 // src/services/TTSService.js
 
 class TTSService {
-  constructor() {
+  constructor(serviceType = 'default') {
     this.speechSynthesis = window.speechSynthesis;
     this.currentUtterance = null;
     this.isPlaying = false;
@@ -12,6 +12,7 @@ class TTSService {
     this.fullText = ''; // Store the full text for resume
     this.errorCount = 0; // Track consecutive errors
     this.maxRetries = 3; // Maximum retry attempts
+    this.serviceType = serviceType; // 'private' or 'public'
   }
 
   // Get available voices
@@ -115,13 +116,13 @@ class TTSService {
     this.stop();
     
     if (!lesson || !lesson.content) {
-      console.warn('No lesson content to read');
+      console.warn(`[${this.serviceType} TTS] No lesson content to read`);
       return false;
     }
 
     const text = this.extractLessonText(lesson.content);
     if (!text.trim()) {
-      console.warn('No text content extracted from lesson');
+      console.warn(`[${this.serviceType} TTS] No text content extracted from lesson`);
       return false;
     }
 
@@ -144,7 +145,7 @@ class TTSService {
         this.isPlaying = true;
         this.isPaused = false;
         this.errorCount = 0; // Reset error count on successful start
-        console.log('TTS started reading lesson:', lesson.title);
+        console.log(`[${this.serviceType} TTS] Started reading lesson:`, lesson.title);
       };
       
       this.currentUtterance.onend = () => {
@@ -153,16 +154,16 @@ class TTSService {
         this.currentUtterance = null;
         this.pausedAtChar = 0;
         this.errorCount = 0; // Reset error count on successful completion
-        console.log('TTS finished reading lesson:', lesson.title);
+        console.log(`[${this.serviceType} TTS] Finished reading lesson:`, lesson.title);
       };
       
       this.currentUtterance.onerror = (event) => {
-        console.error('TTS error:', event.error);
+        console.error(`[${this.serviceType} TTS] Error:`, event.error);
         this.errorCount++;
         
         // Handle specific error types
         if (event.error === 'interrupted' || event.error === 'canceled') {
-          console.log('TTS was interrupted or canceled, checking if this is a false positive');
+          console.log(`[${this.serviceType} TTS] Was interrupted or canceled, checking if this is a false positive`);
           
           // Check if this is a false positive by examining the actual speech synthesis state
           const actualSpeaking = this.isActuallySpeaking();
@@ -170,18 +171,18 @@ class TTSService {
           
           // If TTS is still active, this might be a false positive
           if (ttsActive) {
-            console.log('TTS interrupted error appears to be false positive - TTS is still active');
+            console.log(`[${this.serviceType} TTS] Interrupted error appears to be false positive - TTS is still active`);
             // Don't change state, let the stable status method handle it
             return;
           }
           
           // Only treat as real interruption if TTS is actually stopped
-          console.log('TTS was genuinely interrupted, going to pause state');
+          console.log(`[${this.serviceType} TTS] Was genuinely interrupted, going to pause state`);
           this.currentUtterance = null;
           this.pausedAtChar = 0;
           // Don't reset error count for interruptions as they're expected
         } else if (event.error === 'not-allowed') {
-          console.log('TTS not allowed, user may need to interact with page first');
+          console.log(`[${this.serviceType} TTS] Not allowed, user may need to interact with page first`);
           this.isPlaying = false;
           this.isPaused = false;
           this.currentUtterance = null;
@@ -189,12 +190,12 @@ class TTSService {
         } else {
           // For other errors, try to recover if we haven't exceeded max retries
           if (this.errorCount < this.maxRetries) {
-            console.log(`TTS error, attempting retry ${this.errorCount}/${this.maxRetries}`);
+            console.log(`[${this.serviceType} TTS] Error, attempting retry ${this.errorCount}/${this.maxRetries}`);
             setTimeout(() => {
               this.restartFromBeginning();
             }, 1000);
           } else {
-            console.log('TTS max retries exceeded, stopping');
+            console.log(`[${this.serviceType} TTS] Max retries exceeded, stopping`);
             this.isPlaying = false;
             this.isPaused = false;
             this.currentUtterance = null;
@@ -211,7 +212,7 @@ class TTSService {
       return true;
       
     } catch (error) {
-      console.error('Error starting TTS:', error);
+      console.error(`[${this.serviceType} TTS] Error starting TTS:`, error);
       this.isPlaying = false;
       this.isPaused = false;
       return false;
@@ -226,9 +227,9 @@ class TTSService {
         this.speechSynthesis.pause();
         this.isPaused = true;
         this.isPlaying = false; // Ensure we're not in playing state when paused
-        console.log('TTS paused');
+        console.log(`[${this.serviceType} TTS] Paused`);
       } catch (error) {
-        console.warn('Pause failed, stopping instead:', error);
+        console.warn(`[${this.serviceType} TTS] Pause failed, stopping instead:`, error);
         // Fallback: stop and remember position
         this.stop();
         this.isPaused = true;
@@ -244,15 +245,15 @@ class TTSService {
         this.speechSynthesis.resume();
         this.isPaused = false;
         this.isPlaying = true;
-        console.log('TTS resumed');
+        console.log(`[${this.serviceType} TTS] Resumed`);
       } catch (error) {
-        console.warn('Resume failed, restarting from beginning:', error);
+        console.warn(`[${this.serviceType} TTS] Resume failed, restarting from beginning:`, error);
         // Fallback: restart from beginning
         this.restartFromBeginning();
       }
     } else if (this.isPaused && !this.fullText) {
       // If we're paused but don't have full text, try to restart
-      console.log('TTS resume: no full text, trying to restart');
+      console.log(`[${this.serviceType} TTS] Resume: no full text, trying to restart`);
       this.restartFromBeginning();
     }
   }
@@ -260,7 +261,7 @@ class TTSService {
   // Restart from beginning (fallback for resume)
   async restartFromBeginning() {
     if (!this.fullText || !this.currentLessonId) {
-      console.warn('TTS restart: missing fullText or currentLessonId');
+      console.warn(`[${this.serviceType} TTS] Restart: missing fullText or currentLessonId`);
       this.isPlaying = false;
       this.isPaused = false;
       return;
@@ -285,7 +286,7 @@ class TTSService {
       this.currentUtterance.onstart = () => {
         this.isPlaying = true;
         this.isPaused = false;
-        console.log('TTS restarted reading');
+        console.log(`[${this.serviceType} TTS] Restarted reading`);
       };
       
       this.currentUtterance.onend = () => {
@@ -293,11 +294,11 @@ class TTSService {
         this.isPaused = false;
         this.currentUtterance = null;
         this.pausedAtChar = 0;
-        console.log('TTS finished reading');
+        console.log(`[${this.serviceType} TTS] Finished reading`);
       };
       
       this.currentUtterance.onerror = (event) => {
-        console.error('TTS error:', event.error);
+        console.error(`[${this.serviceType} TTS] Error:`, event.error);
         this.isPlaying = false;
         this.isPaused = false;
         this.currentUtterance = null;
@@ -305,10 +306,10 @@ class TTSService {
         
         // Handle specific error types
         if (event.error === 'interrupted' || event.error === 'canceled') {
-          console.log('TTS was interrupted or canceled, going to pause state');
+          console.log(`[${this.serviceType} TTS] Was interrupted or canceled, going to pause state`);
           this.isPaused = true; // Set to pause state instead of stopping
         } else if (event.error === 'not-allowed') {
-          console.log('TTS not allowed, user may need to interact with page first');
+          console.log(`[${this.serviceType} TTS] Not allowed, user may need to interact with page first`);
         }
       };
       
@@ -318,7 +319,7 @@ class TTSService {
       }
       this.speechSynthesis.speak(this.currentUtterance);
     } catch (error) {
-      console.error('Error restarting TTS:', error);
+      console.error(`[${this.serviceType} TTS] Error restarting TTS:`, error);
       this.isPlaying = false;
       this.isPaused = false;
     }
@@ -346,7 +347,7 @@ class TTSService {
       this.pausedAtChar = 0;
       this.fullText = '';
       this.errorCount = 0; // Reset error count on stop
-      console.log('TTS stopped');
+      console.log(`[${this.serviceType} TTS] Stopped`);
     }
   }
 
@@ -362,7 +363,8 @@ class TTSService {
       isPaused: this.isPaused,
       currentLessonId: this.currentLessonId,
       isSupported: this.isSupported(),
-      errorCount: this.errorCount
+      errorCount: this.errorCount,
+      serviceType: this.serviceType
     };
   }
 
@@ -435,7 +437,12 @@ class TTSService {
   }
 }
 
-// Create singleton instance
-const ttsService = new TTSService();
+// Create separate singleton instances for private and public courses
+const privateTTSService = new TTSService('private');
+const publicTTSService = new TTSService('public');
 
-export default ttsService; 
+// Export both services
+export { privateTTSService, publicTTSService };
+
+// Default export for backward compatibility (uses private service)
+export default privateTTSService; 

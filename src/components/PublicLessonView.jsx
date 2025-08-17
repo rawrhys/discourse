@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import SimpleImageService from '../services/SimpleImageService';
-import TTSService from '../services/TTSService';
+import { publicTTSService } from '../services/TTSService';
 import PerformanceMonitorService from '../services/PerformanceMonitorService';
 import markdownService from '../services/MarkdownService';
 import Flashcard from './Flashcard';
@@ -37,7 +37,7 @@ const PublicLessonView = ({
   });
   
   // Use singleton instances directly - both services are exported as singletons
-  const ttsService = useRef(TTSService);
+  const ttsService = useRef(publicTTSService);
   const performanceMonitor = useRef(PerformanceMonitorService);
   const renderStartTime = useRef(performance.now());
   const abortControllerRef = useRef(null);
