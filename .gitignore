@@ -34,5 +34,5 @@ public/sw.js
 public/manifest.json
 
 # Discourse logo (should be preserved on server)
-public/assets/images/discourse-logo.png
-public/assets/images/discourse-logo.svg
+public_html/assets/images/discourse-logo.png
+public_html/assets/images/discourse-logo.svg

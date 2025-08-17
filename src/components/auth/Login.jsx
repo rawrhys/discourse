@@ -32,12 +32,12 @@ const Login = () => {
       <div className="max-w-md w-full space-y-8">
         <div>
           <img
-            src={"/assets/images/discourse-logo.svg"}
+            src={"/public_html/assets/images/discourse-logo.svg"}
             alt="Discourse Logo"
             style={{ width: '120px', margin: '0 auto', display: 'block' }}
             onError={(e) => {
               // Fallback to PNG if SVG fails
-              e.target.src = "/assets/images/discourse-logo.png";
+              e.target.src = "/public_html/assets/images/discourse-logo.png";
             }}
           />
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
