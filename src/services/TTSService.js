@@ -183,8 +183,22 @@ class TTSService {
     await ttsCoordinator.requestTTS(this.serviceId);
     console.log(`[${this.serviceType} TTS] Got TTS control for reading lesson`);
     
-    // Stop any current reading
-    this.stop();
+    // Cancel any current speech synthesis without releasing control
+    if (this.speechSynthesis.speaking) {
+      this.speechSynthesis.cancel();
+    }
+    
+    if (this.currentUtterance) {
+      this.speechSynthesis.cancel();
+      this.isPlaying = false;
+      this.isPaused = false;
+      this.currentUtterance = null;
+      this.currentText = '';
+      this.currentLessonId = null;
+      this.pausedAtChar = 0;
+      this.fullText = '';
+      this.errorCount = 0;
+    }
     
     if (!lesson || !lesson.content) {
       console.warn(`[${this.serviceType} TTS] No lesson content to read`);
