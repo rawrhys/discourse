@@ -112,7 +112,7 @@ const results = await ttsTest.runAllTests();
 ```
 
 ### Web Testing
-1. Navigate to `http://localhost:3000/tts-test.html`
+1. Navigate to `/tts-test.html` in your browser
 2. Use the interactive interface to test TTS functionality
 3. Monitor real-time status and logs
 4. Run automated tests

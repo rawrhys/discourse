@@ -203,7 +203,12 @@ class TTSService {
       }
 
       // Wait for voices to be available
-      await this.waitForVoices();
+      const voices = await this.waitForVoices();
+      
+      // Check if we have voices available
+      if (!voices || voices.length === 0) {
+        console.log(`[${this.serviceType} TTS] No voices available, but proceeding with initialization`);
+      }
 
       const initConfig = this.getInitConfig();
       
@@ -226,41 +231,73 @@ class TTSService {
     }
   }
 
-  // Wait for voices to be available
+  // Wait for voices to be available with better timeout handling
   async waitForVoices() {
     return new Promise((resolve) => {
-      const checkVoices = () => {
-        const voices = window.speechSynthesis.getVoices();
-        if (voices && voices.length > 0) {
-          console.log(`[${this.serviceType} TTS] Voices loaded:`, voices.length);
-          resolve(voices);
-        } else {
-          // Try again after a short delay
-          setTimeout(checkVoices, 100);
+      let timeoutId = null;
+      let checkInterval = null;
+      
+      const cleanup = () => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
         }
+        if (checkInterval) {
+          clearInterval(checkInterval);
+          checkInterval = null;
+        }
+        window.speechSynthesis.removeEventListener('voiceschanged', handleVoicesChanged);
+      };
+      
+      const checkVoices = () => {
+        try {
+          const voices = window.speechSynthesis.getVoices();
+          if (voices && voices.length > 0) {
+            console.log(`[${this.serviceType} TTS] Voices loaded:`, voices.length);
+            cleanup();
+            resolve(voices);
+            return true;
+          }
+        } catch (error) {
+          console.warn(`[${this.serviceType} TTS] Error checking voices:`, error);
+        }
+        return false;
       };
       
       // Start checking immediately
-      checkVoices();
+      if (checkVoices()) return;
+      
+      // Set up interval checking
+      checkInterval = setInterval(() => {
+        if (checkVoices()) {
+          clearInterval(checkInterval);
+          checkInterval = null;
+        }
+      }, 200);
       
       // Also listen for voiceschanged event
       const handleVoicesChanged = () => {
-        const voices = window.speechSynthesis.getVoices();
-        if (voices && voices.length > 0) {
-          console.log(`[${this.serviceType} TTS] Voices loaded via event:`, voices.length);
-          window.speechSynthesis.removeEventListener('voiceschanged', handleVoicesChanged);
-          resolve(voices);
+        if (checkVoices()) {
+          cleanup();
         }
       };
       
       window.speechSynthesis.addEventListener('voiceschanged', handleVoicesChanged);
       
-      // Timeout after 5 seconds
-      setTimeout(() => {
-        window.speechSynthesis.removeEventListener('voiceschanged', handleVoicesChanged);
-        console.warn(`[${this.serviceType} TTS] Voice loading timeout`);
-        resolve([]);
-      }, 5000);
+      // Timeout after 10 seconds (increased from 5)
+      timeoutId = setTimeout(() => {
+        console.log(`[${this.serviceType} TTS] Voice loading timeout - proceeding with available voices`);
+        cleanup();
+        
+        // Try to get any available voices, even if empty
+        try {
+          const voices = window.speechSynthesis.getVoices();
+          resolve(voices || []);
+        } catch (error) {
+          console.log(`[${this.serviceType} TTS] Error getting voices after timeout:`, error);
+          resolve([]);
+        }
+      }, 10000);
     });
   }
 
@@ -326,7 +363,8 @@ class TTSService {
           'rate': 1.0,
           'pitch': 1,
           'voice': null,
-          'splitSentences': false
+          'splitSentences': false,
+          'volume': 0.8 // Slightly lower volume for fallback
         };
     }
   }
