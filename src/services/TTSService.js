@@ -1,6 +1,17 @@
 // src/services/TTSService.js
 import Speech from 'speak-tts';
 
+// Enhanced error handling with better categorization
+const TTS_ERROR_TYPES = {
+  INITIALIZATION: 'initialization',
+  BROWSER_UNSUPPORTED: 'browser_unsupported',
+  VOICE_UNAVAILABLE: 'voice_unavailable',
+  NETWORK: 'network',
+  INTERRUPTED: 'interrupted',
+  TIMEOUT: 'timeout',
+  UNKNOWN: 'unknown'
+};
+
 // Global error handler for TTS-related promise rejections
 const handleTTSError = (event) => {
   if (event && event.reason && (
@@ -37,12 +48,13 @@ if (typeof window !== 'undefined') {
   });
 }
 
-// Global TTS Coordinator to prevent conflicts between multiple TTS services
+// Enhanced TTS Coordinator with better conflict resolution
 class TTSCoordinator {
   constructor() {
     this.activeService = null;
     this.queue = [];
     this.isProcessing = false;
+    this.lastActivity = Date.now();
   }
 
   // Request to use TTS - returns a promise that resolves when TTS is available
@@ -51,10 +63,11 @@ class TTSCoordinator {
       if (!this.activeService || this.activeService === serviceId) {
         // No conflict, can use TTS immediately
         this.activeService = serviceId;
+        this.lastActivity = Date.now();
         resolve();
       } else {
         // Conflict - add to queue
-        this.queue.push({ serviceId, resolve });
+        this.queue.push({ serviceId, resolve, timestamp: Date.now() });
         console.log(`[TTS Coordinator] Service ${serviceId} queued, waiting for ${this.activeService} to finish`);
       }
     });
@@ -64,6 +77,7 @@ class TTSCoordinator {
   releaseTTS(serviceId) {
     if (this.activeService === serviceId) {
       this.activeService = null;
+      this.lastActivity = Date.now();
       console.log(`[TTS Coordinator] Service ${serviceId} released TTS control`);
       
       // Process next in queue
@@ -71,13 +85,20 @@ class TTSCoordinator {
     }
   }
 
-  // Process the queue
+  // Process the queue with timeout handling
   processQueue() {
     if (this.queue.length > 0 && !this.activeService) {
-      const next = this.queue.shift();
-      this.activeService = next.serviceId;
-      console.log(`[TTS Coordinator] Service ${next.serviceId} now has TTS control`);
-      next.resolve();
+      const now = Date.now();
+      // Remove stale queue entries (older than 30 seconds)
+      this.queue = this.queue.filter(item => now - item.timestamp < 30000);
+      
+      if (this.queue.length > 0) {
+        const next = this.queue.shift();
+        this.activeService = next.serviceId;
+        this.lastActivity = now;
+        console.log(`[TTS Coordinator] Service ${next.serviceId} now has TTS control`);
+        next.resolve();
+      }
     }
   }
 
@@ -85,6 +106,7 @@ class TTSCoordinator {
   forceStop() {
     this.activeService = null;
     this.queue = [];
+    this.lastActivity = Date.now();
     console.log(`[TTS Coordinator] Force stopped all TTS`);
   }
 
@@ -92,14 +114,29 @@ class TTSCoordinator {
   getStatus() {
     return {
       activeService: this.activeService,
-      queueLength: this.queue.length
+      queueLength: this.queue.length,
+      lastActivity: this.lastActivity,
+      isStale: Date.now() - this.lastActivity > 60000 // 1 minute
     };
+  }
+
+  // Clean up stale services
+  cleanupStaleServices() {
+    if (this.isStale()) {
+      console.log(`[TTS Coordinator] Cleaning up stale service: ${this.activeService}`);
+      this.forceStop();
+    }
+  }
+
+  isStale() {
+    return Date.now() - this.lastActivity > 60000; // 1 minute
   }
 }
 
 // Create global coordinator instance
 const ttsCoordinator = new TTSCoordinator();
 
+// Enhanced TTS Service with better error handling and browser compatibility
 class TTSService {
   constructor(serviceType = 'default') {
     this.serviceType = serviceType;
@@ -115,132 +152,228 @@ class TTSService {
     this.fullText = '';
     this.errorCount = 0;
     this.maxRetries = 3;
+    this.initializationAttempts = 0;
+    this.maxInitAttempts = 3;
+    
+    // Browser compatibility check
+    this.browserSupport = this.checkBrowserSupport();
     
     // Initialize the speech engine
     this.initSpeech();
   }
 
-  // Initialize the speech engine
+  // Check browser support for speech synthesis
+  checkBrowserSupport() {
+    const support = {
+      speechSynthesis: typeof window !== 'undefined' && 'speechSynthesis' in window,
+      speechSynthesisUtterance: typeof window !== 'undefined' && 'SpeechSynthesisUtterance' in window,
+      voices: false
+    };
+
+    if (support.speechSynthesis) {
+      try {
+        const voices = window.speechSynthesis.getVoices();
+        support.voices = voices && voices.length > 0;
+      } catch (e) {
+        console.warn(`[${this.serviceType} TTS] Error checking voices:`, e);
+      }
+    }
+
+    console.log(`[${this.serviceType} TTS] Browser support:`, support);
+    return support;
+  }
+
+  // Enhanced initialization with multiple fallback strategies
   async initSpeech() {
+    if (this.initializationAttempts >= this.maxInitAttempts) {
+      console.warn(`[${this.serviceType} TTS] Max initialization attempts reached`);
+      return;
+    }
+
+    this.initializationAttempts++;
+    
     try {
-      console.log(`[${this.serviceType} TTS] Starting speech engine initialization...`);
+      console.log(`[${this.serviceType} TTS] Starting speech engine initialization (attempt ${this.initializationAttempts}/${this.maxInitAttempts})...`);
       
       // Check if speech synthesis is supported
-      if (!window.speechSynthesis) {
+      if (!this.browserSupport.speechSynthesis) {
         console.warn(`[${this.serviceType} TTS] Speech synthesis not supported in this browser`);
         this.isInitialized = false;
         return;
       }
 
-      await this.speech.init({
-        'volume': 1,
-        'lang': 'en-GB',
-        'rate': 0.9,
-        'pitch': 1,
-        'voice': 'Google UK English Female', // British female voice
-        'splitSentences': true,
-        'listeners': {
-          'onvoiceschanged': (voices) => {
-            console.log(`[${this.serviceType} TTS] Voices loaded:`, voices.length);
-            if (voices.length === 0) {
-              console.warn(`[${this.serviceType} TTS] No voices available, trying fallback initialization`);
-              this.tryFallbackInit();
-            }
-          },
-          'onstart': () => {
-            this.isPlaying = true;
-            this.isPaused = false;
-            console.log(`[${this.serviceType} TTS] Started speaking`);
-          },
-          'onend': () => {
-            this.isPlaying = false;
-            this.isPaused = false;
-            console.log(`[${this.serviceType} TTS] Finished speaking`);
-            ttsCoordinator.releaseTTS(this.serviceId);
-          },
-          'onpause': () => {
-            this.isPaused = true;
-            this.isPlaying = false;
-            console.log(`[${this.serviceType} TTS] Paused`);
-          },
-          'onresume': () => {
-            this.isPaused = false;
-            this.isPlaying = true;
-            console.log(`[${this.serviceType} TTS] Resumed`);
-          },
-          'onerror': (event) => {
-            console.warn(`[${this.serviceType} TTS] Initialization error:`, event);
-            // Don't handle errors during initialization, just log them
-          }
-        }
-      });
+      // Wait for voices to be available
+      await this.waitForVoices();
+
+      const initConfig = this.getInitConfig();
+      
+      await this.speech.init(initConfig);
       
       this.isInitialized = true;
+      this.initializationAttempts = 0; // Reset on success
       console.log(`[${this.serviceType} TTS] Speech engine initialized successfully`);
       
     } catch (error) {
-      console.warn(`[${this.serviceType} TTS] Failed to initialize speech engine:`, error);
+      console.warn(`[${this.serviceType} TTS] Failed to initialize speech engine (attempt ${this.initializationAttempts}):`, error);
       this.isInitialized = false;
       
-      // Try fallback initialization
-      this.tryFallbackInit();
+      // Try fallback initialization with delay
+      if (this.initializationAttempts < this.maxInitAttempts) {
+        setTimeout(() => {
+          this.initSpeech();
+        }, 1000 * this.initializationAttempts); // Exponential backoff
+      }
     }
   }
 
-  // Try fallback initialization with different settings
-  async tryFallbackInit() {
-    try {
-      console.log(`[${this.serviceType} TTS] Trying fallback initialization...`);
-      
-      await this.speech.init({
-        'volume': 1,
-        'lang': 'en-US', // Try US English as fallback
-        'rate': 1.0,     // Normal rate
-        'pitch': 1,
-        'voice': null,   // Let it choose default voice
-        'splitSentences': false,
-        'listeners': {
-          'onvoiceschanged': (voices) => {
-            console.log(`[${this.serviceType} TTS] Fallback voices loaded:`, voices.length);
-          },
-          'onstart': () => {
-            this.isPlaying = true;
-            this.isPaused = false;
-            console.log(`[${this.serviceType} TTS] Started speaking (fallback)`);
-          },
-          'onend': () => {
-            this.isPlaying = false;
-            this.isPaused = false;
-            console.log(`[${this.serviceType} TTS] Finished speaking (fallback)`);
-            ttsCoordinator.releaseTTS(this.serviceId);
-          },
-          'onpause': () => {
-            this.isPaused = true;
-            this.isPlaying = false;
-            console.log(`[${this.serviceType} TTS] Paused (fallback)`);
-          },
-          'onresume': () => {
-            this.isPaused = false;
-            this.isPlaying = true;
-            console.log(`[${this.serviceType} TTS] Resumed (fallback)`);
-          },
-          'onerror': (event) => {
-            console.warn(`[${this.serviceType} TTS] Fallback initialization error:`, event);
-            // Don't handle errors during fallback initialization, just log them
-          }
+  // Wait for voices to be available
+  async waitForVoices() {
+    return new Promise((resolve) => {
+      const checkVoices = () => {
+        const voices = window.speechSynthesis.getVoices();
+        if (voices && voices.length > 0) {
+          console.log(`[${this.serviceType} TTS] Voices loaded:`, voices.length);
+          resolve(voices);
+        } else {
+          // Try again after a short delay
+          setTimeout(checkVoices, 100);
         }
-      });
+      };
       
-      this.isInitialized = true;
-      console.log(`[${this.serviceType} TTS] Fallback speech engine initialized successfully`);
+      // Start checking immediately
+      checkVoices();
       
-    } catch (fallbackError) {
-      console.warn(`[${this.serviceType} TTS] Fallback initialization also failed:`, fallbackError);
-      this.isInitialized = false;
+      // Also listen for voiceschanged event
+      const handleVoicesChanged = () => {
+        const voices = window.speechSynthesis.getVoices();
+        if (voices && voices.length > 0) {
+          console.log(`[${this.serviceType} TTS] Voices loaded via event:`, voices.length);
+          window.speechSynthesis.removeEventListener('voiceschanged', handleVoicesChanged);
+          resolve(voices);
+        }
+      };
+      
+      window.speechSynthesis.addEventListener('voiceschanged', handleVoicesChanged);
+      
+      // Timeout after 5 seconds
+      setTimeout(() => {
+        window.speechSynthesis.removeEventListener('voiceschanged', handleVoicesChanged);
+        console.warn(`[${this.serviceType} TTS] Voice loading timeout`);
+        resolve([]);
+      }, 5000);
+    });
+  }
+
+  // Get initialization configuration based on attempt number
+  getInitConfig() {
+    const baseConfig = {
+      'volume': 1,
+      'splitSentences': true,
+      'listeners': {
+        'onvoiceschanged': (voices) => {
+          console.log(`[${this.serviceType} TTS] Voices loaded:`, voices.length);
+        },
+        'onstart': () => {
+          this.isPlaying = true;
+          this.isPaused = false;
+          console.log(`[${this.serviceType} TTS] Started speaking`);
+        },
+        'onend': () => {
+          this.isPlaying = false;
+          this.isPaused = false;
+          console.log(`[${this.serviceType} TTS] Finished speaking`);
+          ttsCoordinator.releaseTTS(this.serviceId);
+        },
+        'onpause': () => {
+          this.isPaused = true;
+          this.isPlaying = false;
+          console.log(`[${this.serviceType} TTS] Paused`);
+        },
+        'onresume': () => {
+          this.isPaused = false;
+          this.isPlaying = true;
+          console.log(`[${this.serviceType} TTS] Resumed`);
+        },
+        'onerror': (event) => {
+          console.warn(`[${this.serviceType} TTS] Speech error:`, event);
+          this.handleSpeechError(event);
+        }
+      }
+    };
+
+    // Different configurations based on initialization attempt
+    switch (this.initializationAttempts) {
+      case 1:
+        return {
+          ...baseConfig,
+          'lang': 'en-GB',
+          'rate': 0.9,
+          'pitch': 1,
+          'voice': 'Google UK English Female'
+        };
+      case 2:
+        return {
+          ...baseConfig,
+          'lang': 'en-US',
+          'rate': 1.0,
+          'pitch': 1,
+          'voice': null // Let it choose default
+        };
+      default:
+        return {
+          ...baseConfig,
+          'lang': 'en',
+          'rate': 1.0,
+          'pitch': 1,
+          'voice': null,
+          'splitSentences': false
+        };
     }
   }
 
-  // Enhanced text cleaning for TTS (remove markdown, extra spaces, etc.)
+  // Handle speech errors with better categorization
+  handleSpeechError(event) {
+    const errorType = this.categorizeError(event);
+    
+    switch (errorType) {
+      case TTS_ERROR_TYPES.INTERRUPTED:
+        console.log(`[${this.serviceType} TTS] Speech interrupted, not counting as error`);
+        break;
+      case TTS_ERROR_TYPES.VOICE_UNAVAILABLE:
+        console.warn(`[${this.serviceType} TTS] Voice unavailable, trying reinitialization`);
+        this.isInitialized = false;
+        this.initSpeech();
+        break;
+      case TTS_ERROR_TYPES.NETWORK:
+        console.warn(`[${this.serviceType} TTS] Network-related error, will retry`);
+        this.errorCount++;
+        break;
+      default:
+        console.warn(`[${this.serviceType} TTS] Unknown error:`, event);
+        this.errorCount++;
+    }
+  }
+
+  // Categorize errors for better handling
+  categorizeError(event) {
+    const error = event.error || event;
+    
+    if (error === 'interrupted' || error === 'canceled') {
+      return TTS_ERROR_TYPES.INTERRUPTED;
+    }
+    
+    if (error === 'not-allowed' || error === 'network') {
+      return TTS_ERROR_TYPES.NETWORK;
+    }
+    
+    if (error === 'voice-not-found' || error === 'voice-unavailable') {
+      return TTS_ERROR_TYPES.VOICE_UNAVAILABLE;
+    }
+    
+    return TTS_ERROR_TYPES.UNKNOWN;
+  }
+
+  // Enhanced text cleaning for TTS
   cleanTextForTTS(text) {
     if (!text) return '';
     
@@ -326,10 +459,6 @@ class TTSService {
         parts.push(content.text);
       }
       
-      // Don't include introduction/conclusion as they might be from other lessons
-      // if (content.introduction) parts.push(content.introduction);
-      // if (content.conclusion) parts.push(content.conclusion);
-      
       text = parts.join('\n\n');
     }
     
@@ -345,11 +474,20 @@ class TTSService {
     return cleanedText;
   }
 
-  // Start reading the lesson
+  // Start reading the lesson with enhanced error handling
   async readLesson(lesson, lessonId) {
-    if (!this.isInitialized) {
-      console.warn(`[${this.serviceType} TTS] Speech engine not initialized`);
+    if (!this.browserSupport.speechSynthesis) {
+      console.warn(`[${this.serviceType} TTS] Speech synthesis not supported in this browser`);
       return false;
+    }
+
+    if (!this.isInitialized) {
+      console.warn(`[${this.serviceType} TTS] Speech engine not initialized, attempting initialization...`);
+      await this.initSpeech();
+      if (!this.isInitialized) {
+        console.warn(`[${this.serviceType} TTS] Failed to initialize speech engine`);
+        return false;
+      }
     }
 
     // Request TTS control from coordinator
@@ -394,7 +532,7 @@ class TTSService {
     }
   }
 
-  // Speak text using speak-tts
+  // Enhanced speak method with better error handling
   async speak(text) {
     try {
       console.log(`[${this.serviceType} TTS] Attempting to speak text (length: ${text.length})`);
@@ -460,35 +598,36 @@ class TTSService {
                 this.isPlaying = true;
                 console.log(`[${this.serviceType} TTS] Resumed`);
               },
-                             'onerror': (event) => {
-                 console.warn(`[${this.serviceType} TTS] Speech error occurred:`, event.error);
-                 this.isPlaying = false;
-                 this.isPaused = false;
-                 
-                 // Handle interrupted errors more gracefully
-                 if (event.error === 'interrupted' || event.error === 'canceled') {
-                   console.log(`[${this.serviceType} TTS] Speech was interrupted/canceled (${event.error}), not counting as error`);
-                   // Don't increment error count for interruptions
-                   ttsCoordinator.releaseTTS(this.serviceId);
-                   resolve(); // Resolve gracefully for interruptions
-                   return;
-                 }
-                 
-                 console.warn(`[${this.serviceType} TTS] Real error occurred: ${event.error}`);
-                 this.errorCount++;
-                 
-                 // Don't throw the error, handle it gracefully
-                 if (this.errorCount < this.maxRetries) {
-                   console.log(`[${this.serviceType} TTS] Retrying... (${this.errorCount}/${this.maxRetries})`);
-                   setTimeout(() => {
-                     this.speak(this.fullText).then(resolve); // Always use fullText for retries
-                   }, 1000);
-                 } else {
-                   console.log(`[${this.serviceType} TTS] Max retries exceeded, stopping gracefully`);
-                   ttsCoordinator.releaseTTS(this.serviceId);
-                   resolve(); // Always resolve, never reject
-                 }
-               }
+              'onerror': (event) => {
+                console.warn(`[${this.serviceType} TTS] Speech error occurred:`, event.error);
+                this.isPlaying = false;
+                this.isPaused = false;
+                
+                const errorType = this.categorizeError(event);
+                
+                // Handle interrupted errors more gracefully
+                if (errorType === TTS_ERROR_TYPES.INTERRUPTED) {
+                  console.log(`[${this.serviceType} TTS] Speech was interrupted/canceled, not counting as error`);
+                  ttsCoordinator.releaseTTS(this.serviceId);
+                  resolve(); // Resolve gracefully for interruptions
+                  return;
+                }
+                
+                console.warn(`[${this.serviceType} TTS] Real error occurred: ${event.error}`);
+                this.errorCount++;
+                
+                // Don't throw the error, handle it gracefully
+                if (this.errorCount < this.maxRetries) {
+                  console.log(`[${this.serviceType} TTS] Retrying... (${this.errorCount}/${this.maxRetries})`);
+                  setTimeout(() => {
+                    this.speak(this.fullText).then(resolve); // Always use fullText for retries
+                  }, 1000);
+                } else {
+                  console.log(`[${this.serviceType} TTS] Max retries exceeded, stopping gracefully`);
+                  ttsCoordinator.releaseTTS(this.serviceId);
+                  resolve(); // Always resolve, never reject
+                }
+              }
             }
           };
 
@@ -506,10 +645,11 @@ class TTSService {
                 this.isPlaying = false;
                 this.isPaused = false;
                 
+                const errorType = this.categorizeError(error);
+                
                 // Handle interrupted errors more gracefully
-                if (error && (error.error === 'interrupted' || error.error === 'canceled')) {
+                if (errorType === TTS_ERROR_TYPES.INTERRUPTED) {
                   console.log(`[${this.serviceType} TTS] Promise was interrupted/canceled, not counting as error`);
-                  // Don't increment error count for interruptions
                   ttsCoordinator.releaseTTS(this.serviceId);
                   resolve(); // Resolve gracefully for interruptions
                   return;
@@ -637,7 +777,7 @@ class TTSService {
 
   // Check if TTS is supported
   isSupported() {
-    return this.isInitialized;
+    return this.browserSupport.speechSynthesis && this.isInitialized;
   }
 
   // Get current status
@@ -649,7 +789,9 @@ class TTSService {
       isSupported: this.isSupported(),
       errorCount: this.errorCount,
       serviceType: this.serviceType,
-      isInitialized: this.isInitialized
+      isInitialized: this.isInitialized,
+      browserSupport: this.browserSupport,
+      initializationAttempts: this.initializationAttempts
     };
   }
 
@@ -662,16 +804,26 @@ class TTSService {
   canResume() {
     return this.isPaused && this.fullText && this.currentLessonId;
   }
+
+  // Force reinitialization
+  async forceReinitialize() {
+    console.log(`[${this.serviceType} TTS] Force reinitializing...`);
+    this.isInitialized = false;
+    this.initializationAttempts = 0;
+    await this.initSpeech();
+  }
 }
 
 // Create separate singleton instances for private and public courses
 const privateTTSService = new TTSService('private');
 const publicTTSService = new TTSService('public');
 
-// TTS Service Factory for session-specific instances
+// Enhanced TTS Service Factory for session-specific instances
 class TTSServiceFactory {
   constructor() {
     this.services = new Map(); // Store session-specific services
+    this.cleanupInterval = null;
+    this.startCleanupInterval();
   }
 
   // Get or create a TTS service for a specific session
@@ -713,6 +865,37 @@ class TTSServiceFactory {
   // Get all active services (for debugging)
   getActiveServices() {
     return Array.from(this.services.keys());
+  }
+
+  // Start cleanup interval to prevent memory leaks
+  startCleanupInterval() {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+    }
+    
+    this.cleanupInterval = setInterval(() => {
+      this.cleanupStaleServices();
+    }, 300000); // Clean up every 5 minutes
+  }
+
+  // Clean up stale services
+  cleanupStaleServices() {
+    const now = Date.now();
+    for (const [key, service] of this.services.entries()) {
+      const status = service.getStatus();
+      // Clean up services that haven't been used for 10 minutes
+      if (now - service.lastActivity > 600000) {
+        this.cleanupService(key.split('_')[1], key.split('_')[0]);
+      }
+    }
+  }
+
+  // Stop cleanup interval
+  stopCleanupInterval() {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
   }
 }
 
