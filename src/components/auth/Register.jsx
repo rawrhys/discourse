@@ -42,13 +42,9 @@ const Register = () => {
       <div className="max-w-md w-full space-y-8">
         <div>
           <img
-            src={"/domains/thediscourse.ai/public_html/assets/images/discourse-logo.svg"}
+            src={"/domains/thediscourse.ai/public_html/assets/images/discourse-logo.png"}
             alt="Discourse Logo"
             style={{ width: '120px', margin: '0 auto', display: 'block' }}
-            onError={(e) => {
-              // Fallback to PNG if SVG fails
-              e.target.src = "/domains/thediscourse.ai/public_html/assets/images/discourse-logo.png";
-            }}
           />
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
             Create your account
