@@ -9,36 +9,32 @@ import LoadingIndicator from './LoadingIndicator';
 import logger from '../utils/logger';
 import SimpleImageService from '../services/SimpleImageService.js';
 import Image from './Image.jsx';
-import ReactMarkdown from 'react-markdown';
+
 import ttsService from '../services/TTSService.js';
 import Flashcard from './Flashcard';
 import { useThrottledLogger, useDebounce, useStableValue } from '../hooks/usePerformanceOptimization';
 import performanceMonitor from '../services/PerformanceMonitorService';
 import BibliographyService from '../services/BibliographyService.js';
 import quizPersistenceService from '../services/QuizPersistenceService';
-import { parseMalformedMarkdown, parseGreekCityStatesContent, parseArchaicPeriodContent } from '../utils/markdownParser';
+import markdownService from '../services/MarkdownService';
 
-// Enhanced markdown parsing with resilient error handling
+// Enhanced markdown parsing with resilient error handling using Marked
 const fixMalformedMarkdown = (text) => {
   if (!text) return text;
   
-  // First try the specific Greek City-States parser
-  if (text.includes('The Formation of the Greek City-States')) {
-    return parseGreekCityStatesContent(text);
+  // Use the efficient MarkdownService with content-specific parsing
+  if (text.includes('The Formation of the Greek City-States') || 
+      (text.includes('Polis') && (text.includes('Acropolis') || text.includes('Agora')))) {
+    return markdownService.parseGreekCityStates(text);
   }
   
   // Try the Archaic Period parser
   if (text.includes('Archaic Period') && text.includes('Lyric Poetry')) {
-    return parseArchaicPeriodContent(text);
+    return markdownService.parseGreekContent(text);
   }
   
-  // Try the new Greek City-States parser for content with specific patterns
-  if (text.includes('Polis') && (text.includes('Acropolis') || text.includes('Agora'))) {
-    return parseGreekCityStatesContent(text);
-  }
-  
-  // Fall back to general malformed markdown parser
-  return parseMalformedMarkdown(text);
+  // Fall back to general parsing
+  return markdownService.parse(text);
 };
 
 // Additional cleanup function for any remaining malformed asterisks
@@ -175,7 +171,10 @@ const Content = memo(({ content, bibliography, lessonTitle, courseSubject }) => 
 
   return (
     <div className="prose max-w-none lesson-content">
-      <ReactMarkdown>{fixedContent}</ReactMarkdown>
+      <div 
+        className="markdown-body"
+        dangerouslySetInnerHTML={{ __html: fixedContent }}
+      />
     </div>
   );
 });
