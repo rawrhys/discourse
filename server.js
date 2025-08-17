@@ -155,8 +155,8 @@ function extractMainLessonText(content) {
   }
 }
 
-// Simple heuristic to score image candidates for relevance
-function computeImageRelevanceScore(subject, mainText, meta) {
+// Enhanced heuristic to score image candidates for relevance with full course context
+function computeImageRelevanceScore(subject, mainText, meta, courseContext = {}) {
   try {
     const subj = String(subject || '').toLowerCase();
     const text = String(mainText || '').toLowerCase();
@@ -165,9 +165,19 @@ function computeImageRelevanceScore(subject, mainText, meta) {
     const page = String(meta?.pageURL || '').toLowerCase();
     const uploader = String(meta?.uploader || '').toLowerCase();
 
+    // Extract course context information
+    const courseTitle = String(courseContext?.title || '').toLowerCase();
+    const courseSubject = String(courseContext?.subject || '').toLowerCase();
+    const allLessonTitles = Array.isArray(courseContext?.lessonTitles) 
+      ? courseContext.lessonTitles.map(t => String(t || '').toLowerCase())
+      : [];
+
     let score = 0;
 
     const haystack = `${title} ${desc} ${page} ${uploader}`;
+    
+    // Create comprehensive context text for better relevance scoring
+    const contextText = `${subj} ${text} ${courseTitle} ${courseSubject} ${allLessonTitles.join(' ')}`.toLowerCase();
 
     // Heavy penalty for completely irrelevant objects
     const irrelevantObjects = ['bench', 'chair', 'table', 'furniture', 'modern', 'contemporary', 'office', 'kitchen', 'bathroom', 'bedroom', 'living room', 'garden', 'flower', 'tree', 'plant', 'animal', 'pet', 'car', 'vehicle', 'building', 'house', 'apartment'];
@@ -194,13 +204,32 @@ function computeImageRelevanceScore(subject, mainText, meta) {
     // Strong bonus for exact subject phrase appearing
     if (subj && haystack.includes(subj)) score += 30;
 
-    // Token-based matching from subject and lesson content
+    // Enhanced token-based matching using full course context
     const subjectTokens = extractSearchKeywords(subj, null, 6);
     const contentTokens = extractSearchKeywords(text, null, 6);
-    const tokens = [...new Set([...subjectTokens, ...contentTokens])];
-    for (const tok of tokens) {
+    const courseTokens = extractSearchKeywords(courseTitle + ' ' + courseSubject, null, 6);
+    const allTokens = [...new Set([...subjectTokens, ...contentTokens, ...courseTokens])];
+    
+    for (const tok of allTokens) {
       if (tok.length < 3) continue;
       if (haystack.includes(tok)) score += 4;
+    }
+
+    // Course context relevance scoring
+    if (courseTitle || courseSubject) {
+      // Heavy penalty for images that don't match the course context
+      const courseContextTerms = extractSearchKeywords(courseTitle + ' ' + courseSubject, null, 10);
+      const hasCourseContextMatch = courseContextTerms.some(term => 
+        term.length > 3 && haystack.includes(term)
+      );
+      
+      if (!hasCourseContextMatch) {
+        score -= 50; // Heavy penalty for images not relevant to course context
+        console.log(`[ImageScoring] Heavy penalty for image not matching course context: ${courseTitle}`);
+      } else {
+        score += 20; // Bonus for images that match course context
+        console.log(`[ImageScoring] Bonus for image matching course context: ${courseTitle}`);
+      }
     }
 
     // Additional bonus for historical content relevance
@@ -1265,7 +1294,7 @@ Context: "${context.substring(0, 1000)}..."`;
   
   // --- IMAGE SEARCH SETTINGS & HELPERS ---
   // Fetch a Wikipedia thumbnail for a given subject/title
-  async fetchWikipediaImage(subject, content = '', usedImageTitles = [], usedImageUrls = [], options = { relaxed: false }) {
+  async fetchWikipediaImage(subject, content = '', usedImageTitles = [], usedImageUrls = [], options = { relaxed: false }, courseContext = {}) {
     if (!subject) return null;
     console.log(`[AIService] Fetching Wikipedia image (simplified) for "${subject}", excluding ${usedImageTitles.length} titles and ${usedImageUrls.length} urls.`);
 
@@ -1330,7 +1359,7 @@ Context: "${context.substring(0, 1000)}..."`;
               description,
               pageURL,
               uploader: undefined
-            });
+            }, courseContext);
             
             // Debug logging for Wikipedia scoring
             if (candidates.length < 5) { // Only log first few candidates to avoid spam
@@ -1367,7 +1396,7 @@ Context: "${context.substring(0, 1000)}..."`;
     }
   }
   
-  async fetchPixabayImage(subject, content = '', usedImageTitles = [], usedImageUrls = [], options = { relaxed: false }) {
+  async fetchPixabayImage(subject, content = '', usedImageTitles = [], usedImageUrls = [], options = { relaxed: false }, courseContext = {}) {
     const apiKey = getPixabayApiKey();
     if (!apiKey) {
       return null;
@@ -1434,7 +1463,7 @@ Context: "${context.substring(0, 1000)}..."`;
             uploader: h.user,
             imageWidth: h.imageWidth,
             imageHeight: h.imageHeight,
-          });
+          }, courseContext);
           
           // Debug logging for scoring issues
           if (candidates.length < 5) { // Only log first few candidates to avoid spam
@@ -1469,9 +1498,9 @@ Context: "${context.substring(0, 1000)}..."`;
   // Met Museum image service removed
    
   // Try Wikipedia first; then Pixabay
-  async fetchRelevantImage(subject, content = '', usedImageTitles = [], usedImageUrls = [], options = { relaxed: false }) {
-    const wiki = await this.fetchWikipediaImage(subject, content, usedImageTitles, usedImageUrls, { relaxed: !!options.relaxed });
-    const pixa = await this.fetchPixabayImage(subject, content, usedImageTitles, usedImageUrls, { relaxed: !!options.relaxed });
+  async fetchRelevantImage(subject, content = '', usedImageTitles = [], usedImageUrls = [], options = { relaxed: false }, courseContext = {}) {
+    const wiki = await this.fetchWikipediaImage(subject, content, usedImageTitles, usedImageUrls, { relaxed: !!options.relaxed }, courseContext);
+    const pixa = await this.fetchPixabayImage(subject, content, usedImageTitles, usedImageUrls, { relaxed: !!options.relaxed }, courseContext);
     
     // Check if this is historical/educational content
     const isHistoricalContent = /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(subject) || 
@@ -3478,12 +3507,34 @@ async function imageSearchHandler(req, res) {
       const safeUsedTitles = Array.isArray(req.body.usedImageTitles) ? req.body.usedImageTitles : usedImageTitles;
       const safeUsedUrls = Array.isArray(req.body.usedImageUrls) ? req.body.usedImageUrls : usedImageUrls;
       
+      // Get course context for better image relevance scoring
+      let courseContext = {};
+      if (courseId) {
+        try {
+          const course = db.data.courses.find(c => c.id === courseId);
+          if (course) {
+            courseContext = {
+              title: course.title || '',
+              subject: course.subject || '',
+              lessonTitles: course.modules?.flatMap(m => m.lessons?.map(l => l.title) || []) || []
+            };
+            console.log('[ImageSearch] Course context loaded:', {
+              courseTitle: courseContext.title,
+              courseSubject: courseContext.subject,
+              lessonCount: courseContext.lessonTitles.length
+            });
+          }
+        } catch (courseError) {
+          console.warn('[ImageSearch] Failed to load course context:', courseError.message);
+        }
+      }
+      
       console.log('[ImageSearch] Calling fetchRelevantImage...');
-      let imageData = await global.aiService.fetchRelevantImage(lessonTitle, content, safeUsedTitles, safeUsedUrls, { relaxed: false });
+      let imageData = await global.aiService.fetchRelevantImage(lessonTitle, content, safeUsedTitles, safeUsedUrls, { relaxed: false }, courseContext);
       
       if (!imageData) {
           console.log('[ImageSearch] No image found with strict search, trying relaxed...');
-          imageData = await global.aiService.fetchRelevantImage(lessonTitle, content, safeUsedTitles, safeUsedUrls, { relaxed: true });
+          imageData = await global.aiService.fetchRelevantImage(lessonTitle, content, safeUsedTitles, safeUsedUrls, { relaxed: true }, courseContext);
       }
       
       if (imageData) {
