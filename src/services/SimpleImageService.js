@@ -177,10 +177,17 @@ const SimpleImageService = {
         contentTerms = contentWords.join(' ');
         query = query + ' ' + contentTerms;
       }
+      
+      // Extract specific historical terms from content for better image relevance
+      var historicalTerms = this.extractHistoricalTerms(content);
+      if (historicalTerms) {
+        query = query + ' ' + historicalTerms;
+      }
     }
     
     // Add historical context for history-related topics
-    if (query.toLowerCase().includes('rome') || query.toLowerCase().includes('ancient') || query.toLowerCase().includes('history')) {
+    if (query.toLowerCase().includes('rome') || query.toLowerCase().includes('ancient') || query.toLowerCase().includes('history') || 
+        query.toLowerCase().includes('greek') || query.toLowerCase().includes('greece') || query.toLowerCase().includes('egypt')) {
       query = query + ' history';
     }
     
@@ -201,6 +208,48 @@ const SimpleImageService = {
       // Fallback to basic query
       return lessonTitle || 'lesson';
     }
+  },
+
+  // Extract historical terms from content for better image relevance
+  extractHistoricalTerms: function(content) {
+    if (!content || typeof content !== 'string') return '';
+    
+    var terms = [];
+    
+    // Look for specific historical periods and concepts
+    var historicalPatterns = [
+      /\bArchaic Period\b/gi,
+      /\bClassical Period\b/gi,
+      /\bAncient Greece\b/gi,
+      /\bAncient Rome\b/gi,
+      /\bGreek City-States\b/gi,
+      /\bPolis\b/gi,
+      /\bAcropolis\b/gi,
+      /\bAgora\b/gi,
+      /\bOracle of Delphi\b/gi,
+      /\bOlympic Games\b/gi,
+      /\bLyric Poetry\b/gi,
+      /\bSappho\b/gi,
+      /\bHomer\b/gi,
+      /\bMount Parnassus\b/gi,
+      /\bDelphi\b/gi,
+      /\bOlympia\b/gi,
+      /\bZeus\b/gi,
+      /\bApollo\b/gi,
+      /\bPythia\b/gi
+    ];
+    
+    historicalPatterns.forEach(pattern => {
+      var matches = content.match(pattern);
+      if (matches) {
+        terms.push(...matches);
+      }
+    });
+    
+    // Remove duplicates and limit to 3 most relevant terms
+    var uniqueTerms = [...new Set(terms)].slice(0, 3);
+    
+    return uniqueTerms.join(' ');
   }
 };
 

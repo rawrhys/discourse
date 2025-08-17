@@ -206,3 +206,37 @@
 .fullscreen-image-attribution::-webkit-scrollbar-track {
   background: #222;
 } 
+
+/* Hide problematic asterisks that might not be properly parsed */
+.hidden-asterisk {
+  display: none;
+}
+
+/* Hide standalone asterisks that are clearly malformed */
+.lesson-content .markdown-body {
+  /* Hide patterns like "**" that are clearly malformed */
+  font-family: inherit;
+}
+
+/* Specific fix for malformed bold patterns */
+.lesson-content .markdown-body p:has(span:contains("**")) {
+  /* Target paragraphs with malformed asterisks */
+}
+
+/* Alternative approach: hide specific malformed patterns */
+.lesson-content .markdown-body p {
+  /* Hide standalone ** patterns */
+  text-replace: "**" "";
+}
+
+/* For browsers that support it, hide malformed asterisk patterns */
+@supports (text-replace: "**" "") {
+  .lesson-content .markdown-body {
+    text-replace: "**" "";
+  }
+}
+
+/* Fallback: use JavaScript to clean up remaining asterisks */
+.lesson-content .markdown-body {
+  /* This will be handled by JavaScript cleanup */
+} 

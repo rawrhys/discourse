@@ -76,7 +76,12 @@ function fixMalformedBold(text) {
     'Polis', 'Acropolis', 'Agora', 'Poleis', 'Citizens', 'Tyranny',
     'Cultural', 'Religious', 'Challenges', 'Conflicts', 'Geography',
     'Social', 'Economic', 'Political', 'Population', 'Trade', 'Military', 'Oligarchy',
-    'hoplite', 'stasis', 'Dark Age', 'Archaic Period', 'Mycenaean', 'Gerousia'
+    'hoplite', 'stasis', 'Dark Age', 'Archaic Period', 'Mycenaean', 'Gerousia',
+    // Add new words from the Archaic Period content
+    'Lyric Poetry', 'Oracle of Delphi', 'Olympic Games', 'Sappho', 'Homer',
+    'Pythia', 'Apollo', 'Mount Parnassus', 'Delphi', 'Olympia', 'Zeus',
+    'arete', 'ekecheiria', 'stadion', 'pankration', 'agoge', 'gymnasia',
+    'Sophocles', 'Classical Period', 'Athens', 'democracy'
   ];
   
   boldWords.forEach(word => {
@@ -268,6 +273,106 @@ export function parseGreekCityStatesContent(rawText) {
   processedText = parseMalformedMarkdown(processedText);
   
   // Final cleanup for Greek City-States specific issues
+  processedText = cleanupLeftoverSyntax(processedText);
+
+  return processedText;
+}
+
+/**
+ * New function specifically for Archaic Period content
+ */
+export function parseArchaicPeriodContent(rawText) {
+  if (!rawText || typeof rawText !== 'string') {
+    return rawText;
+  }
+
+  let processedText = rawText;
+
+  // Specific fixes for Archaic Period content
+  processedText = processedText
+    // Fix malformed bold patterns with ** at the end
+    .replace(/\bLyric Poetry\*\*/g, '**Lyric Poetry**')
+    .replace(/\bOracle of Delphi\*\*/g, '**Oracle of Delphi**')
+    .replace(/\bOlympic Games\*\*/g, '**Olympic Games**')
+    .replace(/\bSappho\*\*/g, '**Sappho**')
+    .replace(/\bHomer\*\*/g, '**Homer**')
+    .replace(/\bPythia\*\*/g, '**Pythia**')
+    .replace(/\bApollo\*\*/g, '**Apollo**')
+    .replace(/\bMount Parnassus\*\*/g, '**Mount Parnassus**')
+    .replace(/\bDelphi\*\*/g, '**Delphi**')
+    .replace(/\bOlympia\*\*/g, '**Olympia**')
+    .replace(/\bZeus\*\*/g, '**Zeus**')
+    .replace(/\barete\*\*/g, '**arete**')
+    .replace(/\bekecheiria\*\*/g, '**ekecheiria**')
+    .replace(/\bstadion\*\*/g, '**stadion**')
+    .replace(/\bpankration\*\*/g, '**pankration**')
+    .replace(/\bagoge\*\*/g, '**agoge**')
+    .replace(/\bgymnasia\*\*/g, '**gymnasia**')
+    .replace(/\bSophocles\*\*/g, '**Sophocles**')
+    .replace(/\bClassical Period\*\*/g, '**Classical Period**')
+    .replace(/\bAthens\*\*/g, '**Athens**')
+    .replace(/\bdemocracy\*\*/g, '**democracy**')
+    
+    // Fix patterns with single asterisk at the beginning
+    .replace(/\*Lyric Poetry\b/g, '**Lyric Poetry**')
+    .replace(/\*Oracle of Delphi\b/g, '**Oracle of Delphi**')
+    .replace(/\*Olympic Games\b/g, '**Olympic Games**')
+    .replace(/\*Sappho\b/g, '**Sappho**')
+    .replace(/\*Homer\b/g, '**Homer**')
+    .replace(/\*Pythia\b/g, '**Pythia**')
+    .replace(/\*Apollo\b/g, '**Apollo**')
+    .replace(/\*Mount Parnassus\b/g, '**Mount Parnassus**')
+    .replace(/\*Delphi\b/g, '**Delphi**')
+    .replace(/\*Olympia\b/g, '**Olympia**')
+    .replace(/\*Zeus\b/g, '**Zeus**')
+    .replace(/\*arete\b/g, '**arete**')
+    .replace(/\*ekecheiria\b/g, '**ekecheiria**')
+    .replace(/\*stadion\b/g, '**stadion**')
+    .replace(/\*pankration\b/g, '**pankration**')
+    .replace(/\*agoge\b/g, '**agoge**')
+    .replace(/\*gymnasia\b/g, '**gymnasia**')
+    .replace(/\*Sophocles\b/g, '**Sophocles**')
+    .replace(/\*Classical Period\b/g, '**Classical Period**')
+    .replace(/\*Athens\b/g, '**Athens**')
+    .replace(/\*democracy\b/g, '**democracy**')
+    
+    // Fix patterns with single asterisk at the end
+    .replace(/\bLyric Poetry\*/g, '**Lyric Poetry**')
+    .replace(/\bOracle of Delphi\*/g, '**Oracle of Delphi**')
+    .replace(/\bOlympic Games\*/g, '**Olympic Games**')
+    .replace(/\bSappho\*/g, '**Sappho**')
+    .replace(/\bHomer\*/g, '**Homer**')
+    .replace(/\bPythia\*/g, '**Pythia**')
+    .replace(/\bApollo\*/g, '**Apollo**')
+    .replace(/\bMount Parnassus\*/g, '**Mount Parnassus**')
+    .replace(/\bDelphi\*/g, '**Delphi**')
+    .replace(/\bOlympia\*/g, '**Olympia**')
+    .replace(/\bZeus\*/g, '**Zeus**')
+    .replace(/\barete\*/g, '**arete**')
+    .replace(/\bekecheiria\*/g, '**ekecheiria**')
+    .replace(/\bstadion\*/g, '**stadion**')
+    .replace(/\bpankration\*/g, '**pankration**')
+    .replace(/\bagoge\*/g, '**agoge**')
+    .replace(/\bgymnasia\*/g, '**gymnasia**')
+    .replace(/\bSophocles\*/g, '**Sophocles**')
+    .replace(/\bClassical Period\*/g, '**Classical Period**')
+    .replace(/\bAthens\*/g, '**Athens**')
+    .replace(/\bdemocracy\*/g, '**democracy**')
+    
+    // Fix the specific pattern at the end of the text
+    .replace(/\*\*\.\*\*$/, '')
+    
+    // Fix malformed references
+    .replace(/References\s*\n\s*\[1\]/g, '\n## References\n\n[1]')
+    .replace(/\[1\] Oxford University Press\. \(2012\)\. Oxford Classical Dictionary\. Oxford University Press\./g, 
+             '[1] Oxford University Press. (2012). Oxford Classical Dictionary. Oxford University Press.')
+    .replace(/\[2\] Encyclopaedia Britannica\. \(2024\)\. Academic Edition\. Encyclopaedia Britannica, Inc\.\./g, 
+             '[2] Encyclopaedia Britannica. (2024). Academic Edition. Encyclopaedia Britannica, Inc.');
+
+  // Apply general fixes
+  processedText = parseMalformedMarkdown(processedText);
+  
+  // Final cleanup
   processedText = cleanupLeftoverSyntax(processedText);
 
   return processedText;

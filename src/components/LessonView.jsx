@@ -16,7 +16,7 @@ import { useThrottledLogger, useDebounce, useStableValue } from '../hooks/usePer
 import performanceMonitor from '../services/PerformanceMonitorService';
 import BibliographyService from '../services/BibliographyService.js';
 import quizPersistenceService from '../services/QuizPersistenceService';
-import { parseMalformedMarkdown, parseGreekCityStatesContent } from '../utils/markdownParser';
+import { parseMalformedMarkdown, parseGreekCityStatesContent, parseArchaicPeriodContent } from '../utils/markdownParser';
 
 // Enhanced markdown parsing with resilient error handling
 const fixMalformedMarkdown = (text) => {
@@ -27,29 +27,53 @@ const fixMalformedMarkdown = (text) => {
     return parseGreekCityStatesContent(text);
   }
   
+  // Try the Archaic Period parser
+  if (text.includes('Archaic Period') && text.includes('Lyric Poetry')) {
+    return parseArchaicPeriodContent(text);
+  }
+  
   // Fall back to general malformed markdown parser
   return parseMalformedMarkdown(text);
+};
+
+// Additional cleanup function for any remaining malformed asterisks
+const cleanupRemainingAsterisks = (text) => {
+  if (!text) return text;
+  
+  return text
+    // Remove standalone ** patterns that are clearly malformed
+    .replace(/\*\*([^*\n]+?)\*\*/g, '**$1**')  // Fix unclosed bold
+    .replace(/\*\*([^*\n]+?)$/gm, '**$1**')    // Fix unclosed bold at end
+    .replace(/^([^*\n]+?)\*\*/gm, '**$1**')    // Fix unclosed bold at start
+    // Remove any remaining standalone ** patterns
+    .replace(/\*\*(?!\w)/g, '')                // Remove ** not followed by word
+    .replace(/(?<!\w)\*\*/g, '')               // Remove ** not preceded by word
+    // Clean up multiple consecutive asterisks
+    .replace(/\*\*\*\*/g, '**')
+    .replace(/\*\*\*\*\*/g, '**')
+    .replace(/\*\*\*\*\*\*/g, '**');
 };
 
 // Helper function to clean and combine lesson content
 const cleanAndCombineContent = (content) => {
   if (!content) return '';
   if (typeof content === 'string') {
-    return fixMalformedMarkdown(
+    const cleaned = fixMalformedMarkdown(
       content.replace(/Content generation completed\./g, '')
              .replace(/\|\|\|---\|\|\|/g, '')
              .trim()
     );
+    return cleanupRemainingAsterisks(cleaned);
   }
   
   const { introduction, main_content, conclusion } = content;
   
   const cleanedIntro = introduction 
-    ? fixMalformedMarkdown(introduction.replace(/Content generation completed\./g, '').trim())
+    ? cleanupRemainingAsterisks(fixMalformedMarkdown(introduction.replace(/Content generation completed\./g, '').trim()))
     : '';
 
-  const cleanedMain = main_content ? fixMalformedMarkdown(main_content.trim()) : '';
-  const cleanedConclusion = conclusion ? fixMalformedMarkdown(conclusion.trim()) : '';
+  const cleanedMain = main_content ? cleanupRemainingAsterisks(fixMalformedMarkdown(main_content.trim())) : '';
+  const cleanedConclusion = conclusion ? cleanupRemainingAsterisks(fixMalformedMarkdown(conclusion.trim())) : '';
   
   return [cleanedIntro, cleanedMain, cleanedConclusion]
     .filter(Boolean)
@@ -694,6 +718,30 @@ const LessonView = ({
       ttsService.stop();
     };
   }, []);
+
+  // Clean up any remaining malformed asterisks after content is rendered
+  useEffect(() => {
+    if (lessonContent) {
+      // Use a timeout to ensure the DOM is updated
+      const timer = setTimeout(() => {
+        const markdownElements = document.querySelectorAll('.lesson-content .markdown-body');
+        markdownElements.forEach(element => {
+          // Clean up any remaining malformed asterisks
+          element.innerHTML = element.innerHTML
+            .replace(/\*\*([^*\n]+?)\*\*/g, '**$1**')  // Fix unclosed bold
+            .replace(/\*\*([^*\n]+?)$/gm, '**$1**')    // Fix unclosed bold at end
+            .replace(/^([^*\n]+?)\*\*/gm, '**$1**')    // Fix unclosed bold at start
+            .replace(/\*\*(?!\w)/g, '')                // Remove ** not followed by word
+            .replace(/(?<!\w)\*\*/g, '')               // Remove ** not preceded by word
+            .replace(/\*\*\*\*/g, '**')                // Clean up multiple asterisks
+            .replace(/\*\*\*\*\*/g, '**')
+            .replace(/\*\*\*\*\*\*/g, '**');
+        });
+      }, 100);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [lessonContent]);
 
   // Performance monitoring (console logging disabled)
   useEffect(() => {
