@@ -1,5 +1,71 @@
 // src/services/TTSService.js
 
+// Global TTS Coordinator to prevent conflicts between multiple TTS services
+class TTSCoordinator {
+  constructor() {
+    this.speechSynthesis = window.speechSynthesis;
+    this.activeService = null;
+    this.queue = [];
+    this.isProcessing = false;
+  }
+
+  // Request to use TTS - returns a promise that resolves when TTS is available
+  async requestTTS(serviceId) {
+    return new Promise((resolve) => {
+      if (!this.activeService || this.activeService === serviceId) {
+        // No conflict, can use TTS immediately
+        this.activeService = serviceId;
+        resolve();
+      } else {
+        // Conflict - add to queue
+        this.queue.push({ serviceId, resolve });
+        console.log(`[TTS Coordinator] Service ${serviceId} queued, waiting for ${this.activeService} to finish`);
+      }
+    });
+  }
+
+  // Release TTS control
+  releaseTTS(serviceId) {
+    if (this.activeService === serviceId) {
+      this.activeService = null;
+      console.log(`[TTS Coordinator] Service ${serviceId} released TTS control`);
+      
+      // Process next in queue
+      this.processQueue();
+    }
+  }
+
+  // Process the queue
+  processQueue() {
+    if (this.queue.length > 0 && !this.activeService) {
+      const next = this.queue.shift();
+      this.activeService = next.serviceId;
+      console.log(`[TTS Coordinator] Service ${next.serviceId} now has TTS control`);
+      next.resolve();
+    }
+  }
+
+  // Force stop all TTS and clear queue
+  forceStop() {
+    this.speechSynthesis.cancel();
+    this.activeService = null;
+    this.queue = [];
+    console.log(`[TTS Coordinator] Force stopped all TTS`);
+  }
+
+  // Get current status
+  getStatus() {
+    return {
+      activeService: this.activeService,
+      queueLength: this.queue.length,
+      isSpeaking: this.speechSynthesis.speaking
+    };
+  }
+}
+
+// Create global coordinator instance
+const ttsCoordinator = new TTSCoordinator();
+
 class TTSService {
   constructor(serviceType = 'default') {
     this.speechSynthesis = window.speechSynthesis;
@@ -13,6 +79,7 @@ class TTSService {
     this.errorCount = 0; // Track consecutive errors
     this.maxRetries = 3; // Maximum retry attempts
     this.serviceType = serviceType; // 'private' or 'public'
+    this.serviceId = `${serviceType}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
   // Get available voices
@@ -112,17 +179,23 @@ class TTSService {
 
   // Start reading the lesson
   async readLesson(lesson, lessonId) {
+    // Request TTS control from coordinator
+    await ttsCoordinator.requestTTS(this.serviceId);
+    console.log(`[${this.serviceType} TTS] Got TTS control for reading lesson`);
+    
     // Stop any current reading
     this.stop();
     
     if (!lesson || !lesson.content) {
       console.warn(`[${this.serviceType} TTS] No lesson content to read`);
+      ttsCoordinator.releaseTTS(this.serviceId);
       return false;
     }
 
     const text = this.extractLessonText(lesson.content);
     if (!text.trim()) {
       console.warn(`[${this.serviceType} TTS] No text content extracted from lesson`);
+      ttsCoordinator.releaseTTS(this.serviceId);
       return false;
     }
 
@@ -155,6 +228,7 @@ class TTSService {
         this.pausedAtChar = 0;
         this.errorCount = 0; // Reset error count on successful completion
         console.log(`[${this.serviceType} TTS] Finished reading lesson:`, lesson.title);
+        ttsCoordinator.releaseTTS(this.serviceId);
       };
       
       this.currentUtterance.onerror = (event) => {
@@ -202,6 +276,9 @@ class TTSService {
             this.pausedAtChar = 0;
           }
         }
+        
+        // Release TTS control on error
+        ttsCoordinator.releaseTTS(this.serviceId);
       };
       
       // Before calling speechSynthesis.speak(utterance);
@@ -215,6 +292,7 @@ class TTSService {
       console.error(`[${this.serviceType} TTS] Error starting TTS:`, error);
       this.isPlaying = false;
       this.isPaused = false;
+      ttsCoordinator.releaseTTS(this.serviceId);
       return false;
     }
   }
@@ -268,6 +346,10 @@ class TTSService {
     }
     
     try {
+      // Request TTS control from coordinator
+      await ttsCoordinator.requestTTS(this.serviceId);
+      console.log(`[${this.serviceType} TTS] Got TTS control for restart`);
+      
       // Cancel any current utterance first
       if (this.currentUtterance) {
         this.speechSynthesis.cancel();
@@ -295,6 +377,7 @@ class TTSService {
         this.currentUtterance = null;
         this.pausedAtChar = 0;
         console.log(`[${this.serviceType} TTS] Finished reading`);
+        ttsCoordinator.releaseTTS(this.serviceId);
       };
       
       this.currentUtterance.onerror = (event) => {
@@ -311,6 +394,9 @@ class TTSService {
         } else if (event.error === 'not-allowed') {
           console.log(`[${this.serviceType} TTS] Not allowed, user may need to interact with page first`);
         }
+        
+        // Release TTS control on error
+        ttsCoordinator.releaseTTS(this.serviceId);
       };
       
       // Before calling speechSynthesis.speak(utterance);
@@ -322,6 +408,7 @@ class TTSService {
       console.error(`[${this.serviceType} TTS] Error restarting TTS:`, error);
       this.isPlaying = false;
       this.isPaused = false;
+      ttsCoordinator.releaseTTS(this.serviceId);
     }
   }
 
@@ -349,6 +436,9 @@ class TTSService {
       this.errorCount = 0; // Reset error count on stop
       console.log(`[${this.serviceType} TTS] Stopped`);
     }
+    
+    // Release TTS control
+    ttsCoordinator.releaseTTS(this.serviceId);
   }
 
   // Check if TTS is supported
