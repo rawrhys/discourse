@@ -10,6 +10,8 @@ class TTSService {
     this.currentLessonId = null;
     this.pausedAtChar = 0; // Track where we paused
     this.fullText = ''; // Store the full text for resume
+    this.errorCount = 0; // Track consecutive errors
+    this.maxRetries = 3; // Maximum retry attempts
   }
 
   // Get available voices
@@ -44,18 +46,46 @@ class TTSService {
     return femaleVoice || englishVoices[0] || voices[0];
   }
 
-  // Clean text for TTS (remove markdown, extra spaces, etc.)
+  // Enhanced text cleaning for TTS (remove markdown, extra spaces, etc.)
   cleanTextForTTS(text) {
     if (!text) return '';
     
     return text
+      // Remove markdown formatting
       .replace(/\*\*(.*?)\*\*/g, '$1') // Remove bold markdown
       .replace(/\*(.*?)\*/g, '$1') // Remove italic markdown
-      .replace(/### (.*?)\n/g, '$1. ') // Convert headers to sentences
-      .replace(/## (.*?)\n/g, '$1. ')
-      .replace(/# (.*?)\n/g, '$1. ')
+      .replace(/`(.*?)`/g, '$1') // Remove code markdown
+      .replace(/~~(.*?)~~/g, '$1') // Remove strikethrough
+      .replace(/\[(.*?)\]\(.*?\)/g, '$1') // Remove links, keep text
+      .replace(/!\[(.*?)\]\(.*?\)/g, '$1') // Remove images, keep alt text
+      
+      // Convert headers to sentences
+      .replace(/^#{1,6}\s+(.*?)$/gm, '$1. ')
+      
+      // Handle lists
+      .replace(/^[\s]*[-*+]\s+(.*?)$/gm, '$1. ')
+      .replace(/^[\s]*\d+\.\s+(.*?)$/gm, '$1. ')
+      
+      // Handle blockquotes
+      .replace(/^>\s+(.*?)$/gm, '$1. ')
+      
+      // Handle code blocks
+      .replace(/```[\s\S]*?```/g, '') // Remove code blocks entirely
+      .replace(/`([^`]+)`/g, '$1') // Remove inline code
+      
+      // Clean up whitespace and formatting
       .replace(/\n{3,}/g, '\n\n') // Reduce multiple newlines
       .replace(/\s+/g, ' ') // Normalize whitespace
+      .replace(/\s*\.\s*/g, '. ') // Normalize periods
+      .replace(/\s*,\s*/g, ', ') // Normalize commas
+      .replace(/\s*:\s*/g, ': ') // Normalize colons
+      .replace(/\s*;\s*/g, '; ') // Normalize semicolons
+      .replace(/\s*!\s*/g, '! ') // Normalize exclamation marks
+      .replace(/\s*\?\s*/g, '? ') // Normalize question marks
+      
+      // Remove any remaining special characters that might cause TTS issues
+      .replace(/[^\w\s.,!?;:()'-]/g, '')
+      
       .trim();
   }
 
@@ -107,11 +137,13 @@ class TTSService {
       this.currentLessonId = lessonId;
       this.fullText = text;
       this.pausedAtChar = 0;
+      this.errorCount = 0; // Reset error count for new reading
       
       // Set up event handlers
       this.currentUtterance.onstart = () => {
         this.isPlaying = true;
         this.isPaused = false;
+        this.errorCount = 0; // Reset error count on successful start
         console.log('TTS started reading lesson:', lesson.title);
       };
       
@@ -120,21 +152,42 @@ class TTSService {
         this.isPaused = false;
         this.currentUtterance = null;
         this.pausedAtChar = 0;
+        this.errorCount = 0; // Reset error count on successful completion
         console.log('TTS finished reading lesson:', lesson.title);
       };
       
       this.currentUtterance.onerror = (event) => {
         console.error('TTS error:', event.error);
-        this.isPlaying = false;
-        this.isPaused = false;
-        this.currentUtterance = null;
-        this.pausedAtChar = 0;
+        this.errorCount++;
         
         // Handle specific error types
         if (event.error === 'interrupted' || event.error === 'canceled') {
-          console.log('TTS was interrupted or canceled, resetting state');
+          console.log('TTS was interrupted or canceled, going to pause state');
+          this.isPlaying = false;
+          this.isPaused = true; // Set to pause state instead of stopping
+          this.currentUtterance = null;
+          this.pausedAtChar = 0;
+          // Don't reset error count for interruptions as they're expected
         } else if (event.error === 'not-allowed') {
           console.log('TTS not allowed, user may need to interact with page first');
+          this.isPlaying = false;
+          this.isPaused = false;
+          this.currentUtterance = null;
+          this.pausedAtChar = 0;
+        } else {
+          // For other errors, try to recover if we haven't exceeded max retries
+          if (this.errorCount < this.maxRetries) {
+            console.log(`TTS error, attempting retry ${this.errorCount}/${this.maxRetries}`);
+            setTimeout(() => {
+              this.restartFromBeginning();
+            }, 1000);
+          } else {
+            console.log('TTS max retries exceeded, stopping');
+            this.isPlaying = false;
+            this.isPaused = false;
+            this.currentUtterance = null;
+            this.pausedAtChar = 0;
+          }
         }
       };
       
@@ -143,6 +196,8 @@ class TTSService {
       
     } catch (error) {
       console.error('Error starting TTS:', error);
+      this.isPlaying = false;
+      this.isPaused = false;
       return false;
     }
   }
@@ -234,7 +289,8 @@ class TTSService {
         
         // Handle specific error types
         if (event.error === 'interrupted' || event.error === 'canceled') {
-          console.log('TTS was interrupted or canceled, resetting state');
+          console.log('TTS was interrupted or canceled, going to pause state');
+          this.isPaused = true; // Set to pause state instead of stopping
         } else if (event.error === 'not-allowed') {
           console.log('TTS not allowed, user may need to interact with page first');
         }
@@ -264,6 +320,7 @@ class TTSService {
       this.currentLessonId = null;
       this.pausedAtChar = 0;
       this.fullText = '';
+      this.errorCount = 0; // Reset error count on stop
       console.log('TTS stopped');
     }
   }
@@ -279,7 +336,8 @@ class TTSService {
       isPlaying: this.isPlaying,
       isPaused: this.isPaused,
       currentLessonId: this.currentLessonId,
-      isSupported: this.isSupported()
+      isSupported: this.isSupported(),
+      errorCount: this.errorCount
     };
   }
 }

@@ -3841,17 +3841,22 @@ app.post('/api/public/courses/:courseId/quiz-score', async (req, res) => {
       score
     });
     
-    // In a real implementation, you'd store this in a database
-    // For now, we'll just log it and return success
-    // You could use Redis, MongoDB, or any other session storage
+    // Use the PublicCourseSessionService to save the quiz score
+    const saved = publicCourseSessionService.saveQuizScore(sessionId, lessonId, score);
     
-    res.json({ 
-      success: true, 
-      message: 'Quiz score saved for session',
-      sessionId,
-      lessonId,
-      score
-    });
+    if (saved) {
+      console.log(`[API] Successfully saved quiz score for session ${sessionId}, lesson ${lessonId}: ${score}`);
+      res.json({ 
+        success: true, 
+        message: 'Quiz score saved for session',
+        sessionId,
+        lessonId,
+        score
+      });
+    } else {
+      console.log(`[API] Failed to save quiz score - session ${sessionId} not found`);
+      res.status(404).json({ error: 'Session not found' });
+    }
   } catch (error) {
     console.error('[API] Failed to save quiz score:', error);
     res.status(500).json({ error: 'Failed to save quiz score' });
@@ -3874,13 +3879,15 @@ app.get('/api/public/courses/:courseId/quiz-score/:lessonId', async (req, res) =
       lessonId
     });
     
-    // In a real implementation, you'd retrieve this from a database
-    // For now, we'll return null (no score saved yet)
+    // Use the PublicCourseSessionService to get the quiz score
+    const score = publicCourseSessionService.getQuizScore(sessionId, lessonId);
+    
+    console.log(`[API] Retrieved quiz score for session ${sessionId}, lesson ${lessonId}: ${score}`);
     
     res.json({ 
       sessionId,
       lessonId,
-      score: null // This would be retrieved from session storage
+      score: score
     });
   } catch (error) {
     console.error('[API] Failed to get quiz score:', error);

@@ -370,9 +370,9 @@ const PublicCourseDisplay = () => {
           {course.modules.map((module, moduleIndex) => {
             const isLocked = !unlockedModules.has(module.id);
             const lessonsWithQuizzes = module.lessons.filter(l => l.quiz && l.quiz.length > 0);
-            // For public courses, we don't have user-specific quiz scores, so we'll show all modules as unlocked
-            const perfectScores = []; // Empty for public courses
-            const quizProgress = lessonsWithQuizzes.length > 0 ? `0/${lessonsWithQuizzes.length}` : null;
+            // Calculate actual quiz progress for public courses
+            const perfectScores = lessonsWithQuizzes.filter(l => l.quizScore === 5);
+            const quizProgress = lessonsWithQuizzes.length > 0 ? `${perfectScores.length}/${lessonsWithQuizzes.length}` : null;
             
             return (
               <div key={module.id}>
