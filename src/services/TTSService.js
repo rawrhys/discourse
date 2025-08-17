@@ -245,13 +245,25 @@ class TTSService {
     if (!text) return '';
     
     return text
-      // Remove markdown formatting
+      // Remove HTML tags and entities
+      .replace(/<[^>]*>/g, '') // Remove all HTML tags
+      .replace(/&[a-zA-Z0-9#]+;/g, '') // Remove HTML entities
+      
+      // Remove markdown formatting more thoroughly
       .replace(/\*\*(.*?)\*\*/g, '$1') // Remove bold markdown
       .replace(/\*(.*?)\*/g, '$1') // Remove italic markdown
       .replace(/`(.*?)`/g, '$1') // Remove code markdown
       .replace(/~~(.*?)~~/g, '$1') // Remove strikethrough
       .replace(/\[(.*?)\]\(.*?\)/g, '$1') // Remove links, keep text
       .replace(/!\[(.*?)\]\(.*?\)/g, '$1') // Remove images, keep alt text
+      
+      // Remove HTML-style formatting
+      .replace(/<strong>(.*?)<\/strong>/gi, '$1') // Remove strong tags
+      .replace(/<b>(.*?)<\/b>/gi, '$1') // Remove bold tags
+      .replace(/<em>(.*?)<\/em>/gi, '$1') // Remove emphasis tags
+      .replace(/<i>(.*?)<\/i>/gi, '$1') // Remove italic tags
+      .replace(/<code>(.*?)<\/code>/gi, '$1') // Remove code tags
+      .replace(/<pre>(.*?)<\/pre>/gi, '$1') // Remove pre tags
       
       // Convert headers to sentences
       .replace(/^#{1,6}\s+(.*?)$/gm, '$1. ')
