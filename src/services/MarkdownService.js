@@ -91,28 +91,7 @@ class MarkdownService {
       // Clean up multiple consecutive asterisks
       .replace(/\*\*\*\*/g, '**')
       .replace(/\*\*\*\*\*/g, '**')
-      .replace(/\*\*\*\*\*\*/g, '**')
-      
-      // Fix malformed references and bibliography formatting
-      .replace(/References\s*\n\s*\[1\]/g, '\n## References\n\n[1]')
-      .replace(/## References\s*\n\s*\[1\]/g, '\n## References\n\n[1]')
-      .replace(/## References\s*\[1\]/g, '\n## References\n\n[1]')
-      
-      // Fix bibliography citation formatting
-      .replace(/\[(\d+)\]\s*([^\.]+)\.\s*\(([^)]+)\)\.\s*\*([^*]+)\*\.\s*([^\.]+)\./g, 
-               '[$1] $2. ($3). *$4*. $5.')
-      .replace(/\[(\d+)\]\s*([^\.]+)\.\s*\(([^)]+)\)\.\s*([^\.]+)\.\s*([^\.]+)\./g, 
-               '[$1] $2. ($3). $4. $5.')
-      
-      // Fix specific bibliography patterns
-      .replace(/\[1\] Encyclopaedia Britannica\. \(2024\)\. Academic Edition\. Encyclopaedia Britannica, Inc\.\./g, 
-               '[1] Encyclopaedia Britannica. (2024). Academic Edition. Encyclopaedia Britannica, Inc.')
-      .replace(/\[2\] Oxford University Press\. \(2012\)\. Oxford Classical Dictionary\. Oxford University Press\./g, 
-               '[2] Oxford University Press. (2012). Oxford Classical Dictionary. Oxford University Press.')
-      
-      // Ensure proper spacing in bibliography
-      .replace(/\n## References\n\[/g, '\n## References\n\n[')
-      .replace(/\n## References\s*\n\s*\[/g, '\n## References\n\n[');
+      .replace(/\*\*\*\*\*\*/g, '**');
   }
 
   // Post-process HTML to clean up any remaining issues
@@ -207,23 +186,34 @@ class MarkdownService {
   parseWithBibliography(content) {
     if (!content) return '';
     
-    // Apply bibliography-specific preprocessing
-    let processedContent = content
-      // Ensure proper bibliography header formatting
-      .replace(/## References\s*\n\s*\[/g, '\n## References\n\n[')
+    // First, handle the specific problematic pattern
+    let processedContent = content;
+    
+    // Fix the specific pattern: "## References [1] ... [2] ..."
+    if (processedContent.includes('## References [')) {
+      processedContent = processedContent
+        // Replace the problematic pattern with proper formatting
+        .replace(/## References\s*\[(\d+)\]/g, '\n## References\n\n[$1]')
+        // Ensure each citation is on its own line
+        .replace(/\]\s*\[(\d+)\]/g, '.\n\n[$1]')
+        // Add proper line breaks between citations
+        .replace(/\.\s*\[(\d+)\]/g, '.\n\n[$1]');
+    }
+    
+    // Handle other bibliography patterns
+    processedContent = processedContent
+      // Fix "References [1]" pattern (without ##)
+      .replace(/^References\s*\[(\d+)\]/gm, '\n## References\n\n[$1]')
+      // Fix "## References\n[1]" pattern
+      .replace(/## References\s*\n\s*\[(\d+)\]/g, '\n## References\n\n[$1]')
+      // Ensure proper spacing after References header
       .replace(/## References\s*\[/g, '\n## References\n\n[')
-      .replace(/References\s*\n\s*\[/g, '\n## References\n\n[')
-      
-      // Fix bibliography citation formatting
-      .replace(/\[(\d+)\]\s*([^\.]+)\.\s*\(([^)]+)\)\.\s*\*([^*]+)\*\.\s*([^\.]+)\./g, 
-               '[$1] $2. ($3). *$4*. $5.')
-      .replace(/\[(\d+)\]\s*([^\.]+)\.\s*\(([^)]+)\)\.\s*([^\.]+)\.\s*([^\.]+)\./g, 
-               '[$1] $2. ($3). $4. $5.')
-      
-      // Ensure proper line breaks in bibliography
-      .replace(/\n\[(\d+)\]/g, '\n\n[$1]')
-      .replace(/\[(\d+)\]\s*([^\.]+)\.\s*\(([^)]+)\)\.\s*\*([^*]+)\*\.\s*([^\.]+)\.\s*\[/g, 
-               '[$1] $2. ($3). *$4*. $5.\n\n[');
+      // Add line breaks between citations
+      .replace(/\.\s*\[(\d+)\]/g, '.\n\n[$1]')
+      // Clean up any remaining issues
+      .replace(/\n{3,}/g, '\n\n') // Normalize multiple line breaks
+      // Remove any duplicate References headers
+      .replace(/(## References\s*\n)+/g, '\n## References\n\n');
     
     return this.parse(processedContent);
   }
