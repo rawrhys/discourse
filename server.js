@@ -3845,4 +3845,284 @@ async function saveCachedImageToLibrary({ cachedRecord, courseId, lessonId }) {
 
     const id = generateImageId();
     const ext = getFileExtensionFromLocalUrl(cachedRecord.localUrl);
-    const destFilename = `${id}.${ext}`
+    const destFilename = `${id}.${ext}`;
+    const destPath = path.join(imageLibraryDir, destFilename);
+
+    // Copy compressed file into library
+    fs.copyFileSync(sourcePath, destPath);
+
+    const record = {
+      id,
+      courseId: courseId || null,
+      lessonId: lessonId || null,
+      title: cachedRecord.title || '',
+      attribution: cachedRecord.attribution || '',
+      pageURL: cachedRecord.pageURL || '',
+      sourceUrl: cachedRecord.sourceUrl || '',
+      localUrl: `/images/${destFilename}`,
+      createdAt: new Date().toISOString(),
+      originalSize: cachedRecord.originalSize,
+      compressedSize: cachedRecord.compressedSize,
+      compressionRatio: cachedRecord.compressionRatio,
+      format: cachedRecord.format || ext,
+      cacheKey: cachedRecord.key,
+    };
+
+    // Defensive: ensure images collection exists before pushing
+    db.data = db.data || {};
+    if (!Array.isArray(db.data.images)) {
+      db.data.images = [];
+    }
+    db.data.images.push(record);
+    await db.write();
+
+    console.log('[ImageLibrary] Saved image to library:', record.id, '->', record.localUrl);
+    return record;
+  } catch (e) {
+    console.warn('[ImageLibrary] Failed to save cached image to library:', e.message);
+    return null;
+  }
+}
+
+// API: Get single image metadata by id
+app.get('/api/images/:id', async (req, res) => {
+  try {
+    const rec = (db.data.images || []).find(r => r.id === req.params.id);
+    if (!rec) return res.status(404).json({ error: 'Image not found' });
+    return res.json(rec);
+  } catch (e) {
+    return res.status(500).json({ error: 'Failed to fetch image', details: e.message });
+  }
+});
+
+// API: List images for a course
+app.get('/api/courses/:courseId/images', async (req, res) => {
+  try {
+    const list = (db.data.images || []).filter(r => r.courseId === req.params.courseId);
+    return res.json(list);
+  } catch (e) {
+    return res.status(500).json({ error: 'Failed to list images', details: e.message });
+  }
+});
+
+// API: List images for a lesson
+app.get('/api/lessons/:lessonId/images', async (req, res) => {
+  try {
+    const list = (db.data.images || []).filter(r => r.lessonId === req.params.lessonId);
+    return res.json(list);
+  } catch (e) {
+    return res.status(500).json({ error: 'Failed to list images', details: e.message });
+  }
+});
+
+// API: Delete an image from library (requires auth)
+app.delete('/api/images/:id', authenticateToken, requireAdminIfConfigured, async (req, res) => {
+  try {
+    const images = db.data.images || [];
+    const idx = images.findIndex(r => r.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: 'Image not found' });
+    const rec = images[idx];
+    // Delete file
+    try {
+      const basename = path.basename(rec.localUrl || '');
+      const filePath = path.join(imageLibraryDir, basename);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    } catch {}
+    images.splice(idx, 1);
+    await db.write();
+    return res.status(204).end();
+  } catch (e) {
+    return res.status(500).json({ error: 'Failed to delete image', details: e.message });
+  }
+});
+
+// Debug endpoint to check authentication status
+app.get('/api/debug/auth', (req, res) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  
+  console.log('[DEBUG] Auth debug request:', {
+    hasAuthHeader: !!authHeader,
+    hasToken: !!token,
+    tokenLength: token ? token.length : 0,
+    tokenPrefix: token ? token.substring(0, 10) + '...' : 'none',
+    headers: req.headers
+  });
+  
+  res.json({
+    hasAuthHeader: !!authHeader,
+    hasToken: !!token,
+    tokenLength: token ? token.length : 0,
+    tokenPrefix: token ? token.substring(0, 10) + '...' : 'none',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Start the server
+async function startServer() {
+  try {
+    // Server configuration
+    const port = process.env.PORT || 4003;
+    const host = process.env.HOST || '0.0.0.0';
+    const availablePort = port;
+    
+    // Initialize database
+    await initializeDatabase();
+    
+    // Create HTTP server
+    const httpServer = createHttpServer(app);
+    const wss = new WebSocketServer({ server: httpServer });
+
+    wss.on('connection', (ws, req) => {
+      console.log('[WebSocket] New connection established');
+      
+      ws.on('message', (message) => {
+        try {
+          const data = JSON.parse(message);
+          console.log('[WebSocket] Received message:', data);
+        } catch (e) {
+          console.warn('[WebSocket] Invalid JSON message:', e.message);
+        }
+      });
+      
+      ws.on('close', () => {
+        console.log('[WebSocket] Connection closed');
+      });
+    });
+    
+    // Start listening
+    httpServer.listen(availablePort, host, () => {
+      console.log(`[SERVER] HTTP running on http://${host}:${availablePort}`);
+      console.log(`[SERVER] Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log('[SERVER] Press Ctrl+C to stop');
+    });
+
+    // Handle server errors
+    httpServer.on('error', (error) => {
+      if (error.code === 'EADDRINUSE') {
+        console.error(`[SERVER_ERROR] Port ${availablePort} is already in use.`);
+        process.exit(1);
+      } else {
+        console.error('[SERVER_ERROR]', error);
+        process.exit(1);
+      }
+    });
+
+    // Graceful shutdown
+    process.on('SIGINT', () => {
+      console.log('\n[SERVER] Shutting down gracefully...');
+      httpServer.close(() => {
+        console.log('[SERVER] HTTP server closed');
+        process.exit(0);
+      });
+    });
+
+    process.on('SIGTERM', () => {
+      console.log('\n[SERVER] Received SIGTERM, shutting down gracefully...');
+      httpServer.close(() => {
+        console.log('[SERVER] HTTP server closed');
+        process.exit(0);
+      });
+    });
+
+    return httpServer;
+  } catch (error) {
+    console.error('[SERVER_ERROR] Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+// --- AI SERVICE INIT ---
+const MISTRAL_KEY = process.env.MISTRAL_API_KEY || process.env.VITE_MISTRAL_API_KEY || '';
+try {
+  global.aiService = new AIService(MISTRAL_KEY);
+  console.log(`[SERVER] AI service ${MISTRAL_KEY ? 'initialized with API key' : 'initialized without API key (image search only)'}`);
+} catch (e) {
+  console.error('[SERVER] Failed to initialize AI service:', e.message);
+  global.aiService = new AIService('');
+}
+
+// Start the server only when not running under tests
+if (process.env.NODE_ENV !== 'test') {
+  startServer();
+}
+
+// SPA fallback: always serve index.html with no-cache so clients fetch the latest bundle
+app.get('*', (req, res, next) => {
+  // Let API endpoints and static files pass through
+  if (req.path.startsWith('/api/') || req.path.startsWith('/images/') || req.path.startsWith('/cached-images/')) {
+    return next();
+  }
+  try {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    return res.sendFile(path.join(buildPath, 'index.html'));
+  } catch (e) {
+    console.error('[SERVER] Failed to serve SPA index.html:', e.message);
+  }
+});
+
+app.post('/api/quizzes/submit', authenticateToken, async (req, res) => {
+  const { courseId, moduleId, lessonId, score } = req.body;
+  const userId = req.user.id;
+
+  if (!courseId || !moduleId || !lessonId || score === undefined) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  try {
+    await db.read();
+    const course = db.data.courses.find(c => c.id === courseId && c.userId === userId);
+
+    if (!course) {
+      return res.status(404).json({ error: 'Course not found' });
+    }
+
+    const module = course.modules.find(m => m.id === moduleId);
+    if (!module) {
+      return res.status(404).json({ error: 'Module not found' });
+    }
+
+    const lesson = module.lessons.find(l => l.id === lessonId);
+    if (!lesson) {
+      return res.status(404).json({ error: 'Lesson not found' });
+    }
+
+    // Update or add the quiz score for the lesson
+    if (!lesson.quizScores) {
+      lesson.quizScores = {};
+    }
+    lesson.quizScores[userId] = score;
+    lesson.lastQuizScore = score; // Keep track of the last score
+
+    // Check if the module is now complete
+    const allQuizzesPerfect = module.lessons.every(l => l.quiz && l.quiz.length > 0 ? (l.quizScores && l.quizScores[userId] === 5) : true);
+
+    let unlockedNextModule = false;
+    if (allQuizzesPerfect) {
+      module.isCompleted = true; // Mark module as completed
+      const currentModuleIndex = course.modules.findIndex(m => m.id === moduleId);
+      if (currentModuleIndex !== -1 && currentModuleIndex + 1 < course.modules.length) {
+        course.modules[currentModuleIndex + 1].isLocked = false;
+        unlockedNextModule = true;
+      }
+    }
+
+    await db.write();
+
+    res.json({
+      message: 'Quiz score submitted successfully',
+      unlockedNextModule,
+      moduleCompleted: allQuizzesPerfect
+    });
+
+  } catch (error) {
+    console.error('Error submitting quiz score:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
+
+export { app, db, startServer };
