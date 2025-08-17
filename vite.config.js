@@ -41,19 +41,18 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: 'https://thediscourse.ai/api',
+        target: 'https://thediscourse.ai',
         changeOrigin: true,
         secure: true,
-        rewrite: (path) => path.replace(/^\/api/, ''),
       },
       '/cached-images': {
-        target: 'https://thediscourse.ai/api',
+        target: 'https://thediscourse.ai',
         changeOrigin: true,
         secure: true,
       },
       // Ensure saved images served by the backend are accessible in dev
       '/images': {
-        target: 'https://thediscourse.ai/api',
+        target: 'https://thediscourse.ai',
         changeOrigin: true,
         secure: true,
       }

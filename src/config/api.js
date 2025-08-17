@@ -16,10 +16,10 @@ const inferDefaultBaseUrl = () => {
       
       // For production, use the same domain as the frontend
       // This assumes the backend is running on the same domain
-      return `https://${hostname}/api`;
+      return `https://${hostname}`;
     }
   } catch (_) {}
-  return 'https://thediscourse.ai/api'; // Default to production API
+  return 'https://thediscourse.ai'; // Default to production API
 };
 
 export const API_BASE_URL = inferDefaultBaseUrl();
@@ -37,7 +37,7 @@ export const testBackendConnection = async () => {
   console.log('🔍 [CONNECTION TEST] Testing backend connection...');
   
   try {
-    const response = await fetch(`${API_BASE_URL}/api/health`, {
+    const response = await fetch(`${API_BASE_URL}/api/test`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
