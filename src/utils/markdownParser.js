@@ -81,7 +81,12 @@ function fixMalformedBold(text) {
     'Lyric Poetry', 'Oracle of Delphi', 'Olympic Games', 'Sappho', 'Homer',
     'Pythia', 'Apollo', 'Mount Parnassus', 'Delphi', 'Olympia', 'Zeus',
     'arete', 'ekecheiria', 'stadion', 'pankration', 'agoge', 'gymnasia',
-    'Sophocles', 'Classical Period', 'Athens', 'democracy'
+    'Sophocles', 'Classical Period', 'Athens', 'democracy',
+    // Add additional Greek terms from the provided content
+    'Phoenicia', 'Egypt', 'Corinth', 'Miletus', 'Chalcis', 'Eretria',
+    'Lelantine War', 'Draco', 'Solon', 'Peisistratos', 'Lesbos',
+    'symposia', 'helots', 'demos', 'arete', 'ekecheiria', 'stadion',
+    'pankration', 'agoge', 'gymnasia', 'Persian Wars', 'Mycenaean palaces'
   ];
   
   boldWords.forEach(word => {
@@ -368,6 +373,145 @@ export function parseArchaicPeriodContent(rawText) {
              '[1] Oxford University Press. (2012). Oxford Classical Dictionary. Oxford University Press.')
     .replace(/\[2\] Encyclopaedia Britannica\. \(2024\)\. Academic Edition\. Encyclopaedia Britannica, Inc\.\./g, 
              '[2] Encyclopaedia Britannica. (2024). Academic Edition. Encyclopaedia Britannica, Inc.');
+
+  // Apply general fixes
+  processedText = parseMalformedMarkdown(processedText);
+  
+  // Final cleanup
+  processedText = cleanupLeftoverSyntax(processedText);
+
+  return processedText;
+}
+
+/**
+ * New function specifically for Greek City-States content
+ */
+export function parseGreekCityStatesContent(rawText) {
+  if (!rawText || typeof rawText !== 'string') {
+    return rawText;
+  }
+
+  let processedText = rawText;
+
+  // Specific fixes for Greek City-States content
+  processedText = processedText
+    // Fix malformed bold patterns with ** at the end
+    .replace(/\bPolis\*\*/g, '**Polis**')
+    .replace(/\bAcropolis\*\*/g, '**Acropolis**')
+    .replace(/\bAgora\*\*/g, '**Agora**')
+    .replace(/\bPoleis\*\*/g, '**Poleis**')
+    .replace(/\bTyranny\*\*/g, '**Tyranny**')
+    .replace(/\bOligarchy\*\*/g, '**Oligarchy**')
+    .replace(/\bhoplite\*\*/g, '**hoplite**')
+    .replace(/\bstasis\*\*/g, '**stasis**')
+    .replace(/\bGerousia\*\*/g, '**Gerousia**')
+    .replace(/\bPhoenicia\*\*/g, '**Phoenicia**')
+    .replace(/\bEgypt\*\*/g, '**Egypt**')
+    .replace(/\bCorinth\*\*/g, '**Corinth**')
+    .replace(/\bMiletus\*\*/g, '**Miletus**')
+    .replace(/\bChalcis\*\*/g, '**Chalcis**')
+    .replace(/\bEretria\*\*/g, '**Eretria**')
+    .replace(/\bLelantine War\*\*/g, '**Lelantine War**')
+    .replace(/\bDraco\*\*/g, '**Draco**')
+    .replace(/\bSolon\*\*/g, '**Solon**')
+    .replace(/\bPeisistratos\*\*/g, '**Peisistratos**')
+    .replace(/\bLesbos\*\*/g, '**Lesbos**')
+    .replace(/\bsymposia\*\*/g, '**symposia**')
+    .replace(/\bhelots\*\*/g, '**helots**')
+    .replace(/\bdemos\*\*/g, '**demos**')
+    .replace(/\barete\*\*/g, '**arete**')
+    .replace(/\bekecheiria\*\*/g, '**ekecheiria**')
+    .replace(/\bstadion\*\*/g, '**stadion**')
+    .replace(/\bpankration\*\*/g, '**pankration**')
+    .replace(/\bagoge\*\*/g, '**agoge**')
+    .replace(/\bgymnasia\*\*/g, '**gymnasia**')
+    .replace(/\bPersian Wars\*\*/g, '**Persian Wars**')
+    .replace(/\bMycenaean palaces\*\*/g, '**Mycenaean palaces**')
+    
+    // Fix patterns with single asterisk at the beginning
+    .replace(/\*Polis\b/g, '**Polis**')
+    .replace(/\*Acropolis\b/g, '**Acropolis**')
+    .replace(/\*Agora\b/g, '**Agora**')
+    .replace(/\*Poleis\b/g, '**Poleis**')
+    .replace(/\*Tyranny\b/g, '**Tyranny**')
+    .replace(/\*Oligarchy\b/g, '**Oligarchy**')
+    .replace(/\*hoplite\b/g, '**hoplite**')
+    .replace(/\*stasis\b/g, '**stasis**')
+    .replace(/\*Gerousia\b/g, '**Gerousia**')
+    .replace(/\*Phoenicia\b/g, '**Phoenicia**')
+    .replace(/\*Egypt\b/g, '**Egypt**')
+    .replace(/\*Corinth\b/g, '**Corinth**')
+    .replace(/\*Miletus\b/g, '**Miletus**')
+    .replace(/\*Chalcis\b/g, '**Chalcis**')
+    .replace(/\*Eretria\b/g, '**Eretria**')
+    .replace(/\*Lelantine War\b/g, '**Lelantine War**')
+    .replace(/\*Draco\b/g, '**Draco**')
+    .replace(/\*Solon\b/g, '**Solon**')
+    .replace(/\*Peisistratos\b/g, '**Peisistratos**')
+    .replace(/\*Lesbos\b/g, '**Lesbos**')
+    .replace(/\*symposia\b/g, '**symposia**')
+    .replace(/\*helots\b/g, '**helots**')
+    .replace(/\*demos\b/g, '**demos**')
+    .replace(/\*arete\b/g, '**arete**')
+    .replace(/\*ekecheiria\b/g, '**ekecheiria**')
+    .replace(/\*stadion\b/g, '**stadion**')
+    .replace(/\*pankration\b/g, '**pankration**')
+    .replace(/\*agoge\b/g, '**agoge**')
+    .replace(/\*gymnasia\b/g, '**gymnasia**')
+    .replace(/\*Persian Wars\b/g, '**Persian Wars**')
+    .replace(/\*Mycenaean palaces\b/g, '**Mycenaean palaces**')
+    
+    // Fix patterns with single asterisk at the end
+    .replace(/\bPolis\*/g, '**Polis**')
+    .replace(/\bAcropolis\*/g, '**Acropolis**')
+    .replace(/\bAgora\*/g, '**Agora**')
+    .replace(/\bPoleis\*/g, '**Poleis**')
+    .replace(/\bTyranny\*/g, '**Tyranny**')
+    .replace(/\bOligarchy\*/g, '**Oligarchy**')
+    .replace(/\bhoplite\*/g, '**hoplite**')
+    .replace(/\bstasis\*/g, '**stasis**')
+    .replace(/\bGerousia\*/g, '**Gerousia**')
+    .replace(/\bPhoenicia\*/g, '**Phoenicia**')
+    .replace(/\bEgypt\*/g, '**Egypt**')
+    .replace(/\bCorinth\*/g, '**Corinth**')
+    .replace(/\bMiletus\*/g, '**Miletus**')
+    .replace(/\bChalcis\*/g, '**Chalcis**')
+    .replace(/\bEretria\*/g, '**Eretria**')
+    .replace(/\bLelantine War\*/g, '**Lelantine War**')
+    .replace(/\bDraco\*/g, '**Draco**')
+    .replace(/\bSolon\*/g, '**Solon**')
+    .replace(/\bPeisistratos\*/g, '**Peisistratos**')
+    .replace(/\bLesbos\*/g, '**Lesbos**')
+    .replace(/\bsymposia\*/g, '**symposia**')
+    .replace(/\bhelots\*/g, '**helots**')
+    .replace(/\bdemos\*/g, '**demos**')
+    .replace(/\barete\*/g, '**arete**')
+    .replace(/\bekecheiria\*/g, '**ekecheiria**')
+    .replace(/\bstadion\*/g, '**stadion**')
+    .replace(/\bpankration\*/g, '**pankration**')
+    .replace(/\bagoge\*/g, '**agoge**')
+    .replace(/\bgymnasia\*/g, '**gymnasia**')
+    .replace(/\bPersian Wars\*/g, '**Persian Wars**')
+    .replace(/\bMycenaean palaces\*/g, '**Mycenaean palaces**')
+    
+    // Fix malformed headers
+    .replace(/^\*\*## Geography and the Birth of the \*\*Polis/gm, '## Geography and the Birth of the Polis')
+    .replace(/^Social and Economic Foundations\*\*/gm, '## Social and Economic Foundations')
+    .replace(/^\*## Political Evolution: From Kings to Citizens/gm, '## Political Evolution: From Kings to Citizens')
+    .replace(/^\*## Cultural and Religious Unity/gm, '## Cultural and Religious Unity')
+    .replace(/^## Challenges and Conflicts/gm, '## Challenges and Conflicts')
+    
+    // Fix malformed list items
+    .replace(/^Population Growth\*/gm, '### Population Growth')
+    .replace(/^Trade Networks\*/gm, '### Trade Networks')
+    .replace(/^Military Reforms\*/gm, '### Military Reforms')
+    
+    // Fix malformed references
+    .replace(/References\s*\n\s*\[1\]/g, '\n## References\n\n[1]')
+    .replace(/\[1\] Encyclopaedia Britannica\. \(2024\)\. Academic Edition\. Encyclopaedia Britannica, Inc\.\./g, 
+             '[1] Encyclopaedia Britannica. (2024). Academic Edition. Encyclopaedia Britannica, Inc.')
+    .replace(/\[2\] Oxford University Press\. \(2012\)\. Oxford Classical Dictionary\. Oxford University Press\./g, 
+             '[2] Oxford University Press. (2012). Oxford Classical Dictionary. Oxford University Press.');
 
   // Apply general fixes
   processedText = parseMalformedMarkdown(processedText);

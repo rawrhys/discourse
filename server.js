@@ -224,10 +224,10 @@ function computeImageRelevanceScore(subject, mainText, meta) {
     if (w * h > 600 * 400) score += 5;
     if (w * h > 1000 * 700) score += 5;
 
-    // Bonus for Wikipedia images in historical contexts
+    // Reduced bonus for Wikipedia images in historical contexts
     if (isHistoricalContent && url.includes('wikimedia.org')) {
-      score += 50; // Significant bonus for Wikipedia images in historical content
-      console.log(`[ImageScoring] Bonus for Wikipedia image in historical content`);
+      score += 15; // Reduced bonus for Wikipedia images in historical content (was 50)
+      console.log(`[ImageScoring] Reduced bonus for Wikipedia image in historical content`);
     }
 
     return Math.max(0, score);
@@ -1143,27 +1143,27 @@ Context: "${context.substring(0, 1000)}..."`;
     const isHistoricalContent = /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(subject) || 
                                /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(content);
     
-    // Prioritize Wikipedia over Pixabay
+    // More balanced scoring between providers
     if (wiki && pixa) {
       const wikiScore = Number(wiki.score || 0);
       const pixaScore = Number(pixa.score || 0);
       
       if (isHistoricalContent) {
-        // For historical content, require Pixabay to be MUCH higher (15+ points) to be selected
-        if (pixaScore > wikiScore + 15) {
-          console.log(`[AIService] Selected Pixabay image (score ${pixaScore}) over Wikipedia (score ${wikiScore}) for historical content - significantly higher score`);
+        // For historical content, use a more balanced threshold (5+ points instead of 15+)
+        if (pixaScore > wikiScore + 5) {
+          console.log(`[AIService] Selected Pixabay image (score ${pixaScore}) over Wikipedia (score ${wikiScore}) for historical content - balanced scoring`);
           return pixa;
         } else {
-          console.log(`[AIService] Selected Wikipedia image (score ${wikiScore}) over Pixabay (score ${pixaScore}) for historical content - prioritizing Wikipedia`);
+          console.log(`[AIService] Selected Wikipedia image (score ${wikiScore}) over Pixabay (score ${pixaScore}) for historical content - balanced scoring`);
           return wiki;
         }
       } else {
-        // For non-historical content, use the original threshold
-        if (pixaScore > wikiScore + 2) {
-          console.log(`[AIService] Selected Pixabay image (score ${pixaScore}) over Wikipedia (score ${wikiScore}) due to significantly higher score`);
+        // For non-historical content, use an even more balanced threshold (1+ points instead of 2+)
+        if (pixaScore > wikiScore + 1) {
+          console.log(`[AIService] Selected Pixabay image (score ${pixaScore}) over Wikipedia (score ${wikiScore}) due to balanced scoring`);
           return pixa;
         } else {
-          console.log(`[AIService] Selected Wikipedia image (score ${wikiScore}) over Pixabay (score ${pixaScore}) - prioritizing Wikipedia`);
+          console.log(`[AIService] Selected Wikipedia image (score ${wikiScore}) over Pixabay (score ${pixaScore}) - balanced scoring`);
           return wiki;
         }
       }

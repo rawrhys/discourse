@@ -32,6 +32,11 @@ const fixMalformedMarkdown = (text) => {
     return parseArchaicPeriodContent(text);
   }
   
+  // Try the new Greek City-States parser for content with specific patterns
+  if (text.includes('Polis') && (text.includes('Acropolis') || text.includes('Agora'))) {
+    return parseGreekCityStatesContent(text);
+  }
+  
   // Fall back to general malformed markdown parser
   return parseMalformedMarkdown(text);
 };

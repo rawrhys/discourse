@@ -239,4 +239,79 @@
 /* Fallback: use JavaScript to clean up remaining asterisks */
 .lesson-content .markdown-body {
   /* This will be handled by JavaScript cleanup */
+}
+
+/* Additional CSS rules to hide malformed characters that slip through parsing */
+.lesson-content .markdown-body {
+  /* Hide standalone asterisks that are clearly malformed */
+  font-variant-ligatures: none;
+}
+
+/* Hide specific malformed patterns */
+.lesson-content .markdown-body p:contains("**") {
+  /* Target paragraphs with malformed asterisks */
+}
+
+/* Hide malformed bold patterns that weren't properly parsed */
+.lesson-content .markdown-body strong:empty,
+.lesson-content .markdown-body strong:has(span:empty) {
+  display: none;
+}
+
+/* Hide malformed markdown patterns */
+.lesson-content .markdown-body p:has(code:contains("**")) {
+  /* Hide code blocks with malformed asterisks */
+}
+
+/* Hide specific problematic patterns */
+.lesson-content .markdown-body p:has(span:contains("*")) {
+  /* Hide spans with single asterisks */
+}
+
+/* Additional fallback for any remaining malformed characters */
+.lesson-content .markdown-body *:contains("**") {
+  /* This is a fallback for any remaining malformed patterns */
+}
+
+/* Hide malformed headers */
+.lesson-content .markdown-body h1:contains("**"),
+.lesson-content .markdown-body h2:contains("**"),
+.lesson-content .markdown-body h3:contains("**"),
+.lesson-content .markdown-body h4:contains("**"),
+.lesson-content .markdown-body h5:contains("**"),
+.lesson-content .markdown-body h6:contains("**") {
+  /* Hide headers with malformed asterisks */
+}
+
+/* Hide malformed list items */
+.lesson-content .markdown-body li:contains("**") {
+  /* Hide list items with malformed asterisks */
+}
+
+/* Hide malformed blockquotes */
+.lesson-content .markdown-body blockquote:contains("**") {
+  /* Hide blockquotes with malformed asterisks */
+}
+
+/* Additional rules for specific Greek content patterns */
+.lesson-content .markdown-body p:contains("Polis**"),
+.lesson-content .markdown-body p:contains("Acropolis**"),
+.lesson-content .markdown-body p:contains("Agora**"),
+.lesson-content .markdown-body p:contains("Poleis**"),
+.lesson-content .markdown-body p:contains("Tyranny**"),
+.lesson-content .markdown-body p:contains("Oligarchy**"),
+.lesson-content .markdown-body p:contains("hoplite**"),
+.lesson-content .markdown-body p:contains("stasis**"),
+.lesson-content .markdown-body p:contains("Gerousia**") {
+  /* Hide specific Greek terms with malformed asterisks */
+}
+
+/* Hide malformed patterns at the end of text */
+.lesson-content .markdown-body p:last-child:contains("**") {
+  /* Hide malformed patterns at the end */
+}
+
+/* Hide malformed patterns at the beginning of text */
+.lesson-content .markdown-body p:first-child:contains("**") {
+  /* Hide malformed patterns at the beginning */
 } 
