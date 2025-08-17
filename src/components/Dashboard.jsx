@@ -80,7 +80,12 @@ const Dashboard = () => {
       
       logger.debug('✅ [DASHBOARD] Successfully fetched saved courses', {
         coursesCount: Array.isArray(courses) ? courses.length : 0,
-        courses: Array.isArray(courses) ? courses.map(c => ({ id: c.id, title: c.title })) : [],
+        courses: Array.isArray(courses) ? courses.map(c => ({ 
+          id: c.id, 
+          title: c.title, 
+          published: c.published,
+          publishedType: typeof c.published 
+        })) : [],
         timestamp: new Date().toISOString()
       });
       
@@ -644,6 +649,15 @@ const Dashboard = () => {
                       const modulesCount = Array.isArray(course.modules) ? course.modules.length : 0;
                       const lessonsCount = Array.isArray(course.modules) ? course.modules.reduce((sum, m) => sum + (Array.isArray(m.lessons) ? m.lessons.length : 0), 0) : 0;
                       
+                      // Debug logging for course state
+                      logger.debug('🎯 [DASHBOARD] Rendering course card:', {
+                        courseId: course.id,
+                        courseTitle: course.title,
+                        published: course.published,
+                        publishedType: typeof course.published,
+                        timestamp: new Date().toISOString()
+                      });
+                      
                       return (
                         <div
                           key={courseId}
@@ -716,6 +730,17 @@ const Dashboard = () => {
                                       // Unpublish the course
                                       logger.debug('Attempting to unpublish course:', course.id);
                                       const updated = await api.unpublishCourse(course.id);
+                                      logger.debug('✅ [DASHBOARD] Course unpublished successfully:', updated);
+                                      
+                                      // Update local state immediately
+                                      setSavedCourses(prevCourses => 
+                                        prevCourses.map(c => 
+                                          c.id === course.id 
+                                            ? { ...c, published: false }
+                                            : c
+                                        )
+                                      );
+                                      
                                       await fetchSavedCourses(true); // Force refresh after unpublishing
                                       setSuccessMessage('Course unpublished successfully!');
                                       setShowSuccessToast(true);
@@ -724,6 +749,17 @@ const Dashboard = () => {
                                       // Publish the course
                                       logger.debug('Attempting to publish course:', course.id);
                                       const updated = await api.publishCourse(course.id);
+                                      logger.debug('✅ [DASHBOARD] Course published successfully:', updated);
+                                      
+                                      // Update local state immediately
+                                      setSavedCourses(prevCourses => 
+                                        prevCourses.map(c => 
+                                          c.id === course.id 
+                                            ? { ...c, published: true }
+                                            : c
+                                        )
+                                      );
+                                      
                                       await fetchSavedCourses(true); // Force refresh after publishing
                                       // Trigger confetti animation
                                       setShowConfetti(true);
