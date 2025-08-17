@@ -21,8 +21,6 @@ const PublicLessonView = ({
 }) => {
   const [imageData, setImageData] = useState(null);
   const [imageLoading, setImageLoading] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
   const [view, setView] = useState('content'); // 'content' or 'flashcards'
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [showFailMessage, setShowFailMessage] = useState(false);
@@ -30,6 +28,13 @@ const PublicLessonView = ({
   const [usedImageUrls, setUsedImageUrls] = useState(new Set());
   const [imageTitleCounts, setImageTitleCounts] = useState({});
   const [imageUrlCounts, setImageUrlCounts] = useState({});
+  
+  // TTS state management (matching private LessonView)
+  const [ttsStatus, setTtsStatus] = useState({
+    isPlaying: false,
+    isPaused: false,
+    isSupported: true // Assume supported for public courses
+  });
   
   // Use singleton instances directly - both services are exported as singletons
   const ttsService = useRef(TTSService);
@@ -84,7 +89,7 @@ const PublicLessonView = ({
 
   // Auto-pause TTS when lesson changes
   useEffect(() => {
-    if (isPlaying || isPaused) {
+    if (ttsStatus.isPlaying || ttsStatus.isPaused) {
       try {
         if (ttsService.current && typeof ttsService.current.stop === 'function') {
           ttsService.current.stop();
@@ -92,10 +97,9 @@ const PublicLessonView = ({
       } catch (error) {
         console.warn('[PublicLessonView] TTS auto-pause error:', error);
       }
-      setIsPlaying(false);
-      setIsPaused(false);
+      setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
     }
-  }, [lesson?.id, isPlaying, isPaused]);
+  }, [lesson?.id, ttsStatus.isPlaying, ttsStatus.isPaused]);
 
   // Handle image loading for public courses (simplified)
   useEffect(() => {
@@ -149,17 +153,15 @@ const PublicLessonView = ({
     if (!lesson?.content) return;
     
     try {
-      if (isPaused) {
+      if (ttsStatus.isPaused) {
         // Resume if paused
         if (ttsService.current && typeof ttsService.current.resume === 'function') {
           ttsService.current.resume();
-          setIsPlaying(true);
-          setIsPaused(false);
+          setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
         }
       } else {
         // Start new reading
-        setIsPlaying(true);
-        setIsPaused(false);
+        setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
         if (ttsService.current && typeof ttsService.current.readLesson === 'function') {
           const contentStr = cleanAndCombineContent(lesson.content);
           await ttsService.current.readLesson({ ...lesson, content: contentStr }, lesson.id);
@@ -169,10 +171,9 @@ const PublicLessonView = ({
       }
     } catch (error) {
       console.error('[PublicLessonView] TTS error:', error);
-    } finally {
-      setIsPlaying(false);
+      setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
     }
-  }, [lesson, isPaused]);
+  }, [lesson, ttsStatus.isPaused]);
 
   const handleStopAudio = useCallback(() => {
     try {
@@ -182,19 +183,18 @@ const PublicLessonView = ({
     } catch (error) {
       console.warn('[PublicLessonView] TTS stop error:', error);
     }
-    setIsPlaying(false);
-    setIsPaused(false);
+    setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
   }, []);
 
   const handlePauseResumeAudio = useCallback(() => {
     try {
       if (ttsService.current) {
-        if (isPaused && typeof ttsService.current.resume === 'function') {
+        if (ttsStatus.isPaused && typeof ttsService.current.resume === 'function') {
           ttsService.current.resume();
-          setIsPaused(false);
-        } else if (isPlaying && typeof ttsService.current.pause === 'function') {
+          setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
+        } else if (ttsStatus.isPlaying && typeof ttsService.current.pause === 'function') {
           ttsService.current.pause();
-          setIsPaused(true);
+          setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: true }));
         }
       }
     } catch (error) {
@@ -400,16 +400,16 @@ const PublicLessonView = ({
             <i className="fas fa-clone mr-2"></i>Flashcards {flashcardData?.length ? `(${flashcardData.length})` : ''}
           </button>
           <button
-            onClick={isPlaying || isPaused ? handleStopAudio : handlePlayAudio}
+            onClick={ttsStatus.isPlaying || ttsStatus.isPaused ? handleStopAudio : handlePlayAudio}
             className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-              isPlaying || isPaused
+              ttsStatus.isPlaying || ttsStatus.isPaused
                 ? 'bg-green-600 text-white hover:bg-green-700'
                 : 'bg-blue-600 text-white hover:bg-blue-700'
             }`}
-            title={isPlaying ? 'Pause reading' : isPaused ? 'Resume reading' : 'Start reading aloud'}
+            title={ttsStatus.isPlaying ? 'Pause reading' : ttsStatus.isPaused ? 'Resume reading' : 'Start reading aloud'}
           >
-            <i className={`mr-2 ${isPlaying ? 'fas fa-pause' : isPaused ? 'fas fa-play' : 'fas fa-volume-up'}`}></i>
-            {isPlaying ? 'Pause' : isPaused ? 'Resume' : 'Read Aloud'}
+            <i className={`mr-2 ${ttsStatus.isPlaying ? 'fas fa-pause' : ttsStatus.isPaused ? 'fas fa-play' : 'fas fa-volume-up'}`}></i>
+            {ttsStatus.isPlaying ? 'Pause' : ttsStatus.isPaused ? 'Resume' : 'Read Aloud'}
           </button>
         </div>
 
