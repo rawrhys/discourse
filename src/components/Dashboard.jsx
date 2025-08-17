@@ -183,11 +183,9 @@ const Dashboard = () => {
       // Clear any existing errors first, especially "Course not found" errors
       setError(null);
       
-      // Normalize course ID to remove timestamp suffix
-      const normalizedCourseId = String(courseId || '').replace(/_[0-9]{10,}$/, '');
-      logger.debug('🗑️ [DASHBOARD] Deleting course:', courseId, 'normalized:', normalizedCourseId);
+      logger.debug('🗑️ [DASHBOARD] Deleting course:', courseId);
       
-      const deleteResult = await api.deleteCourse(normalizedCourseId);
+      const deleteResult = await api.deleteCourse(courseId);
       logger.debug('✅ [DASHBOARD] Course deletion API call completed:', deleteResult);
       
       // Clear the course to delete state immediately

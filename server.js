@@ -3012,8 +3012,14 @@ app.get('/api/courses/:courseId', authenticateToken, (req, res) => {
       type: typeof req.user.id
     });
     
-    const normalizedCourseId = String(courseId || '').replace(/_[0-9]{10,}$/, '');
-    const course = db.data.courses.find(c => String(c.id || '').replace(/_[0-9]{10,}$/, '') === normalizedCourseId);
+    // Try to find the course by exact ID first
+    let course = db.data.courses.find(c => c.id === courseId);
+    
+    // If not found by exact ID, try normalized ID (for backward compatibility)
+    if (!course) {
+      const normalizedCourseId = String(courseId || '').replace(/_[0-9]{10,}$/, '');
+      course = db.data.courses.find(c => String(c.id || '').replace(/_[0-9]{10,}$/, '') === normalizedCourseId);
+    }
     console.log(`[API] Course found:`, {
       found: !!course,
       courseId: courseId,
@@ -3675,17 +3681,20 @@ app.post('/api/courses/:courseId/publish', authenticateToken, async (req, res) =
     const { courseId } = req.params;
     const userId = req.user.id;
     
-    // Normalize: strip optional trailing _<timestamp> (e.g., _1754750525562)
-    const normalizedCourseId = String(courseId || '').replace(/_[0-9]{10,}$/, '');
-    
     console.log(`[API] Publish request:`, {
       originalCourseId: courseId,
-      normalizedCourseId: normalizedCourseId,
       userId: userId,
       availableCourseIds: db.data.courses.map(c => ({ id: c.id, title: c.title, published: c.published }))
     });
     
-    const course = db.data.courses.find(c => String(c.id || '').replace(/_[0-9]{10,}$/, '') === normalizedCourseId);
+    // Try to find the course by exact ID first
+    let course = db.data.courses.find(c => c.id === courseId);
+    
+    // If not found by exact ID, try normalized ID (for backward compatibility)
+    if (!course) {
+      const normalizedCourseId = String(courseId || '').replace(/_[0-9]{10,}$/, '');
+      course = db.data.courses.find(c => String(c.id || '').replace(/_[0-9]{10,}$/, '') === normalizedCourseId);
+    }
     if (!course) {
       console.log(`[API] Course not found for publish:`, {
         requestedId: courseId,
@@ -3716,18 +3725,21 @@ app.post('/api/courses/:courseId/unpublish', authenticateToken, async (req, res)
   try {
     const { courseId } = req.params;
     const userId = req.user.id;
-
-    // Normalize: strip optional trailing _<timestamp> (e.g., _1754750525562)
-    const normalizedCourseId = String(courseId || '').replace(/_[0-9]{10,}$/, '');
     
     console.log(`[API] Unpublish request:`, {
       originalCourseId: courseId,
-      normalizedCourseId: normalizedCourseId,
       userId: userId,
       availableCourseIds: db.data.courses.map(c => ({ id: c.id, title: c.title, published: c.published }))
     });
 
-    const course = db.data.courses.find(c => String(c.id || '').replace(/_[0-9]{10,}$/, '') === normalizedCourseId);
+    // Try to find the course by exact ID first
+    let course = db.data.courses.find(c => c.id === courseId);
+    
+    // If not found by exact ID, try normalized ID (for backward compatibility)
+    if (!course) {
+      const normalizedCourseId = String(courseId || '').replace(/_[0-9]{10,}$/, '');
+      course = db.data.courses.find(c => String(c.id || '').replace(/_[0-9]{10,}$/, '') === normalizedCourseId);
+    }
     if (!course) {
       console.log(`[API] Course not found for unpublish:`, {
         requestedId: courseId,
@@ -4045,18 +4057,20 @@ app.delete('/api/courses/:courseId', authenticateToken, async (req, res) => {
     const userId = req.user.id;
     const userEmail = req.user.email;
 
-    // Normalize: strip optional trailing _<timestamp> (e.g., _1754750525562)
-    const normalizedCourseId = String(courseId || '').replace(/_[0-9]{10,}$/, '');
+    console.log(`[API] Deleting course ${courseId} for user ${userId} (${userEmail})`);
 
-    console.log(`[API] Deleting course ${courseId} (normalized: ${normalizedCourseId}) for user ${userId} (${userEmail})`);
-
-    // First, find the course by ID regardless of owner
-    const course = db.data.courses.find(c => String(c.id || '').replace(/_[0-9]{10,}$/, '') === normalizedCourseId);
+    // Try to find the course by exact ID first
+    let course = db.data.courses.find(c => c.id === courseId);
+    
+    // If not found by exact ID, try normalized ID (for backward compatibility)
+    if (!course) {
+      const normalizedCourseId = String(courseId || '').replace(/_[0-9]{10,}$/, '');
+      course = db.data.courses.find(c => String(c.id || '').replace(/_[0-9]{10,}$/, '') === normalizedCourseId);
+    }
 
     if (!course) {
       console.log(`[API] Delete failed, course not found:`, {
         requestedId: courseId,
-        normalizedId: normalizedCourseId,
         availableIds: db.data.courses.map(c => c.id)
       });
       return res.status(404).json({ error: 'Course not found' });
