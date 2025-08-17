@@ -29,7 +29,7 @@ const PublicLessonView = ({
   const [imageUrlCounts, setImageUrlCounts] = useState({});
   
   const ttsService = useRef(new TTSService());
-  const performanceMonitor = useRef(new PerformanceMonitorService());
+  const performanceMonitor = useRef(PerformanceMonitorService);
   const renderStartTime = useRef(performance.now());
   const abortControllerRef = useRef(null);
 
