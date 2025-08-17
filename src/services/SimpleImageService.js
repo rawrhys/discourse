@@ -87,8 +87,20 @@ const SimpleImageService = {
 
   // Enhanced search with course context
   searchWithContext: function(lessonTitle, courseSubject, content, usedImageTitles, usedImageUrls, courseId, lessonId, coursePrompt = null) {
-    var contextualQuery = this.createEnhancedContextAwareQuery(lessonTitle, courseSubject, content, coursePrompt);
-    return this.search(contextualQuery, content, usedImageTitles, usedImageUrls, courseId, lessonId, true);
+    try {
+      // Ensure content is a string
+      if (content && typeof content !== 'string') {
+        console.warn('[SimpleImageService] Content is not a string, converting to string:', typeof content);
+        content = String(content);
+      }
+      
+      var contextualQuery = this.createEnhancedContextAwareQuery(lessonTitle, courseSubject, content, coursePrompt);
+      return this.search(contextualQuery, content, usedImageTitles, usedImageUrls, courseId, lessonId, true);
+    } catch (error) {
+      console.error('[SimpleImageService] Error in searchWithContext:', error);
+      // Fallback to basic search
+      return this.search(lessonTitle || 'lesson', content, usedImageTitles, usedImageUrls, courseId, lessonId, false);
+    }
   },
 
   // Get image source for debugging
@@ -124,14 +136,15 @@ const SimpleImageService = {
 
   // Create enhanced context-aware search query using course prompt and lesson text
   createEnhancedContextAwareQuery: function(lessonTitle, courseSubject, content, coursePrompt) {
-    courseSubject = courseSubject || '';
-    content = content || '';
-    coursePrompt = coursePrompt || '';
-    
-    if (!lessonTitle) return '';
-    
-    // Start with the lesson title
-    var query = String(lessonTitle).trim();
+    try {
+      courseSubject = courseSubject || '';
+      content = content || '';
+      coursePrompt = coursePrompt || '';
+      
+      if (!lessonTitle) return '';
+      
+      // Start with the lesson title
+      var query = String(lessonTitle).trim();
     
     // Add course subject for broader context
     if (courseSubject) {
@@ -151,7 +164,7 @@ const SimpleImageService = {
     }
     
     // Extract key terms from lesson content for more specific context
-    if (content) {
+    if (content && typeof content === 'string') {
       // Look for key terms in content (bold text, important concepts)
       var contentTerms = '';
       var contentWords = content.split(' ').filter(word => 
@@ -183,6 +196,11 @@ const SimpleImageService = {
     
     console.log('[SimpleImageService] Enhanced query created:', query);
     return query;
+    } catch (error) {
+      console.error('[SimpleImageService] Error in createEnhancedContextAwareQuery:', error);
+      // Fallback to basic query
+      return lessonTitle || 'lesson';
+    }
   }
 };
 

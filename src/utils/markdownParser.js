@@ -44,18 +44,35 @@ function fixMalformedHeaders(text) {
 }
 
 function fixMalformedBold(text) {
-  // Fix patterns like "*text*" -> "**text**"
-  text = text.replace(/\*([^*\n]+?)\*/g, '**$1**');
+  // First, protect already properly formatted bold text
+  text = text.replace(/\*\*([^*]+?)\*\*/g, '___BOLD_PROTECTED___$1___BOLD_PROTECTED___');
   
-  // Fix patterns like "*text**" -> "**text**"
+  // Fix patterns like "*text**" -> "**text**" (single asterisk followed by double)
   text = text.replace(/\*([^*\n]+?)\*\*/g, '**$1**');
   
-  // Fix patterns like "**text*" -> "**text**"
+  // Fix patterns like "**text*" -> "**text**" (double asterisk followed by single)
   text = text.replace(/\*\*([^*\n]+?)\*/g, '**$1**');
-
-  // Fix patterns like "*text*" that are actually meant to be bold
-  // Look for patterns that are clearly meant to be emphasized
-  text = text.replace(/\*([A-Z][^*\n]*?)\*/g, '**$1**');
+  
+  // Fix patterns like "*text*" -> "**text**" (single asterisk on both sides)
+  // But only for specific words that should be bold
+  const boldWords = [
+    'Polis', 'Acropolis', 'Agora', 'Poleis', 'Citizens', 'Tyranny',
+    'Cultural', 'Religious', 'Challenges', 'Conflicts', 'Geography',
+    'Social', 'Economic', 'Political', 'Population', 'Trade', 'Military', 'Oligarchy',
+    'hoplite', 'stasis', 'Dark Age', 'Archaic Period', 'Mycenaean'
+  ];
+  
+  boldWords.forEach(word => {
+    const regex = new RegExp(`\\*${word}\\b`, 'g');
+    text = text.replace(regex, `**${word}**`);
+  });
+  
+  // Restore protected bold text
+  text = text.replace(/___BOLD_PROTECTED___([^*]+?)___BOLD_PROTECTED___/g, '**$1**');
+  
+  // Clean up any remaining malformed patterns
+  text = text.replace(/\*\*\*\*/g, '**');
+  text = text.replace(/\*\*\*\*\*/g, '**');
 
   return text;
 }
