@@ -203,6 +203,10 @@ class TTSService {
         }
       };
       
+      // Before calling speechSynthesis.speak(utterance);
+      if (this.speechSynthesis.speaking) {
+        this.speechSynthesis.cancel();
+      }
       this.speechSynthesis.speak(this.currentUtterance);
       return true;
       
@@ -308,6 +312,10 @@ class TTSService {
         }
       };
       
+      // Before calling speechSynthesis.speak(utterance);
+      if (this.speechSynthesis.speaking) {
+        this.speechSynthesis.cancel();
+      }
       this.speechSynthesis.speak(this.currentUtterance);
     } catch (error) {
       console.error('Error restarting TTS:', error);
@@ -323,6 +331,11 @@ class TTSService {
 
   // Stop reading completely
   stop() {
+    // Cancel any current speech synthesis
+    if (this.speechSynthesis.speaking) {
+      this.speechSynthesis.cancel();
+    }
+    
     if (this.currentUtterance) {
       this.speechSynthesis.cancel();
       this.isPlaying = false;
