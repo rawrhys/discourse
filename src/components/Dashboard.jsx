@@ -757,13 +757,10 @@ const Dashboard = () => {
                                       logger.debug('Attempting to unpublish course:', course.id);
                                       setIsUpdatingCourseState(true);
                                       
-                                      // Immediately update button state for better UX
-                                      course.published = false;
-                                      
                                       const updated = await api.unpublishCourse(course.id);
                                       logger.debug('✅ [DASHBOARD] Course unpublished successfully:', updated);
                                       
-                                      // Update local state immediately
+                                      // Update local state immediately with callback to ensure proper update
                                       setSavedCourses(prevCourses => {
                                         logger.debug('🔄 [DASHBOARD] Updating local state for unpublish:', {
                                           courseId: course.id,
@@ -792,38 +789,49 @@ const Dashboard = () => {
                                           updatedCourses: updatedCourses.map(c => ({ id: c.id, published: c.published }))
                                         });
                                         
+                                        // Log the specific course that was updated
+                                        const updatedCourse = updatedCourses.find(c => String(c.id) === String(course.id));
+                                        if (updatedCourse) {
+                                          logger.debug('🎯 [DASHBOARD] Updated course state:', {
+                                            courseId: updatedCourse.id,
+                                            published: updatedCourse.published,
+                                            publishedType: typeof updatedCourse.published
+                                          });
+                                        }
+                                        
                                         return updatedCourses;
                                       });
                                       
-                                      // Force a re-render to ensure button state updates immediately
+                                      // Force multiple re-renders to ensure button state updates immediately
                                       setTimeout(() => {
                                         setSavedCourses(current => [...current]);
                                       }, 0);
                                       
-                                      // Also update the course object in the current scope for immediate button state
-                                      course.published = false;
+                                      setTimeout(() => {
+                                        setSavedCourses(current => [...current]);
+                                      }, 50);
+                                      
+                                      setTimeout(() => {
+                                        setSavedCourses(current => [...current]);
+                                      }, 100);
                                       
                                       setSuccessMessage('Course unpublished successfully!');
                                       setShowSuccessToast(true);
                                       setTimeout(() => setShowSuccessToast(false), 3000);
                                       
-                                      // Fetch from server after a short delay to avoid race conditions
-                                      setTimeout(async () => {
+                                      // Reset state update flag after a short delay
+                                      setTimeout(() => {
                                         setIsUpdatingCourseState(false);
-                                        await fetchSavedCourses(true);
-                                      }, 500); // Shorter delay for unpublish since no confetti
+                                      }, 500);
                                     } else {
                                       // Publish the course
                                       logger.debug('Attempting to publish course:', course.id);
                                       setIsUpdatingCourseState(true);
                                       
-                                      // Immediately update button state for better UX
-                                      course.published = true;
-                                      
                                       const updated = await api.publishCourse(course.id);
                                       logger.debug('✅ [DASHBOARD] Course published successfully:', updated);
                                       
-                                      // Update local state immediately
+                                      // Update local state immediately with callback to ensure proper update
                                       setSavedCourses(prevCourses => {
                                         logger.debug('🔄 [DASHBOARD] Updating local state for publish:', {
                                           courseId: course.id,
@@ -852,16 +860,31 @@ const Dashboard = () => {
                                           updatedCourses: updatedCourses.map(c => ({ id: c.id, published: c.published }))
                                         });
                                         
+                                        // Log the specific course that was updated
+                                        const updatedCourse = updatedCourses.find(c => String(c.id) === String(course.id));
+                                        if (updatedCourse) {
+                                          logger.debug('🎯 [DASHBOARD] Updated course state:', {
+                                            courseId: updatedCourse.id,
+                                            published: updatedCourse.published,
+                                            publishedType: typeof updatedCourse.published
+                                          });
+                                        }
+                                        
                                         return updatedCourses;
                                       });
                                       
-                                      // Force a re-render to ensure button state updates immediately
+                                      // Force multiple re-renders to ensure button state updates immediately
                                       setTimeout(() => {
                                         setSavedCourses(current => [...current]);
                                       }, 0);
                                       
-                                      // Also update the course object in the current scope for immediate button state
-                                      course.published = true;
+                                      setTimeout(() => {
+                                        setSavedCourses(current => [...current]);
+                                      }, 50);
+                                      
+                                      setTimeout(() => {
+                                        setSavedCourses(current => [...current]);
+                                      }, 100);
                                       
                                       // Trigger confetti animation
                                       setShowConfetti(true);
@@ -869,26 +892,19 @@ const Dashboard = () => {
                                       setShowSuccessToast(true);
                                       setTimeout(() => setShowSuccessToast(false), 3000);
                                       
-                                      // Fetch from server after confetti completes to avoid race conditions
-                                      setTimeout(async () => {
+                                      // Reset state update flag after confetti completes
+                                      setTimeout(() => {
                                         setIsUpdatingCourseState(false);
-                                        await fetchSavedCourses(true);
-                                      }, 2000); // Increased delay to let confetti finish
+                                      }, 2000);
                                     }
                                   } catch (err) {
                                     logger.error('❌ [DASHBOARD] Error with course publish/unpublish:', err);
                                     setIsUpdatingCourseState(false);
                                     
-                                    // Revert the local state change on error
-                                    setSavedCourses(prevCourses => {
-                                      const revertedCourses = prevCourses.map(c => {
-                                        const courseIdMatch = String(c.id) === String(course.id);
-                                        return courseIdMatch 
-                                          ? { ...c, published: course.published } // Revert to original state
-                                          : c;
-                                      });
-                                      return revertedCourses;
-                                    });
+                                    // Revert the local state change on error by fetching fresh data
+                                    setTimeout(async () => {
+                                      await fetchSavedCourses(true);
+                                    }, 100);
                                     
                                     alert('Failed to ' + (course.published ? 'unpublish' : 'publish') + ' course: ' + (err.message || 'Unknown error'));
                                   }
