@@ -200,7 +200,7 @@ const PublicLessonView = ({
     } catch (error) {
       console.warn('[PublicLessonView] TTS pause/resume error:', error);
     }
-  }, [isPlaying, isPaused]);
+  }, [ttsStatus.isPlaying, ttsStatus.isPaused]);
 
   const handleTabChange = useCallback((newView) => {
     setView(newView);

@@ -183,10 +183,27 @@ const PublicCourseDisplay = () => {
           currentSessionId = urlParams.get('sessionId');
           
           if (!currentSessionId) {
-            currentSessionId = publicCourseSessionService.createSession(courseId);
-            // Update URL with session ID
-            const newUrl = `${window.location.pathname}?sessionId=${currentSessionId}`;
-            window.history.replaceState({}, '', newUrl);
+            // Create session through backend API
+            try {
+              const response = await fetch(`/api/public/courses/${courseId}/session`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                }
+              });
+              
+              if (response.ok) {
+                const data = await response.json();
+                currentSessionId = data.sessionId;
+                // Update URL with session ID
+                const newUrl = `${window.location.pathname}?sessionId=${currentSessionId}`;
+                window.history.replaceState({}, '', newUrl);
+              } else {
+                console.error('[PublicCourseDisplay] Failed to create session');
+              }
+            } catch (error) {
+              console.error('[PublicCourseDisplay] Error creating session:', error);
+            }
           }
           
           setSessionId(currentSessionId);

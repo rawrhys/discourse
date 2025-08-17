@@ -3888,6 +3888,30 @@ app.get('/api/public/courses/:courseId/quiz-score/:lessonId', async (req, res) =
   }
 });
 
+// Create session for public course
+app.post('/api/public/courses/:courseId/session', async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    
+    console.log(`[API] Creating session for public course:`, {
+      courseId
+    });
+    
+    // Create session using PublicCourseSessionService
+    const sessionId = publicCourseSessionService.createSession(courseId);
+    
+    console.log(`[API] Created session: ${sessionId}`);
+    
+    res.json({ 
+      sessionId,
+      courseId
+    });
+  } catch (error) {
+    console.error('[API] Failed to create session:', error);
+    res.status(500).json({ error: 'Failed to create session' });
+  }
+});
+
 // Get all quiz scores for public course session
 app.get('/api/public/courses/:courseId/quiz-scores', async (req, res) => {
   try {
