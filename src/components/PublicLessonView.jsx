@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import ReactMarkdown from 'react-markdown';
 import SimpleImageService from '../services/SimpleImageService';
 import TTSService from '../services/TTSService';
 import PerformanceMonitorService from '../services/PerformanceMonitorService';
+import markdownService from '../services/MarkdownService';
 import './LessonView.css';
 
 const PublicLessonView = ({ 
@@ -152,22 +152,68 @@ const PublicLessonView = ({
     setIsPlaying(false);
   }, []);
 
-  const cleanAndCombineContent = (content) => {
-    if (!content) return '';
+  // Enhanced markdown parsing with resilient error handling using Marked
+  const fixMalformedMarkdown = (text) => {
+    if (!text) return text;
     
-    // Handle different content formats
-    let textContent = '';
-    if (typeof content === 'string') {
-      textContent = content;
-    } else if (content.text) {
-      textContent = content.text;
-    } else if (content.content) {
-      textContent = content.content;
-    } else {
-      textContent = String(content);
+    // Use the efficient MarkdownService with content-specific parsing
+    if (text.includes('The Formation of the Greek City-States') || 
+        (text.includes('Polis') && (text.includes('Acropolis') || text.includes('Agora')))) {
+      return markdownService.parseGreekCityStates(text);
     }
     
-    return textContent;
+    // Try the Archaic Period parser
+    if (text.includes('Archaic Period') && text.includes('Lyric Poetry')) {
+      return markdownService.parseGreekContent(text);
+    }
+    
+    // Fall back to general parsing
+    return markdownService.parse(text);
+  };
+
+  // Additional cleanup function for any remaining malformed asterisks
+  const cleanupRemainingAsterisks = (text) => {
+    if (!text) return text;
+    
+    return text
+      // Remove standalone ** patterns that are clearly malformed
+      .replace(/\*\*([^*\n]+?)\*\*/g, '**$1**')  // Fix unclosed bold
+      .replace(/\*\*([^*\n]+?)$/gm, '**$1**')    // Fix unclosed bold at end
+      .replace(/^([^*\n]+?)\*\*/gm, '**$1**')    // Fix unclosed bold at start
+      // Remove any remaining standalone ** patterns
+      .replace(/\*\*(?!\w)/g, '')                // Remove ** not followed by word
+      .replace(/(?<!\w)\*\*/g, '')               // Remove ** not preceded by word
+      // Clean up multiple consecutive asterisks
+      .replace(/\*\*\*\*/g, '**')
+      .replace(/\*\*\*\*\*/g, '**')
+      .replace(/\*\*\*\*\*\*/g, '**');
+  };
+
+  // Helper function to clean and combine lesson content
+  const cleanAndCombineContent = (content) => {
+    if (!content) return '';
+    if (typeof content === 'string') {
+      const cleaned = fixMalformedMarkdown(
+        content.replace(/Content generation completed\./g, '')
+               .replace(/\|\|\|---\|\|\|/g, '')
+               .trim()
+      );
+      return cleanupRemainingAsterisks(cleaned);
+    }
+    
+    const { introduction, main_content, conclusion } = content;
+    
+    const cleanedIntro = introduction 
+      ? cleanupRemainingAsterisks(fixMalformedMarkdown(introduction.replace(/Content generation completed\./g, '').trim()))
+      : '';
+
+    const cleanedMain = main_content ? cleanupRemainingAsterisks(fixMalformedMarkdown(main_content.trim())) : '';
+    const cleanedConclusion = conclusion ? cleanupRemainingAsterisks(fixMalformedMarkdown(conclusion.trim())) : '';
+    
+    return [cleanedIntro, cleanedMain, cleanedConclusion]
+      .filter(Boolean)
+      .join('\n\n')
+      .replace(/\|\|\|---\|\|\|/g, '');
   };
 
   // Early return if no lesson
@@ -180,6 +226,16 @@ const PublicLessonView = ({
   }
 
   const lessonContent = cleanAndCombineContent(lesson.content);
+  
+  // Process the content for rendering
+  let fixedContent = lessonContent;
+  
+  // Add bibliography if available
+  if (lesson.bibliography && lesson.bibliography.length > 0) {
+    const bibliographyMarkdown = '\n\n## References\n\n' + 
+      lesson.bibliography.map((ref, index) => `[${index + 1}] ${ref}`).join('\n\n');
+    fixedContent += bibliographyMarkdown;
+  }
 
   return (
     <div className="lesson-view bg-white rounded-lg shadow-sm overflow-hidden">
@@ -255,24 +311,14 @@ const PublicLessonView = ({
         </div>
       </div>
 
-      {/* Lesson Content */}
-      <div className="p-6">
-        <div className="lesson-content max-w-none">
-          <ReactMarkdown
-            components={{
-              code({ node, inline, className, children, ...props }) {
-                return (
-                  <code className={`${className} bg-gray-100 px-1 py-0.5 rounded text-sm`} {...props}>
-                    {children}
-                  </code>
-                );
-              },
-            }}
-            className="markdown-body"
-          >
-            {lessonContent}
-          </ReactMarkdown>
-        </div>
+             {/* Lesson Content */}
+       <div className="p-6">
+         <div className="lesson-content max-w-none">
+           <div 
+             className="markdown-body prose max-w-none"
+             dangerouslySetInnerHTML={{ __html: fixedContent }}
+           />
+         </div>
 
         {/* Image Section */}
         {imageLoading && (
