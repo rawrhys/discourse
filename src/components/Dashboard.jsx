@@ -655,6 +655,7 @@ const Dashboard = () => {
                         courseTitle: course.title,
                         published: course.published,
                         publishedType: typeof course.published,
+                        courseIdType: typeof course.id,
                         timestamp: new Date().toISOString()
                       });
                       
@@ -733,18 +734,45 @@ const Dashboard = () => {
                                       logger.debug('✅ [DASHBOARD] Course unpublished successfully:', updated);
                                       
                                       // Update local state immediately
-                                      setSavedCourses(prevCourses => 
-                                        prevCourses.map(c => 
-                                          c.id === course.id 
+                                      setSavedCourses(prevCourses => {
+                                        logger.debug('🔄 [DASHBOARD] Updating local state for unpublish:', {
+                                          courseId: course.id,
+                                          prevCourses: prevCourses.map(c => ({ id: c.id, published: c.published })),
+                                          updatingTo: false
+                                        });
+                                        
+                                        const updatedCourses = prevCourses.map(c => {
+                                          const courseIdMatch = String(c.id) === String(course.id);
+                                          if (courseIdMatch) {
+                                            logger.debug('🎯 [DASHBOARD] Found matching course for unpublish:', {
+                                              courseId: course.id,
+                                              courseIdType: typeof course.id,
+                                              cId: c.id,
+                                              cIdType: typeof c.id,
+                                              currentPublished: c.published,
+                                              updatingTo: false
+                                            });
+                                          }
+                                          return courseIdMatch 
                                             ? { ...c, published: false }
-                                            : c
-                                        )
-                                      );
+                                            : c;
+                                        });
+                                        
+                                        logger.debug('✅ [DASHBOARD] Local state updated:', {
+                                          updatedCourses: updatedCourses.map(c => ({ id: c.id, published: c.published }))
+                                        });
+                                        
+                                        return updatedCourses;
+                                      });
                                       
-                                      await fetchSavedCourses(true); // Force refresh after unpublishing
                                       setSuccessMessage('Course unpublished successfully!');
                                       setShowSuccessToast(true);
                                       setTimeout(() => setShowSuccessToast(false), 3000);
+                                      
+                                      // Fetch from server after a short delay to avoid race conditions
+                                      setTimeout(async () => {
+                                        await fetchSavedCourses(true);
+                                      }, 100);
                                     } else {
                                       // Publish the course
                                       logger.debug('Attempting to publish course:', course.id);
@@ -752,20 +780,47 @@ const Dashboard = () => {
                                       logger.debug('✅ [DASHBOARD] Course published successfully:', updated);
                                       
                                       // Update local state immediately
-                                      setSavedCourses(prevCourses => 
-                                        prevCourses.map(c => 
-                                          c.id === course.id 
+                                      setSavedCourses(prevCourses => {
+                                        logger.debug('🔄 [DASHBOARD] Updating local state for publish:', {
+                                          courseId: course.id,
+                                          prevCourses: prevCourses.map(c => ({ id: c.id, published: c.published })),
+                                          updatingTo: true
+                                        });
+                                        
+                                        const updatedCourses = prevCourses.map(c => {
+                                          const courseIdMatch = String(c.id) === String(course.id);
+                                          if (courseIdMatch) {
+                                            logger.debug('🎯 [DASHBOARD] Found matching course for publish:', {
+                                              courseId: course.id,
+                                              courseIdType: typeof course.id,
+                                              cId: c.id,
+                                              cIdType: typeof c.id,
+                                              currentPublished: c.published,
+                                              updatingTo: true
+                                            });
+                                          }
+                                          return courseIdMatch 
                                             ? { ...c, published: true }
-                                            : c
-                                        )
-                                      );
+                                            : c;
+                                        });
+                                        
+                                        logger.debug('✅ [DASHBOARD] Local state updated:', {
+                                          updatedCourses: updatedCourses.map(c => ({ id: c.id, published: c.published }))
+                                        });
+                                        
+                                        return updatedCourses;
+                                      });
                                       
-                                      await fetchSavedCourses(true); // Force refresh after publishing
                                       // Trigger confetti animation
                                       setShowConfetti(true);
                                       setSuccessMessage('Course published successfully! 🎉');
                                       setShowSuccessToast(true);
                                       setTimeout(() => setShowSuccessToast(false), 3000);
+                                      
+                                      // Fetch from server after a short delay to avoid race conditions
+                                      setTimeout(async () => {
+                                        await fetchSavedCourses(true);
+                                      }, 100);
                                     }
                                   } catch (err) {
                                     logger.error('❌ [DASHBOARD] Error with course publish/unpublish:', err);
