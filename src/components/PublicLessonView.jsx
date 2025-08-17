@@ -28,7 +28,8 @@ const PublicLessonView = ({
   const [imageTitleCounts, setImageTitleCounts] = useState({});
   const [imageUrlCounts, setImageUrlCounts] = useState({});
   
-  const ttsService = useRef(new TTSService());
+  // Use singleton instances directly - both services are exported as singletons
+  const ttsService = useRef(TTSService);
   const performanceMonitor = useRef(PerformanceMonitorService);
   const renderStartTime = useRef(performance.now());
   const abortControllerRef = useRef(null);
@@ -36,7 +37,13 @@ const PublicLessonView = ({
   // Clean up TTS on unmount
   useEffect(() => {
     return () => {
-      ttsService.current.stop();
+      try {
+        if (ttsService.current && typeof ttsService.current.stop === 'function') {
+          ttsService.current.stop();
+        }
+      } catch (error) {
+        console.warn('[PublicLessonView] TTS cleanup error:', error);
+      }
     };
   }, []);
 
@@ -59,8 +66,14 @@ const PublicLessonView = ({
 
   // Performance monitoring
   useEffect(() => {
-    const renderTime = performance.now() - renderStartTime.current;
-    performanceMonitor.current.trackComponentRender('PublicLessonView', renderTime);
+    try {
+      const renderTime = performance.now() - renderStartTime.current;
+      if (performanceMonitor.current && typeof performanceMonitor.current.trackComponentRender === 'function') {
+        performanceMonitor.current.trackComponentRender('PublicLessonView', renderTime);
+      }
+    } catch (error) {
+      console.warn('[PublicLessonView] Performance monitoring error:', error);
+    }
   }, [lesson?.id]);
 
   // Handle image loading for public courses (simplified)
@@ -116,7 +129,11 @@ const PublicLessonView = ({
     
     try {
       setIsPlaying(true);
-      await ttsService.current.speak(lesson.content);
+      if (ttsService.current && typeof ttsService.current.speak === 'function') {
+        await ttsService.current.speak(lesson.content);
+      } else {
+        console.warn('[PublicLessonView] TTS service not available');
+      }
     } catch (error) {
       console.error('[PublicLessonView] TTS error:', error);
     } finally {
@@ -125,7 +142,13 @@ const PublicLessonView = ({
   }, [lesson?.content]);
 
   const handleStopAudio = useCallback(() => {
-    ttsService.current.stop();
+    try {
+      if (ttsService.current && typeof ttsService.current.stop === 'function') {
+        ttsService.current.stop();
+      }
+    } catch (error) {
+      console.warn('[PublicLessonView] TTS stop error:', error);
+    }
     setIsPlaying(false);
   }, []);
 
