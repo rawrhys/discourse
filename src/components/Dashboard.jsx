@@ -25,6 +25,7 @@ const Dashboard = () => {
   const [showConfetti, setShowConfetti] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [isUpdatingCourseState, setIsUpdatingCourseState] = useState(false);
   const urlParams = new URLSearchParams(window.location.search);
   
   // Connection diagnostic state
@@ -47,6 +48,13 @@ const Dashboard = () => {
   if (!user) {
     return <div className="text-center mt-10 text-gray-500">Loading user...</div>;
   }
+  
+  // Cleanup effect to reset state update flag on unmount
+  useEffect(() => {
+    return () => {
+      setIsUpdatingCourseState(false);
+    };
+  }, []);
 
   
   const fetchSavedCourses = useCallback(async (force = false) => {
@@ -56,9 +64,16 @@ const Dashboard = () => {
       return;
     }
     
+    // Don't override local state updates if we're in the middle of updating
+    if (isUpdatingCourseState && !force) {
+      logger.debug('🔄 [DASHBOARD] Skipping fetch - course state update in progress');
+      return;
+    }
+    
     logger.debug('📚 [DASHBOARD] Fetching saved courses', {
       force: force,
       hasAttemptedFetch: hasAttemptedFetch.current,
+      isUpdatingCourseState: isUpdatingCourseState,
       timestamp: new Date().toISOString()
     });
     
@@ -110,7 +125,7 @@ const Dashboard = () => {
     } finally {
       setIsLoadingCourses(false);
     }
-  }, [api]);
+  }, [api, isUpdatingCourseState]);
 
   const handleGenerateCourse = useCallback(async (courseParams) => {
     logger.debug('🎯 [COURSE GENERATION] Starting simplified course generation process', {
@@ -432,7 +447,13 @@ const Dashboard = () => {
       {/* Confetti Animation */}
       <ConfettiAnimation 
         isActive={showConfetti} 
-        onComplete={() => setShowConfetti(false)} 
+        onComplete={() => {
+          setShowConfetti(false);
+          // Force a state refresh after confetti completes to ensure button state is correct
+          setTimeout(() => {
+            setSavedCourses(current => [...current]);
+          }, 100);
+        }} 
       />
       
       {/* Success Toast Notification */}
@@ -661,7 +682,7 @@ const Dashboard = () => {
                       
                       return (
                         <div
-                          key={courseId}
+                          key={`${courseId}-${course.published}-${isUpdatingCourseState}`}
                           className="bg-gray-50 overflow-hidden shadow rounded-lg relative group hover:shadow-md transition-shadow duration-200"
                         >
                           <div className="px-4 py-5 sm:p-6">
@@ -721,6 +742,10 @@ const Dashboard = () => {
                               )}
                               <button
                                 onClick={async () => {
+                                  // Prevent multiple clicks
+                                  if (isUpdatingCourseState) {
+                                    return;
+                                  }
                                   try {
                                     if (!course.id) {
                                       alert('This course cannot be published because it has no ID.');
@@ -730,6 +755,11 @@ const Dashboard = () => {
                                     if (course.published) {
                                       // Unpublish the course
                                       logger.debug('Attempting to unpublish course:', course.id);
+                                      setIsUpdatingCourseState(true);
+                                      
+                                      // Immediately update button state for better UX
+                                      course.published = false;
+                                      
                                       const updated = await api.unpublishCourse(course.id);
                                       logger.debug('✅ [DASHBOARD] Course unpublished successfully:', updated);
                                       
@@ -765,17 +795,31 @@ const Dashboard = () => {
                                         return updatedCourses;
                                       });
                                       
+                                      // Force a re-render to ensure button state updates immediately
+                                      setTimeout(() => {
+                                        setSavedCourses(current => [...current]);
+                                      }, 0);
+                                      
+                                      // Also update the course object in the current scope for immediate button state
+                                      course.published = false;
+                                      
                                       setSuccessMessage('Course unpublished successfully!');
                                       setShowSuccessToast(true);
                                       setTimeout(() => setShowSuccessToast(false), 3000);
                                       
                                       // Fetch from server after a short delay to avoid race conditions
                                       setTimeout(async () => {
+                                        setIsUpdatingCourseState(false);
                                         await fetchSavedCourses(true);
-                                      }, 100);
+                                      }, 500); // Shorter delay for unpublish since no confetti
                                     } else {
                                       // Publish the course
                                       logger.debug('Attempting to publish course:', course.id);
+                                      setIsUpdatingCourseState(true);
+                                      
+                                      // Immediately update button state for better UX
+                                      course.published = true;
+                                      
                                       const updated = await api.publishCourse(course.id);
                                       logger.debug('✅ [DASHBOARD] Course published successfully:', updated);
                                       
@@ -811,41 +855,67 @@ const Dashboard = () => {
                                         return updatedCourses;
                                       });
                                       
+                                      // Force a re-render to ensure button state updates immediately
+                                      setTimeout(() => {
+                                        setSavedCourses(current => [...current]);
+                                      }, 0);
+                                      
+                                      // Also update the course object in the current scope for immediate button state
+                                      course.published = true;
+                                      
                                       // Trigger confetti animation
                                       setShowConfetti(true);
                                       setSuccessMessage('Course published successfully! 🎉');
                                       setShowSuccessToast(true);
                                       setTimeout(() => setShowSuccessToast(false), 3000);
                                       
-                                      // Fetch from server after a short delay to avoid race conditions
+                                      // Fetch from server after confetti completes to avoid race conditions
                                       setTimeout(async () => {
+                                        setIsUpdatingCourseState(false);
                                         await fetchSavedCourses(true);
-                                      }, 100);
+                                      }, 2000); // Increased delay to let confetti finish
                                     }
                                   } catch (err) {
                                     logger.error('❌ [DASHBOARD] Error with course publish/unpublish:', err);
+                                    setIsUpdatingCourseState(false);
+                                    
+                                    // Revert the local state change on error
+                                    setSavedCourses(prevCourses => {
+                                      const revertedCourses = prevCourses.map(c => {
+                                        const courseIdMatch = String(c.id) === String(course.id);
+                                        return courseIdMatch 
+                                          ? { ...c, published: course.published } // Revert to original state
+                                          : c;
+                                      });
+                                      return revertedCourses;
+                                    });
+                                    
                                     alert('Failed to ' + (course.published ? 'unpublish' : 'publish') + ' course: ' + (err.message || 'Unknown error'));
                                   }
                                 }}
                                 onMouseEnter={() => setHoveredCourseId(course.id)}
                                 onMouseLeave={() => setHoveredCourseId(null)}
-                                disabled={!course.id}
+                                disabled={!course.id || isUpdatingCourseState}
                                 className={`text-sm font-medium rounded px-3 py-2 transition-colors duration-200 ${
-                                  course.published 
-                                    ? 'bg-green-100 text-green-800 border border-green-300 hover:bg-green-200'
-                                    : !course.id 
-                                      ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
-                                      : 'bg-green-600 text-white hover:bg-green-700'
+                                  isUpdatingCourseState
+                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                    : course.published 
+                                      ? 'bg-green-100 text-green-800 border border-green-300 hover:bg-green-200'
+                                      : !course.id 
+                                        ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
+                                        : 'bg-green-600 text-white hover:bg-green-700'
                                 }`}
                                 title={
-                                  course.published 
-                                    ? 'Click to unpublish this course'
-                                    : !course.id 
-                                      ? 'Cannot publish: missing course ID' 
-                                      : 'Publish this course to share publicly'
+                                  isUpdatingCourseState
+                                    ? 'Updating...'
+                                    : course.published 
+                                      ? 'Click to unpublish this course'
+                                      : !course.id 
+                                        ? 'Cannot publish: missing course ID' 
+                                        : 'Publish this course to share publicly'
                                 }
                               >
-                                {course.published ? 'Unpublish' : 'Publish'}
+                                {isUpdatingCourseState ? 'Updating...' : (course.published ? 'Unpublish' : 'Publish')}
                               </button>
                             </div>
                           </div>

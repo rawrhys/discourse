@@ -26,24 +26,24 @@ const ConfettiAnimation = ({ isActive, onComplete }) => {
         this.x = Math.random() * canvas.width;
         this.y = -10;
         this.vx = (Math.random() - 0.5) * 8;
-        this.vy = Math.random() * 3 + 2;
+        this.vy = Math.random() * 3 + 4; // Increased fall speed
         this.rotation = Math.random() * 360;
         this.rotationSpeed = (Math.random() - 0.5) * 10;
-        this.size = Math.random() * 10 + 5;
+        this.size = Math.random() * 8 + 4; // Slightly smaller particles
         this.color = [
           '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
           '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9'
         ][Math.floor(Math.random() * 10)];
         this.shape = Math.random() > 0.5 ? 'square' : 'circle';
         this.opacity = 1;
-        this.fadeSpeed = Math.random() * 0.02 + 0.005;
+        this.fadeSpeed = Math.random() * 0.03 + 0.01; // Faster fade out
       }
 
       update() {
         this.x += this.vx;
         this.y += this.vy;
         this.rotation += this.rotationSpeed;
-        this.vy += 0.1; // gravity
+        this.vy += 0.15; // Increased gravity
         this.opacity -= this.fadeSpeed;
         
         // Add some wind effect
@@ -74,9 +74,9 @@ const ConfettiAnimation = ({ isActive, onComplete }) => {
       }
     }
 
-    // Create initial confetti
+    // Create initial confetti - reduced count
     const createConfetti = () => {
-      for (let i = 0; i < 150; i++) {
+      for (let i = 0; i < 80; i++) { // Reduced from 150 to 80
         confettiRef.current.push(new ConfettiParticle());
       }
     };
@@ -92,9 +92,9 @@ const ConfettiAnimation = ({ isActive, onComplete }) => {
         return !particle.isDead();
       });
       
-      // Add more confetti for the first 2 seconds
-      if (confettiRef.current.length < 50 && Date.now() - startTime < 2000) {
-        for (let i = 0; i < 5; i++) {
+      // Add more confetti for the first 1 second only (reduced from 2 seconds)
+      if (confettiRef.current.length < 30 && Date.now() - startTime < 1000) {
+        for (let i = 0; i < 3; i++) { // Reduced from 5 to 3
           confettiRef.current.push(new ConfettiParticle());
         }
       }
@@ -113,6 +113,17 @@ const ConfettiAnimation = ({ isActive, onComplete }) => {
     const startTime = Date.now();
     createConfetti();
     animate();
+    
+    // Force stop animation after 3 seconds to prevent infinite running
+    const timeoutId = setTimeout(() => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        confettiRef.current = [];
+        if (onComplete) {
+          onComplete();
+        }
+      }
+    }, 3000);
 
     // Cleanup
     return () => {
@@ -120,6 +131,7 @@ const ConfettiAnimation = ({ isActive, onComplete }) => {
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
       }
+      clearTimeout(timeoutId);
     };
   }, [isActive, onComplete]);
 
