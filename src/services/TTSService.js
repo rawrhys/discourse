@@ -265,6 +265,11 @@ class TTSService {
       .replace(/<code>(.*?)<\/code>/gi, '$1') // Remove code tags
       .replace(/<pre>(.*?)<\/pre>/gi, '$1') // Remove pre tags
       
+      // Remove paragraph tags and other common HTML elements
+      .replace(/<p[^>]*>(.*?)<\/p>/gi, '$1') // Remove paragraph tags
+      .replace(/<div[^>]*>(.*?)<\/div>/gi, '$1') // Remove div tags
+      .replace(/<span[^>]*>(.*?)<\/span>/gi, '$1') // Remove span tags
+      
       // Convert headers to sentences
       .replace(/^#{1,6}\s+(.*?)$/gm, '$1. ')
       
@@ -291,6 +296,9 @@ class TTSService {
       
       // Remove any remaining special characters that might cause TTS issues
       .replace(/[^\w\s.,!?;:()'-]/g, '')
+      
+      // Remove leading 'p' or other single characters that might be artifacts
+      .replace(/^[pP]\s*/, '')
       
       .trim();
   }
@@ -431,34 +439,35 @@ class TTSService {
                 this.isPlaying = true;
                 console.log(`[${this.serviceType} TTS] Resumed`);
               },
-              'onerror': (event) => {
-                console.warn(`[${this.serviceType} TTS] Speech error occurred:`, event);
-                this.isPlaying = false;
-                this.isPaused = false;
-                
-                // Handle interrupted errors more gracefully
-                if (event.error === 'interrupted' || event.error === 'canceled') {
-                  console.log(`[${this.serviceType} TTS] Speech was interrupted/canceled, not counting as error`);
-                  // Don't increment error count for interruptions
-                  ttsCoordinator.releaseTTS(this.serviceId);
-                  resolve(); // Resolve gracefully for interruptions
-                  return;
-                }
-                
-                this.errorCount++;
-                
-                // Don't throw the error, handle it gracefully
-                if (this.errorCount < this.maxRetries) {
-                  console.log(`[${this.serviceType} TTS] Retrying... (${this.errorCount}/${this.maxRetries})`);
-                  setTimeout(() => {
-                    this.speak(this.fullText).then(resolve); // Always use fullText for retries
-                  }, 1000);
-                } else {
-                  console.log(`[${this.serviceType} TTS] Max retries exceeded, stopping gracefully`);
-                  ttsCoordinator.releaseTTS(this.serviceId);
-                  resolve(); // Always resolve, never reject
-                }
-              }
+                             'onerror': (event) => {
+                 console.warn(`[${this.serviceType} TTS] Speech error occurred:`, event.error);
+                 this.isPlaying = false;
+                 this.isPaused = false;
+                 
+                 // Handle interrupted errors more gracefully
+                 if (event.error === 'interrupted' || event.error === 'canceled') {
+                   console.log(`[${this.serviceType} TTS] Speech was interrupted/canceled (${event.error}), not counting as error`);
+                   // Don't increment error count for interruptions
+                   ttsCoordinator.releaseTTS(this.serviceId);
+                   resolve(); // Resolve gracefully for interruptions
+                   return;
+                 }
+                 
+                 console.warn(`[${this.serviceType} TTS] Real error occurred: ${event.error}`);
+                 this.errorCount++;
+                 
+                 // Don't throw the error, handle it gracefully
+                 if (this.errorCount < this.maxRetries) {
+                   console.log(`[${this.serviceType} TTS] Retrying... (${this.errorCount}/${this.maxRetries})`);
+                   setTimeout(() => {
+                     this.speak(this.fullText).then(resolve); // Always use fullText for retries
+                   }, 1000);
+                 } else {
+                   console.log(`[${this.serviceType} TTS] Max retries exceeded, stopping gracefully`);
+                   ttsCoordinator.releaseTTS(this.serviceId);
+                   resolve(); // Always resolve, never reject
+                 }
+               }
             }
           };
 
