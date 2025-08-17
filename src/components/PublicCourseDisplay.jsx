@@ -42,9 +42,21 @@ const PublicCourseDisplay = () => {
   const handleQuizCompletion = useCallback(async (lessonId, score) => {
     if (!course || !sessionId) return;
     
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[PublicQuizCompletion] Received score: ${score} for lessonId: ${lessonId}`);
+    }
+
+    let moduleOfCompletedQuizId = null;
+
+    // Find the module containing this lesson
+    const module = course.modules.find(m => m.lessons.some(l => l.id === lessonId));
+    if (module) {
+      moduleOfCompletedQuizId = module.id;
+    }
+
     try {
       // Save quiz score to session
-      const success = await fetch(`/api/public/courses/${courseId}/quiz-score`, {
+      const response = await fetch(`/api/public/courses/${courseId}/quiz-score`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -56,13 +68,72 @@ const PublicCourseDisplay = () => {
         })
       });
       
-      if (success.ok) {
+      if (response.ok) {
         console.log(`[PublicCourseDisplay] Quiz score saved for session ${sessionId}, lesson ${lessonId}: ${score}`);
+        
+        // Update the lesson with the quiz score
+        const updatedCourse = {
+          ...course,
+          modules: course.modules.map(m => {
+            if (m.id === moduleOfCompletedQuizId) {
+              return {
+                ...m,
+                lessons: m.lessons.map(l => 
+                  l.id === lessonId ? { ...l, quizScore: score } : l
+                )
+              };
+            }
+            return m;
+          })
+        };
+
+        setCourse(updatedCourse);
+
+        // Check if all quizzes in the module are perfect
+        const updatedModule = updatedCourse.modules.find(m => m.id === moduleOfCompletedQuizId);
+        const lessonsWithQuizzes = updatedModule?.lessons.filter(l => l.quiz && l.quiz.length > 0) || [];
+        const perfectScores = lessonsWithQuizzes.filter(l => l.quizScore === 5);
+
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[PublicQuizCompletion] Module completion check:', {
+            moduleId: moduleOfCompletedQuizId,
+            moduleTitle: updatedModule?.title,
+            totalLessonsWithQuizzes: lessonsWithQuizzes.length,
+            perfectScores: perfectScores.length,
+            lessonScores: updatedModule?.lessons.map(l => ({
+              id: l.id,
+              title: l.title,
+              score: l.quizScore
+            }))
+          });
+        }
+
+        // If all quizzes in the module are perfect, unlock the next module
+        if (perfectScores.length === lessonsWithQuizzes.length && lessonsWithQuizzes.length > 0) {
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[PublicQuizCompletion] All quizzes perfect! Unlocking next module.');
+          }
+
+          // Find the current module index
+          const currentModuleIndex = course.modules.findIndex(m => m.id === moduleOfCompletedQuizId);
+          const nextModuleIndex = currentModuleIndex + 1;
+
+          // Update unlocked modules state
+          const newUnlockedModules = new Set(unlockedModules);
+          if (nextModuleIndex < course.modules.length) {
+            const nextModule = course.modules[nextModuleIndex];
+            newUnlockedModules.add(nextModule.id);
+            setUnlockedModules(newUnlockedModules);
+            setShowUnlockToast(true);
+            setUnlockedModuleName(nextModule.title);
+            setTimeout(() => setShowUnlockToast(false), 5000);
+          }
+        }
       }
     } catch (error) {
       console.error('[PublicCourseDisplay] Failed to save quiz score:', error);
     }
-  }, [course, sessionId, courseId]);
+  }, [course, sessionId, courseId, unlockedModules]);
 
   useEffect(() => {
     const fetchCourse = async () => {
@@ -126,14 +197,17 @@ const PublicCourseDisplay = () => {
       // Check quiz completion for subsequent modules
       for (let i = 1; i < course.modules.length; i++) {
         const previousModule = course.modules[i - 1];
-        const hasPerfectScores = previousModule.lessons.every(lesson => {
-          // For public courses, we'd need to check session-based scores
-          // For now, we'll unlock all modules for public access
-          return true;
-        });
+        const lessonsWithQuizzes = previousModule.lessons.filter(l => l.quiz && l.quiz.length > 0);
         
-        if (hasPerfectScores) {
+        if (lessonsWithQuizzes.length === 0) {
+          // If no quizzes, unlock the next module
           initialUnlocked.add(course.modules[i].id);
+        } else {
+          // Check if all quizzes have perfect scores
+          const perfectScores = lessonsWithQuizzes.filter(l => l.quizScore === 5);
+          if (perfectScores.length === lessonsWithQuizzes.length) {
+            initialUnlocked.add(course.modules[i].id);
+          }
         }
       }
       

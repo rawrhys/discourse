@@ -82,6 +82,21 @@ const PublicLessonView = ({
     }
   }, [lesson?.id]);
 
+  // Auto-pause TTS when lesson changes
+  useEffect(() => {
+    if (isPlaying || isPaused) {
+      try {
+        if (ttsService.current && typeof ttsService.current.stop === 'function') {
+          ttsService.current.stop();
+        }
+      } catch (error) {
+        console.warn('[PublicLessonView] TTS auto-pause error:', error);
+      }
+      setIsPlaying(false);
+      setIsPaused(false);
+    }
+  }, [lesson?.id, isPlaying, isPaused]);
+
   // Handle image loading for public courses (simplified)
   useEffect(() => {
     if (!lesson?.title) return;
@@ -134,20 +149,30 @@ const PublicLessonView = ({
     if (!lesson?.content) return;
     
     try {
-      setIsPlaying(true);
-      setIsPaused(false);
-      if (ttsService.current && typeof ttsService.current.readLesson === 'function') {
-        const contentStr = cleanAndCombineContent(lesson.content);
-        await ttsService.current.readLesson({ ...lesson, content: contentStr }, lesson.id);
+      if (isPaused) {
+        // Resume if paused
+        if (ttsService.current && typeof ttsService.current.resume === 'function') {
+          ttsService.current.resume();
+          setIsPlaying(true);
+          setIsPaused(false);
+        }
       } else {
-        console.warn('[PublicLessonView] TTS service not available');
+        // Start new reading
+        setIsPlaying(true);
+        setIsPaused(false);
+        if (ttsService.current && typeof ttsService.current.readLesson === 'function') {
+          const contentStr = cleanAndCombineContent(lesson.content);
+          await ttsService.current.readLesson({ ...lesson, content: contentStr }, lesson.id);
+        } else {
+          console.warn('[PublicLessonView] TTS service not available');
+        }
       }
     } catch (error) {
       console.error('[PublicLessonView] TTS error:', error);
     } finally {
       setIsPlaying(false);
     }
-  }, [lesson]);
+  }, [lesson, isPaused]);
 
   const handleStopAudio = useCallback(() => {
     try {
@@ -324,22 +349,25 @@ const PublicLessonView = ({
           </div>
           
           <div className="flex items-center space-x-3">
-            <button
-              onClick={isPlaying ? handleStopAudio : handlePlayAudio}
-              className="p-2 rounded-full bg-white bg-opacity-20 hover:bg-opacity-30 transition-all"
-              title={isPlaying ? "Stop audio" : "Play audio"}
-            >
-              {isPlaying ? (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
-                </svg>
-              ) : (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-                </svg>
-              )}
-            </button>
+                         <button
+               onClick={isPlaying || isPaused ? handleStopAudio : handlePlayAudio}
+               className="p-2 rounded-full bg-white bg-opacity-20 hover:bg-opacity-30 transition-all"
+               title={isPlaying ? "Pause audio" : isPaused ? "Resume audio" : "Play audio"}
+             >
+               {isPlaying ? (
+                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                 </svg>
+               ) : isPaused ? (
+                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                 </svg>
+               ) : (
+                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                 </svg>
+               )}
+             </button>
             
             {lesson.quiz && lesson.quiz.length > 0 && (
               <button
