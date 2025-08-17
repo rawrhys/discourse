@@ -215,6 +215,17 @@ class MarkdownService {
       // Remove any duplicate References headers
       .replace(/(## References\s*\n)+/g, '\n## References\n\n');
     
+    // Additional fix: Ensure citations are properly separated into paragraphs
+    processedContent = processedContent
+      // First, ensure proper spacing after References header
+      .replace(/## References\n\n\[(\d+)\]/g, '## References\n\n<p>[$1]')
+      // Split citations that are running together and wrap each in paragraph tags
+      .replace(/\]\.\s*\[(\d+)\]/g, '].</p>\n\n<p>[$1]')
+      // Ensure each citation starts with proper paragraph tag (but not if already wrapped)
+      .replace(/(?<!<p>)\n\[(\d+)\]/g, '\n\n<p>[$1]')
+      // Close any open paragraph at the end
+      .replace(/([^>])\s*$/, '$1</p>');
+    
     return this.parse(processedContent);
   }
 

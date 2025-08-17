@@ -58,7 +58,12 @@ const fixMalformedReferencesAtFrontend = (text) => {
     // Add class to References headers
     .replace(/<h2>References<\/h2>/g, '<h2 class="references-header">References</h2>')
     // Add class to citation paragraphs
-    .replace(/<p>\[(\d+)\]/g, '<p class="citation-item">[$1]');
+    .replace(/<p>\[(\d+)\]/g, '<p class="citation-item">[$1]')
+    // Fix citations that are running together in the same paragraph
+    .replace(/<p class="citation-item">\[(\d+)\](.*?)<\/p>\s*<p class="citation-item">\[(\d+)\]/g, 
+             '<p class="citation-item">[$1]$2</p>\n\n<p class="citation-item">[$3]')
+    // Ensure proper paragraph separation
+    .replace(/<\/p>\s*<p class="citation-item">/g, '</p>\n\n<p class="citation-item">');
 
   return fixedText;
 };
