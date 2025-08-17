@@ -9,6 +9,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { useApiWrapper } from './services/api';
 import useApi from './hooks/useApi'; // Import the refactored hook
 import './utils/debug'; // Import debug utilities
+import quizPersistenceService from './services/QuizPersistenceService';
 
 // Lazy load the components
 const Login = lazy(() => import('./components/auth/Login'));
@@ -157,8 +158,14 @@ const CourseLayout = () => {
           });
         }
         
-        setCourse(courseData);
+        // Restore quiz scores from localStorage
+        const restoredCourseData = quizPersistenceService.restoreQuizScoresToCourse(courseData, user?.id);
+        
+        setCourse(restoredCourseData);
         localStorage.setItem('currentCourseId', courseId);
+        
+        // Sync any localStorage scores with backend in the background
+        quizPersistenceService.syncScoresWithBackend(courseId, user?.id);
         
         const pathParts = location.pathname.split('/');
         const lessonId = pathParts.length > 3 && pathParts[3] === 'lesson' ? pathParts[4] : null;
@@ -230,6 +237,31 @@ const CourseLayout = () => {
         return newCourse;
     });
   };
+
+  // Add page visibility change listener to sync scores when user returns
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && course && user) {
+        // User has returned to the tab, sync any localStorage scores
+        quizPersistenceService.syncScoresWithBackend(course.id, user.id);
+      }
+    };
+
+    const handleBeforeUnload = () => {
+      if (course && user) {
+        // Ensure any pending scores are saved before leaving
+        quizPersistenceService.syncScoresWithBackend(course.id, user.id);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [course, user]);
 
   if (loading) return <LoadingScreen />;
   if (error) return <div className="text-red-500 text-center mt-10">{error}</div>;

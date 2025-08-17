@@ -15,6 +15,7 @@ import Flashcard from './Flashcard';
 import { useThrottledLogger, useDebounce, useStableValue } from '../hooks/usePerformanceOptimization';
 import performanceMonitor from '../services/PerformanceMonitorService';
 import BibliographyService from '../services/BibliographyService.js';
+import quizPersistenceService from '../services/QuizPersistenceService';
 
 // Helper function to fix malformed markdown
 const fixMalformedMarkdown = (text) => {
@@ -305,7 +306,8 @@ const LessonView = ({
   usedImageUrls = [],
   imageTitleCounts = {},
   imageUrlCounts = {},
-  courseId
+  courseId,
+  courseDescription = null
 }) => {
   const { user } = useAuth(); // Add this line to get the user
   const { lessonId: lessonIdFromParams } = useParams();
@@ -383,7 +385,7 @@ const LessonView = ({
         usedImageUrls,
         courseId,
         propLesson?.id || lessonId,
-        fallbackController.signal
+        courseDescription
       );
       
       // Check if request was aborted before setting state
@@ -498,6 +500,9 @@ const LessonView = ({
   const handleQuizComplete = useCallback(
     async (score) => {
       if (!activeModule || !propLesson) return;
+
+      // Save to localStorage immediately for persistence
+      quizPersistenceService.saveQuizScore(courseId, propLesson.id, score, user?.id);
 
       try {
         // Submit quiz score to backend
@@ -701,7 +706,7 @@ const LessonView = ({
             usedImageUrls,
             courseId,
             propLesson?.id || lessonId,
-            abortController.signal
+            courseDescription
           );
           
           // Check if request was aborted before setting state
@@ -741,7 +746,7 @@ const LessonView = ({
       // Abort any pending request
       abortController.abort();
     };
-  }, [propLesson, activeModule?.id, usedImageTitles, usedImageUrls, imageTitleCounts, imageUrlCounts, courseId, lessonId, normalizeImageUrl, onUpdateLesson, subject]);
+  }, [propLesson, activeModule?.id, usedImageTitles, usedImageUrls, imageTitleCounts, imageUrlCounts, courseId, lessonId, normalizeImageUrl, onUpdateLesson, subject, courseDescription]);
 
   // Cleanup TTS on unmount
   useEffect(() => {

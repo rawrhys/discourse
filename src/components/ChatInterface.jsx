@@ -13,7 +13,7 @@ const ChatInterface = ({ onGenerateCourse, isGenerating, onCancel }) => {
   // Clear error when generation starts
   useEffect(() => {
     if (isGenerating) {
-      setError(null);
+        setError(null);
     }
   }, [isGenerating]);
 
@@ -54,50 +54,50 @@ const ChatInterface = ({ onGenerateCourse, isGenerating, onCancel }) => {
     <div className="max-w-2xl mx-auto">
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Topic Input */}
-        <div>
+          <div>
           <label htmlFor="prompt" className="block text-sm font-medium text-gray-700 mb-2">
             What topic would you like to learn about?
-          </label>
-          <textarea
-            id="prompt"
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
+            </label>
+            <textarea
+              id="prompt"
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
             placeholder="e.g., Ancient Egyptian History, Python Programming, Art History, etc."
             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             rows={3}
             disabled={isGenerating}
-            required
+              required
           />
-        </div>
-
+          </div>
+          
         {/* Difficulty Level */}
-        <div>
+            <div>
           <label htmlFor="difficulty" className="block text-sm font-medium text-gray-700 mb-2">
-            Difficulty Level
-          </label>
-          <select
-            id="difficulty"
-            value={difficultyLevel}
-            onChange={(e) => setDifficultyLevel(e.target.value)}
+                Difficulty Level
+              </label>
+              <select
+                id="difficulty"
+                value={difficultyLevel}
+                onChange={(e) => setDifficultyLevel(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             disabled={isGenerating}
-          >
-            <option value="beginner">Beginner</option>
-            <option value="intermediate">Intermediate</option>
-            <option value="advanced">Advanced</option>
-          </select>
-        </div>
-
+              >
+                <option value="beginner">Beginner</option>
+                <option value="intermediate">Intermediate</option>
+                <option value="advanced">Advanced</option>
+              </select>
+            </div>
+            
         {/* Course Structure */}
         <div className="grid grid-cols-2 gap-4">
-          <div>
+            <div>
             <label htmlFor="modules" className="block text-sm font-medium text-gray-700 mb-2">
-              Number of Modules
-            </label>
+                Number of Modules
+              </label>
             <select
               id="modules"
-              value={numModules}
-              onChange={(e) => setNumModules(e.target.value)}
+                value={numModules}
+                onChange={(e) => setNumModules(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               disabled={isGenerating}
             >
@@ -106,15 +106,15 @@ const ChatInterface = ({ onGenerateCourse, isGenerating, onCancel }) => {
               <option value={4}>4 Modules</option>
               <option value={5}>5 Modules</option>
             </select>
-          </div>
-          <div>
+            </div>
+            <div>
             <label htmlFor="lessons" className="block text-sm font-medium text-gray-700 mb-2">
-              Lessons per Module
-            </label>
+                Lessons per Module
+              </label>
             <select
               id="lessons"
-              value={numLessonsPerModule}
-              onChange={(e) => setNumLessonsPerModule(e.target.value)}
+                value={numLessonsPerModule}
+                onChange={(e) => setNumLessonsPerModule(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               disabled={isGenerating}
             >
@@ -124,7 +124,7 @@ const ChatInterface = ({ onGenerateCourse, isGenerating, onCancel }) => {
               <option value={5}>5 Lessons</option>
             </select>
           </div>
-        </div>
+            </div>
 
         {/* Error Display */}
         {error && (
@@ -161,9 +161,9 @@ const ChatInterface = ({ onGenerateCourse, isGenerating, onCancel }) => {
             ) : (
               'Generate Course'
             )}
-          </button>
-        </div>
-      </form>
+            </button>
+          </div>
+        </form>
     </div>
   );
 };

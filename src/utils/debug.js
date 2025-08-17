@@ -212,6 +212,39 @@ window.debugCourseGeneration = {
     }
   },
 
+  // Get quiz persistence statistics
+  getQuizPersistenceStats: function() {
+    try {
+      const QuizPersistenceService = require('../services/QuizPersistenceService').default;
+      const stats = QuizPersistenceService.getPersistenceStats();
+      console.log('📊 [DEBUG] Quiz Persistence Statistics:', stats);
+      return stats;
+    } catch (error) {
+      console.error('💥 [DEBUG] Error getting quiz persistence stats:', error);
+      return null;
+    }
+  },
+
+  // Test quiz persistence service
+  testQuizPersistence: function(courseId, lessonId, score, userId) {
+    try {
+      const QuizPersistenceService = require('../services/QuizPersistenceService').default;
+      
+      // Test saving
+      const saveResult = QuizPersistenceService.saveQuizScore(courseId, lessonId, score, userId);
+      console.log('✅ [DEBUG] Quiz persistence save test:', saveResult);
+      
+      // Test retrieving
+      const retrievedScore = QuizPersistenceService.getQuizScore(courseId, lessonId, userId);
+      console.log('✅ [DEBUG] Quiz persistence retrieve test:', retrievedScore);
+      
+      return { saveResult, retrievedScore };
+    } catch (error) {
+      console.error('💥 [DEBUG] Error testing quiz persistence:', error);
+      return null;
+    }
+  },
+
   // Debug function to check current course state
   debugCourseState: function() {
     console.log('🔍 [DEBUG] Current Course State Debug:');

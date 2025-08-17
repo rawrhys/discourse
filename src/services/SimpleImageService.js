@@ -85,9 +85,9 @@ const SimpleImageService = {
     }
   },
 
-  // Simple search with context
-  searchWithContext: function(lessonTitle, courseSubject, content, usedImageTitles, usedImageUrls, courseId, lessonId) {
-    var contextualQuery = this.createContextAwareQuery(lessonTitle, courseSubject, content);
+  // Enhanced search with course context
+  searchWithContext: function(lessonTitle, courseSubject, content, usedImageTitles, usedImageUrls, courseId, lessonId, coursePrompt = null) {
+    var contextualQuery = this.createEnhancedContextAwareQuery(lessonTitle, courseSubject, content, coursePrompt);
     return this.search(contextualQuery, content, usedImageTitles, usedImageUrls, courseId, lessonId, true);
   },
 
@@ -119,6 +119,69 @@ const SimpleImageService = {
     if (query.toLowerCase().includes('rome') || query.toLowerCase().includes('ancient') || query.toLowerCase().includes('history')) {
       query = query + ' history';
     }
+    return query;
+  },
+
+  // Create enhanced context-aware search query using course prompt and lesson text
+  createEnhancedContextAwareQuery: function(lessonTitle, courseSubject, content, coursePrompt) {
+    courseSubject = courseSubject || '';
+    content = content || '';
+    coursePrompt = coursePrompt || '';
+    
+    if (!lessonTitle) return '';
+    
+    // Start with the lesson title
+    var query = String(lessonTitle).trim();
+    
+    // Add course subject for broader context
+    if (courseSubject) {
+      query = courseSubject + ' ' + query;
+    }
+    
+    // Add course prompt/description for enhanced context
+    if (coursePrompt) {
+      // Extract key terms from course prompt (first 100 characters to avoid too long queries)
+      var promptTerms = coursePrompt.substring(0, 100).split(' ').filter(word => 
+        word.length > 3 && !['the', 'and', 'for', 'with', 'this', 'that', 'from', 'into', 'during', 'including', 'until', 'against', 'among', 'throughout', 'despite', 'towards', 'upon'].includes(word.toLowerCase())
+      ).slice(0, 3).join(' ');
+      
+      if (promptTerms) {
+        query = query + ' ' + promptTerms;
+      }
+    }
+    
+    // Extract key terms from lesson content for more specific context
+    if (content) {
+      // Look for key terms in content (bold text, important concepts)
+      var contentTerms = '';
+      var contentWords = content.split(' ').filter(word => 
+        word.length > 4 && 
+        (word.startsWith('**') || word.endsWith('**') || 
+         word.charAt(0) === word.charAt(0).toUpperCase() && word.length > 5)
+      ).slice(0, 2);
+      
+      if (contentWords.length > 0) {
+        contentTerms = contentWords.join(' ');
+        query = query + ' ' + contentTerms;
+      }
+    }
+    
+    // Add historical context for history-related topics
+    if (query.toLowerCase().includes('rome') || query.toLowerCase().includes('ancient') || query.toLowerCase().includes('history')) {
+      query = query + ' history';
+    }
+    
+    // Add educational context for better image relevance
+    if (query.toLowerCase().includes('science') || query.toLowerCase().includes('chemistry') || query.toLowerCase().includes('physics')) {
+      query = query + ' educational';
+    }
+    
+    // Add art context for art-related topics
+    if (query.toLowerCase().includes('art') || query.toLowerCase().includes('painting') || query.toLowerCase().includes('sculpture')) {
+      query = query + ' art';
+    }
+    
+    console.log('[SimpleImageService] Enhanced query created:', query);
     return query;
   }
 };

@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { API_BASE_URL } from '../config/api';
 import NewCourseButton from './NewCourseButton';
 import NoCourseState from './NoCourseState';
+import quizPersistenceService from '../services/QuizPersistenceService';
 
 // Lazy load QuizView
 const QuizView = lazy(() => import('./QuizView'));
@@ -67,6 +68,9 @@ const CourseDisplay = () => {
         moduleTitle: module?.title
       });
     }
+
+    // Save to localStorage immediately for persistence
+    quizPersistenceService.saveQuizScore(course.id, lessonId, score, user?.id);
 
     // Call the backend API to submit the quiz score
     try {
@@ -531,6 +535,7 @@ const CourseDisplay = () => {
                   totalLessonsInModule={totalLessonsInModule}
                   handleModuleUpdate={handleModuleUpdate}
                   activeModule={currentModule}
+                  courseDescription={course.description}
               />
             ) : (
               <div className="text-center text-gray-500 pt-10">

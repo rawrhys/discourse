@@ -147,7 +147,11 @@ const PublicCourseDisplay = () => {
 
         <main className="flex-1 overflow-y-auto p-6 bg-gray-50">
           {currentLesson ? (
-            <LessonView lesson={currentLesson} />
+            <LessonView 
+              lesson={currentLesson} 
+              subject={course.subject}
+              courseDescription={course.description}
+            />
           ) : (
             <div className="text-center text-gray-500 pt-10">
               <p>Select a lesson to begin.</p>
