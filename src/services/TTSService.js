@@ -474,30 +474,74 @@ class TTSService {
       .trim();
   }
 
-  // Extract text content from lesson content
+  // Extract text content from lesson content with enhanced validation
   extractLessonText(content) {
-    if (!content) return '';
+    if (!content) {
+      console.log(`[${this.serviceType} TTS] No content provided to extractLessonText`);
+      return '';
+    }
     
     let text = '';
     
     if (typeof content === 'string') {
       text = content;
+      console.log(`[${this.serviceType} TTS] Content is string, length: ${text.length}`);
     } else if (typeof content === 'object') {
       // Handle structured content - only get the current lesson content
       const parts = [];
       
+      // Log the content structure for debugging
+      console.log(`[${this.serviceType} TTS] Content is object, keys:`, Object.keys(content));
+      
       // Only include the main content, not introduction/conclusion from other lessons
       if (content.main_content) {
         parts.push(content.main_content);
+        console.log(`[${this.serviceType} TTS] Found main_content, length: ${content.main_content.length}`);
       } else if (content.content) {
         // Fallback to content if main_content doesn't exist
         parts.push(content.content);
+        console.log(`[${this.serviceType} TTS] Found content, length: ${content.content.length}`);
       } else if (content.text) {
         // Fallback to text if content doesn't exist
         parts.push(content.text);
+        console.log(`[${this.serviceType} TTS] Found text, length: ${content.text.length}`);
+      } else {
+        // Try to find any text-like properties
+        const textKeys = Object.keys(content).filter(key => 
+          typeof content[key] === 'string' && 
+          content[key].trim().length > 0 &&
+          (key.includes('text') || key.includes('content') || key.includes('body') || key.includes('description'))
+        );
+        
+        if (textKeys.length > 0) {
+          console.log(`[${this.serviceType} TTS] Found text-like keys:`, textKeys);
+          textKeys.forEach(key => parts.push(content[key]));
+        } else {
+          console.warn(`[${this.serviceType} TTS] No recognizable text content found in object`);
+          // Try to stringify the object as a last resort
+          try {
+            const stringified = JSON.stringify(content);
+            if (stringified.length > 50) { // Only use if it's substantial
+              parts.push(stringified);
+              console.log(`[${this.serviceType} TTS] Using stringified content, length: ${stringified.length}`);
+            }
+          } catch (e) {
+            console.warn(`[${this.serviceType} TTS] Could not stringify content:`, e);
+          }
+        }
       }
       
       text = parts.join('\n\n');
+      console.log(`[${this.serviceType} TTS] Combined text length: ${text.length}`);
+    } else {
+      console.warn(`[${this.serviceType} TTS] Unknown content type:`, typeof content);
+      return '';
+    }
+    
+    // Validate that we have meaningful text
+    if (!text || text.trim().length === 0) {
+      console.warn(`[${this.serviceType} TTS] No text extracted from content`);
+      return '';
     }
     
     // Clean the text but ensure we don't remove everything
@@ -505,10 +549,11 @@ class TTSService {
     
     // If cleaning removed too much, use original text
     if (!cleanedText || cleanedText.trim().length < 10) {
-      console.warn(`[${this.serviceType} TTS] Text cleaning removed too much content, using original text`);
+      console.log(`[${this.serviceType} TTS] Text cleaning removed too much content (${cleanedText ? cleanedText.length : 0} chars), using original text (${text.trim().length} chars)`);
       return text.trim();
     }
     
+    console.log(`[${this.serviceType} TTS] Final cleaned text length: ${cleanedText.length}`);
     return cleanedText;
   }
 
@@ -532,18 +577,27 @@ class TTSService {
     await ttsCoordinator.requestTTS(this.serviceId);
     console.log(`[${this.serviceType} TTS] Got TTS control for reading lesson`);
     
-    if (!lesson || !lesson.content) {
-      console.warn(`[${this.serviceType} TTS] No lesson content to read`);
+    if (!lesson) {
+      console.warn(`[${this.serviceType} TTS] No lesson provided to readLesson`);
+      ttsCoordinator.releaseTTS(this.serviceId);
+      return false;
+    }
+    
+    if (!lesson.content) {
+      console.warn(`[${this.serviceType} TTS] No lesson.content provided to readLesson`);
       ttsCoordinator.releaseTTS(this.serviceId);
       return false;
     }
 
+    console.log(`[${this.serviceType} TTS] Lesson content type:`, typeof lesson.content);
+    console.log(`[${this.serviceType} TTS] Lesson content keys:`, typeof lesson.content === 'object' ? Object.keys(lesson.content) : 'N/A');
+    
     const text = this.extractLessonText(lesson.content);
     console.log(`[${this.serviceType} TTS] Extracted text length: ${text ? text.length : 0}`);
     console.log(`[${this.serviceType} TTS] Text preview: ${text ? text.substring(0, 100) + '...' : 'NO TEXT'}`);
     
     if (!text || !text.trim()) {
-      console.warn(`[${this.serviceType} TTS] No text content extracted from lesson`);
+      console.warn(`[${this.serviceType} TTS] No text content extracted from lesson - lessonId: ${lessonId}, lesson title: ${lesson.title || 'unknown'}`);
       ttsCoordinator.releaseTTS(this.serviceId);
       return false;
     }
@@ -587,8 +641,18 @@ class TTSService {
       }
 
       // Ensure we have valid text
-      if (!text || text.trim().length === 0) {
-        console.warn(`[${this.serviceType} TTS] No valid text to speak`);
+      if (!text) {
+        console.warn(`[${this.serviceType} TTS] No text provided to speak`);
+        return;
+      }
+      
+      if (typeof text !== 'string') {
+        console.warn(`[${this.serviceType} TTS] Text is not a string:`, typeof text, text);
+        return;
+      }
+      
+      if (text.trim().length === 0) {
+        console.warn(`[${this.serviceType} TTS] Text is empty or only whitespace`);
         return;
       }
       
