@@ -314,9 +314,6 @@ class TTSService {
     await ttsCoordinator.requestTTS(this.serviceId);
     console.log(`[${this.serviceType} TTS] Got TTS control for reading lesson`);
     
-    // Stop any current reading (without releasing control)
-    this.stop();
-    
     if (!lesson || !lesson.content) {
       console.warn(`[${this.serviceType} TTS] No lesson content to read`);
       ttsCoordinator.releaseTTS(this.serviceId);
@@ -335,6 +332,9 @@ class TTSService {
       this.currentLessonId = lessonId;
       this.fullText = text;
       this.errorCount = 0;
+      
+      // Stop any current reading (without releasing control) AFTER setting the text
+      this.stop();
       
       console.log(`[${this.serviceType} TTS] Starting to read lesson:`, lesson.title);
       await this.speak(text);
@@ -411,7 +411,7 @@ class TTSService {
                 if (this.errorCount < this.maxRetries) {
                   console.log(`[${this.serviceType} TTS] Retrying... (${this.errorCount}/${this.maxRetries})`);
                   setTimeout(() => {
-                    this.speak(this.currentText).then(resolve);
+                    this.speak(this.fullText || this.currentText).then(resolve);
                   }, 1000);
                 } else {
                   console.log(`[${this.serviceType} TTS] Max retries exceeded, stopping gracefully`);
@@ -440,7 +440,7 @@ class TTSService {
                 if (this.errorCount < this.maxRetries) {
                   console.log(`[${this.serviceType} TTS] Retrying after promise rejection... (${this.errorCount}/${this.maxRetries})`);
                   setTimeout(() => {
-                    this.speak(this.currentText).then(resolve);
+                    this.speak(this.fullText || this.currentText).then(resolve);
                   }, 1000);
                 } else {
                   console.log(`[${this.serviceType} TTS] Max retries exceeded after promise rejection`);
@@ -456,16 +456,16 @@ class TTSService {
           this.isPaused = false;
           this.errorCount++;
           
-          if (this.errorCount < this.maxRetries) {
-            console.log(`[${this.serviceType} TTS] Retrying after speak error... (${this.errorCount}/${this.maxRetries})`);
-            setTimeout(() => {
-              this.speak(this.currentText).then(resolve);
-            }, 1000);
-          } else {
-            console.log(`[${this.serviceType} TTS] Max retries exceeded after speak error`);
-            ttsCoordinator.releaseTTS(this.serviceId);
-            resolve(); // Always resolve, never reject
-          }
+                          if (this.errorCount < this.maxRetries) {
+                  console.log(`[${this.serviceType} TTS] Retrying after speak error... (${this.errorCount}/${this.maxRetries})`);
+                  setTimeout(() => {
+                    this.speak(this.fullText || this.currentText).then(resolve);
+                  }, 1000);
+                } else {
+                  console.log(`[${this.serviceType} TTS] Max retries exceeded after speak error`);
+                  ttsCoordinator.releaseTTS(this.serviceId);
+                  resolve(); // Always resolve, never reject
+                }
         }
       });
 
@@ -491,7 +491,7 @@ class TTSService {
       if (this.errorCount < this.maxRetries) {
         console.log(`[${this.serviceType} TTS] Retrying after catch error... (${this.errorCount}/${this.maxRetries})`);
         setTimeout(() => {
-          this.speak(this.currentText);
+          this.speak(this.fullText || this.currentText);
         }, 1000);
       } else {
         console.log(`[${this.serviceType} TTS] Max retries exceeded in catch block`);
@@ -531,9 +531,12 @@ class TTSService {
         this.speech.cancel();
         this.isPlaying = false;
         this.isPaused = false;
-        this.currentText = '';
-        this.currentLessonId = null;
-        this.fullText = '';
+        // Don't clear currentText if we're in a retry cycle
+        if (this.errorCount === 0) {
+          this.currentText = '';
+          this.currentLessonId = null;
+          this.fullText = '';
+        }
         this.errorCount = 0;
         console.log(`[${this.serviceType} TTS] Stopped`);
       } catch (error) {
