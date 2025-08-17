@@ -89,6 +89,13 @@ class TTSService {
     try {
       console.log(`[${this.serviceType} TTS] Starting speech engine initialization...`);
       
+      // Check if speech synthesis is supported
+      if (!window.speechSynthesis) {
+        console.warn(`[${this.serviceType} TTS] Speech synthesis not supported in this browser`);
+        this.isInitialized = false;
+        return;
+      }
+
       await this.speech.init({
         'volume': 1,
         'lang': 'en-GB',
@@ -126,21 +133,8 @@ class TTSService {
             console.log(`[${this.serviceType} TTS] Resumed`);
           },
           'onerror': (event) => {
-            console.error(`[${this.serviceType} TTS] Error:`, event);
-            this.isPlaying = false;
-            this.isPaused = false;
-            this.errorCount++;
-            
-            // Handle errors gracefully
-            if (this.errorCount < this.maxRetries) {
-              console.log(`[${this.serviceType} TTS] Retrying... (${this.errorCount}/${this.maxRetries})`);
-              setTimeout(() => {
-                this.speak(this.currentText);
-              }, 1000);
-            } else {
-              console.log(`[${this.serviceType} TTS] Max retries exceeded`);
-              ttsCoordinator.releaseTTS(this.serviceId);
-            }
+            console.warn(`[${this.serviceType} TTS] Initialization error:`, event);
+            // Don't handle errors during initialization, just log them
           }
         }
       });
@@ -149,7 +143,7 @@ class TTSService {
       console.log(`[${this.serviceType} TTS] Speech engine initialized successfully`);
       
     } catch (error) {
-      console.error(`[${this.serviceType} TTS] Failed to initialize speech engine:`, error);
+      console.warn(`[${this.serviceType} TTS] Failed to initialize speech engine:`, error);
       this.isInitialized = false;
       
       // Try fallback initialization
@@ -195,20 +189,8 @@ class TTSService {
             console.log(`[${this.serviceType} TTS] Resumed (fallback)`);
           },
           'onerror': (event) => {
-            console.error(`[${this.serviceType} TTS] Fallback error:`, event);
-            this.isPlaying = false;
-            this.isPaused = false;
-            this.errorCount++;
-            
-            if (this.errorCount < this.maxRetries) {
-              console.log(`[${this.serviceType} TTS] Fallback retrying... (${this.errorCount}/${this.maxRetries})`);
-              setTimeout(() => {
-                this.speak(this.currentText);
-              }, 1000);
-            } else {
-              console.log(`[${this.serviceType} TTS] Fallback max retries exceeded`);
-              ttsCoordinator.releaseTTS(this.serviceId);
-            }
+            console.warn(`[${this.serviceType} TTS] Fallback initialization error:`, event);
+            // Don't handle errors during fallback initialization, just log them
           }
         }
       });
@@ -217,7 +199,7 @@ class TTSService {
       console.log(`[${this.serviceType} TTS] Fallback speech engine initialized successfully`);
       
     } catch (fallbackError) {
-      console.error(`[${this.serviceType} TTS] Fallback initialization also failed:`, fallbackError);
+      console.warn(`[${this.serviceType} TTS] Fallback initialization also failed:`, fallbackError);
       this.isInitialized = false;
     }
   }
@@ -337,56 +319,108 @@ class TTSService {
       console.log(`[${this.serviceType} TTS] Attempting to speak text (length: ${text.length})`);
       console.log(`[${this.serviceType} TTS] Text preview:`, text.substring(0, 100) + '...');
       
-      await this.speech.speak({
-        text: text,
-        queue: false, // Don't queue, replace current speech
-        listeners: {
-          'onstart': () => {
-            this.isPlaying = true;
-            this.isPaused = false;
-            console.log(`[${this.serviceType} TTS] Started speaking`);
-          },
-          'onend': () => {
-            this.isPlaying = false;
-            this.isPaused = false;
-            console.log(`[${this.serviceType} TTS] Finished speaking`);
-            ttsCoordinator.releaseTTS(this.serviceId);
-          },
-          'onpause': () => {
-            this.isPaused = true;
-            this.isPlaying = false;
-            console.log(`[${this.serviceType} TTS] Paused`);
-          },
-          'onresume': () => {
-            this.isPaused = false;
-            this.isPlaying = true;
-            console.log(`[${this.serviceType} TTS] Resumed`);
-          },
-          'onerror': (event) => {
-            console.error(`[${this.serviceType} TTS] Error:`, event);
-            this.isPlaying = false;
-            this.isPaused = false;
-            this.errorCount++;
-            
-            if (this.errorCount < this.maxRetries) {
-              console.log(`[${this.serviceType} TTS] Retrying... (${this.errorCount}/${this.maxRetries})`);
-              setTimeout(() => {
-                this.speak(this.currentText);
-              }, 1000);
-            } else {
-              console.log(`[${this.serviceType} TTS] Max retries exceeded`);
-              ttsCoordinator.releaseTTS(this.serviceId);
+      // Check if speech is already initialized and working
+      if (!this.speech || !this.isInitialized) {
+        console.warn(`[${this.serviceType} TTS] Speech not initialized, attempting to reinitialize...`);
+        await this.initSpeech();
+        if (!this.isInitialized) {
+          throw new Error('Failed to initialize speech engine');
+        }
+      }
+
+      // Ensure we have valid text
+      if (!text || text.trim().length === 0) {
+        console.warn(`[${this.serviceType} TTS] No valid text to speak`);
+        return;
+      }
+
+      // Use a more robust speak approach
+      const speakPromise = new Promise((resolve, reject) => {
+        try {
+          this.speech.speak({
+            text: text,
+            queue: false, // Don't queue, replace current speech
+            listeners: {
+              'onstart': () => {
+                this.isPlaying = true;
+                this.isPaused = false;
+                console.log(`[${this.serviceType} TTS] Started speaking`);
+              },
+              'onend': () => {
+                this.isPlaying = false;
+                this.isPaused = false;
+                console.log(`[${this.serviceType} TTS] Finished speaking`);
+                ttsCoordinator.releaseTTS(this.serviceId);
+                resolve();
+              },
+              'onpause': () => {
+                this.isPaused = true;
+                this.isPlaying = false;
+                console.log(`[${this.serviceType} TTS] Paused`);
+              },
+              'onresume': () => {
+                this.isPaused = false;
+                this.isPlaying = true;
+                console.log(`[${this.serviceType} TTS] Resumed`);
+              },
+              'onerror': (event) => {
+                console.warn(`[${this.serviceType} TTS] Speech error occurred:`, event);
+                this.isPlaying = false;
+                this.isPaused = false;
+                this.errorCount++;
+                
+                // Don't throw the error, handle it gracefully
+                if (this.errorCount < this.maxRetries) {
+                  console.log(`[${this.serviceType} TTS] Retrying... (${this.errorCount}/${this.maxRetries})`);
+                  setTimeout(() => {
+                    this.speak(this.currentText).then(resolve).catch(reject);
+                  }, 1000);
+                } else {
+                  console.log(`[${this.serviceType} TTS] Max retries exceeded, stopping gracefully`);
+                  ttsCoordinator.releaseTTS(this.serviceId);
+                  resolve(); // Resolve instead of reject to prevent error propagation
+                }
+              }
             }
+          });
+        } catch (speakError) {
+          console.warn(`[${this.serviceType} TTS] Speak method error:`, speakError);
+          this.isPlaying = false;
+          this.isPaused = false;
+          this.errorCount++;
+          
+          if (this.errorCount < this.maxRetries) {
+            console.log(`[${this.serviceType} TTS] Retrying after speak error... (${this.errorCount}/${this.maxRetries})`);
+            setTimeout(() => {
+              this.speak(this.currentText).then(resolve).catch(reject);
+            }, 1000);
+          } else {
+            console.log(`[${this.serviceType} TTS] Max retries exceeded after speak error`);
+            ttsCoordinator.releaseTTS(this.serviceId);
+            resolve(); // Resolve instead of reject
           }
         }
       });
-      
+
+      await speakPromise;
       console.log(`[${this.serviceType} TTS] Speak command completed successfully`);
+      
     } catch (error) {
-      console.error(`[${this.serviceType} TTS] Error speaking:`, error);
+      console.warn(`[${this.serviceType} TTS] Error in speak method:`, error);
       this.isPlaying = false;
       this.isPaused = false;
-      ttsCoordinator.releaseTTS(this.serviceId);
+      this.errorCount++;
+      
+      // Handle the error gracefully without throwing
+      if (this.errorCount < this.maxRetries) {
+        console.log(`[${this.serviceType} TTS] Retrying after catch error... (${this.errorCount}/${this.maxRetries})`);
+        setTimeout(() => {
+          this.speak(this.currentText);
+        }, 1000);
+      } else {
+        console.log(`[${this.serviceType} TTS] Max retries exceeded in catch block`);
+        ttsCoordinator.releaseTTS(this.serviceId);
+      }
     }
   }
 
