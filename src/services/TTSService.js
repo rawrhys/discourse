@@ -292,11 +292,21 @@ class TTSService {
     if (typeof content === 'string') {
       text = content;
     } else if (typeof content === 'object') {
-      // Handle structured content
+      // Handle structured content - only get the current lesson content
       const parts = [];
-      if (content.introduction) parts.push(content.introduction);
-      if (content.main_content) parts.push(content.main_content);
-      if (content.conclusion) parts.push(content.conclusion);
+      
+      // Only include the main content, not introduction/conclusion from other lessons
+      if (content.main_content) {
+        parts.push(content.main_content);
+      } else if (content.content) {
+        // Fallback to content if main_content doesn't exist
+        parts.push(content.content);
+      }
+      
+      // Don't include introduction/conclusion as they might be from other lessons
+      // if (content.introduction) parts.push(content.introduction);
+      // if (content.conclusion) parts.push(content.conclusion);
+      
       text = parts.join('\n\n');
     }
     
@@ -532,6 +542,8 @@ class TTSService {
   pause() {
     if (this.isPlaying && !this.isPaused && this.isInitialized) {
       try {
+        // Reset error count to allow pause to work
+        this.errorCount = 0;
         this.speech.pause();
         console.log(`[${this.serviceType} TTS] Paused`);
       } catch (error) {
@@ -544,6 +556,8 @@ class TTSService {
   resume() {
     if (this.isPaused && !this.isPlaying && this.isInitialized) {
       try {
+        // Reset error count to allow resume to work
+        this.errorCount = 0;
         this.speech.resume();
         console.log(`[${this.serviceType} TTS] Resumed`);
       } catch (error) {
@@ -556,21 +570,16 @@ class TTSService {
   stop() {
     if (this.isInitialized) {
       try {
-        // Don't stop if we're currently speaking and in a retry cycle
-        if (this.isPlaying && this.errorCount > 0) {
-          console.log(`[${this.serviceType} TTS] Skipping stop during active retry cycle`);
-          return;
-        }
-        
         this.speech.cancel();
         this.isPlaying = false;
         this.isPaused = false;
-        // Don't clear currentText if we're in a retry cycle or if we have text to preserve
-        if (this.errorCount === 0 && !this.fullText) {
-          this.currentText = '';
-          this.currentLessonId = null;
-          this.fullText = '';
-        }
+        this.errorCount = 0; // Reset error count when stopping
+        
+        // Clear text when stopping
+        this.currentText = '';
+        this.currentLessonId = null;
+        this.fullText = '';
+        
         console.log(`[${this.serviceType} TTS] Stopped`);
       } catch (error) {
         console.warn(`[${this.serviceType} TTS] Stop failed:`, error);
