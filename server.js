@@ -2975,10 +2975,7 @@ async function imageSearchHandler(req, res) {
 // --- IMAGE PROXY ---
 app.get('/api/image/proxy', imageProxyHandler);
 
-// Primary route
-app.post('/api/image-search/search', imageSearchHandler);
-// Aliases for compatibility (some proxies may not forward hyphenated path)
-app.post('/api/image-search/search', imageSearchHandler);
+// Image search endpoint
 app.post('/api/image-search/search', imageSearchHandler);
 
 app.post('/api/courses', authenticateToken, async (req, res) => {
