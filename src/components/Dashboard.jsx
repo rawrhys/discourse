@@ -671,18 +671,14 @@ const Dashboard = () => {
                                     
                                     if (course.published) {
                                       // Unpublish the course
-                                      // Normalize course ID to remove timestamp suffix
-                                      const normalizedCourseId = String(course.id || '').replace(/_[0-9]{10,}$/, '');
-                                      logger.debug('Attempting to unpublish course:', course.id, 'normalized:', normalizedCourseId);
-                                      const updated = await api.unpublishCourse(normalizedCourseId);
+                                      logger.debug('Attempting to unpublish course:', course.id);
+                                      const updated = await api.unpublishCourse(course.id);
                                       await fetchSavedCourses(true); // Force refresh after unpublishing
                                       alert('Course unpublished!');
                                     } else {
                                       // Publish the course
-                                      // Normalize course ID to remove timestamp suffix
-                                      const normalizedCourseId = String(course.id || '').replace(/_[0-9]{10,}$/, '');
-                                      logger.debug('Attempting to publish course:', course.id, 'normalized:', normalizedCourseId);
-                                      const updated = await api.publishCourse(normalizedCourseId);
+                                      logger.debug('Attempting to publish course:', course.id);
+                                      const updated = await api.publishCourse(course.id);
                                       await fetchSavedCourses(true); // Force refresh after publishing
                                       alert('Course published!');
                                     }
@@ -698,7 +694,7 @@ const Dashboard = () => {
                                   course.published 
                                     ? hoveredCourseId === course.id 
                                       ? 'bg-red-600 text-white hover:bg-red-700' 
-                                      : 'bg-green-200 text-green-700 hover:bg-green-300'
+                                      : 'bg-green-100 text-green-800 border border-green-300 hover:bg-green-200'
                                     : !course.id 
                                       ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
                                       : 'bg-green-600 text-white hover:bg-green-700'
