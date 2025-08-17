@@ -441,8 +441,59 @@ class TTSService {
 const privateTTSService = new TTSService('private');
 const publicTTSService = new TTSService('public');
 
+// TTS Service Factory for session-specific instances
+class TTSServiceFactory {
+  constructor() {
+    this.services = new Map(); // Store session-specific services
+  }
+
+  // Get or create a TTS service for a specific session
+  getService(sessionId, serviceType = 'session') {
+    const key = `${serviceType}_${sessionId}`;
+    
+    if (!this.services.has(key)) {
+      const service = new TTSService(`${serviceType}_${sessionId}`);
+      this.services.set(key, service);
+      console.log(`[TTS Factory] Created new TTS service for ${key}`);
+    }
+    
+    return this.services.get(key);
+  }
+
+  // Clean up a specific session's TTS service
+  cleanupService(sessionId, serviceType = 'session') {
+    const key = `${serviceType}_${sessionId}`;
+    const service = this.services.get(key);
+    
+    if (service) {
+      service.stop();
+      this.services.delete(key);
+      console.log(`[TTS Factory] Cleaned up TTS service for ${key}`);
+    }
+  }
+
+  // Clean up all session services
+  cleanupAllSessions() {
+    for (const [key, service] of this.services.entries()) {
+      if (key.startsWith('session_')) {
+        service.stop();
+        this.services.delete(key);
+      }
+    }
+    console.log(`[TTS Factory] Cleaned up all session TTS services`);
+  }
+
+  // Get all active services (for debugging)
+  getActiveServices() {
+    return Array.from(this.services.keys());
+  }
+}
+
+// Create singleton factory instance
+const ttsServiceFactory = new TTSServiceFactory();
+
 // Export both services
-export { privateTTSService, publicTTSService };
+export { privateTTSService, publicTTSService, ttsServiceFactory };
 
 // Default export for backward compatibility (uses private service)
 export default privateTTSService; 

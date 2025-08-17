@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import SimpleImageService from '../services/SimpleImageService';
-import { publicTTSService } from '../services/TTSService';
+import { ttsServiceFactory } from '../services/TTSService';
 import PerformanceMonitorService from '../services/PerformanceMonitorService';
 import markdownService from '../services/MarkdownService';
 import Flashcard from './Flashcard';
@@ -17,7 +17,8 @@ const PublicLessonView = ({
   currentLessonIndex, 
   totalLessonsInModule, 
   activeModule,
-  courseDescription 
+  courseDescription,
+  sessionId // Add sessionId prop
 }) => {
   const [imageData, setImageData] = useState(null);
   const [imageLoading, setImageLoading] = useState(false);
@@ -36,12 +37,36 @@ const PublicLessonView = ({
     isSupported: true // Assume supported for public courses
   });
   
-  // Use singleton instances directly - both services are exported as singletons
-  const ttsService = useRef(publicTTSService);
+  // Use session-specific TTS service
+  const ttsService = useRef(null);
   const performanceMonitor = useRef(PerformanceMonitorService);
   const renderStartTime = useRef(performance.now());
   const abortControllerRef = useRef(null);
   const ttsStateUpdateTimeoutRef = useRef(null); // For debouncing state updates
+
+  // Initialize session-specific TTS service
+  useEffect(() => {
+    if (sessionId) {
+      ttsService.current = ttsServiceFactory.getService(sessionId, 'public');
+      console.log(`[PublicLessonView] Using session-specific TTS service for session: ${sessionId}`);
+    }
+  }, [sessionId]);
+
+  // Clean up session-specific TTS service on unmount
+  useEffect(() => {
+    return () => {
+      try {
+        if (ttsService.current && typeof ttsService.current.stop === 'function') {
+          ttsService.current.stop();
+        }
+        if (sessionId) {
+          ttsServiceFactory.cleanupService(sessionId, 'public');
+        }
+      } catch (error) {
+        console.warn('[PublicLessonView] TTS cleanup error:', error);
+      }
+    };
+  }, [sessionId]);
 
   // Get flashcards data
   const flashcardData = lesson?.flashcards || lesson?.content?.flashcards || [];

@@ -473,6 +473,7 @@ const PublicCourseDisplay = () => {
                   totalLessonsInModule={totalLessonsInModule}
                   activeModule={currentModule}
                   courseDescription={course.description}
+                  sessionId={sessionId}
               />
             ) : (
               <div className="text-center text-gray-500 pt-10">
