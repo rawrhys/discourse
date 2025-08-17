@@ -88,18 +88,37 @@ const SimpleImageService = {
   // Enhanced search with course context
   searchWithContext: function(lessonTitle, courseSubject, content, usedImageTitles, usedImageUrls, courseId, lessonId, coursePrompt = null) {
     try {
-      // Ensure content is a string
-      if (content && typeof content !== 'string') {
-        console.warn('[SimpleImageService] Content is not a string, converting to string:', typeof content);
-        content = String(content);
+      // Ensure content is a string and handle various input types
+      if (content) {
+        if (typeof content === 'object') {
+          // If content is an object, try to extract text content
+          if (content.text) {
+            content = content.text;
+          } else if (content.content) {
+            content = content.content;
+          } else if (content.toString) {
+            content = content.toString();
+          } else {
+            content = JSON.stringify(content);
+          }
+        } else if (typeof content !== 'string') {
+          content = String(content);
+        }
+      } else {
+        content = '';
       }
+      
+      // Ensure other parameters are strings
+      lessonTitle = lessonTitle ? String(lessonTitle) : '';
+      courseSubject = courseSubject ? String(courseSubject) : '';
+      coursePrompt = coursePrompt ? String(coursePrompt) : '';
       
       var contextualQuery = this.createEnhancedContextAwareQuery(lessonTitle, courseSubject, content, coursePrompt);
       return this.search(contextualQuery, content, usedImageTitles, usedImageUrls, courseId, lessonId, true);
     } catch (error) {
       console.error('[SimpleImageService] Error in searchWithContext:', error);
       // Fallback to basic search
-      return this.search(lessonTitle || 'lesson', content, usedImageTitles, usedImageUrls, courseId, lessonId, false);
+      return this.search(lessonTitle || 'lesson', content || '', usedImageTitles, usedImageUrls, courseId, lessonId, false);
     }
   },
 

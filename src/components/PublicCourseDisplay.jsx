@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, memo, useRef, Suspense, lazy } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import LessonView from './LessonView';
+import PublicLessonView from './PublicLessonView';
 import './CourseDisplay.css';
 import { useApiWrapper } from '../services/api';
 import LoadingState from './LoadingState';
@@ -228,15 +228,7 @@ const PublicCourseDisplay = () => {
     });
   }
 
-  const allImageUrls = useMemo(() => {
-    if (!course) return [];
-    return course.modules.flatMap(m => m.lessons.map(l => l.image?.imageUrl).filter(Boolean));
-  }, [course]);
 
-  const allImageTitles = useMemo(() => {
-    if (!course) return [];
-    return course.modules.flatMap(m => m.lessons.map(l => l.image?.imageTitle).filter(Boolean));
-  }, [course]);
 
   if (loading) return <LoadingState />;
   if (error) return <ErrorState message={error} />;
@@ -348,20 +340,16 @@ const PublicCourseDisplay = () => {
             </Suspense>
           ) : (
             currentLesson ? (
-              <LessonView
+              <PublicLessonView
                   lesson={currentLesson}
                   moduleTitle={currentModule?.title}
                   subject={course.subject}
-                  onUpdateLesson={() => {}} // No-op for public courses
-                  usedImageTitles={allImageTitles}
-                  usedImageUrls={allImageUrls}
                   courseId={courseId}
                   onNextLesson={handleNextLesson}
                   onPreviousLesson={handlePreviousLesson}
                   onTakeQuiz={() => setShowQuiz(true)}
                   currentLessonIndex={currentLessonIndex}
                   totalLessonsInModule={totalLessonsInModule}
-                  handleModuleUpdate={() => {}} // No-op for public courses
                   activeModule={currentModule}
                   courseDescription={course.description}
               />
