@@ -26,7 +26,6 @@ import { compressImage, getOptimalFormat, getFileExtension, formatFileSize } fro
 import sharp from 'sharp';
 import imageProxyHandler from './server/utils/proxy.js';
 import enhancedImageProxy from './server/utils/enhancedImageProxy.js';
-import PublicCourseSessionService from './src/services/PublicCourseSessionService.js';
 // import { isValidFlashcardTerm } from './src/utils/flashcardUtils.js';
 
 
@@ -36,8 +35,8 @@ dotenv.config();
 
 const app = express();
 
-// Initialize PublicCourseSessionService
-const publicCourseSessionService = new PublicCourseSessionService();
+// Import PublicCourseSessionService singleton instance
+import publicCourseSessionService from './src/services/PublicCourseSessionService.js';
 
 // --- CORE MIDDLEWARE ---
 // Apply compression to all responses
