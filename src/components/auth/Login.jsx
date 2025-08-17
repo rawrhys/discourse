@@ -34,7 +34,7 @@ const Login = () => {
           <img
             src={"/assets/images/discourse-logo.png"}
             alt="Discourse Logo"
-            style={{ width: '120px', margin: '0 auto', display: 'block' }}
+            style={{ width: '200px', margin: '0 auto', display: 'block' }}
           />
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
             Sign in to your account
