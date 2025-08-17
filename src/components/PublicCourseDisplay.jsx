@@ -33,7 +33,6 @@ const PublicCourseDisplay = () => {
   const [sessionId, setSessionId] = useState(null);
 
   const [showQuiz, setShowQuiz] = useState(false);
-  const [shareCopied, setShareCopied] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [unlockedModules, setUnlockedModules] = useState(new Set());
   const [showUnlockToast, setShowUnlockToast] = useState(false);
@@ -313,12 +312,7 @@ const PublicCourseDisplay = () => {
     }
   }, [course, activeModuleId, activeLessonId]);
 
-  const handleShare = () => {
-    const publicUrl = window.location.href;
-    navigator.clipboard.writeText(publicUrl);
-    setShareCopied(true);
-    setTimeout(() => setShareCopied(false), 2000);
-  };
+
 
   // Find the current module - first try by activeModuleId, then fallback to finding module containing current lesson
   let currentModule = course ? course.modules.find(m => m.id === activeModuleId) : null;
@@ -436,13 +430,6 @@ const PublicCourseDisplay = () => {
             );
           })}
         </nav>
-        <div className="p-4 border-t">
-          <button onClick={handleShare} className="w-full relative bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition flex items-center justify-center shadow">
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12s-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z"></path></svg>
-              Share
-              {shareCopied && <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-green-600 text-white text-xs rounded px-2 py-1 shadow-lg">Copied!</span>}
-          </button>
-        </div>
       </div>
 
       <div className="flex-1 flex flex-col overflow-hidden">
