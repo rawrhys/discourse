@@ -101,6 +101,30 @@ const PublicLessonView = ({
     }
   }, [lesson?.id, ttsStatus.isPlaying, ttsStatus.isPaused]);
 
+  // Sync TTS state with service state periodically
+  useEffect(() => {
+    if (ttsStatus.isPlaying || ttsStatus.isPaused) {
+      const interval = setInterval(() => {
+        try {
+          if (ttsService.current && typeof ttsService.current.getStatus === 'function') {
+            const serviceStatus = ttsService.current.getStatus();
+            if (serviceStatus.isPlaying !== ttsStatus.isPlaying || serviceStatus.isPaused !== ttsStatus.isPaused) {
+              setTtsStatus(prev => ({
+                ...prev,
+                isPlaying: serviceStatus.isPlaying,
+                isPaused: serviceStatus.isPaused
+              }));
+            }
+          }
+        } catch (error) {
+          console.warn('[PublicLessonView] TTS state sync error:', error);
+        }
+      }, 1000); // Check every second
+
+      return () => clearInterval(interval);
+    }
+  }, [ttsStatus.isPlaying, ttsStatus.isPaused]);
+
   // Handle image loading for public courses (simplified)
   useEffect(() => {
     if (!lesson?.title) return;
@@ -156,17 +180,25 @@ const PublicLessonView = ({
       if (ttsStatus.isPaused) {
         // Resume if paused
         if (ttsService.current && typeof ttsService.current.resume === 'function') {
-          ttsService.current.resume();
-          setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
+          const resumed = ttsService.current.resume();
+          if (resumed) {
+            setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
+          }
         }
       } else {
         // Start new reading
         setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
         if (ttsService.current && typeof ttsService.current.readLesson === 'function') {
           const contentStr = cleanAndCombineContent(lesson.content);
-          await ttsService.current.readLesson({ ...lesson, content: contentStr }, lesson.id);
+          const started = await ttsService.current.readLesson({ ...lesson, content: contentStr }, lesson.id);
+          
+          // If TTS failed to start, reset the state
+          if (!started) {
+            setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
+          }
         } else {
           console.warn('[PublicLessonView] TTS service not available');
+          setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
         }
       }
     } catch (error) {

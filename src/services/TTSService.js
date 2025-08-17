@@ -129,6 +129,13 @@ class TTSService {
         this.isPaused = false;
         this.currentUtterance = null;
         this.pausedAtChar = 0;
+        
+        // Handle specific error types
+        if (event.error === 'interrupted' || event.error === 'canceled') {
+          console.log('TTS was interrupted or canceled, resetting state');
+        } else if (event.error === 'not-allowed') {
+          console.log('TTS not allowed, user may need to interact with page first');
+        }
       };
       
       this.speechSynthesis.speak(this.currentUtterance);
@@ -224,6 +231,13 @@ class TTSService {
         this.isPaused = false;
         this.currentUtterance = null;
         this.pausedAtChar = 0;
+        
+        // Handle specific error types
+        if (event.error === 'interrupted' || event.error === 'canceled') {
+          console.log('TTS was interrupted or canceled, resetting state');
+        } else if (event.error === 'not-allowed') {
+          console.log('TTS not allowed, user may need to interact with page first');
+        }
       };
       
       this.speechSynthesis.speak(this.currentUtterance);
