@@ -16,10 +16,10 @@ const inferDefaultBaseUrl = () => {
       
       // For production, use the same domain as the frontend
       // This assumes the backend is running on the same domain
-      return `https://${hostname}/api-proxy.php`;
+      return `https://${hostname}/api`;
     }
   } catch (_) {}
-  return 'https://thediscourse.ai/api-proxy.php'; // Default to production API through PHP proxy
+  return 'https://thediscourse.ai/api'; // Default to production API
 };
 
 export const API_BASE_URL = inferDefaultBaseUrl();

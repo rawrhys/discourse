@@ -2972,6 +2972,15 @@ async function imageSearchHandler(req, res) {
   }
 }
 
+// Test endpoint to verify server is working
+app.get('/api/test', (req, res) => {
+  res.json({ 
+    message: 'Server is running', 
+    timestamp: new Date().toISOString(),
+    imageService: 'available'
+  });
+});
+
 // --- IMAGE PROXY ---
 app.get('/api/image/proxy', imageProxyHandler);
 
@@ -4059,67 +4068,5 @@ app.get('*', (req, res, next) => {
     console.error('[SERVER] Failed to serve SPA index.html:', e.message);
   }
 });
-
-app.post('/api/quizzes/submit', authenticateToken, async (req, res) => {
-  const { courseId, moduleId, lessonId, score } = req.body;
-  const userId = req.user.id;
-
-  if (!courseId || !moduleId || !lessonId || score === undefined) {
-    return res.status(400).json({ error: 'Missing required fields' });
-  }
-
-  try {
-    await db.read();
-    const course = db.data.courses.find(c => c.id === courseId && c.userId === userId);
-
-    if (!course) {
-      return res.status(404).json({ error: 'Course not found' });
-    }
-
-    const module = course.modules.find(m => m.id === moduleId);
-    if (!module) {
-      return res.status(404).json({ error: 'Module not found' });
-    }
-
-    const lesson = module.lessons.find(l => l.id === lessonId);
-    if (!lesson) {
-      return res.status(404).json({ error: 'Lesson not found' });
-    }
-
-    // Update or add the quiz score for the lesson
-    if (!lesson.quizScores) {
-      lesson.quizScores = {};
-    }
-    lesson.quizScores[userId] = score;
-    lesson.lastQuizScore = score; // Keep track of the last score
-
-    // Check if the module is now complete
-    const allQuizzesPerfect = module.lessons.every(l => l.quiz && l.quiz.length > 0 ? (l.quizScores && l.quizScores[userId] === 5) : true);
-
-    let unlockedNextModule = false;
-    if (allQuizzesPerfect) {
-      module.isCompleted = true; // Mark module as completed
-      const currentModuleIndex = course.modules.findIndex(m => m.id === moduleId);
-      if (currentModuleIndex !== -1 && currentModuleIndex + 1 < course.modules.length) {
-        course.modules[currentModuleIndex + 1].isLocked = false;
-        unlockedNextModule = true;
-      }
-    }
-
-    await db.write();
-
-    res.json({
-      message: 'Quiz score submitted successfully',
-      unlockedNextModule,
-      moduleCompleted: allQuizzesPerfect
-    });
-
-  } catch (error) {
-    console.error('Error submitting quiz score:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-
 
 export { app, db, startServer };
