@@ -32,7 +32,7 @@ const Login = () => {
       <div className="max-w-md w-full space-y-8">
         <div>
           <img
-            src={"/domains/thediscourse.ai/public_html/assets/images/discourse-logo.png"}
+            src={"/assets/images/discourse-logo.png"}
             alt="Discourse Logo"
             style={{ width: '120px', margin: '0 auto', display: 'block' }}
           />

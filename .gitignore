@@ -33,5 +33,5 @@ public/.htaccess
 public/sw.js
 public/manifest.json
 
-# Discourse logo (managed on frontend server)
-# Logo is located at: /domains/thediscourse.ai/public_html/assets/images/discourse-logo.png
+# Discourse logo (should be preserved on server)
+public/assets/images/discourse-logo.png
