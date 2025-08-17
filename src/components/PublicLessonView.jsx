@@ -392,9 +392,8 @@ const PublicLessonView = ({
            <i className="fas fa-clone mr-2"></i>Flashcards {flashcardData?.length ? `(${flashcardData.length})` : ''}
          </button>
        </div>
-      </div>
 
-                    {/* Content View */}
+       {/* Content View */}
        {view === 'content' && (
          <div className="p-6">
            {/* Image Section - Above content like private LessonView */}
