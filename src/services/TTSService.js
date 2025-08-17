@@ -294,11 +294,11 @@ class TTSService {
       .replace(/\s*!\s*/g, '! ') // Normalize exclamation marks
       .replace(/\s*\?\s*/g, '? ') // Normalize question marks
       
-      // Remove any remaining special characters that might cause TTS issues
-      .replace(/[^\w\s.,!?;:()'-]/g, '')
-      
       // Remove leading 'p' or other single characters that might be artifacts
       .replace(/^[pP]\s*/, '')
+      
+      // Remove any remaining special characters that might cause TTS issues (less aggressive)
+      .replace(/[^\w\s.,!?;:()'\-]/g, '')
       
       .trim();
   }
@@ -321,6 +321,9 @@ class TTSService {
       } else if (content.content) {
         // Fallback to content if main_content doesn't exist
         parts.push(content.content);
+      } else if (content.text) {
+        // Fallback to text if content doesn't exist
+        parts.push(content.text);
       }
       
       // Don't include introduction/conclusion as they might be from other lessons
@@ -330,7 +333,16 @@ class TTSService {
       text = parts.join('\n\n');
     }
     
-    return this.cleanTextForTTS(text);
+    // Clean the text but ensure we don't remove everything
+    const cleanedText = this.cleanTextForTTS(text);
+    
+    // If cleaning removed too much, use original text
+    if (!cleanedText || cleanedText.trim().length < 10) {
+      console.warn(`[${this.serviceType} TTS] Text cleaning removed too much content, using original text`);
+      return text.trim();
+    }
+    
+    return cleanedText;
   }
 
   // Start reading the lesson
@@ -351,7 +363,10 @@ class TTSService {
     }
 
     const text = this.extractLessonText(lesson.content);
-    if (!text.trim()) {
+    console.log(`[${this.serviceType} TTS] Extracted text length: ${text ? text.length : 0}`);
+    console.log(`[${this.serviceType} TTS] Text preview: ${text ? text.substring(0, 100) + '...' : 'NO TEXT'}`);
+    
+    if (!text || !text.trim()) {
       console.warn(`[${this.serviceType} TTS] No text content extracted from lesson`);
       ttsCoordinator.releaseTTS(this.serviceId);
       return false;
@@ -398,6 +413,12 @@ class TTSService {
       // Ensure we have valid text
       if (!text || text.trim().length === 0) {
         console.warn(`[${this.serviceType} TTS] No valid text to speak`);
+        return;
+      }
+      
+      // Additional validation to ensure text is substantial
+      if (text.trim().length < 5) {
+        console.warn(`[${this.serviceType} TTS] Text too short to speak: "${text.trim()}"`);
         return;
       }
 
