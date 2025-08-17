@@ -88,8 +88,14 @@ class AIService {
 
     let markdown = '\n\n## References\n\n';
     
-    bibliography.forEach(ref => {
-      const citation = `[${ref.citationNumber}] ${ref.author}. (${ref.year}). *${ref.title}*. ${ref.publisher}.`;
+    bibliography.forEach((ref, index) => {
+      // Ensure proper citation number
+      const citationNumber = ref.citationNumber || (index + 1);
+      
+      // Format citation with proper spacing and punctuation
+      const citation = `[${citationNumber}] ${ref.author}. (${ref.year}). *${ref.title}*. ${ref.publisher}.`;
+      
+      // Add citation with proper line breaks
       markdown += citation + '\n\n';
     });
     

@@ -1707,6 +1707,9 @@ Context: "${context.substring(0, 1000)}..."`;
               const bibliography = this.generateBibliography(lesson.title, courseWithIds.subject || 'history', 5);
               const bibliographyMarkdown = this.formatBibliographyAsMarkdown(bibliography);
               
+              // Clean up any malformed References sections that might exist in the content
+              lesson.content.conclusion = this.cleanupMalformedReferences(lesson.content.conclusion);
+              
               // Append bibliography to the conclusion
               if (bibliographyMarkdown) {
                 lesson.content.conclusion += bibliographyMarkdown;
@@ -2028,8 +2031,14 @@ Conclusion: ${content.conclusion}`;
 
     let markdown = '\n\n## References\n\n';
     
-    bibliography.forEach(ref => {
-      const citation = `[${ref.citationNumber}] ${ref.author}. (${ref.year}). *${ref.title}*. ${ref.publisher}.`;
+    bibliography.forEach((ref, index) => {
+      // Ensure proper citation number
+      const citationNumber = ref.citationNumber || (index + 1);
+      
+      // Format citation with proper spacing and punctuation
+      const citation = `[${citationNumber}] ${ref.author}. (${ref.year}). *${ref.title}*. ${ref.publisher}.`;
+      
+      // Add citation with proper line breaks
       markdown += citation + '\n\n';
     });
     
@@ -2057,6 +2066,27 @@ Conclusion: ${content.conclusion}`;
    */
   verifyBibliography(bibliography) {
     return bibliography.every(ref => ref.verified === true);
+  }
+
+  /**
+   * Clean up malformed References sections in content
+   * @param {string} content - Content that might contain malformed References
+   * @returns {string} Cleaned content
+   */
+  cleanupMalformedReferences(content) {
+    if (!content || typeof content !== 'string') {
+      return content;
+    }
+
+    return content
+      // Fix the specific problematic pattern: "## References [1] ... [2] ..."
+      .replace(/## References\s*\[(\d+)\]/g, '\n## References\n\n[$1]')
+      // Ensure each citation is on its own line
+      .replace(/\]\s*\[(\d+)\]/g, '.\n\n[$1]')
+      // Add proper line breaks between citations
+      .replace(/\.\s*\[(\d+)\]/g, '.\n\n[$1]')
+      // Clean up any remaining issues
+      .replace(/\n{3,}/g, '\n\n'); // Normalize multiple line breaks
   }
 }
 
