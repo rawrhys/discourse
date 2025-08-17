@@ -14,7 +14,7 @@ import ttsService from '../services/TTSService.js';
 import Flashcard from './Flashcard';
 import { useThrottledLogger, useDebounce, useStableValue } from '../hooks/usePerformanceOptimization';
 import performanceMonitor from '../services/PerformanceMonitorService';
-import BibliographyService from '../services/BibliographyService.js';
+import api from '../services/api.js';
 import quizPersistenceService from '../services/QuizPersistenceService';
 import markdownService from '../services/MarkdownService';
 
@@ -143,18 +143,26 @@ const Content = memo(({ content, bibliography, lessonTitle, courseSubject }) => 
     );
   }
 
-  // Generate bibliography if not provided
+  // Use embedded bibliography from lesson data if available, otherwise fall back to separate service
   let finalBibliography = bibliography;
   if (!finalBibliography || finalBibliography.length === 0) {
-    finalBibliography = BibliographyService.generateBibliography(lessonTitle, courseSubject, 5);
+    // Check if lesson has embedded bibliography data
+    if (content && typeof content === 'object' && content.bibliography) {
+      finalBibliography = content.bibliography;
+    } else {
+      // Fall back to API service bibliography generation
+      finalBibliography = api.generateBibliography(lessonTitle, courseSubject, 5);
+    }
   }
 
-  // Apply markdown fix before rendering
-  let fixedContent = fixMalformedMarkdown(contentStr);
+  // Apply markdown fix before rendering - use bibliography-aware parsing
+  let fixedContent = contentStr.includes('## References') 
+    ? markdownService.parseWithBibliography(contentStr)
+    : fixMalformedMarkdown(contentStr);
 
-  // Append bibliography to the content if we have references
-  if (finalBibliography && finalBibliography.length > 0) {
-    const bibliographyMarkdown = BibliographyService.formatBibliographyAsMarkdown(finalBibliography);
+  // Append bibliography to the content if we have references and it's not already in the content
+  if (finalBibliography && finalBibliography.length > 0 && !contentStr.includes('## References')) {
+    const bibliographyMarkdown = api.formatBibliographyAsMarkdown(finalBibliography);
     fixedContent += bibliographyMarkdown;
   }
 

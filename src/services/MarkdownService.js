@@ -93,12 +93,26 @@ class MarkdownService {
       .replace(/\*\*\*\*\*/g, '**')
       .replace(/\*\*\*\*\*\*/g, '**')
       
-      // Fix malformed references
+      // Fix malformed references and bibliography formatting
       .replace(/References\s*\n\s*\[1\]/g, '\n## References\n\n[1]')
+      .replace(/## References\s*\n\s*\[1\]/g, '\n## References\n\n[1]')
+      .replace(/## References\s*\[1\]/g, '\n## References\n\n[1]')
+      
+      // Fix bibliography citation formatting
+      .replace(/\[(\d+)\]\s*([^\.]+)\.\s*\(([^)]+)\)\.\s*\*([^*]+)\*\.\s*([^\.]+)\./g, 
+               '[$1] $2. ($3). *$4*. $5.')
+      .replace(/\[(\d+)\]\s*([^\.]+)\.\s*\(([^)]+)\)\.\s*([^\.]+)\.\s*([^\.]+)\./g, 
+               '[$1] $2. ($3). $4. $5.')
+      
+      // Fix specific bibliography patterns
       .replace(/\[1\] Encyclopaedia Britannica\. \(2024\)\. Academic Edition\. Encyclopaedia Britannica, Inc\.\./g, 
                '[1] Encyclopaedia Britannica. (2024). Academic Edition. Encyclopaedia Britannica, Inc.')
       .replace(/\[2\] Oxford University Press\. \(2012\)\. Oxford Classical Dictionary\. Oxford University Press\./g, 
-               '[2] Oxford University Press. (2012). Oxford Classical Dictionary. Oxford University Press.');
+               '[2] Oxford University Press. (2012). Oxford Classical Dictionary. Oxford University Press.')
+      
+      // Ensure proper spacing in bibliography
+      .replace(/\n## References\n\[/g, '\n## References\n\n[')
+      .replace(/\n## References\s*\n\s*\[/g, '\n## References\n\n[');
   }
 
   // Post-process HTML to clean up any remaining issues
@@ -185,6 +199,31 @@ class MarkdownService {
       .replace(/\bdemos\*\*/g, '**demos**')
       .replace(/\bPersian Wars\*\*/g, '**Persian Wars**')
       .replace(/\bMycenaean palaces\*\*/g, '**Mycenaean palaces**');
+    
+    return this.parse(processedContent);
+  }
+
+  // Parse content with bibliography support
+  parseWithBibliography(content) {
+    if (!content) return '';
+    
+    // Apply bibliography-specific preprocessing
+    let processedContent = content
+      // Ensure proper bibliography header formatting
+      .replace(/## References\s*\n\s*\[/g, '\n## References\n\n[')
+      .replace(/## References\s*\[/g, '\n## References\n\n[')
+      .replace(/References\s*\n\s*\[/g, '\n## References\n\n[')
+      
+      // Fix bibliography citation formatting
+      .replace(/\[(\d+)\]\s*([^\.]+)\.\s*\(([^)]+)\)\.\s*\*([^*]+)\*\.\s*([^\.]+)\./g, 
+               '[$1] $2. ($3). *$4*. $5.')
+      .replace(/\[(\d+)\]\s*([^\.]+)\.\s*\(([^)]+)\)\.\s*([^\.]+)\.\s*([^\.]+)\./g, 
+               '[$1] $2. ($3). $4. $5.')
+      
+      // Ensure proper line breaks in bibliography
+      .replace(/\n\[(\d+)\]/g, '\n\n[$1]')
+      .replace(/\[(\d+)\]\s*([^\.]+)\.\s*\(([^)]+)\)\.\s*\*([^*]+)\*\.\s*([^\.]+)\.\s*\[/g, 
+               '[$1] $2. ($3). *$4*. $5.\n\n[');
     
     return this.parse(processedContent);
   }
