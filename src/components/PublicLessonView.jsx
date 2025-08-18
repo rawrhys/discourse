@@ -257,10 +257,10 @@ const PublicLessonView = ({
     try {
       console.log('[PublicLessonView] Generating academic references for:', lesson.title);
       
-      // Ensure lesson.content is a string
+      // Ensure lesson.content is a string - use content formatter to strip keys
       const lessonContentString = typeof lesson.content === 'string' 
-        ? lesson.content 
-        : JSON.stringify(lesson.content);
+        ? getContentAsString(lesson.content)
+        : getContentAsString(lesson.content);
       
       // Generate academic references
       const references = academicReferencesService.generateReferences(
@@ -629,12 +629,26 @@ const PublicLessonView = ({
   }
   
   // Use content with citations if available, otherwise use original content
-  const displayContent = contentWithCitations || lessonContent;
+  // Ensure we strip any remaining JSON keys from contentWithCitations
+  const displayContent = contentWithCitations 
+    ? getContentAsString(contentWithCitations) 
+    : lessonContent;
   
   // Apply markdown parsing to the content
   let parsedContent = '';
   try {
     parsedContent = fixMalformedMarkdown(displayContent);
+    
+    // Debug log to check if JSON keys are still present
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[PublicLessonView] Content processing debug:', {
+        hasIntroductionKey: displayContent.includes('"introduction":'),
+        hasMainContentKey: displayContent.includes('"main_content":'),
+        hasConclusionKey: displayContent.includes('"conclusion":'),
+        displayContentLength: displayContent.length,
+        parsedContentLength: parsedContent.length
+      });
+    }
   } catch (error) {
     console.error('[PublicLessonView] Error parsing markdown:', error);
     parsedContent = displayContent || '';
@@ -819,7 +833,11 @@ const PublicLessonView = ({
            <div className="lesson-content max-w-none">
              <div 
                className="markdown-body prose max-w-none"
-              dangerouslySetInnerHTML={{ __html: parsedContent }}
+              dangerouslySetInnerHTML={{ 
+                __html: parsedContent.includes('"introduction":') || parsedContent.includes('"main_content":') || parsedContent.includes('"conclusion":')
+                  ? getContentAsString(parsedContent) // Final safety check
+                  : parsedContent 
+              }}
              />
            </div>
           
