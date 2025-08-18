@@ -73,6 +73,12 @@ class TTSService {
     this.lastStartTime = 0; // Track when TTS last started
     this.speakTimeout = null; // Track speak debounce timeout
     
+    // Position tracking for pause/resume functionality
+    this.pausePosition = 0; // Track where we paused in the text
+    this.pauseTime = 0; // Track when we paused
+    this.totalSpokenTime = 0; // Track total time spent speaking
+    this.speakingStartTime = 0; // Track when current speaking session started
+    
     // Browser compatibility check
     this.browserSupport = this.checkBrowserSupport();
     
@@ -562,11 +568,17 @@ class TTSService {
       // Stop any current reading BEFORE setting the new text
       this.stop();
       
-      // Set the new text properties
-      this.currentText = text;
-      this.currentLessonId = lessonId;
-      this.fullText = text;
-      this.errorCount = 0;
+             // Set the new text properties
+       this.currentText = text;
+       this.currentLessonId = lessonId;
+       this.fullText = text;
+       this.errorCount = 0;
+       
+       // Reset position tracking for new lesson
+       this.pausePosition = 0;
+       this.pauseTime = 0;
+       this.totalSpokenTime = 0;
+       this.speakingStartTime = 0;
       
       console.log(`[${this.serviceType} TTS] Starting to read lesson:`, lesson.title);
       console.log(`[${this.serviceType} TTS] Full text length before speak: ${this.fullText.length}`);
@@ -589,7 +601,7 @@ class TTSService {
   }
 
   // Enhanced speak method with better error handling
-  async speak(text) {
+  async speak(text, startPosition = 0) {
     // Prevent multiple simultaneous speak calls
     if (this.isPlaying) {
       console.warn(`[${this.serviceType} TTS] Already playing, ignoring new speak request`);
@@ -653,13 +665,20 @@ class TTSService {
         }
       }
 
-      // Enhanced text validation with early return for empty content
-      if (!text) {
-        console.warn(`[${this.serviceType} TTS] No text provided to speak`);
-        this.isPlaying = false;
-        this.isPaused = false;
-        return;
-      }
+             // Enhanced text validation with early return for empty content
+       if (!text) {
+         console.warn(`[${this.serviceType} TTS] No text provided to speak`);
+         this.isPlaying = false;
+         this.isPaused = false;
+         return;
+       }
+       
+       // If we have a start position, trim the text to start from that position
+       let textToSpeak = text;
+       if (startPosition > 0 && startPosition < text.length) {
+         textToSpeak = text.substring(startPosition);
+         console.log(`[${this.serviceType} TTS] Starting from position ${startPosition}, remaining text length: ${textToSpeak.length}`);
+       }
       
       if (typeof text !== 'string') {
         console.warn(`[${this.serviceType} TTS] Text is not a string:`, typeof text, text);
@@ -694,16 +713,17 @@ class TTSService {
       // Create a promise that wraps the speak-tts library call
       const speakPromise = new Promise((resolve) => {
         try {
-          // Create the speak configuration
-          const speakConfig = {
-            text: text,
-            queue: false, // Don't queue, replace current speech
+                     // Create the speak configuration
+           const speakConfig = {
+             text: textToSpeak,
+             queue: false, // Don't queue, replace current speech
             listeners: {
-              'onstart': () => {
-                this.isPlaying = true;
-                this.isPaused = false;
-                console.log(`[${this.serviceType} TTS] Started speaking`);
-              },
+                             'onstart': () => {
+                 this.isPlaying = true;
+                 this.isPaused = false;
+                 this.speakingStartTime = Date.now();
+                 console.log(`[${this.serviceType} TTS] Started speaking`);
+               },
               'onend': () => {
                 this.isPlaying = false;
                 this.isPaused = false;
@@ -894,10 +914,30 @@ class TTSService {
   pause() {
     if (this.isPlaying && !this.isPaused && this.isInitialized) {
       try {
+        // Calculate current position based on time spent speaking
+        const currentTime = Date.now();
+        const timeSpentSpeaking = currentTime - this.speakingStartTime;
+        this.totalSpokenTime += timeSpentSpeaking;
+        
+        // Estimate position based on time (rough approximation)
+        // Assuming average speaking rate of 150 words per minute
+        const wordsPerMinute = 150;
+        const wordsPerSecond = wordsPerMinute / 60;
+        const estimatedWordsSpoken = (this.totalSpokenTime / 1000) * wordsPerSecond;
+        
+        // Convert words to approximate character position
+        const averageWordLength = 5; // Rough average
+        this.pausePosition = Math.min(
+          Math.floor(estimatedWordsSpoken * averageWordLength),
+          this.fullText.length
+        );
+        
+        this.pauseTime = currentTime;
+        
         // Reset error count to allow pause to work
         this.errorCount = 0;
         this.speech.pause();
-        console.log(`[${this.serviceType} TTS] Paused`);
+        console.log(`[${this.serviceType} TTS] Paused at position ${this.pausePosition}/${this.fullText.length} (${Math.round((this.pausePosition / this.fullText.length) * 100)}%)`);
       } catch (error) {
         console.warn(`[${this.serviceType} TTS] Pause failed:`, error);
       }
@@ -911,9 +951,12 @@ class TTSService {
         // Reset error count to allow resume to work
         this.errorCount = 0;
         this.speech.resume();
-        console.log(`[${this.serviceType} TTS] Resumed`);
+        this.speakingStartTime = Date.now(); // Reset speaking start time
+        console.log(`[${this.serviceType} TTS] Resumed from position ${this.pausePosition}/${this.fullText.length} (${Math.round((this.pausePosition / this.fullText.length) * 100)}%)`);
       } catch (error) {
         console.warn(`[${this.serviceType} TTS] Resume failed:`, error);
+        // If resume fails, try to restart from pause position
+        this.restartFromPausePosition();
       }
     }
   }
@@ -940,6 +983,12 @@ class TTSService {
         this.currentText = '';
         this.currentLessonId = null;
         // Don't clear fullText here - it's needed for retries
+        
+        // Reset position tracking
+        this.pausePosition = 0;
+        this.pauseTime = 0;
+        this.totalSpokenTime = 0;
+        this.speakingStartTime = 0;
         
         console.log(`[${this.serviceType} TTS] Stopped`);
       } catch (error) {
@@ -982,6 +1031,12 @@ class TTSService {
         this.currentText = '';
         this.currentLessonId = null;
         this.fullText = '';
+        
+        // Reset position tracking
+        this.pausePosition = 0;
+        this.pauseTime = 0;
+        this.totalSpokenTime = 0;
+        this.speakingStartTime = 0;
         
         console.log(`[${this.serviceType} TTS] Stopped and cleared`);
       } catch (error) {
@@ -1026,6 +1081,12 @@ class TTSService {
     this.currentLessonId = null;
     this.fullText = '';
     
+    // Reset position tracking
+    this.pausePosition = 0;
+    this.pauseTime = 0;
+    this.totalSpokenTime = 0;
+    this.speakingStartTime = 0;
+    
     // Clear any pending timeouts
     if (this.speakTimeout) {
       clearTimeout(this.speakTimeout);
@@ -1065,6 +1126,35 @@ class TTSService {
     return this.isPaused && this.fullText && this.currentLessonId;
   }
 
+  // Restart from pause position
+  async restartFromPausePosition() {
+    if (!this.fullText || this.pausePosition <= 0) {
+      console.warn(`[${this.serviceType} TTS] Cannot restart from pause position - no text or invalid position`);
+      return false;
+    }
+    
+    try {
+      console.log(`[${this.serviceType} TTS] Restarting from pause position ${this.pausePosition}/${this.fullText.length}`);
+      
+      // Stop current speech if any
+      if (this.isPlaying || this.isPaused) {
+        this.speech.cancel();
+      }
+      
+      // Reset state
+      this.isPlaying = false;
+      this.isPaused = false;
+      this.errorCount = 0;
+      
+      // Speak from the pause position
+      await this.speak(this.fullText, this.pausePosition);
+      return true;
+    } catch (error) {
+      console.warn(`[${this.serviceType} TTS] Failed to restart from pause position:`, error);
+      return false;
+    }
+  }
+
   // Force reinitialization
   async forceReinitialize() {
     console.log(`[${this.serviceType} TTS] Force reinitializing...`);
@@ -1080,6 +1170,13 @@ class TTSService {
     this.isPlaying = false;
     this.isPaused = false;
     this.errorCount = 0;
+    
+    // Reset position tracking
+    this.pausePosition = 0;
+    this.pauseTime = 0;
+    this.totalSpokenTime = 0;
+    this.speakingStartTime = 0;
+    
     console.log(`[${this.serviceType} TTS] Force reset complete, service should be ready`);
   }
 
