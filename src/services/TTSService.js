@@ -1040,9 +1040,9 @@ class TTSService {
         break;
       }
       
-      // Check if we're paused again
+      // Check if we're paused - stop processing chunks if paused
       if (this.isPaused) {
-        console.log(`[${this.serviceType} TTS] Chunked speech paused again at chunk ${i + 1}/${this.currentChunks.length}`);
+        console.log(`[${this.serviceType} TTS] Chunked speech paused at chunk ${i + 1}/${this.currentChunks.length}`);
         this.currentChunkIndex = i;
         return;
       }
@@ -1115,6 +1115,13 @@ class TTSService {
           let timeoutId;
           
           const checkSpeechStatus = () => {
+            // Check if we're paused - don't timeout if user paused
+            if (this.isPaused) {
+              console.log(`[${this.serviceType} TTS] Chunk ${i + 1} paused by user, stopping timeout check`);
+              if (timeoutId) clearTimeout(timeoutId);
+              return;
+            }
+            
             // Check if speech has actually started
             if (this.isPlaying && this.speakingStartTime > 0) {
               const timeSinceStart = Date.now() - this.speakingStartTime;
@@ -1140,8 +1147,11 @@ class TTSService {
           setTimeout(() => {
             if (timeoutId) {
               clearTimeout(timeoutId);
-              console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} maximum timeout reached, continuing to next chunk`);
-              resolve();
+              // Only timeout if not paused by user
+              if (!this.isPaused) {
+                console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} maximum timeout reached, continuing to next chunk`);
+                resolve();
+              }
             }
           }, 30000); // Maximum 30 seconds total
         });
@@ -1216,17 +1226,30 @@ class TTSService {
         // Reset error count to allow pause to work
         this.errorCount = 0;
         
-        // Stop TTS completely instead of trying to pause in place
-        let stopSuccessful = false;
+        // Try to pause first, fallback to cancel if pause fails
+        let pauseSuccessful = false;
         
         try {
-          if (this.speech && typeof this.speech.cancel === 'function') {
-            this.speech.cancel();
-            console.log(`[${this.serviceType} TTS] Successfully called speech.cancel()`);
-            stopSuccessful = true;
+          if (this.speech && typeof this.speech.pause === 'function') {
+            this.speech.pause();
+            console.log(`[${this.serviceType} TTS] Successfully called speech.pause()`);
+            pauseSuccessful = true;
           }
-        } catch (cancelError) {
-          console.warn(`[${this.serviceType} TTS] speak-tts cancel failed:`, cancelError);
+        } catch (pauseError) {
+          console.warn(`[${this.serviceType} TTS] speak-tts pause failed:`, pauseError);
+        }
+        
+        // Fallback to cancel if pause doesn't work
+        if (!pauseSuccessful) {
+          try {
+            if (this.speech && typeof this.speech.cancel === 'function') {
+              this.speech.cancel();
+              console.log(`[${this.serviceType} TTS] Fallback: called speech.cancel()`);
+              pauseSuccessful = true; // Consider this successful for our purposes
+            }
+          } catch (cancelError) {
+            console.warn(`[${this.serviceType} TTS] speak-tts cancel also failed:`, cancelError);
+          }
         }
         
         // Ensure state is properly set regardless of stop method success
@@ -1331,11 +1354,31 @@ class TTSService {
           }
         }
         
-        // Always restart from recorded position instead of trying to resume in place
-        console.log(`[${this.serviceType} TTS] Restarting from recorded pause position: ${this.pausePosition}`);
+        // Try to resume in place first, then fallback to restarting
+        console.log(`[${this.serviceType} TTS] Attempting to resume from position: ${this.pausePosition}`);
         
-        // Check if this is chunked speech that was paused
-        if (this.isChunkedSpeech && this.currentChunks && Array.isArray(this.currentChunks)) {
+        // First, try to resume the current speech in place
+        let resumeInPlaceSuccessful = false;
+        try {
+          if (this.speech && typeof this.speech.resume === 'function') {
+            this.speech.resume();
+            console.log(`[${this.serviceType} TTS] Successfully called speech.resume()`);
+            this.speakingStartTime = Date.now(); // Reset speaking start time
+            this.wasManuallyPaused = false; // Clear manual pause flag
+            this.isPlaying = true;
+            this.isPaused = false;
+            resumeInPlaceSuccessful = true;
+          }
+        } catch (resumeError) {
+          console.warn(`[${this.serviceType} TTS] speak-tts resume failed:`, resumeError);
+        }
+        
+        // If resume in place failed, restart from recorded position
+        if (!resumeInPlaceSuccessful) {
+          console.log(`[${this.serviceType} TTS] Resume in place failed, restarting from recorded position`);
+          
+          // Check if this is chunked speech that was paused
+          if (this.isChunkedSpeech && this.currentChunks && Array.isArray(this.currentChunks)) {
           console.log(`[${this.serviceType} TTS] Resuming chunked speech with ${this.currentChunks.length} chunks`);
           
           // Always calculate chunk index from pause position for accuracy
