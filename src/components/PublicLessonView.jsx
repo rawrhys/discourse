@@ -668,10 +668,14 @@ const PublicLessonView = ({
         .replace(/"/g, '"')  // Replace any remaining smart quotes
         .replace(/\[object Object\]/g, '')  // Remove [object Object] artifacts
         .replace(/\[object\s+Object\]/g, '')  // Remove [object Object] with spaces
-        // Remove JSON key patterns with empty quotes
+        // Remove JSON key patterns with empty quotes - more comprehensive
         .replace(/""\s*:\s*/g, '')  // Remove "" : patterns
         .replace(/""\s*:/g, '')  // Remove "" : patterns
         .replace(/""\s*:\s*"/g, '')  // Remove "" : " patterns
+        .replace(/""\s*:\s*""/g, '')  // Remove "" : "" patterns
+        .replace(/,\s*""\s*:\s*"/g, '')  // Remove ,"" : " patterns
+        .replace(/,\s*""\s*:\s*""/g, '')  // Remove ,"" : "" patterns
+        .replace(/,\s*""\s*:/g, '')  // Remove ,"" : patterns
         // Remove standalone colons and commas that are not part of grammar
         .replace(/:\s*"/g, '')  // Remove : " patterns
         .replace(/,\s*"/g, '')  // Remove , " patterns
@@ -727,10 +731,14 @@ const PublicLessonView = ({
         .replace(/"/g, '"')  // Replace any remaining smart quotes
         .replace(/\[object Object\]/g, '')  // Remove [object Object] artifacts
         .replace(/\[object\s+Object\]/g, '')  // Remove [object Object] with spaces
-        // Remove JSON key patterns with empty quotes
+        // Remove JSON key patterns with empty quotes - more comprehensive
         .replace(/""\s*:\s*/g, '')  // Remove "" : patterns
         .replace(/""\s*:/g, '')  // Remove "" : patterns
         .replace(/""\s*:\s*"/g, '')  // Remove "" : " patterns
+        .replace(/""\s*:\s*""/g, '')  // Remove "" : "" patterns
+        .replace(/,\s*""\s*:\s*"/g, '')  // Remove ,"" : " patterns
+        .replace(/,\s*""\s*:\s*""/g, '')  // Remove ,"" : "" patterns
+        .replace(/,\s*""\s*:/g, '')  // Remove ,"" : patterns
         // Remove standalone colons and commas that are not part of grammar
         .replace(/:\s*"/g, '')  // Remove : " patterns
         .replace(/,\s*"/g, '')  // Remove , " patterns
