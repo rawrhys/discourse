@@ -610,14 +610,27 @@ const PublicLessonView = ({
       let cleaned = textString;
       
       // Step 1: Handle JSON structure if present
+      // Check for JSON-like structure (starts with { and ends with })
       if (cleaned.trim().startsWith('{') && cleaned.trim().endsWith('}')) {
+        console.log('[PublicLessonView] Detected JSON-like structure, attempting to parse...');
         try {
           // Replace smart quotes with standard quotes
-      cleaned = cleaned
+          cleaned = cleaned
             .replace(/"/g, '"')
             .replace(/"/g, '"')
             .replace(/"/g, '"')
             .replace(/"/g, '"');
+          
+          // Try to fix common JSON issues before parsing
+          cleaned = cleaned
+            // Fix empty keys
+            .replace(/""\s*:/g, '"content":')
+            .replace(/,\s*""\s*:/g, ',"content":')
+            // Fix unescaped quotes in content
+            .replace(/"([^"]*)"([^"]*)"([^"]*)"/g, '"$1\\"$2\\"$3"')
+            // Fix newlines in strings
+            .replace(/\n/g, '\\n')
+            .replace(/\\n\\n/g, '\\n\\n');
           
           const parsed = JSON.parse(cleaned);
           const { introduction, main_content, conclusion } = parsed;
@@ -635,6 +648,33 @@ const PublicLessonView = ({
           });
         } catch (error) {
           console.warn('[PublicLessonView] JSON parsing failed, treating as regular text:', error);
+          // If JSON parsing fails, treat the content as regular text and clean it up
+          cleaned = cleaned
+            // Remove JSON structure indicators
+            .replace(/^\{/, '')
+            .replace(/\}$/, '')
+            // Remove JSON key patterns
+            .replace(/"introduction"\s*:\s*"/g, '')
+            .replace(/"main_content"\s*:\s*"/g, '')
+            .replace(/"conclusion"\s*:\s*"/g, '')
+            .replace(/"content"\s*:\s*"/g, '')
+            .replace(/""\s*:\s*"/g, '')
+            // Remove trailing quotes and commas
+            .replace(/",?\s*$/g, '')
+            .replace(/",\s*"/g, '\n\n')
+            .replace(/"/g, '')
+            // Clean up any remaining JSON artifacts
+            .replace(/\[object Object\]/g, '')
+            .replace(/\[object\s+Object\]/g, '')
+            // Normalize line breaks
+            .replace(/\\n/g, '\n')
+            .replace(/\n{3,}/g, '\n\n')
+            .trim();
+          
+          console.log('[PublicLessonView] Converted malformed JSON to text:', {
+            cleanedLength: cleaned.length,
+            sampleContent: cleaned.substring(0, 200) + '...'
+          });
         }
       }
       
