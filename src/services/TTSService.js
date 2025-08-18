@@ -712,8 +712,10 @@ class TTSService {
     }
   }
 
-  // Speak text with enhanced error handling and retry logic
+  // PATCH: When starting any new TTS action, always clear the stopped flag
   async speak(text, startPosition = 0) {
+    this.isStopped = false; // <-- PATCH: clear stop flag at the start of speak
+    
     // Check if service is properly initialized
     if (!this.isInitialized || !this.speech) {
       console.warn(`[${this.serviceType} TTS] Service not properly initialized, attempting to reinitialize`);
@@ -919,8 +921,10 @@ class TTSService {
     return chunks;
   }
 
-  // Speak text in chunks to prevent long task errors
+  // PATCH: For chunked speech, clear isStopped at start of chunked speak
   async speakInChunks(text, chunkSize = 1000) {
+    this.isStopped = false; // <-- PATCH: clear stop flag at the start
+    
     // Check if TTS has been stopped - if so, don't start chunked speech
     if (this.isStopped) {
       console.log(`[${this.serviceType} TTS] TTS was stopped, not starting chunked speech`);
@@ -1175,8 +1179,10 @@ class TTSService {
     // Don't clear isPaused here - let the pause method handle it
   }
 
-  // Speak chunks from a specific index with proper async handling
+  // PATCH: For speakChunksFrom, clear isStopped at start (for resume)
   async speakChunksFrom(startIndex) {
+    this.isStopped = false; // <-- PATCH: clear stop flag at the start
+    
     console.log(`[${this.serviceType} TTS] Speaking chunks from index ${startIndex}/${this.currentChunks.length}`);
     
     // Check if TTS has been stopped before starting
@@ -1601,8 +1607,10 @@ class TTSService {
     }
   }
 
-  // Resume reading with server-based pause position
+  // PATCH: Resume also clears isStopped so you can start again after stopping
   async resume() {
+    this.isStopped = false; // <-- PATCH: clear stop flag at the start of resume
+    
     console.log(`[${this.serviceType} TTS] Resume called - current state:`, {
       isPaused: this.isPaused,
       isPlaying: this.isPlaying,
@@ -1783,51 +1791,62 @@ class TTSService {
     }
   }
 
-  // Stop reading completely
+  // PATCH: Robust stop logic to prevent stuck state and allow immediate resume/restart
   stop() {
-    if (this.isInitialized) {
-      try {
-        console.log(`[${this.serviceType} TTS] Stopping TTS`);
-        
-        // Set stop flag to prevent further chunk processing
-        this.isStopped = true;
-        
-        // Cancel any ongoing speech immediately
-        if (this.speech && typeof this.speech.cancel === 'function') {
+    try {
+      console.log(`[${this.serviceType} TTS] Stopping TTS`);
+
+      // Mark as stopped immediately, block all further chunk/speak actions
+      this.isStopped = true;
+
+      // Try to cancel any ongoing speech using both speak-tts and native API
+      if (this.speech && typeof this.speech.cancel === 'function') {
+        try {
           this.speech.cancel();
-        }
-        
-        // Reset all state flags
-        this.isPlaying = false;
-        this.isPaused = false;
-        this.isChunkedSpeech = false;
-        this.errorCount = 0;
-        
-        // Clear current text but preserve fullText for potential retries
-        this.currentText = '';
-        this.currentLessonId = null;
-        
-        // Reset position tracking and clear server pause data
-        this.resetPauseData();
-        
-        // Clear chunked speech state
-        this.isChunkedSpeech = false;
-        this.currentChunks = null;
-        this.currentChunkIndex = 0;
-        
-        // Clear server pause data to prevent auto-resume
-        this.clearServerPauseData();
-        
-        console.log(`[${this.serviceType} TTS] Stopped`);
-      } catch (error) {
-        console.warn(`[${this.serviceType} TTS] Stop failed:`, error);
-      } finally {
-        // Clear any pending timeouts
-        if (this.speakTimeout) {
-          clearTimeout(this.speakTimeout);
-          this.speakTimeout = null;
+          console.log(`[${this.serviceType} TTS] Called speak-tts cancel`);
+        } catch (e) {
+          console.warn(`[${this.serviceType} TTS] speak-tts cancel error:`, e);
         }
       }
+
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        try {
+          window.speechSynthesis.cancel();
+          console.log(`[${this.serviceType} TTS] Called native speechSynthesis.cancel`);
+        } catch (e) {
+          console.warn(`[${this.serviceType} TTS] native speechSynthesis.cancel error:`, e);
+        }
+      }
+
+      // Clear all state flags and timers
+      this.isPlaying = false;
+      this.isPaused = false;
+      this.isChunkedSpeech = false;
+      this.errorCount = 0;
+      this.pauseTime = 0;
+      this.speakingStartTime = 0;
+      this.finishedNormally = false;
+      this.wasManuallyPaused = false;
+
+      // Clear current text but preserve fullText for potential retries
+      this.currentText = '';
+      this.currentLessonId = null;
+
+      // Reset chunked speech state
+      this.currentChunks = null;
+      this.currentChunkIndex = 0;
+
+      // Clear server pause data to prevent auto-resume
+      this.clearServerPauseData();
+
+      // Clear any pending timeouts
+      if (this.speakTimeout) {
+        clearTimeout(this.speakTimeout);
+        this.speakTimeout = null;
+      }
+      console.log(`[${this.serviceType} TTS] Stopped and state cleared`);
+    } catch (error) {
+      console.warn(`[${this.serviceType} TTS] Stop failed:`, error);
     }
   }
 
