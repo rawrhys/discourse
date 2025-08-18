@@ -251,6 +251,8 @@ class TTSService {
     return new Promise((resolve) => {
       let timeoutId = null;
       let checkInterval = null;
+      let attempts = 0;
+      const maxAttempts = 50; // Limit attempts to prevent infinite loops
       
       const cleanup = () => {
         if (timeoutId) {
@@ -261,10 +263,15 @@ class TTSService {
           clearInterval(checkInterval);
           checkInterval = null;
         }
-        window.speechSynthesis.removeEventListener('voiceschanged', handleVoicesChanged);
+        try {
+          window.speechSynthesis.removeEventListener('voiceschanged', handleVoicesChanged);
+        } catch (error) {
+          // Ignore cleanup errors
+        }
       };
       
       const checkVoices = () => {
+        attempts++;
         try {
           if (!window.speechSynthesis) {
             console.warn(`[${this.serviceType} TTS] Speech synthesis not available`);
@@ -280,8 +287,11 @@ class TTSService {
             return true;
           }
         } catch (error) {
-          console.warn(`[${this.serviceType} TTS] Error checking voices:`, error);
-          // Don't throw, just return false to continue checking
+          // Only log error every 10 attempts to reduce spam
+          if (attempts % 10 === 0) {
+            console.warn(`[${this.serviceType} TTS] Error checking voices (attempt ${attempts}):`, error.message || error);
+          }
+          return false;
         }
         return false;
       };
@@ -289,13 +299,13 @@ class TTSService {
       // Start checking immediately
       if (checkVoices()) return;
       
-      // Set up interval checking
+      // Set up interval checking with longer intervals to reduce conflicts
       checkInterval = setInterval(() => {
-        if (checkVoices()) {
+        if (checkVoices() || attempts >= maxAttempts) {
           clearInterval(checkInterval);
           checkInterval = null;
         }
-      }, 200);
+      }, 500); // Increased interval to reduce conflicts
       
       // Also listen for voiceschanged event
       const handleVoicesChanged = () => {
@@ -304,7 +314,11 @@ class TTSService {
         }
       };
       
-      window.speechSynthesis.addEventListener('voiceschanged', handleVoicesChanged);
+      try {
+        window.speechSynthesis.addEventListener('voiceschanged', handleVoicesChanged);
+      } catch (error) {
+        console.warn(`[${this.serviceType} TTS] Failed to add voiceschanged listener:`, error.message || error);
+      }
       
       // Timeout after 10 seconds (increased from 5)
       timeoutId = setTimeout(() => {
@@ -316,7 +330,7 @@ class TTSService {
           const voices = window.speechSynthesis.getVoices();
           resolve(voices || []);
         } catch (error) {
-          console.log(`[${this.serviceType} TTS] Error getting voices after timeout:`, error);
+          console.log(`[${this.serviceType} TTS] Error getting voices after timeout:`, error.message || error);
           resolve([]);
         }
       }, 10000);
@@ -1035,10 +1049,10 @@ class TTSService {
       } catch (error) {
         console.warn(`[${this.serviceType} TTS] Stop failed:`, error);
       } finally {
-        // Reset the flag after a short delay to allow error handling to complete
+        // Reset the flag after a longer delay to match lesson change timing
         setTimeout(() => {
           this.isStoppingIntentionally = false;
-        }, 100);
+        }, 1500); // Increased to 1.5 seconds to match lesson change timing
       }
     }
   }
@@ -1062,10 +1076,10 @@ class TTSService {
       } catch (error) {
         console.warn(`[${this.serviceType} TTS] Stop and clear failed:`, error);
       } finally {
-        // Reset the flag after a short delay to allow error handling to complete
+        // Reset the flag after a longer delay to match lesson change timing
         setTimeout(() => {
           this.isStoppingIntentionally = false;
-        }, 100);
+        }, 1500); // Increased to 1.5 seconds to match lesson change timing
       }
     }
   }

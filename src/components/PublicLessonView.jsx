@@ -155,7 +155,7 @@ const PublicLessonView = ({
     setTimeout(() => {
       isLessonChanging.current = false;
       console.log('[PublicLessonView] Lesson change flag cleared, TTS can resume');
-    }, 1000); // Increased delay to 1 second
+    }, 2000); // Increased delay to 2 seconds to match TTS service timing
   }, [lesson?.id, ttsStatus.isPlaying, ttsStatus.isPaused]);
 
   // Sync TTS state with service state periodically
