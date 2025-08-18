@@ -636,7 +636,7 @@ const PublicLessonView = ({
         .replace(/Content generation completed\./g, '')
         .replace(/\|\|\|---\|\|\|/g, '')
         .replace(/\|\|\|/g, '')
-        // Remove JSON structure words
+        // Remove JSON structure words - more comprehensive
         .replace(/\bintroduction\b/gi, '')
         .replace(/\bmain_content\b/gi, '')
         .replace(/\bconclusion\b/gi, '')
@@ -647,6 +647,18 @@ const PublicLessonView = ({
         .replace(/\bConclusion\b/g, '')
         .replace(/\bMain\b/g, '')
         .replace(/\bIntro\b/g, '')
+        // Remove additional JSON structure variations
+        .replace(/\bINTRODUCTION\b/g, '')
+        .replace(/\bMAIN_CONTENT\b/g, '')
+        .replace(/\bCONCLUSION\b/g, '')
+        .replace(/\bMAIN\b/g, '')
+        .replace(/\bINTRO\b/g, '')
+        // Remove JSON key patterns
+        .replace(/"introduction":/gi, '')
+        .replace(/"main_content":/gi, '')
+        .replace(/"conclusion":/gi, '')
+        .replace(/"main":/gi, '')
+        .replace(/"intro":/gi, '')
         // Remove citations
         .replace(/\[\d+\]/g, '')
         // Remove JSON artifacts
@@ -666,9 +678,38 @@ const PublicLessonView = ({
       // Step 5: Final cleanup
       cleaned = cleanupRemainingAsterisks(cleaned);
       
+      // Step 6: Final JSON artifact cleanup
+      cleaned = cleaned
+        // Final pass to remove any remaining JSON structure words
+        .replace(/\bintroduction\b/gi, '')
+        .replace(/\bmain_content\b/gi, '')
+        .replace(/\bconclusion\b/gi, '')
+        .replace(/\bmain\b/gi, '')
+        .replace(/\bintro\b/gi, '')
+        .replace(/\bIntroduction\b/g, '')
+        .replace(/\bMain Content\b/g, '')
+        .replace(/\bConclusion\b/g, '')
+        .replace(/\bMain\b/g, '')
+        .replace(/\bIntro\b/g, '')
+        .replace(/\bINTRODUCTION\b/g, '')
+        .replace(/\bMAIN_CONTENT\b/g, '')
+        .replace(/\bCONCLUSION\b/g, '')
+        .replace(/\bMAIN\b/g, '')
+        .replace(/\bINTRO\b/g, '')
+        // Remove any remaining JSON patterns
+        .replace(/"introduction":/gi, '')
+        .replace(/"main_content":/gi, '')
+        .replace(/"conclusion":/gi, '')
+        .replace(/"main":/gi, '')
+        .replace(/"intro":/gi, '')
+        // Final space normalization
+        .replace(/\s+/g, ' ')
+        .trim();
+      
       console.log('[PublicLessonView] Content processing complete:', {
         finalLength: cleaned.length,
-        hasContent: cleaned.trim().length > 0
+        hasContent: cleaned.trim().length > 0,
+        sampleContent: cleaned.substring(0, 200) + '...'
       });
       
       return cleaned;
