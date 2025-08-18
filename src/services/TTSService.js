@@ -800,14 +800,19 @@ class TTSService {
       console.log(`[${this.serviceType} TTS] Speaking chunk ${i + 1}/${chunks.length} (${chunk.length} chars)`);
       
       try {
-        // Check for optimal timing from backend
+        // Use default timeout (optimal timing is non-blocking)
         let optimalTimeout = 5000; // Default 5 second timeout
+        
+        // Check for optimal timing from backend (non-blocking)
         if (this.currentLessonId) {
-          const timing = await this.getOptimalChunkTiming(this.currentLessonId, i);
-          if (timing && timing.optimalTimeout) {
-            optimalTimeout = timing.optimalTimeout;
-            console.log(`[${this.serviceType} TTS] Using optimal timeout for chunk ${i + 1}: ${optimalTimeout}ms`);
-          }
+          // Use non-blocking call to avoid interfering with TTS functionality
+          this.getOptimalChunkTiming(this.currentLessonId, i).then(timing => {
+            if (timing && timing.optimalTimeout) {
+              console.log(`[${this.serviceType} TTS] Retrieved optimal timeout for chunk ${i + 1}: ${timing.optimalTimeout}ms`);
+            }
+          }).catch(error => {
+            console.log(`[${this.serviceType} TTS] Error getting optimal timing for chunk ${i + 1} (non-critical):`, error.message);
+          });
         }
         
         // Use speak-tts library only (no native fallback)
@@ -831,7 +836,7 @@ class TTSService {
           setTimeout(() => {
             console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} timeout - continuing to next chunk`);
             resolve(); // Just continue to next chunk on timeout
-          }, 5000); // 5 second timeout
+          }, optimalTimeout); // Use default timeout
         });
         
         await Promise.race([chunkPromise, timeoutPromise]);
@@ -909,14 +914,19 @@ class TTSService {
       console.log(`[${this.serviceType} TTS] Speaking chunk ${i + 1}/${this.currentChunks.length} (${chunk.length} chars)`);
       
       try {
-        // Check for optimal timing from backend
+        // Use default timeout (optimal timing is non-blocking)
         let optimalTimeout = 5000; // Default 5 second timeout
+        
+        // Check for optimal timing from backend (non-blocking)
         if (this.currentLessonId) {
-          const timing = await this.getOptimalChunkTiming(this.currentLessonId, i);
-          if (timing && timing.optimalTimeout) {
-            optimalTimeout = timing.optimalTimeout;
-            console.log(`[${this.serviceType} TTS] Using optimal timeout for chunk ${i + 1}: ${optimalTimeout}ms`);
-          }
+          // Use non-blocking call to avoid interfering with TTS functionality
+          this.getOptimalChunkTiming(this.currentLessonId, i).then(timing => {
+            if (timing && timing.optimalTimeout) {
+              console.log(`[${this.serviceType} TTS] Retrieved optimal timeout for chunk ${i + 1}: ${timing.optimalTimeout}ms`);
+            }
+          }).catch(error => {
+            console.log(`[${this.serviceType} TTS] Error getting optimal timing for chunk ${i + 1} (non-critical):`, error.message);
+          });
         }
         
         // Use speak-tts library only (no native fallback)
@@ -940,7 +950,7 @@ class TTSService {
           setTimeout(() => {
             console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} timeout - continuing to next chunk`);
             resolve(); // Just continue to next chunk on timeout
-          }, optimalTimeout); // Use optimal timeout from backend
+          }, optimalTimeout); // Use default timeout
         });
         
         await Promise.race([chunkPromise, timeoutPromise]);
@@ -1168,13 +1178,15 @@ class TTSService {
           console.log(`[${this.serviceType} TTS] Chunked speech paused at chunk ${this.currentChunkIndex + 1}/${this.currentChunks.length}`);
         }
         
-        // Record pause time to backend for optimization
+        // Record pause time to backend for optimization (non-blocking)
         if (this.currentLessonId) {
           this.recordTTSStopTime(
             this.currentLessonId, 
             this.isChunkedSpeech ? this.currentChunkIndex : null, 
             'pause'
-          );
+          ).catch(error => {
+            console.log(`[${this.serviceType} TTS] Error recording pause time (non-critical):`, error.message);
+          });
         }
         
         return pauseSuccessful;
@@ -1304,13 +1316,15 @@ class TTSService {
       try {
         console.log(`[${this.serviceType} TTS] Stopping TTS`);
         
-        // Record stop time before clearing state
+        // Record stop time before clearing state (non-blocking)
         if (this.currentLessonId) {
           this.recordTTSStopTime(
             this.currentLessonId, 
             this.isChunkedSpeech ? this.currentChunkIndex : null, 
             'stop'
-          );
+          ).catch(error => {
+            console.log(`[${this.serviceType} TTS] Error recording stop time (non-critical):`, error.message);
+          });
         }
         
         this.speech.cancel();
@@ -1616,6 +1630,12 @@ class TTSService {
   // Record TTS stop time to backend for chunk timing optimization
   async recordTTSStopTime(lessonId, chunkIndex = null, stopReason = 'manual') {
     try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.log(`[${this.serviceType} TTS] No auth token available, skipping TTS stop time recording`);
+        return null;
+      }
+
       const stopData = {
         lessonId: lessonId,
         serviceType: this.serviceType,
@@ -1633,7 +1653,7 @@ class TTSService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(stopData)
       });
@@ -1642,12 +1662,15 @@ class TTSService {
         const result = await response.json();
         console.log(`[${this.serviceType} TTS] TTS stop time recorded successfully:`, result);
         return result;
+      } else if (response.status === 401) {
+        console.log(`[${this.serviceType} TTS] Not authenticated for TTS stop time recording, skipping`);
+        return null;
       } else {
         console.warn(`[${this.serviceType} TTS] Failed to record TTS stop time:`, response.status);
         return null;
       }
     } catch (error) {
-      console.warn(`[${this.serviceType} TTS] Error recording TTS stop time:`, error);
+      console.log(`[${this.serviceType} TTS] Error recording TTS stop time (non-critical):`, error.message);
       return null;
     }
   }
@@ -1655,10 +1678,16 @@ class TTSService {
   // Get optimal chunk timing from backend
   async getOptimalChunkTiming(lessonId, chunkIndex) {
     try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.log(`[${this.serviceType} TTS] No auth token available, using default timeout for chunk ${chunkIndex}`);
+        return null;
+      }
+
       const response = await fetch(`/api/tts/chunk-timing?lessonId=${lessonId}&chunkIndex=${chunkIndex}`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`
         }
       });
 
@@ -1666,12 +1695,15 @@ class TTSService {
         const timing = await response.json();
         console.log(`[${this.serviceType} TTS] Retrieved optimal chunk timing:`, timing);
         return timing;
+      } else if (response.status === 401) {
+        console.log(`[${this.serviceType} TTS] Not authenticated for chunk timing, using default timeout for chunk ${chunkIndex}`);
+        return null;
       } else {
         console.log(`[${this.serviceType} TTS] No optimal timing found for chunk ${chunkIndex}`);
         return null;
       }
     } catch (error) {
-      console.warn(`[${this.serviceType} TTS] Error getting chunk timing:`, error);
+      console.log(`[${this.serviceType} TTS] Error getting chunk timing (non-critical):`, error.message);
       return null;
     }
   }
