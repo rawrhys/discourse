@@ -73,7 +73,10 @@ export const publicCourseRateLimit = rateLimit({
 export const publicCourseSlowDown = slowDown({
   windowMs: 15 * 60 * 1000, // 15 minutes
   delayAfter: 50, // Allow 50 requests per 15 minutes, then...
-  delayMs: 500, // Add 500ms delay per request after limit
+  delayMs: (used, req) => {
+    const delayAfter = req.slowDown.limit;
+    return (used - delayAfter) * 500;
+  },
   maxDelayMs: 20000, // Maximum delay of 20 seconds
   skip: (req) => {
     return req.user && req.user.id;
