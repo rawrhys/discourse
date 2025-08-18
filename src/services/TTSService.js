@@ -73,6 +73,7 @@ class TTSService {
      this.speakTimeout = null; // Track speak debounce timeout
      this.finishedNormally = false; // Track if TTS finished normally (not interrupted)
      this.wasManuallyPaused = false; // Track if user manually paused TTS
+     this.isStopped = false; // Track if TTS has been stopped by user
     
     // Position tracking for pause/resume functionality
     this.pausePosition = 0; // Track where we paused in the text
@@ -599,6 +600,7 @@ class TTSService {
       this.speakingStartTime = 0;
       this.finishedNormally = false;
       this.wasManuallyPaused = false;
+      this.isStopped = false; // Reset stop flag when starting new lesson
       
       console.log(`[${this.serviceType} TTS] Starting to read lesson:`, lesson.title);
       console.log(`[${this.serviceType} TTS] Full text length before speak: ${this.fullText.length}`);
@@ -842,9 +844,9 @@ class TTSService {
         break;
       }
       
-      // Check if we should stop due to pause or errors
-      if (!this.isInitialized || this.errorCount >= this.maxRetries) {
-        console.log(`[${this.serviceType} TTS] Stopping chunked speech due to errors or initialization issues`);
+      // Check if we should stop due to pause, errors, or manual stop
+      if (!this.isInitialized || this.errorCount >= this.maxRetries || this.isStopped) {
+        console.log(`[${this.serviceType} TTS] Stopping chunked speech due to errors, initialization issues, or manual stop`);
         break;
       }
       
@@ -968,10 +970,16 @@ class TTSService {
         
         await Promise.race([chunkPromise, timeoutPromise]);
         
-        // Check if we're paused after chunk completion
+        // Check if we're paused or stopped after chunk completion
         if (this.isPaused) {
           console.log(`[${this.serviceType} TTS] Paused after chunk ${i + 1}, stopping chunked speech`);
           return;
+        }
+        
+        // Check if we've been stopped manually
+        if (this.isStopped) {
+          console.log(`[${this.serviceType} TTS] Manually stopped after chunk ${i + 1}, ending chunked speech`);
+          break;
         }
         
         // Small delay between chunks to prevent overwhelming the system
@@ -1053,9 +1061,9 @@ class TTSService {
         break;
       }
       
-      // Check if we should stop due to pause or errors
-      if (!this.isInitialized || this.errorCount >= this.maxRetries) {
-        console.log(`[${this.serviceType} TTS] Stopping chunked speech due to errors or initialization issues`);
+      // Check if we should stop due to pause, errors, or manual stop
+      if (!this.isInitialized || this.errorCount >= this.maxRetries || this.isStopped) {
+        console.log(`[${this.serviceType} TTS] Stopping chunked speech due to errors, initialization issues, or manual stop`);
         break;
       }
       
@@ -1205,10 +1213,16 @@ class TTSService {
         
         await Promise.race([chunkPromise, timeoutPromise]);
         
-        // Check if we're paused after chunk completion
+        // Check if we're paused or stopped after chunk completion
         if (this.isPaused) {
           console.log(`[${this.serviceType} TTS] Paused after chunk ${i + 1}, stopping chunked speech`);
           return;
+        }
+        
+        // Check if we've been stopped manually
+        if (this.isStopped) {
+          console.log(`[${this.serviceType} TTS] Manually stopped after chunk ${i + 1}, ending chunked speech`);
+          break;
         }
         
         // Small delay between chunks to prevent overwhelming the system
@@ -1554,7 +1568,8 @@ class TTSService {
       try {
         console.log(`[${this.serviceType} TTS] Stopping TTS`);
         
-
+        // Set stop flag to prevent further chunk processing
+        this.isStopped = true;
         
         this.speech.cancel();
         this.isPlaying = false;
@@ -1572,6 +1587,9 @@ class TTSService {
         this.isChunkedSpeech = false;
         this.currentChunks = null;
         this.currentChunkIndex = 0;
+        
+        // Clear server pause data to prevent auto-resume
+        this.clearServerPauseData();
         
         console.log(`[${this.serviceType} TTS] Stopped`);
       } catch (error) {
@@ -1627,12 +1645,38 @@ class TTSService {
     }
   }
 
+  // Clear server pause data to prevent auto-resume
+  async clearServerPauseData() {
+    try {
+      if (this.currentLessonId) {
+        const response = await fetch('/api/tts/clear-pause-position', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            lessonId: this.currentLessonId,
+            serviceType: this.serviceType
+          })
+        });
+        
+        if (response.ok) {
+          console.log(`[${this.serviceType} TTS] Server pause data cleared successfully`);
+        } else {
+          console.warn(`[${this.serviceType} TTS] Failed to clear server pause data:`, response.status);
+        }
+      }
+    } catch (error) {
+      console.warn(`[${this.serviceType} TTS] Error clearing server pause data:`, error);
+    }
+  }
+
   // Reset TTS state - useful for recovery from inconsistent states
   reset() {
     console.log(`[${this.serviceType} TTS] Resetting TTS state`);
     
-    // Force reset the stopping flag immediately
-    // this.isStoppingIntentionally = false; // Removed as per edit hint
+    // Reset stop flag
+    this.isStopped = false;
     
     // Cancel any ongoing speech synthesis using speak-tts
     if (this.speech && typeof this.speech.cancel === 'function') {
