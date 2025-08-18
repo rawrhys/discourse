@@ -594,50 +594,79 @@ const PublicLessonView = ({
       return cleaned;
     };
     
+    // Handle JSON string content
+    let parsedContent = content;
     if (typeof content === 'string') {
-      const cleaned = cleanContentPart(content);
-      const result = cleanupRemainingAsterisks(cleaned);
-      
-      // Final separator cleanup after all processing
-      const finalResult = result
-        .replace(/\|\|\|---\|\|\|/g, '')
-        .replace(/\|\|\|/g, '');
-      
-      console.log('[PublicLessonView] String content processed:', {
-        originalLength: content.length,
-        cleanedLength: finalResult.length,
-        hasContent: finalResult.trim().length > 0
-      });
-      return finalResult;
+      try {
+        // Check if it's a JSON string
+        if (content.trim().startsWith('{') && content.trim().endsWith('}')) {
+          parsedContent = JSON.parse(content);
+          console.log('[PublicLessonView] Parsed JSON content:', parsedContent);
+        } else {
+          // Regular string content
+          const cleaned = cleanContentPart(content);
+          const result = cleanupRemainingAsterisks(cleaned);
+          
+          // Final separator cleanup after all processing
+          const finalResult = result
+            .replace(/\|\|\|---\|\|\|/g, '')
+            .replace(/\|\|\|/g, '');
+          
+          console.log('[PublicLessonView] String content processed:', {
+            originalLength: content.length,
+            cleanedLength: finalResult.length,
+            hasContent: finalResult.trim().length > 0
+          });
+          return finalResult;
+        }
+      } catch (error) {
+        console.warn('[PublicLessonView] Failed to parse JSON, treating as regular string:', error);
+        // Fall back to treating as regular string
+        const cleaned = cleanContentPart(content);
+        const result = cleanupRemainingAsterisks(cleaned);
+        
+        const finalResult = result
+          .replace(/\|\|\|---\|\|\|/g, '')
+          .replace(/\|\|\|/g, '');
+        
+        return finalResult;
+      }
     }
     
-    const { introduction, main_content, conclusion } = content;
-    
-    const cleanedIntro = introduction 
-      ? cleanupRemainingAsterisks(cleanContentPart(introduction))
-      : '';
-
-    const cleanedMain = main_content ? cleanupRemainingAsterisks(cleanContentPart(main_content)) : '';
-    const cleanedConclusion = conclusion ? cleanupRemainingAsterisks(cleanContentPart(conclusion)) : '';
-    
-    const result = [cleanedIntro, cleanedMain, cleanedConclusion]
-      .filter(Boolean)
-      .join('\n\n')
-      .replace(/\|\|\|---\|\|\|/g, '') // Final cleanup of any remaining patterns
-      .replace(/\|\|\|/g, ''); // Final cleanup of any remaining ||| patterns
+    // Handle object content (either parsed JSON or direct object)
+    if (typeof parsedContent === 'object' && parsedContent !== null) {
+      const { introduction, main_content, conclusion } = parsedContent;
       
-    console.log('[PublicLessonView] Object content processed:', {
-      hasIntro: !!introduction,
-      hasMain: !!main_content,
-      hasConclusion: !!conclusion,
-      introLength: cleanedIntro.length,
-      mainLength: cleanedMain.length,
-      conclusionLength: cleanedConclusion.length,
-      resultLength: result.length,
-      hasContent: result.trim().length > 0
-    });
+      const cleanedIntro = introduction 
+        ? cleanupRemainingAsterisks(cleanContentPart(introduction))
+        : '';
+
+      const cleanedMain = main_content ? cleanupRemainingAsterisks(cleanContentPart(main_content)) : '';
+      const cleanedConclusion = conclusion ? cleanupRemainingAsterisks(cleanContentPart(conclusion)) : '';
+      
+      const result = [cleanedIntro, cleanedMain, cleanedConclusion]
+        .filter(Boolean)
+        .join('\n\n')
+        .replace(/\|\|\|---\|\|\|/g, '') // Final cleanup of any remaining patterns
+        .replace(/\|\|\|/g, ''); // Final cleanup of any remaining ||| patterns
+        
+      console.log('[PublicLessonView] Object content processed:', {
+        hasIntro: !!introduction,
+        hasMain: !!main_content,
+        hasConclusion: !!conclusion,
+        introLength: cleanedIntro.length,
+        mainLength: cleanedMain.length,
+        conclusionLength: cleanedConclusion.length,
+        resultLength: result.length,
+        hasContent: result.trim().length > 0
+      });
+      
+      return result;
+    }
     
-    return result;
+    // Fallback for any other content type
+    console.warn('[PublicLessonView] Unknown content type:', typeof content);
+    return String(content);
   };
 
   // Early return if no lesson
