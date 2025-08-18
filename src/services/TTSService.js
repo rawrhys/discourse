@@ -1057,7 +1057,7 @@ class TTSService {
 
 
   // Pause reading
-  pause() {
+  async pause() {
     console.log(`[${this.serviceType} TTS] Pause called - current state:`, {
       isPlaying: this.isPlaying,
       isPaused: this.isPaused,
@@ -1481,7 +1481,7 @@ class TTSService {
       // Wait a moment then try to pause
       setTimeout(async () => {
         console.log(`[${this.serviceType} TTS] Attempting to pause test speech...`);
-        this.pause();
+        await this.pause();
         
         // Wait a moment then try to resume
         setTimeout(async () => {

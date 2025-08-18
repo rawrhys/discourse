@@ -359,7 +359,7 @@ const PublicLessonView = ({
         publicTTSService.resume();
         setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
       } else if (ttsStatus.isPlaying) {
-        publicTTSService.pause();
+        await publicTTSService.pause();
         setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: true }));
       }
     } catch (error) {

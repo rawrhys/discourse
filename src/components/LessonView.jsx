@@ -672,7 +672,7 @@ const LessonView = ({
     try {
       if (serviceStatus.isPlaying) {
         console.log('[LessonView] Attempting to pause TTS...');
-        privateTTSService.pause();
+        await privateTTSService.pause();
         
         // Wait a moment and check if pause was successful
         await new Promise(resolve => setTimeout(resolve, 100));
