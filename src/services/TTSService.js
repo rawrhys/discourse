@@ -685,9 +685,9 @@ class TTSService {
       }
 
       // Cancel any ongoing speech synthesis before starting new one
-      if (window.speechSynthesis && window.speechSynthesis.speaking) {
+      if (this.speech && typeof this.speech.cancel === 'function') {
         console.log(`[${this.serviceType} TTS] Canceling ongoing speech synthesis`);
-        window.speechSynthesis.cancel();
+        this.speech.cancel();
         // Small delay to ensure cancel completes
         await new Promise(resolve => setTimeout(resolve, 50));
       }
@@ -725,18 +725,9 @@ class TTSService {
             resolve();
           }).catch((error) => {
             console.warn(`[${this.serviceType} TTS] Speak promise rejected:`, error);
-            
-            // Try fallback to native SpeechSynthesis API
-            console.log(`[${this.serviceType} TTS] Trying fallback to native SpeechSynthesis API...`);
-            this.fallbackToNativeSpeechSynthesis(textToSpeak).then(() => {
-              console.log(`[${this.serviceType} TTS] Fallback speech synthesis completed`);
-              resolve();
-            }).catch((fallbackError) => {
-              console.warn(`[${this.serviceType} TTS] Fallback also failed:`, fallbackError);
-              // Handle the error and retry if needed
-              this.handleSpeakError(error, textToSpeak, startPosition);
-              resolve(); // Resolve to prevent hanging
-            });
+            // Handle the error and retry if needed
+            this.handleSpeakError(error, textToSpeak, startPosition);
+            resolve(); // Resolve to prevent hanging
           });
         } catch (error) {
           console.warn(`[${this.serviceType} TTS] Error in speak promise:`, error);
@@ -819,42 +810,28 @@ class TTSService {
           }
         }
         
-        // Use a shorter timeout for each chunk
+        // Use speak-tts library only (no native fallback)
         const chunkPromise = new Promise((resolve) => {
           const speakConfig = {
             text: chunk,
             splitSentences: false
           };
           
-          // Try speak-tts first
+          // Use speak-tts library only (no native fallback)
           this.speech.speak(speakConfig).then(() => {
             console.log(`[${this.serviceType} TTS] Chunk ${i + 1} completed successfully`);
             resolve();
           }).catch((error) => {
-            console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} speak-tts failed, using fallback:`, error);
-            // Immediately try fallback if speak-tts fails
-            this.fallbackToNativeSpeechSynthesis(chunk).then(() => {
-              console.log(`[${this.serviceType} TTS] Chunk ${i + 1} fallback completed`);
-              resolve();
-            }).catch((fallbackError) => {
-              console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} fallback also failed:`, fallbackError);
-              resolve(); // Continue with next chunk
-            });
+            console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} speak-tts failed:`, error);
+            resolve(); // Continue with next chunk
           });
         });
         
         const timeoutPromise = new Promise((resolve) => {
           setTimeout(() => {
-            console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} timeout - trying fallback`);
-            // Try fallback if speak-tts is taking too long
-            this.fallbackToNativeSpeechSynthesis(chunk).then(() => {
-              console.log(`[${this.serviceType} TTS] Chunk ${i + 1} fallback completed after timeout`);
-              resolve();
-            }).catch((fallbackError) => {
-              console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} fallback failed after timeout:`, fallbackError);
-              resolve(); // Continue with next chunk
-            });
-          }, 5000); // Reduced timeout to 5 seconds to prevent long delays
+            console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} timeout - continuing to next chunk`);
+            resolve(); // Just continue to next chunk on timeout
+          }, 5000); // 5 second timeout
         });
         
         await Promise.race([chunkPromise, timeoutPromise]);
@@ -898,6 +875,12 @@ class TTSService {
       return;
     }
     
+    // Additional null check for currentChunks
+    if (!this.currentChunks || !Array.isArray(this.currentChunks) || this.currentChunks.length === 0) {
+      console.warn(`[${this.serviceType} TTS] Cannot resume chunked speech - currentChunks is invalid:`, this.currentChunks);
+      return;
+    }
+    
     console.log(`[${this.serviceType} TTS] Resuming chunked speech from chunk ${this.currentChunkIndex + 1}/${this.currentChunks.length}`);
     
     // Set playing state
@@ -936,41 +919,27 @@ class TTSService {
           }
         }
         
-        // Use a shorter timeout for each chunk
+        // Use speak-tts library only (no native fallback)
         const chunkPromise = new Promise((resolve) => {
           const speakConfig = {
             text: chunk,
             splitSentences: false
           };
           
-          // Try speak-tts first
+          // Use speak-tts library only (no native fallback)
           this.speech.speak(speakConfig).then(() => {
             console.log(`[${this.serviceType} TTS] Chunk ${i + 1} completed successfully`);
             resolve();
           }).catch((error) => {
-            console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} speak-tts failed, using fallback:`, error);
-            // Immediately try fallback if speak-tts fails
-            this.fallbackToNativeSpeechSynthesis(chunk).then(() => {
-              console.log(`[${this.serviceType} TTS] Chunk ${i + 1} fallback completed`);
-              resolve();
-            }).catch((fallbackError) => {
-              console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} fallback also failed:`, fallbackError);
-              resolve(); // Continue with next chunk
-            });
+            console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} speak-tts failed:`, error);
+            resolve(); // Continue with next chunk
           });
         });
         
         const timeoutPromise = new Promise((resolve) => {
           setTimeout(() => {
-            console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} timeout - trying fallback`);
-            // Try fallback if speak-tts is taking too long
-            this.fallbackToNativeSpeechSynthesis(chunk).then(() => {
-              console.log(`[${this.serviceType} TTS] Chunk ${i + 1} fallback completed after timeout`);
-              resolve();
-            }).catch((fallbackError) => {
-              console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} fallback failed after timeout:`, fallbackError);
-              resolve(); // Continue with next chunk
-            });
+            console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} timeout - continuing to next chunk`);
+            resolve(); // Just continue to next chunk on timeout
           }, optimalTimeout); // Use optimal timeout from backend
         });
         
@@ -1156,10 +1125,9 @@ class TTSService {
         // Reset error count to allow pause to work
         this.errorCount = 0;
         
-        // Try multiple pause strategies
+        // Use speak-tts library only (no native fallback)
         let pauseSuccessful = false;
         
-        // Strategy 1: Try speak-tts library pause
         try {
           if (this.speech && typeof this.speech.pause === 'function') {
             this.speech.pause();
@@ -1170,25 +1138,12 @@ class TTSService {
           console.warn(`[${this.serviceType} TTS] speak-tts pause failed:`, pauseError);
         }
         
-        // Strategy 2: Try native SpeechSynthesis pause
-        if (!pauseSuccessful && window.speechSynthesis) {
-          try {
-            window.speechSynthesis.pause();
-            console.log(`[${this.serviceType} TTS] Used native SpeechSynthesis.pause()`);
-            pauseSuccessful = true;
-          } catch (nativePauseError) {
-            console.warn(`[${this.serviceType} TTS] Native SpeechSynthesis pause failed:`, nativePauseError);
-          }
-        }
-        
-        // Strategy 3: Cancel and restart from position later
+        // Fallback: Cancel and restart from position later
         if (!pauseSuccessful) {
-          console.log(`[${this.serviceType} TTS] All pause methods failed, using cancel strategy`);
+          console.log(`[${this.serviceType} TTS] Pause failed, using cancel strategy`);
           try {
             if (this.speech && typeof this.speech.cancel === 'function') {
               this.speech.cancel();
-            } else if (window.speechSynthesis) {
-              window.speechSynthesis.cancel();
             }
             pauseSuccessful = true; // Consider this successful for our purposes
           } catch (cancelError) {
@@ -1270,10 +1225,9 @@ class TTSService {
           return true;
         }
         
-        // Try multiple resume strategies
+        // Use speak-tts library only (no native fallback)
         let resumeSuccessful = false;
         
-        // Strategy 1: Try speak-tts library resume
         try {
           if (this.speech && typeof this.speech.resume === 'function') {
             this.speech.resume();
@@ -1288,24 +1242,9 @@ class TTSService {
           console.warn(`[${this.serviceType} TTS] speak-tts resume failed:`, resumeError);
         }
         
-        // Strategy 2: Try native SpeechSynthesis resume
-        if (!resumeSuccessful && window.speechSynthesis) {
-          try {
-            window.speechSynthesis.resume();
-            console.log(`[${this.serviceType} TTS] Used native SpeechSynthesis.resume()`);
-            this.speakingStartTime = Date.now(); // Reset speaking start time
-            this.wasManuallyPaused = false; // Clear manual pause flag
-            this.isPlaying = true;
-            this.isPaused = false;
-            resumeSuccessful = true;
-          } catch (nativeResumeError) {
-            console.warn(`[${this.serviceType} TTS] Native SpeechSynthesis resume failed:`, nativeResumeError);
-          }
-        }
-        
-        // Strategy 3: Restart from pause position
+        // Fallback: Restart from pause position
         if (!resumeSuccessful) {
-          console.log(`[${this.serviceType} TTS] All resume methods failed, restarting from pause position`);
+          console.log(`[${this.serviceType} TTS] Resume failed, restarting from pause position`);
           setTimeout(() => {
             this.restartFromPausePosition();
           }, 100); // Small delay to ensure state is stable
@@ -1457,10 +1396,10 @@ class TTSService {
     // Force reset the stopping flag immediately
     // this.isStoppingIntentionally = false; // Removed as per edit hint
     
-    // Cancel any ongoing speech synthesis
-    if (window.speechSynthesis && window.speechSynthesis.speaking) {
+    // Cancel any ongoing speech synthesis using speak-tts
+    if (this.speech && typeof this.speech.cancel === 'function') {
       try {
-        window.speechSynthesis.cancel();
+        this.speech.cancel();
         console.log(`[${this.serviceType} TTS] Canceled ongoing speech synthesis during reset`);
       } catch (error) {
         console.warn(`[${this.serviceType} TTS] Failed to cancel speech synthesis during reset:`, error);
@@ -1527,9 +1466,9 @@ class TTSService {
         hasPause: typeof this.speech?.pause === 'function',
         hasResume: typeof this.speech?.resume === 'function',
         hasCancel: typeof this.speech?.cancel === 'function',
-        browserPaused: window.speechSynthesis?.paused || false,
-        browserSpeaking: window.speechSynthesis?.speaking || false,
-        browserPending: window.speechSynthesis?.pending || false
+        ourPaused: this.isPaused,
+        ourPlaying: this.isPlaying,
+        wasManuallyPaused: this.wasManuallyPaused
       };
       
       console.log(`[${this.serviceType} TTS] Speak-TTS library state:`, state);
@@ -1578,29 +1517,19 @@ class TTSService {
     return this.isPaused && this.fullText && this.currentLessonId;
   }
 
-  // Check if TTS is actually paused by checking browser state
+  // Check if TTS is actually paused by checking our state
   isActuallyPaused() {
-    if (!window.speechSynthesis) return false;
-    
     try {
-      // Check if speech synthesis is paused
-      const isPaused = window.speechSynthesis.paused;
-      const isSpeaking = window.speechSynthesis.speaking;
-      const hasPendingUtterances = window.speechSynthesis.pending;
-      
-      console.log(`[${this.serviceType} TTS] Browser TTS state:`, {
-        paused: isPaused,
-        speaking: isSpeaking,
-        pending: hasPendingUtterances,
+      console.log(`[${this.serviceType} TTS] TTS state:`, {
         ourPaused: this.isPaused,
         ourPlaying: this.isPlaying,
         wasManuallyPaused: this.wasManuallyPaused
       });
       
-      // Consider paused if browser says it's paused OR if we manually paused it
-      return (isPaused && !isSpeaking) || this.wasManuallyPaused;
+      // Consider paused if we manually paused it or if our state says it's paused
+      return this.isPaused || this.wasManuallyPaused;
     } catch (error) {
-      console.warn(`[${this.serviceType} TTS] Error checking browser TTS state:`, error);
+      console.warn(`[${this.serviceType} TTS] Error checking TTS state:`, error);
       return this.isPaused || this.wasManuallyPaused; // Fallback to our state
     }
   }
