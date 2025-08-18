@@ -611,6 +611,12 @@ class TTSService {
 
   // Start reading the lesson with enhanced error handling
   async readLesson(lesson, lessonId) {
+    // CRITICAL: Check if TTS was stopped - if so, DO NOT restart
+    if (this.isStopped) {
+      console.log(`[${this.serviceType} TTS] TTS was stopped, BLOCKING readLesson attempt`);
+      return false;
+    }
+    
     if (!this.browserSupport.speechSynthesis) {
       console.warn(`[${this.serviceType} TTS] Speech synthesis not supported in this browser`);
       return false;
@@ -714,6 +720,12 @@ class TTSService {
 
   // PATCH: When starting any new TTS action, always clear the stopped flag
   async speak(text, startPosition = 0) {
+    // CRITICAL: Check if TTS was stopped - if so, DO NOT restart
+    if (this.isStopped) {
+      console.log(`[${this.serviceType} TTS] TTS was stopped, BLOCKING speak attempt`);
+      return;
+    }
+    
     this.isStopped = false; // <-- PATCH: clear stop flag at the start of speak
     
     // Check if service is properly initialized
@@ -909,6 +921,12 @@ class TTSService {
 
   // PATCH: For chunked speech, clear isStopped at start of chunked speak
   async speakInChunks(text, chunkSize = 1000) {
+    // CRITICAL: Check if TTS was stopped - if so, DO NOT restart
+    if (this.isStopped) {
+      console.log(`[${this.serviceType} TTS] TTS was stopped, BLOCKING speakInChunks attempt`);
+      return;
+    }
+    
     this.isStopped = false; // <-- PATCH: clear stop flag at the start
     
     // Check if TTS has been stopped - if so, don't start chunked speech
@@ -1116,6 +1134,12 @@ class TTSService {
 
   // PATCH: For speakChunksFrom, clear isStopped at start (for resume)
   async speakChunksFrom(startIndex) {
+    // CRITICAL: Check if TTS was stopped - if so, DO NOT restart
+    if (this.isStopped) {
+      console.log(`[${this.serviceType} TTS] TTS was stopped, BLOCKING speakChunksFrom attempt`);
+      return;
+    }
+    
     this.isStopped = false; // <-- PATCH: clear stop flag at the start
     
     console.log(`[${this.serviceType} TTS] Speaking chunks from index ${startIndex}/${this.currentChunks.length}`);
@@ -1476,6 +1500,12 @@ class TTSService {
 
   // PATCH: Resume also clears isStopped so you can start again after stopping
   async resume() {
+    // CRITICAL: Check if TTS was stopped - if so, DO NOT restart
+    if (this.isStopped) {
+      console.log(`[${this.serviceType} TTS] TTS was stopped, BLOCKING resume attempt`);
+      return false;
+    }
+    
     this.isStopped = false; // <-- PATCH: clear stop flag at the start of resume
     
     console.log(`[${this.serviceType} TTS] Resume called - current state:`, {
@@ -1659,10 +1689,10 @@ class TTSService {
     }
   }
 
-  // PATCH: Robust stop logic to prevent stuck state and allow immediate resume/restart
+  // PATCH: Robust stop logic to prevent stuck state and block all restarts
   stop() {
     try {
-      console.log(`[${this.serviceType} TTS] Stopping TTS`);
+      console.log(`[${this.serviceType} TTS] Stopping TTS - BLOCKING ALL FURTHER OPERATIONS`);
 
       // Mark as stopped immediately, block all further chunk/speak actions
       this.isStopped = true;
