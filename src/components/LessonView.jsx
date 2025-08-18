@@ -441,6 +441,27 @@ const LessonView = ({
     isSupported: privateTTSService.isSupported()
   });
 
+  // Synchronize TTS service state with UI state
+  useEffect(() => {
+    const syncTTSState = () => {
+      const serviceStatus = privateTTSService.getStatus();
+      setTtsStatus(prev => ({
+        ...prev,
+        isPlaying: serviceStatus.isPlaying,
+        isPaused: serviceStatus.isPaused,
+        isSupported: serviceStatus.isSupported
+      }));
+    };
+
+    // Sync immediately
+    syncTTSState();
+
+    // Set up interval to sync state periodically
+    const intervalId = setInterval(syncTTSState, 500);
+
+    return () => clearInterval(intervalId);
+  }, []);
+
   // Comprehensive quiz and flashcard data extraction
   const quizData = useMemo(() => {
     // Check multiple possible locations for quiz data
@@ -637,6 +658,9 @@ const LessonView = ({
     
     const contentStr = cleanAndCombineContent(propLesson.content);
     
+    // Get current TTS service status
+    const serviceStatus = privateTTSService.getStatus();
+    
     // Check if TTS service is ready for requests
     if (!privateTTSService.isReadyForRequests()) {
       console.log('[LessonView] TTS service not ready, attempting to reset...');
@@ -645,18 +669,56 @@ const LessonView = ({
       await new Promise(resolve => setTimeout(resolve, 100));
     }
     
-    if (ttsStatus.isPlaying) {
-      privateTTSService.pause();
-      setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: true }));
-    } else if (ttsStatus.isPaused) {
-      privateTTSService.resume();
-      setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
-    } else {
-      // Use readLesson instead of speak
-      privateTTSService.readLesson({ ...propLesson, content: contentStr }, propLesson.id);
-      setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
+    try {
+      if (serviceStatus.isPlaying) {
+        console.log('[LessonView] Attempting to pause TTS...');
+        privateTTSService.pause();
+        
+        // Wait a moment and check if pause was successful
+        await new Promise(resolve => setTimeout(resolve, 100));
+        const newStatus = privateTTSService.getStatus();
+        
+        if (newStatus.isPaused) {
+          console.log('[LessonView] TTS paused successfully');
+          setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: true }));
+        } else {
+          console.warn('[LessonView] TTS pause may not have worked, forcing state update');
+          setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: true }));
+        }
+      } else if (serviceStatus.isPaused) {
+        console.log('[LessonView] Attempting to resume TTS...');
+        privateTTSService.resume();
+        
+        // Wait a moment and check if resume was successful
+        await new Promise(resolve => setTimeout(resolve, 100));
+        const newStatus = privateTTSService.getStatus();
+        
+        if (newStatus.isPlaying) {
+          console.log('[LessonView] TTS resumed successfully');
+          setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
+        } else {
+          console.warn('[LessonView] TTS resume may not have worked, forcing state update');
+          setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
+        }
+      } else {
+        console.log('[LessonView] Starting TTS...');
+        // Use readLesson instead of speak
+        const success = await privateTTSService.readLesson({ ...propLesson, content: contentStr }, propLesson.id);
+        
+        if (success) {
+          console.log('[LessonView] TTS started successfully');
+          setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
+        } else {
+          console.warn('[LessonView] TTS start failed');
+          setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
+        }
+      }
+    } catch (error) {
+      console.error('[LessonView] Error in TTS toggle:', error);
+      // Reset state on error
+      setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
     }
-  }, [propLesson, ttsStatus.isPlaying, ttsStatus.isPaused]);
+  }, [propLesson]);
 
   // Handle next lesson with TTS cleanup
   const handleNextLessonWithTTS = useCallback(() => {

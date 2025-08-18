@@ -4783,6 +4783,85 @@ app.delete('/api/images/:id', authenticateToken, requireAdminIfConfigured, async
   }
 });
 
+// TTS timing optimization endpoints
+app.post('/api/tts/record-stop', authenticateToken, async (req, res) => {
+  try {
+    const { lessonId, serviceType, stopTime, stopReason, chunkIndex, totalSpokenTime, pausePosition, fullTextLength } = req.body;
+    
+    console.log('[TTS] Recording stop time:', {
+      lessonId,
+      serviceType,
+      stopReason,
+      chunkIndex,
+      totalSpokenTime,
+      pausePosition,
+      fullTextLength
+    });
+    
+    // Store the timing data (you can extend this to use a database)
+    const timingData = {
+      lessonId,
+      serviceType,
+      stopTime,
+      stopReason,
+      chunkIndex,
+      totalSpokenTime,
+      pausePosition,
+      fullTextLength,
+      userId: req.user.id,
+      timestamp: new Date().toISOString()
+    };
+    
+    // For now, just log the data. You can extend this to store in a database
+    console.log('[TTS] Timing data recorded:', timingData);
+    
+    res.json({ 
+      success: true, 
+      message: 'TTS stop time recorded',
+      data: timingData
+    });
+  } catch (error) {
+    console.error('[TTS] Error recording stop time:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to record TTS stop time',
+      details: error.message 
+    });
+  }
+});
+
+app.get('/api/tts/chunk-timing', authenticateToken, async (req, res) => {
+  try {
+    const { lessonId, chunkIndex } = req.query;
+    
+    console.log('[TTS] Requesting chunk timing:', { lessonId, chunkIndex });
+    
+    // For now, return a default optimal timeout
+    // You can extend this to analyze historical data and return optimized timeouts
+    const optimalTimeout = 5000; // 5 seconds default
+    
+    // You could implement logic here to:
+    // 1. Query historical TTS data for this lesson/chunk
+    // 2. Calculate average completion times
+    // 3. Return optimized timeout based on patterns
+    
+    res.json({
+      success: true,
+      lessonId,
+      chunkIndex: parseInt(chunkIndex),
+      optimalTimeout,
+      message: 'Using default optimal timeout'
+    });
+  } catch (error) {
+    console.error('[TTS] Error getting chunk timing:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to get chunk timing',
+      details: error.message 
+    });
+  }
+});
+
 // Debug endpoint to check authentication status
 app.get('/api/debug/auth', (req, res) => {
   const authHeader = req.headers['authorization'];

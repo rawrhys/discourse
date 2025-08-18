@@ -809,6 +809,16 @@ class TTSService {
       console.log(`[${this.serviceType} TTS] Speaking chunk ${i + 1}/${chunks.length} (${chunk.length} chars)`);
       
       try {
+        // Check for optimal timing from backend
+        let optimalTimeout = 5000; // Default 5 second timeout
+        if (this.currentLessonId) {
+          const timing = await this.getOptimalChunkTiming(this.currentLessonId, i);
+          if (timing && timing.optimalTimeout) {
+            optimalTimeout = timing.optimalTimeout;
+            console.log(`[${this.serviceType} TTS] Using optimal timeout for chunk ${i + 1}: ${optimalTimeout}ms`);
+          }
+        }
+        
         // Use a shorter timeout for each chunk
         const chunkPromise = new Promise((resolve) => {
           const speakConfig = {
@@ -835,7 +845,7 @@ class TTSService {
         
         const timeoutPromise = new Promise((resolve) => {
           setTimeout(() => {
-            console.log(`[${this.serviceType} TTS] Chunk ${i + 1} speak-tts taking too long, trying fallback`);
+            console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} timeout - trying fallback`);
             // Try fallback if speak-tts is taking too long
             this.fallbackToNativeSpeechSynthesis(chunk).then(() => {
               console.log(`[${this.serviceType} TTS] Chunk ${i + 1} fallback completed after timeout`);
@@ -844,7 +854,7 @@ class TTSService {
               console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} fallback failed after timeout:`, fallbackError);
               resolve(); // Continue with next chunk
             });
-          }, 8000); // 8 second timeout before trying fallback
+          }, 5000); // Reduced timeout to 5 seconds to prevent long delays
         });
         
         await Promise.race([chunkPromise, timeoutPromise]);
@@ -916,6 +926,16 @@ class TTSService {
       console.log(`[${this.serviceType} TTS] Speaking chunk ${i + 1}/${this.currentChunks.length} (${chunk.length} chars)`);
       
       try {
+        // Check for optimal timing from backend
+        let optimalTimeout = 5000; // Default 5 second timeout
+        if (this.currentLessonId) {
+          const timing = await this.getOptimalChunkTiming(this.currentLessonId, i);
+          if (timing && timing.optimalTimeout) {
+            optimalTimeout = timing.optimalTimeout;
+            console.log(`[${this.serviceType} TTS] Using optimal timeout for chunk ${i + 1}: ${optimalTimeout}ms`);
+          }
+        }
+        
         // Use a shorter timeout for each chunk
         const chunkPromise = new Promise((resolve) => {
           const speakConfig = {
@@ -942,7 +962,7 @@ class TTSService {
         
         const timeoutPromise = new Promise((resolve) => {
           setTimeout(() => {
-            console.log(`[${this.serviceType} TTS] Chunk ${i + 1} speak-tts taking too long, trying fallback`);
+            console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} timeout - trying fallback`);
             // Try fallback if speak-tts is taking too long
             this.fallbackToNativeSpeechSynthesis(chunk).then(() => {
               console.log(`[${this.serviceType} TTS] Chunk ${i + 1} fallback completed after timeout`);
@@ -951,7 +971,7 @@ class TTSService {
               console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} fallback failed after timeout:`, fallbackError);
               resolve(); // Continue with next chunk
             });
-          }, 8000); // 8 second timeout before trying fallback
+          }, optimalTimeout); // Use optimal timeout from backend
         });
         
         await Promise.race([chunkPromise, timeoutPromise]);
@@ -1092,6 +1112,13 @@ class TTSService {
 
   // Pause reading
   pause() {
+    console.log(`[${this.serviceType} TTS] Pause called - current state:`, {
+      isPlaying: this.isPlaying,
+      isPaused: this.isPaused,
+      isInitialized: this.isInitialized,
+      isChunkedSpeech: this.isChunkedSpeech
+    });
+    
     if (this.isPlaying && !this.isPaused && this.isInitialized) {
       try {
         // Debug: Check speak-tts library state before pausing
@@ -1129,51 +1156,100 @@ class TTSService {
         // Reset error count to allow pause to work
         this.errorCount = 0;
         
-        // Try to pause using the speak-tts library first
+        // Try multiple pause strategies
+        let pauseSuccessful = false;
+        
+        // Strategy 1: Try speak-tts library pause
         try {
           if (this.speech && typeof this.speech.pause === 'function') {
             this.speech.pause();
             console.log(`[${this.serviceType} TTS] Successfully called speech.pause()`);
-          } else {
-            // Fallback to native SpeechSynthesis
-            if (window.speechSynthesis) {
-              window.speechSynthesis.pause();
-              console.log(`[${this.serviceType} TTS] Used native SpeechSynthesis.pause()`);
-            }
+            pauseSuccessful = true;
           }
         } catch (pauseError) {
-          console.warn(`[${this.serviceType} TTS] speech.pause() failed, using fallback:`, pauseError);
-          // Fallback: cancel and restart from position later
-          if (this.speech && typeof this.speech.cancel === 'function') {
-            this.speech.cancel();
-          } else if (window.speechSynthesis) {
-            window.speechSynthesis.cancel();
+          console.warn(`[${this.serviceType} TTS] speak-tts pause failed:`, pauseError);
+        }
+        
+        // Strategy 2: Try native SpeechSynthesis pause
+        if (!pauseSuccessful && window.speechSynthesis) {
+          try {
+            window.speechSynthesis.pause();
+            console.log(`[${this.serviceType} TTS] Used native SpeechSynthesis.pause()`);
+            pauseSuccessful = true;
+          } catch (nativePauseError) {
+            console.warn(`[${this.serviceType} TTS] Native SpeechSynthesis pause failed:`, nativePauseError);
           }
         }
         
-        // Ensure state is properly set
+        // Strategy 3: Cancel and restart from position later
+        if (!pauseSuccessful) {
+          console.log(`[${this.serviceType} TTS] All pause methods failed, using cancel strategy`);
+          try {
+            if (this.speech && typeof this.speech.cancel === 'function') {
+              this.speech.cancel();
+            } else if (window.speechSynthesis) {
+              window.speechSynthesis.cancel();
+            }
+            pauseSuccessful = true; // Consider this successful for our purposes
+          } catch (cancelError) {
+            console.warn(`[${this.serviceType} TTS] Cancel also failed:`, cancelError);
+          }
+        }
+        
+        // Ensure state is properly set regardless of pause method success
         this.isPlaying = false;
         this.isPaused = true;
         this.wasManuallyPaused = true; // Mark that user manually paused
         
-        console.log(`[${this.serviceType} TTS] Paused at position ${this.pausePosition}/${this.fullText.length} (${Math.round((this.pausePosition / this.fullText.length) * 100)}%)`);
+        console.log(`[${this.serviceType} TTS] Pause operation completed - state:`, {
+          isPlaying: this.isPlaying,
+          isPaused: this.isPaused,
+          pauseSuccessful: pauseSuccessful,
+          position: `${this.pausePosition}/${this.fullText.length} (${Math.round((this.pausePosition / this.fullText.length) * 100)}%)`
+        });
         
         // If this is chunked speech, log the chunk position
         if (this.isChunkedSpeech && this.currentChunks) {
           console.log(`[${this.serviceType} TTS] Chunked speech paused at chunk ${this.currentChunkIndex + 1}/${this.currentChunks.length}`);
         }
+        
+        // Record pause time to backend for optimization
+        if (this.currentLessonId) {
+          this.recordTTSStopTime(
+            this.currentLessonId, 
+            this.isChunkedSpeech ? this.currentChunkIndex : null, 
+            'pause'
+          );
+        }
+        
+        return pauseSuccessful;
       } catch (error) {
-        console.warn(`[${this.serviceType} TTS] Pause failed:`, error);
+        console.warn(`[${this.serviceType} TTS] Pause failed completely:`, error);
         // If pause fails completely, reset state
         this.isPlaying = false;
         this.isPaused = false;
         this.wasManuallyPaused = false;
+        return false;
       }
+    } else {
+      console.log(`[${this.serviceType} TTS] Cannot pause - conditions not met:`, {
+        isPlaying: this.isPlaying,
+        isPaused: this.isPaused,
+        isInitialized: this.isInitialized
+      });
+      return false;
     }
   }
 
   // Resume reading
   resume() {
+    console.log(`[${this.serviceType} TTS] Resume called - current state:`, {
+      isPaused: this.isPaused,
+      isPlaying: this.isPlaying,
+      isInitialized: this.isInitialized,
+      isChunkedSpeech: this.isChunkedSpeech
+    });
+    
     // Check if we're actually paused
     const actuallyPaused = this.isActuallyPaused();
     
@@ -1191,10 +1267,13 @@ class TTSService {
           
           // Resume chunked speech from current position
           this.resumeChunkedSpeech();
-          return;
+          return true;
         }
         
-        // Try to resume using the speak-tts library first
+        // Try multiple resume strategies
+        let resumeSuccessful = false;
+        
+        // Strategy 1: Try speak-tts library resume
         try {
           if (this.speech && typeof this.speech.resume === 'function') {
             this.speech.resume();
@@ -1203,43 +1282,62 @@ class TTSService {
             this.wasManuallyPaused = false; // Clear manual pause flag
             this.isPlaying = true;
             this.isPaused = false;
-          } else {
-            // Fallback to native SpeechSynthesis
-            if (window.speechSynthesis) {
-              window.speechSynthesis.resume();
-              console.log(`[${this.serviceType} TTS] Used native SpeechSynthesis.resume()`);
-              this.speakingStartTime = Date.now(); // Reset speaking start time
-              this.wasManuallyPaused = false; // Clear manual pause flag
-              this.isPlaying = true;
-              this.isPaused = false;
-            }
+            resumeSuccessful = true;
           }
         } catch (resumeError) {
-          console.warn(`[${this.serviceType} TTS] speech.resume() failed, using fallback:`, resumeError);
-          // Fallback: restart from pause position
+          console.warn(`[${this.serviceType} TTS] speak-tts resume failed:`, resumeError);
+        }
+        
+        // Strategy 2: Try native SpeechSynthesis resume
+        if (!resumeSuccessful && window.speechSynthesis) {
+          try {
+            window.speechSynthesis.resume();
+            console.log(`[${this.serviceType} TTS] Used native SpeechSynthesis.resume()`);
+            this.speakingStartTime = Date.now(); // Reset speaking start time
+            this.wasManuallyPaused = false; // Clear manual pause flag
+            this.isPlaying = true;
+            this.isPaused = false;
+            resumeSuccessful = true;
+          } catch (nativeResumeError) {
+            console.warn(`[${this.serviceType} TTS] Native SpeechSynthesis resume failed:`, nativeResumeError);
+          }
+        }
+        
+        // Strategy 3: Restart from pause position
+        if (!resumeSuccessful) {
+          console.log(`[${this.serviceType} TTS] All resume methods failed, restarting from pause position`);
           setTimeout(() => {
             this.restartFromPausePosition();
           }, 100); // Small delay to ensure state is stable
-          return; // Exit early since we're using fallback
+          return true; // Consider this successful for our purposes
         }
         
-        console.log(`[${this.serviceType} TTS] Resumed from position ${this.pausePosition}/${this.fullText.length} (${Math.round((this.pausePosition / this.fullText.length) * 100)}%)`);
+        console.log(`[${this.serviceType} TTS] Resume operation completed - state:`, {
+          isPlaying: this.isPlaying,
+          isPaused: this.isPaused,
+          resumeSuccessful: resumeSuccessful,
+          position: `${this.pausePosition}/${this.fullText.length} (${Math.round((this.pausePosition / this.fullText.length) * 100)}%)`
+        });
+        
+        return resumeSuccessful;
       } catch (error) {
-        console.warn(`[${this.serviceType} TTS] Resume failed:`, error);
+        console.warn(`[${this.serviceType} TTS] Resume failed completely:`, error);
         // If resume fails, try to restart from pause position
         console.log(`[${this.serviceType} TTS] Attempting to restart from pause position...`);
         setTimeout(() => {
           this.restartFromPausePosition();
         }, 100); // Small delay to ensure state is stable
+        return false;
       }
     } else {
-      console.log(`[${this.serviceType} TTS] Cannot resume - not paused or not initialized. State:`, {
+      console.log(`[${this.serviceType} TTS] Cannot resume - conditions not met:`, {
         isPaused: this.isPaused,
         isPlaying: this.isPlaying,
         isInitialized: this.isInitialized,
         actuallyPaused: actuallyPaused,
         isChunkedSpeech: this.isChunkedSpeech
       });
+      return false;
     }
   }
 
@@ -1266,6 +1364,16 @@ class TTSService {
     if (this.isInitialized) {
       try {
         console.log(`[${this.serviceType} TTS] Stopping TTS`);
+        
+        // Record stop time before clearing state
+        if (this.currentLessonId) {
+          this.recordTTSStopTime(
+            this.currentLessonId, 
+            this.isChunkedSpeech ? this.currentChunkIndex : null, 
+            'stop'
+          );
+        }
+        
         this.speech.cancel();
         this.isPlaying = false;
         this.isPaused = false;
@@ -1574,6 +1682,69 @@ class TTSService {
     }
     
     console.log(`[${this.serviceType} TTS] Force reset complete, service should be ready`);
+  }
+
+  // Record TTS stop time to backend for chunk timing optimization
+  async recordTTSStopTime(lessonId, chunkIndex = null, stopReason = 'manual') {
+    try {
+      const stopData = {
+        lessonId: lessonId,
+        serviceType: this.serviceType,
+        stopTime: Date.now(),
+        stopReason: stopReason,
+        chunkIndex: chunkIndex,
+        totalSpokenTime: this.totalSpokenTime,
+        pausePosition: this.pausePosition,
+        fullTextLength: this.fullText ? this.fullText.length : 0
+      };
+
+      console.log(`[${this.serviceType} TTS] Recording TTS stop time:`, stopData);
+
+      const response = await fetch('/api/tts/record-stop', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify(stopData)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`[${this.serviceType} TTS] TTS stop time recorded successfully:`, result);
+        return result;
+      } else {
+        console.warn(`[${this.serviceType} TTS] Failed to record TTS stop time:`, response.status);
+        return null;
+      }
+    } catch (error) {
+      console.warn(`[${this.serviceType} TTS] Error recording TTS stop time:`, error);
+      return null;
+    }
+  }
+
+  // Get optimal chunk timing from backend
+  async getOptimalChunkTiming(lessonId, chunkIndex) {
+    try {
+      const response = await fetch(`/api/tts/chunk-timing?lessonId=${lessonId}&chunkIndex=${chunkIndex}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        const timing = await response.json();
+        console.log(`[${this.serviceType} TTS] Retrieved optimal chunk timing:`, timing);
+        return timing;
+      } else {
+        console.log(`[${this.serviceType} TTS] No optimal timing found for chunk ${chunkIndex}`);
+        return null;
+      }
+    } catch (error) {
+      console.warn(`[${this.serviceType} TTS] Error getting chunk timing:`, error);
+      return null;
+    }
   }
 
   // Check if service is ready for new requests
