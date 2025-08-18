@@ -660,11 +660,8 @@ const PublicLessonView = ({
 
   const lessonContent = cleanAndCombineContent(lesson.content);
   
-  // Process the content for rendering
-  let fixedContent = lessonContent;
-  
   // Apply markdown fix before rendering - use bibliography-aware parsing
-  fixedContent = lessonContent.includes('## References') 
+  let fixedContent = lessonContent.includes('## References') 
     ? markdownService.parseWithBibliography(lessonContent)
     : fixMalformedMarkdown(lessonContent);
 
@@ -729,6 +726,21 @@ const PublicLessonView = ({
       finalReferences: finalReferences,
       willShowFooter: finalReferences && finalReferences.length > 0
     });
+  }
+
+  // Temporary test: Add a test reference if none exist (for debugging)
+  if (process.env.NODE_ENV === 'development' && (!finalReferences || finalReferences.length === 0)) {
+    finalReferences = [
+      {
+        number: '1',
+        citation: 'Test Reference - Encyclopaedia Britannica. (2024). *Academic Edition*. Encyclopaedia Britannica, Inc.'
+      },
+      {
+        number: '2', 
+        citation: 'Test Reference - Oxford University Press. (2012). *Oxford Classical Dictionary*. Oxford University Press.'
+      }
+    ];
+    console.log('[PublicLessonView] Added test references for debugging:', finalReferences);
   }
 
   return (
