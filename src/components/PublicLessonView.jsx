@@ -709,9 +709,15 @@ const PublicLessonView = ({
   }
   
   // Create academic references footer
-  const referencesFooter = academicReferences.length > 0 
-    ? academicReferencesService.createReferencesFooter(academicReferences)
-    : null;
+  let referencesFooter = null;
+  try {
+    if (academicReferences && academicReferences.length > 0) {
+      referencesFooter = academicReferencesService.createReferencesFooter(academicReferences);
+    }
+  } catch (error) {
+    console.warn('[PublicLessonView] Error creating references footer:', error);
+    referencesFooter = null;
+  }
 
   return (
     <div className="lesson-view bg-white rounded-lg shadow-sm overflow-hidden">
@@ -884,7 +890,7 @@ const PublicLessonView = ({
           </div>
           
                   {/* Academic References Footer */}
-        {referencesFooter && (
+        {referencesFooter && referencesFooter.references && (
           <AcademicReferencesFooter 
             references={referencesFooter.references}
             onCitationClick={handleCitationClick}
