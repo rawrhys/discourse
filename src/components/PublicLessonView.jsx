@@ -142,32 +142,32 @@ const PublicLessonView = ({
       try {
         const serviceStatus = publicTTSService.getStableStatus();
           
-        // Only update state if there's an actual meaningful change
-        const hasSignificantChange = (
-          serviceStatus.isPlaying !== ttsStatus.isPlaying || 
-          serviceStatus.isPaused !== ttsStatus.isPaused
-        );
+          // Only update state if there's an actual meaningful change
+          const hasSignificantChange = (
+            serviceStatus.isPlaying !== ttsStatus.isPlaying || 
+            serviceStatus.isPaused !== ttsStatus.isPaused
+          );
           
-        if (hasSignificantChange) {
-          // Clear any pending state update
-          if (ttsStateUpdateTimeoutRef.current) {
-            clearTimeout(ttsStateUpdateTimeoutRef.current);
-          }
+          if (hasSignificantChange) {
+            // Clear any pending state update
+            if (ttsStateUpdateTimeoutRef.current) {
+              clearTimeout(ttsStateUpdateTimeoutRef.current);
+            }
             
-          // Debounce the state update to prevent rapid changes
-          ttsStateUpdateTimeoutRef.current = setTimeout(() => {
-            console.log('[PublicLessonView] TTS state changed:', {
-              wasPlaying: ttsStatus.isPlaying,
-              wasPaused: ttsStatus.isPaused,
-              nowPlaying: serviceStatus.isPlaying,
-              nowPaused: serviceStatus.isPaused
-            });
+            // Debounce the state update to prevent rapid changes
+            ttsStateUpdateTimeoutRef.current = setTimeout(() => {
+              console.log('[PublicLessonView] TTS state changed:', {
+                wasPlaying: ttsStatus.isPlaying,
+                wasPaused: ttsStatus.isPaused,
+                nowPlaying: serviceStatus.isPlaying,
+                nowPaused: serviceStatus.isPaused
+              });
               
-            setTtsStatus(prev => ({
-              ...prev,
-              isPlaying: serviceStatus.isPlaying,
-              isPaused: serviceStatus.isPaused
-            }));
+              setTtsStatus(prev => ({
+                ...prev,
+                isPlaying: serviceStatus.isPlaying,
+                isPaused: serviceStatus.isPaused
+              }));
           }, 100); // Reduced debounce to 100ms for better responsiveness
         }
       } catch (error) {
@@ -605,7 +605,7 @@ const PublicLessonView = ({
       if (cleaned.trim().startsWith('{') && cleaned.trim().endsWith('}')) {
         try {
           // Replace smart quotes with standard quotes
-          cleaned = cleaned
+      cleaned = cleaned
             .replace(/"/g, '"')
             .replace(/"/g, '"')
             .replace(/"/g, '"')
@@ -900,135 +900,135 @@ const PublicLessonView = ({
           </div>
         </div>
         
-        <h1 className="text-3xl font-bold mb-2">{lesson.title}</h1>
-        {moduleTitle && (
-          <p className="text-blue-100 text-lg">{moduleTitle}</p>
-        )}
-        <div className="flex items-center space-x-4 mt-4 text-sm text-blue-100">
-          <span>Lesson {currentLessonIndex + 1} of {totalLessonsInModule}</span>
-          {lesson.quiz && lesson.quiz.length > 0 && (
-            <span className="flex items-center">
-              <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
-              </svg>
-              Quiz Available
-            </span>
+                 <h1 className="text-3xl font-bold mb-2">{lesson.title}</h1>
+         {moduleTitle && (
+           <p className="text-blue-100 text-lg">{moduleTitle}</p>
+         )}
+         <div className="flex items-center space-x-4 mt-4 text-sm text-blue-100">
+           <span>Lesson {currentLessonIndex + 1} of {totalLessonsInModule}</span>
+           {lesson.quiz && lesson.quiz.length > 0 && (
+             <span className="flex items-center">
+               <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                 <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+               </svg>
+               Quiz Available
+             </span>
+           )}
+         </div>
+       </div>
+
+               {/* Tab Navigation */}
+        <div className="flex space-x-2 mb-4 p-6 pb-0">
+          <button
+            onClick={() => handleTabChange('content')}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              view === 'content' 
+                ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            <i className="fas fa-book mr-2"></i>Content
+          </button>
+          <button
+            onClick={() => handleTabChange('flashcards')}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              view === 'flashcards'
+                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            <i className="fas fa-clone mr-2"></i>Flashcards {flashcardData?.length ? `(${flashcardData.length})` : ''}
+          </button>
+          <button
+            onClick={ttsStatus.isPlaying ? handlePauseResumeAudio : ttsStatus.isPaused ? handlePauseResumeAudio : handleStartAudio}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+              ttsStatus.isPlaying || ttsStatus.isPaused
+                ? 'bg-green-600 text-white hover:bg-green-700'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
+            title={ttsStatus.isPlaying ? 'Pause reading' : ttsStatus.isPaused ? 'Resume reading' : 'Start reading aloud'}
+          >
+            <i className={`mr-2 ${ttsStatus.isPlaying ? 'fas fa-pause' : ttsStatus.isPaused ? 'fas fa-play' : 'fas fa-volume-up'}`}></i>
+            {ttsStatus.isPlaying ? 'Pause' : ttsStatus.isPaused ? 'Resume' : 'Read Aloud'}
+          </button>
+          {(ttsStatus.isPlaying || ttsStatus.isPaused) && (
+            <button
+              onClick={handleStopAudio}
+              className="px-3 py-2 text-sm font-medium rounded-md transition-colors bg-red-600 text-white hover:bg-red-700"
+              title="Stop reading"
+            >
+              <i className="fas fa-stop mr-2"></i>
+              Stop
+            </button>
           )}
         </div>
-      </div>
 
-      {/* Tab Navigation */}
-      <div className="flex space-x-2 mb-4 p-6 pb-0">
-        <button
-          onClick={() => handleTabChange('content')}
-          className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-            view === 'content' 
-              ? 'bg-blue-600 text-white hover:bg-blue-700' 
-              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-          }`}
-        >
-          <i className="fas fa-book mr-2"></i>Content
-        </button>
-        <button
-          onClick={() => handleTabChange('flashcards')}
-          className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-            view === 'flashcards'
-              ? 'bg-blue-600 text-white hover:bg-blue-700'
-              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-          }`}
-        >
-          <i className="fas fa-clone mr-2"></i>Flashcards {flashcardData?.length ? `(${flashcardData.length})` : ''}
-        </button>
-        <button
-          onClick={ttsStatus.isPlaying ? handlePauseResumeAudio : ttsStatus.isPaused ? handlePauseResumeAudio : handleStartAudio}
-          className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-            ttsStatus.isPlaying || ttsStatus.isPaused
-              ? 'bg-green-600 text-white hover:bg-green-700'
-              : 'bg-blue-600 text-white hover:bg-blue-700'
-          }`}
-          title={ttsStatus.isPlaying ? 'Pause reading' : ttsStatus.isPaused ? 'Resume reading' : 'Start reading aloud'}
-        >
-          <i className={`mr-2 ${ttsStatus.isPlaying ? 'fas fa-pause' : ttsStatus.isPaused ? 'fas fa-play' : 'fas fa-volume-up'}`}></i>
-          {ttsStatus.isPlaying ? 'Pause' : ttsStatus.isPaused ? 'Resume' : 'Read Aloud'}
-        </button>
-        {(ttsStatus.isPlaying || ttsStatus.isPaused) && (
-          <button
-            onClick={handleStopAudio}
-            className="px-3 py-2 text-sm font-medium rounded-md transition-colors bg-red-600 text-white hover:bg-red-700"
-            title="Stop reading"
-          >
-            <i className="fas fa-stop mr-2"></i>
-            Stop
-          </button>
-        )}
-      </div>
+       {/* Content View */}
+       {view === 'content' && (
+         <div className="p-6">
+           {/* Image Section - Above content like private LessonView */}
+           {imageLoading && (
+             <div className="lesson-image-container loading mb-6">
+               <div className="image-loading">Loading image...</div>
+             </div>
+           )}
+           
+           {imageData && imageData.url && !imageLoading && (
+             <figure className="lesson-image-container mb-6" style={{ maxWidth: 700, margin: '0 auto' }}>
+               <img
+                 src={imageData.url}
+                 alt={lesson?.title || 'Lesson illustration'}
+                 className="lesson-image"
+                 style={{ width: '100%', height: 'auto' }}
+                 onError={(e) => {
+                   e.target.style.display = 'none';
+                 }}
+               />
+               <figcaption className="image-description" style={{ 
+                 textAlign: 'center', 
+                 marginTop: '8px', 
+                 fontSize: '14px', 
+                 color: '#000',
+                 fontStyle: 'italic'
+               }}>
+                 {(() => {
+                   const { uploader, attribution } = imageData || {};
+                   // Prefer explicit uploader if present; strip leading 'User:'
+                   if (typeof uploader === 'string' && uploader.trim()) {
+                     return uploader.replace(/^user:\s*/i, '').trim();
+                   }
+                   // Fallback: derive from attribution string
+                   if (typeof attribution === 'string') {
+                     const withoutHtml = attribution.replace(/<[^>]*>/g, '');
+                     const byIdx = withoutHtml.toLowerCase().indexOf('image by ');
+                     if (byIdx !== -1) {
+                       const after = withoutHtml.substring(byIdx + 'image by '.length);
+                       const viaIdx = after.toLowerCase().indexOf(' via');
+                       const extracted = (viaIdx !== -1 ? after.substring(0, viaIdx) : after).trim();
+                       return extracted.replace(/^user:\s*/i, '').trim();
+                     }
+                   }
+                   return '';
+                 })()}
+                 {imageData?.pageURL ? (
+                   <>
+                     <span style={{ margin: '0 6px' }}>·</span>
+                     <a href={imageData.pageURL} target="_blank" rel="noopener noreferrer" style={{ color: '#2563eb', fontStyle: 'normal' }}>
+                       Source
+                     </a>
+                   </>
+                 ) : null}
+               </figcaption>
+             </figure>
+           )}
 
-      {/* Content View */}
-      {view === 'content' && (
-        <div className="p-6">
-          {/* Image Section - Above content like private LessonView */}
-          {imageLoading && (
-            <div className="lesson-image-container loading mb-6">
-              <div className="image-loading">Loading image...</div>
-            </div>
-          )}
-          
-          {imageData && imageData.url && !imageLoading && (
-            <figure className="lesson-image-container mb-6" style={{ maxWidth: 700, margin: '0 auto' }}>
-              <img
-                src={imageData.url}
-                alt={lesson?.title || 'Lesson illustration'}
-                className="lesson-image"
-                style={{ width: '100%', height: 'auto' }}
-                onError={(e) => {
-                  e.target.style.display = 'none';
-                }}
-              />
-              <figcaption className="image-description" style={{ 
-                textAlign: 'center', 
-                marginTop: '8px', 
-                fontSize: '14px', 
-                color: '#000',
-                fontStyle: 'italic'
-              }}>
-                {(() => {
-                  const { uploader, attribution } = imageData || {};
-                  // Prefer explicit uploader if present; strip leading 'User:'
-                  if (typeof uploader === 'string' && uploader.trim()) {
-                    return uploader.replace(/^user:\s*/i, '').trim();
-                  }
-                  // Fallback: derive from attribution string
-                  if (typeof attribution === 'string') {
-                    const withoutHtml = attribution.replace(/<[^>]*>/g, '');
-                    const byIdx = withoutHtml.toLowerCase().indexOf('image by ');
-                    if (byIdx !== -1) {
-                      const after = withoutHtml.substring(byIdx + 'image by '.length);
-                      const viaIdx = after.toLowerCase().indexOf(' via');
-                      const extracted = (viaIdx !== -1 ? after.substring(0, viaIdx) : after).trim();
-                      return extracted.replace(/^user:\s*/i, '').trim();
-                    }
-                  }
-                  return '';
-                })()}
-                {imageData?.pageURL ? (
-                  <>
-                    <span style={{ margin: '0 6px' }}>·</span>
-                    <a href={imageData.pageURL} target="_blank" rel="noopener noreferrer" style={{ color: '#2563eb', fontStyle: 'normal' }}>
-                      Source
-                    </a>
-                  </>
-                ) : null}
-              </figcaption>
-            </figure>
-          )}
-
-          {/* Lesson Content */}
-          <div className="lesson-content max-w-none">
-            <div 
-              className="markdown-body prose max-w-none"
+           {/* Lesson Content */}
+           <div className="lesson-content max-w-none">
+             <div 
+               className="markdown-body prose max-w-none"
               dangerouslySetInnerHTML={{ __html: parsedContent }}
-            />
-          </div>
+             />
+           </div>
           
                   {/* Academic References Footer */}
         {referencesFooter && referencesFooter.references && (
@@ -1037,15 +1037,15 @@ const PublicLessonView = ({
             onCitationClick={handleCitationClick}
           />
         )}
-        </div>
-      )}
+         </div>
+       )}
 
-      {/* Flashcards View */}
-      {view === 'flashcards' && (
-        <div className="p-6">
-          {renderFlashcards()}
-        </div>
-      )}
+       {/* Flashcards View */}
+       {view === 'flashcards' && (
+         <div className="p-6">
+           {renderFlashcards()}
+         </div>
+       )}
 
       {/* Success/Fail Messages */}
       {showSuccessMessage && (

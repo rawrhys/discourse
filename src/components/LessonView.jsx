@@ -18,11 +18,14 @@ import api from '../services/api.js';
 import quizPersistenceService from '../services/QuizPersistenceService';
 import markdownService from '../services/MarkdownService';
 
-// Import test utility for development
+// Import test utilities for development
 if (process.env.NODE_ENV === 'development') {
   import('../utils/testReferences.js').then(module => {
     module.testReferencesFormat();
     module.testBibliographyFormatting();
+  });
+  import('../utils/testCitationRemoval.js').then(module => {
+    module.testCitationRemoval();
   });
 }
 
@@ -261,10 +264,13 @@ const Content = memo(({ content, bibliography, lessonTitle, courseSubject }) => 
     }
   }
 
-  // Apply markdown fix before rendering - use bibliography-aware parsing
-  let fixedContent = contentStr.includes('## References') 
-    ? markdownService.parseWithBibliography(contentStr)
-    : fixMalformedMarkdown(contentStr);
+  // Remove in-text citations first, then apply markdown fix
+  let fixedContent = markdownService.removeInTextCitations(contentStr);
+  
+  // Apply markdown fix after citation removal - use bibliography-aware parsing
+  fixedContent = fixedContent.includes('## References') 
+    ? markdownService.parseWithBibliography(fixedContent)
+    : fixMalformedMarkdown(fixedContent);
 
   // Frontend-level fix for malformed References sections
   fixedContent = fixMalformedReferencesAtFrontend(fixedContent);
@@ -701,12 +707,12 @@ const LessonView = ({
               newPaused: serviceStatus.isPaused
             });
 
-            setTtsStatus(prev => ({
-              ...prev,
-              isPlaying: serviceStatus.isPlaying,
-              isPaused: serviceStatus.isPaused,
-              isSupported: serviceStatus.isSupported
-            }));
+      setTtsStatus(prev => ({
+        ...prev,
+        isPlaying: serviceStatus.isPlaying,
+        isPaused: serviceStatus.isPaused,
+        isSupported: serviceStatus.isSupported
+      }));
           }, 100);
         }
       } catch (error) {

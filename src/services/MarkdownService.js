@@ -244,6 +244,53 @@ class MarkdownService {
     return this.parse(processedContent);
   }
 
+  // Remove in-text citations and ensure proper bibliography formatting
+  removeInTextCitations(content) {
+    if (!content) return content;
+    
+    let processedContent = content;
+    
+    // Split content into main content and references section
+    const parts = processedContent.split(/## References/);
+    let mainContent = parts[0];
+    let referencesSection = parts.length > 1 ? '## References' + parts[1] : '';
+    
+    // Remove in-text citations from main content only
+    mainContent = mainContent
+      // Remove citations like [1], [2], [3], [4] from the main content
+      .replace(/\[(\d+)\]/g, '')
+      // Clean up any double spaces that might result from citation removal
+      .replace(/\s{2,}/g, ' ')
+      // Clean up any periods that might be left hanging
+      .replace(/\.\s*\./g, '.')
+      // Clean up any commas that might be left hanging
+      .replace(/,\s*,/g, ',')
+      // Clean up any spaces before punctuation
+      .replace(/\s+([.,;:!?])/g, '$1')
+      // Clean up any spaces after opening parentheses
+      .replace(/\(\s+/g, '(')
+      // Clean up any spaces before closing parentheses
+      .replace(/\s+\)/g, ')');
+    
+    // Recombine content
+    processedContent = referencesSection ? mainContent + '\n\n' + referencesSection : mainContent;
+    
+    // Ensure the References section is properly formatted
+    if (processedContent.includes('## References')) {
+      processedContent = processedContent
+        // Ensure proper spacing after References header
+        .replace(/## References\s*\[/g, '\n## References\n\n[')
+        // Ensure each citation is on its own line
+        .replace(/\]\.\s*\[(\d+)\]/g, '].\n\n[$1]')
+        // Add proper line breaks between citations
+        .replace(/\.\s*\[(\d+)\]/g, '.\n\n[$1]')
+        // Clean up multiple line breaks
+        .replace(/\n{3,}/g, '\n\n');
+    }
+    
+    return processedContent;
+  }
+
   // Get performance metrics
   getPerformanceMetrics() {
     return {
