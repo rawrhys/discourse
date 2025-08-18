@@ -38,11 +38,11 @@ const CaptchaChallenge = ({ onSuccess, onCancel, challengeData, challengeKey }) 
         
         const verifyUrl = `/api/public/courses/${courseId}?sessionId=${sessionId}&challenge=${challenge}&response=${response}&challengeKey=${challengeKey}`;
         
-        const response = await fetch(verifyUrl);
-        if (response.ok) {
+        const fetchResponse = await fetch(verifyUrl);
+        if (fetchResponse.ok) {
           onSuccess();
         } else {
-          const errorData = await response.json();
+          const errorData = await fetchResponse.json();
           setError(errorData.message || 'Incorrect answer. Please try again.');
           // Request new challenge from server
           onCancel(); // This will trigger a new request

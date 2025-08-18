@@ -173,6 +173,8 @@ export const captchaChallenge = (req, res, next) => {
   const challenge = req.query.challenge;
   const response = req.query.response;
   
+  console.log('[CAPTCHA] Processing request:', { sessionId, challenge: !!challenge, response: !!response });
+  
   // Generate simple math challenge for every public access
   if (!challenge) {
     console.log('[CAPTCHA] Generating new challenge for public course access');
@@ -181,13 +183,14 @@ export const captchaChallenge = (req, res, next) => {
     const challengeData = `${num1}+${num2}`;
     const expectedResponse = num1 + num2;
     
-    // Store challenge in memory with unique key for each request
-    const challengeKey = `${sessionId}_${Date.now()}`;
+    // Generate a unique challenge key even if no sessionId exists yet
+    const uniqueId = sessionId || `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const challengeKey = `${uniqueId}_${Date.now()}`;
     captchaChallenges.set(challengeKey, {
       challenge: challengeData,
       expectedResponse: expectedResponse,
       timestamp: Date.now(),
-      sessionId: sessionId
+      sessionId: sessionId || null
     });
     
     console.log('[CAPTCHA] Returning CAPTCHA challenge:', { challengeData, challengeKey });
@@ -203,6 +206,7 @@ export const captchaChallenge = (req, res, next) => {
   const challengeKey = req.query.challengeKey;
   const storedChallenge = captchaChallenges.get(challengeKey);
   if (!storedChallenge) {
+    console.log('[CAPTCHA] Invalid challenge key:', challengeKey);
     return res.status(400).json({
       error: 'Invalid challenge session'
     });
