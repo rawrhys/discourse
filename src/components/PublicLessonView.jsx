@@ -140,38 +140,44 @@ const PublicLessonView = ({
       try {
         const serviceStatus = publicTTSService.getStableStatus();
           
-          // Only update state if there's an actual meaningful change
-          const hasSignificantChange = (
-            serviceStatus.isPlaying !== ttsStatus.isPlaying || 
-            serviceStatus.isPaused !== ttsStatus.isPaused
-          );
+        // Only update state if there's an actual meaningful change
+        const hasSignificantChange = (
+          serviceStatus.isPlaying !== ttsStatus.isPlaying || 
+          serviceStatus.isPaused !== ttsStatus.isPaused
+        );
           
-          if (hasSignificantChange) {
-            // Clear any pending state update
-            if (ttsStateUpdateTimeoutRef.current) {
-              clearTimeout(ttsStateUpdateTimeoutRef.current);
-            }
+        if (hasSignificantChange) {
+          // Clear any pending state update
+          if (ttsStateUpdateTimeoutRef.current) {
+            clearTimeout(ttsStateUpdateTimeoutRef.current);
+          }
             
-            // Debounce the state update to prevent rapid changes
-            ttsStateUpdateTimeoutRef.current = setTimeout(() => {
-              console.log('[PublicLessonView] TTS state changed:', {
-                wasPlaying: ttsStatus.isPlaying,
-                wasPaused: ttsStatus.isPaused,
-                nowPlaying: serviceStatus.isPlaying,
-                nowPaused: serviceStatus.isPaused
-              });
+          // Debounce the state update to prevent rapid changes
+          ttsStateUpdateTimeoutRef.current = setTimeout(() => {
+            console.log('[PublicLessonView] TTS state changed:', {
+              wasPlaying: ttsStatus.isPlaying,
+              wasPaused: ttsStatus.isPaused,
+              nowPlaying: serviceStatus.isPlaying,
+              nowPaused: serviceStatus.isPaused
+            });
               
-              setTtsStatus(prev => ({
-                ...prev,
-                isPlaying: serviceStatus.isPlaying,
-                isPaused: serviceStatus.isPaused
-              }));
-            }, 500); // Reduced debounce to 500ms for better responsiveness
+            setTtsStatus(prev => ({
+              ...prev,
+              isPlaying: serviceStatus.isPlaying,
+              isPaused: serviceStatus.isPaused
+            }));
+          }, 100); // Reduced debounce to 100ms for better responsiveness
         }
       } catch (error) {
         console.warn('[PublicLessonView] TTS state sync error:', error);
+        // If sync fails, reset to stopped state
+        setTtsStatus(prev => ({ 
+          ...prev, 
+          isPlaying: false, 
+          isPaused: false 
+        }));
       }
-    }, 5000); // Increased to 5 seconds to reduce rapid changes
+    }, 1000); // Reduced to 1 second for more responsive state updates
 
     return () => {
       clearInterval(interval);
@@ -179,7 +185,7 @@ const PublicLessonView = ({
         clearTimeout(ttsStateUpdateTimeoutRef.current);
       }
     };
-  }, []); // Removed dependencies to prevent effect recreation
+  }, [ttsStatus.isPlaying, ttsStatus.isPaused]); // Added dependencies back for proper updates
 
   // Handle image loading for public courses (simplified)
   useEffect(() => {
@@ -240,10 +246,18 @@ const PublicLessonView = ({
   useEffect(() => {
     return () => {
       try {
+        console.log('[PublicLessonView] Component unmounting, cleaning up TTS...');
         publicTTSService.stop();
+        publicTTSService.reset();
         console.log('[PublicLessonView] Cleaned up TTS service on unmount');
       } catch (error) {
         console.warn('[PublicLessonView] Error cleaning up TTS service:', error);
+        // Force reset even if stop fails
+        try {
+          publicTTSService.reset();
+        } catch (resetError) {
+          console.warn('[PublicLessonView] Error resetting TTS service:', resetError);
+        }
       }
       
       // Clear any pending timeouts
@@ -356,13 +370,43 @@ const PublicLessonView = ({
     // Add a small delay to prevent rapid button clicks
     await new Promise(resolve => setTimeout(resolve, 100));
     
+    console.log('[PublicLessonView] handleStopAudio called, stopping TTS...');
+    
     try {
-      publicTTSService.stop();
+      // Stop the TTS service
+      await publicTTSService.stop();
+      console.log('[PublicLessonView] TTS stop completed successfully');
+      
+      // Force reset the service state
+      publicTTSService.reset();
+      console.log('[PublicLessonView] TTS service reset completed');
+      
+      // Always reset state when stopping
+      setTtsStatus(prev => ({ 
+        ...prev, 
+        isPlaying: false, 
+        isPaused: false 
+      }));
+      
+      console.log('[PublicLessonView] TTS state reset to stopped');
     } catch (error) {
       console.warn('[PublicLessonView] TTS stop error:', error);
+      
+      // Even if stop fails, try to reset the service
+      try {
+        publicTTSService.reset();
+        console.log('[PublicLessonView] TTS service reset after stop error');
+      } catch (resetError) {
+        console.warn('[PublicLessonView] TTS reset error:', resetError);
+      }
+      
+      // Always reset state when stopping, even on error
+      setTtsStatus(prev => ({ 
+        ...prev, 
+        isPlaying: false, 
+        isPaused: false 
+      }));
     }
-    // Always reset state when stopping
-    setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
   }, []);
 
   const handlePauseResumeAudio = useCallback(async () => {
