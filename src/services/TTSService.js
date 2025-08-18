@@ -1446,8 +1446,9 @@ class TTSService {
           this.restartFromPausePosition(pauseData);
         }, 100); // Small delay to ensure state is stable
         return true; // Consider this successful for our purposes
-        
-      } catch (error) {
+      }
+      
+    } catch (error) {
         console.warn(`[${this.serviceType} TTS] Resume failed completely:`, error);
         // If resume fails, try to restart from pause position
         console.log(`[${this.serviceType} TTS] Attempting to restart from pause position...`);
