@@ -155,6 +155,10 @@ class TTSService {
     this.initializationAttempts = 0;
     this.maxInitAttempts = 3;
     
+    // Add flags for better error handling
+    this.isStoppingIntentionally = false; // Track if we're stopping intentionally
+    this.isRetrying = false; // Track if we're in a retry cycle
+    
     // Browser compatibility check
     this.browserSupport = this.checkBrowserSupport();
     
@@ -673,6 +677,12 @@ class TTSService {
       return;
     }
     
+    // Prevent starting if we're stopping intentionally
+    if (this.isStoppingIntentionally) {
+      console.warn(`[${this.serviceType} TTS] Service is stopping intentionally, ignoring speak request`);
+      return;
+    }
+    
     // Check if service is properly initialized
     if (!this.isInitialized || !this.speech) {
       console.warn(`[${this.serviceType} TTS] Service not properly initialized, attempting to reinitialize`);
@@ -834,6 +844,14 @@ class TTSService {
                 this.isPlaying = false;
                 this.isPaused = false;
                 
+                // Check if we're stopping intentionally
+                if (this.isStoppingIntentionally) {
+                  console.log(`[${this.serviceType} TTS] Promise rejected due to intentional stop, not counting as error`);
+                  ttsCoordinator.releaseTTS(this.serviceId);
+                  resolve(); // Resolve gracefully for intentional stops
+                  return;
+                }
+                
                 const errorType = this.categorizeError(error);
                 
                 // Handle interrupted errors more gracefully
@@ -848,16 +866,18 @@ class TTSService {
                 
                 if (this.errorCount < this.maxRetries) {
                   console.log(`[${this.serviceType} TTS] Retrying after promise rejection... (${this.errorCount}/${this.maxRetries})`);
+                  this.isRetrying = true;
                   setTimeout(() => {
-                    // Only retry if we have valid text to speak
-                    if (this.fullText && this.fullText.trim().length > 5) {
+                    // Only retry if we have valid text to speak and we're not stopping intentionally
+                    if (this.fullText && this.fullText.trim().length > 5 && !this.isStoppingIntentionally) {
                       console.log(`[${this.serviceType} TTS] Retrying with text length: ${this.fullText.trim().length}`);
                       this.speak(this.fullText).then(resolve);
                     } else {
-                      console.warn(`[${this.serviceType} TTS] No valid text for retry (fullText: ${this.fullText ? this.fullText.length : 'undefined'}), resolving gracefully`);
+                      console.warn(`[${this.serviceType} TTS] No valid text for retry or stopping intentionally (fullText: ${this.fullText ? this.fullText.length : 'undefined'}, isStopping: ${this.isStoppingIntentionally}), resolving gracefully`);
                       ttsCoordinator.releaseTTS(this.serviceId);
                       resolve();
                     }
+                    this.isRetrying = false;
                   }, 1000);
                 } else {
                   console.log(`[${this.serviceType} TTS] Max retries exceeded after promise rejection`);
@@ -871,20 +891,31 @@ class TTSService {
           console.warn(`[${this.serviceType} TTS] Speak method error:`, speakError);
           this.isPlaying = false;
           this.isPaused = false;
+          
+          // Check if we're stopping intentionally
+          if (this.isStoppingIntentionally) {
+            console.log(`[${this.serviceType} TTS] Speak error due to intentional stop, not counting as error`);
+            ttsCoordinator.releaseTTS(this.serviceId);
+            resolve(); // Resolve gracefully for intentional stops
+            return;
+          }
+          
           this.errorCount++;
           
           if (this.errorCount < this.maxRetries) {
             console.log(`[${this.serviceType} TTS] Retrying after speak error... (${this.errorCount}/${this.maxRetries})`);
+            this.isRetrying = true;
             setTimeout(() => {
-              // Only retry if we have valid text to speak
-              if (this.fullText && this.fullText.trim().length > 5) {
+              // Only retry if we have valid text to speak and we're not stopping intentionally
+              if (this.fullText && this.fullText.trim().length > 5 && !this.isStoppingIntentionally) {
                 console.log(`[${this.serviceType} TTS] Retrying with text length: ${this.fullText.trim().length}`);
                 this.speak(this.fullText).then(resolve);
               } else {
-                console.warn(`[${this.serviceType} TTS] No valid text for retry (fullText: ${this.fullText ? this.fullText.length : 'undefined'}), resolving gracefully`);
+                console.warn(`[${this.serviceType} TTS] No valid text for retry or stopping intentionally (fullText: ${this.fullText ? this.fullText.length : 'undefined'}, isStopping: ${this.isStoppingIntentionally}), resolving gracefully`);
                 ttsCoordinator.releaseTTS(this.serviceId);
                 resolve();
               }
+              this.isRetrying = false;
             }, 1000);
           } else {
             console.log(`[${this.serviceType} TTS] Max retries exceeded after speak error`);
@@ -913,20 +944,30 @@ class TTSService {
       console.warn(`[${this.serviceType} TTS] Error in speak method:`, error);
       this.isPlaying = false;
       this.isPaused = false;
+      
+      // Check if we're stopping intentionally
+      if (this.isStoppingIntentionally) {
+        console.log(`[${this.serviceType} TTS] Speak method error due to intentional stop, not counting as error`);
+        ttsCoordinator.releaseTTS(this.serviceId);
+        return;
+      }
+      
       this.errorCount++;
       
       // Handle the error gracefully without throwing
       if (this.errorCount < this.maxRetries) {
         console.log(`[${this.serviceType} TTS] Retrying after catch error... (${this.errorCount}/${this.maxRetries})`);
+        this.isRetrying = true;
         setTimeout(() => {
-          // Only retry if we have valid text to speak
-          if (this.fullText && this.fullText.trim().length > 5) {
+          // Only retry if we have valid text to speak and we're not stopping intentionally
+          if (this.fullText && this.fullText.trim().length > 5 && !this.isStoppingIntentionally) {
             console.log(`[${this.serviceType} TTS] Retrying with text length: ${this.fullText.trim().length}`);
             this.speak(this.fullText);
           } else {
-            console.warn(`[${this.serviceType} TTS] No valid text for retry (fullText: ${this.fullText ? this.fullText.length : 'undefined'}), releasing TTS`);
+            console.warn(`[${this.serviceType} TTS] No valid text for retry or stopping intentionally (fullText: ${this.fullText ? this.fullText.length : 'undefined'}, isStopping: ${this.isStoppingIntentionally}), releasing TTS`);
             ttsCoordinator.releaseTTS(this.serviceId);
           }
+          this.isRetrying = false;
         }, 1000);
       } else {
         console.log(`[${this.serviceType} TTS] Max retries exceeded in catch block`);
@@ -967,6 +1008,7 @@ class TTSService {
   stop() {
     if (this.isInitialized) {
       try {
+        this.isStoppingIntentionally = true; // Mark that we're stopping intentionally
         this.speech.cancel();
         this.isPlaying = false;
         this.isPaused = false;
@@ -980,6 +1022,11 @@ class TTSService {
         console.log(`[${this.serviceType} TTS] Stopped`);
       } catch (error) {
         console.warn(`[${this.serviceType} TTS] Stop failed:`, error);
+      } finally {
+        // Reset the flag after a short delay to allow error handling to complete
+        setTimeout(() => {
+          this.isStoppingIntentionally = false;
+        }, 100);
       }
     }
   }
@@ -988,6 +1035,7 @@ class TTSService {
   stopAndClear() {
     if (this.isInitialized) {
       try {
+        this.isStoppingIntentionally = true; // Mark that we're stopping intentionally
         this.speech.cancel();
         this.isPlaying = false;
         this.isPaused = false;
@@ -1001,6 +1049,11 @@ class TTSService {
         console.log(`[${this.serviceType} TTS] Stopped and cleared`);
       } catch (error) {
         console.warn(`[${this.serviceType} TTS] Stop and clear failed:`, error);
+      } finally {
+        // Reset the flag after a short delay to allow error handling to complete
+        setTimeout(() => {
+          this.isStoppingIntentionally = false;
+        }, 100);
       }
     }
   }

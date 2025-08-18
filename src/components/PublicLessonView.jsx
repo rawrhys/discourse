@@ -143,10 +143,11 @@ const PublicLessonView = ({
       setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
     }
     
-    // Clear the flag after a short delay to allow TTS to settle
+    // Clear the flag after a longer delay to ensure TTS has fully settled
     setTimeout(() => {
       isLessonChanging.current = false;
-    }, 500);
+      console.log('[PublicLessonView] Lesson change flag cleared, TTS can resume');
+    }, 1000); // Increased delay to 1 second
   }, [lesson?.id, ttsStatus.isPlaying, ttsStatus.isPaused]);
 
   // Sync TTS state with service state periodically
