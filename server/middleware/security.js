@@ -82,8 +82,9 @@ export const publicCourseSlowDown = slowDown({
 
 // Bot detection middleware
 export const botDetection = (req, res, next) => {
-  const userAgent = req.get('User-Agent') || '';
-  const ip = req.ip;
+  try {
+    const userAgent = req.get('User-Agent') || '';
+    const ip = req.ip || 'unknown';
   
   // Check for bot patterns in User-Agent
   const isBot = BOT_PATTERNS.some(pattern => pattern.test(userAgent));
@@ -115,7 +116,7 @@ export const botDetection = (req, res, next) => {
   
   // Calculate requests per second
   const timeSpan = (requestTime - botData.firstRequest) / 1000;
-  const requestsPerSecond = botData.requestCount / timeSpan;
+  const requestsPerSecond = timeSpan > 0 ? botData.requestCount / timeSpan : 0;
   
   // Bot detection criteria
   const botScore = (isBot ? 3 : 0) +
@@ -152,14 +153,21 @@ export const botDetection = (req, res, next) => {
   req.botScore = botScore;
   
   next();
+  } catch (error) {
+    console.error('[BOT_DETECTION] Error in bot detection middleware:', error);
+    // Continue without bot detection if there's an error
+    req.botScore = 0;
+    next();
+  }
 };
 
 // CAPTCHA verification middleware (simple challenge-response)
 export const captchaChallenge = (req, res, next) => {
-  // Skip for authenticated users
-  if (req.user && req.user.id) {
-    return next();
-  }
+  try {
+    // Skip for authenticated users
+    if (req.user && req.user.id) {
+      return next();
+    }
   
   const sessionId = req.query.sessionId;
   const challenge = req.query.challenge;
@@ -217,6 +225,11 @@ export const captchaChallenge = (req, res, next) => {
   captchaChallenges.delete(challengeKey);
   
   next();
+  } catch (error) {
+    console.error('[CAPTCHA] Error in CAPTCHA middleware:', error);
+    // Continue without CAPTCHA if there's an error
+    next();
+  }
 };
 
 // Session verification middleware - Always require CAPTCHA for public access
