@@ -26,14 +26,15 @@ import { compressImage, getOptimalFormat, getFileExtension, formatFileSize } fro
 import sharp from 'sharp';
 import imageProxyHandler from './server/utils/proxy.js';
 import enhancedImageProxy from './server/utils/enhancedImageProxy.js';
-import { 
-  publicCourseRateLimit, 
-  publicCourseSlowDown, 
-  botDetection, 
-  captchaChallenge, 
-  verifySession, 
-  securityHeaders, 
-  securityLogging 
+import {
+  publicCourseRateLimit,
+  publicCourseSlowDown,
+  botDetection,
+  captchaChallenge,
+  verifySession,
+  checkCaptcha,
+  securityHeaders,
+  securityLogging
 } from './server/middleware/security.js';
 // import { isValidFlashcardTerm } from './src/utils/flashcardUtils.js';
 
@@ -3784,7 +3785,6 @@ app.get('/api/public/courses/:courseId',
   botDetection,
   publicCourseRateLimit,
   publicCourseSlowDown,
-  verifySession,
   async (req, res) => {
   try {
     const { courseId } = req.params;
@@ -3816,7 +3816,7 @@ app.get('/api/public/courses/:courseId',
       });
     }
     
-    // Use enhanced session management for session isolation
+    // Create session ID first, then check CAPTCHA
     const sessionIdToUse = publicCourseSessionService.restoreOrCreateSession(normalizedId, sessionId);
     
     console.log(`[API] Session management result:`, {
@@ -3824,6 +3824,12 @@ app.get('/api/public/courses/:courseId',
       finalSessionId: sessionIdToUse,
       isNewSession: !sessionId || sessionId !== sessionIdToUse
     });
+    
+    // Now check CAPTCHA with the session ID available
+    const captchaResult = await checkCaptcha(req, res, sessionIdToUse);
+    if (captchaResult.requiresCaptcha) {
+      return res.json(captchaResult);
+    }
     
     console.log(`[API] Returning public course data:`, {
       id: course.id,
@@ -3850,7 +3856,6 @@ app.post('/api/public/courses/:courseId/quiz-score',
   botDetection,
   publicCourseRateLimit,
   publicCourseSlowDown,
-  verifySession,
   async (req, res) => {
   try {
     const { courseId } = req.params;
@@ -3917,7 +3922,6 @@ app.get('/api/public/courses/:courseId/quiz-score/:lessonId',
   botDetection,
   publicCourseRateLimit,
   publicCourseSlowDown,
-  verifySession,
   async (req, res) => {
   try {
     const { courseId, lessonId } = req.params;
@@ -3956,7 +3960,6 @@ app.post('/api/public/courses/:courseId/session',
   botDetection,
   publicCourseRateLimit,
   publicCourseSlowDown,
-  verifySession,
   async (req, res) => {
   try {
     const { courseId } = req.params;
@@ -3990,7 +3993,6 @@ app.get('/api/public/courses/:courseId/quiz-scores',
   botDetection,
   publicCourseRateLimit,
   publicCourseSlowDown,
-  verifySession,
   async (req, res) => {
   try {
     const { courseId } = req.params;

@@ -241,6 +241,84 @@ export const captchaChallenge = (req, res, next) => {
   }
 };
 
+// Check CAPTCHA with session ID already available
+export const checkCaptcha = async (req, res, sessionId) => {
+  try {
+    // Skip for authenticated users
+    if (req.user && req.user.id) {
+      return { requiresCaptcha: false };
+    }
+  
+    const challenge = req.query.challenge;
+    const response = req.query.response;
+    
+    console.log('[CAPTCHA] Processing request:', { sessionId, challenge: !!challenge, response: !!response });
+    
+    // Generate simple math challenge for every public access
+    if (!challenge) {
+      console.log('[CAPTCHA] Generating new challenge for public course access');
+      const num1 = Math.floor(Math.random() * 10) + 1;
+      const num2 = Math.floor(Math.random() * 10) + 1;
+      const challengeData = `${num1}+${num2}`;
+      const expectedResponse = num1 + num2;
+      
+      // Use the provided session ID for challenge key
+      const challengeKey = `${sessionId}_${Date.now()}`;
+      captchaChallenges.set(challengeKey, {
+        challenge: challengeData,
+        expectedResponse: expectedResponse,
+        timestamp: Date.now(),
+        sessionId: sessionId
+      });
+      
+      console.log('[CAPTCHA] Returning CAPTCHA challenge:', { challengeData, challengeKey });
+      return {
+        requiresCaptcha: true,
+        challenge: challengeData,
+        challengeKey: challengeKey,
+        message: 'Please solve this simple math problem to continue'
+      };
+    }
+    
+    // Verify response using challenge key
+    const challengeKey = req.query.challengeKey;
+    const storedChallenge = captchaChallenges.get(challengeKey);
+    if (!storedChallenge) {
+      console.log('[CAPTCHA] Invalid challenge key:', challengeKey);
+      return {
+        requiresCaptcha: true,
+        error: 'Invalid challenge session',
+        message: 'Please try again'
+      };
+    }
+    
+    // Clean up old challenges (older than 5 minutes)
+    const now = Date.now();
+    for (const [key, challenge] of captchaChallenges.entries()) {
+      if (now - challenge.timestamp > 5 * 60 * 1000) {
+        captchaChallenges.delete(key);
+      }
+    }
+    
+    if (parseInt(response) !== storedChallenge.expectedResponse) {
+      return {
+        requiresCaptcha: true,
+        error: 'Incorrect answer',
+        message: 'Please try again'
+      };
+    }
+    
+    // Mark this specific challenge as completed and allow access
+    captchaChallenges.delete(challengeKey);
+    
+    return { requiresCaptcha: false };
+  } catch (error) {
+    console.error('[CAPTCHA] Error in CAPTCHA check:', error);
+    // Continue without CAPTCHA if there's an error
+    return { requiresCaptcha: false };
+  }
+};
+
 // Session verification middleware - Always require CAPTCHA for public access
 export const verifySession = (req, res, next) => {
   const sessionId = req.query.sessionId;
