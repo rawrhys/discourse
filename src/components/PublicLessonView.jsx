@@ -171,11 +171,18 @@ const PublicLessonView = ({
                 nowPaused: serviceStatus.isPaused
               });
               
-              setTtsStatus(prev => ({
-                ...prev,
-                isPlaying: serviceStatus.isPlaying,
-                isPaused: serviceStatus.isPaused
-              }));
+              // Only update if the service is actually in a different state
+              // This prevents unnecessary re-renders that might trigger other effects
+              setTtsStatus(prev => {
+                if (prev.isPlaying === serviceStatus.isPlaying && prev.isPaused === serviceStatus.isPaused) {
+                  return prev; // No change needed
+                }
+                return {
+                  ...prev,
+                  isPlaying: serviceStatus.isPlaying,
+                  isPaused: serviceStatus.isPaused
+                };
+              });
           }, 100); // Reduced debounce to 100ms for better responsiveness
         }
       } catch (error) {
@@ -342,6 +349,16 @@ const PublicLessonView = ({
     // Add a small delay to prevent rapid button clicks
     await new Promise(resolve => setTimeout(resolve, 100));
     
+    // Guard against automatic calls - only allow manual button clicks
+    console.log('[PublicLessonView] handleStartAudio called - manual start only');
+    
+    // Check if TTS service has been stopped - if so, don't start
+    const serviceStatus = publicTTSService.getStatus();
+    if (serviceStatus.isStopped) {
+      console.log('[PublicLessonView] TTS service was stopped, not starting new speech');
+      return;
+    }
+    
     try {
       // Check if TTS is already playing
       if (ttsStatus.isPlaying) {
@@ -418,7 +435,7 @@ const PublicLessonView = ({
       console.error('[PublicLessonView] TTS error:', error);
       setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
     }
-  }, [ttsStatus.isPlaying, ttsStatus.isPaused, view, lesson]); // Added view and lesson dependencies
+  }, [view, lesson]); // Removed ttsStatus dependencies to prevent auto-restart
 
   const handleStopAudio = useCallback(async () => {
     // Add a small delay to prevent rapid button clicks

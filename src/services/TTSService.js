@@ -1792,9 +1792,15 @@ class TTSService {
         // Set stop flag to prevent further chunk processing
         this.isStopped = true;
         
-        this.speech.cancel();
+        // Cancel any ongoing speech immediately
+        if (this.speech && typeof this.speech.cancel === 'function') {
+          this.speech.cancel();
+        }
+        
+        // Reset all state flags
         this.isPlaying = false;
         this.isPaused = false;
+        this.isChunkedSpeech = false;
         this.errorCount = 0;
         
         // Clear current text but preserve fullText for potential retries
@@ -1974,6 +1980,7 @@ class TTSService {
     return {
       isPlaying: this.isPlaying,
       isPaused: this.isPaused,
+      isStopped: this.isStopped, // Add stopped flag to status
       currentLessonId: this.currentLessonId,
       isSupported: this.isSupported(),
       errorCount: this.errorCount,
