@@ -48,8 +48,16 @@ const PublicLessonView = ({
   // Initialize session-specific TTS service
   useEffect(() => {
     if (sessionId) {
-      ttsService.current = ttsServiceFactory.getService(sessionId, 'public');
-      console.log(`[PublicLessonView] Using session-specific TTS service for session: ${sessionId}`);
+      const initializeTTS = async () => {
+        try {
+          ttsService.current = await ttsServiceFactory.getService(sessionId, 'public');
+          console.log(`[PublicLessonView] Using session-specific TTS service for session: ${sessionId}`);
+        } catch (error) {
+          console.warn(`[PublicLessonView] Failed to initialize TTS service for session: ${sessionId}`, error);
+        }
+      };
+      
+      initializeTTS();
     }
   }, [sessionId]);
 

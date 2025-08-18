@@ -162,8 +162,8 @@ class TTSService {
     // Browser compatibility check
     this.browserSupport = this.checkBrowserSupport();
     
-    // Initialize the speech engine
-    this.initSpeech();
+    // Initialize the speech engine with coordination
+    this.initSpeechWithCoordination();
   }
 
   // Check browser support for speech synthesis
@@ -185,6 +185,17 @@ class TTSService {
 
     console.log(`[${this.serviceType} TTS] Browser support:`, support);
     return support;
+  }
+
+  // Coordinated initialization to prevent conflicts
+  async initSpeechWithCoordination() {
+    // Use global coordinator to prevent simultaneous initialization
+    if (typeof ttsGlobalCoordinator !== 'undefined') {
+      await ttsGlobalCoordinator.coordinateInitialization(this.serviceType);
+    }
+    
+    // Then proceed with normal initialization
+    await this.initSpeech();
   }
 
   // Enhanced initialization with multiple fallback strategies
@@ -260,6 +271,7 @@ class TTSService {
             return false;
           }
           
+          // Add a small delay to prevent simultaneous voice checking
           const voices = window.speechSynthesis.getVoices();
           if (voices && voices.length > 0) {
             console.log(`[${this.serviceType} TTS] Voices loaded:`, voices.length);
@@ -1126,9 +1138,79 @@ class TTSService {
   }
 }
 
+// Global TTS coordinator to manage service conflicts
+class TTSGlobalCoordinator {
+  constructor() {
+    this.initializingServices = new Set();
+    this.activeServices = new Map();
+    this.initializationPromise = null;
+  }
+
+  // Ensure only one service initializes at a time
+  async coordinateInitialization(serviceType) {
+    if (this.initializingServices.has(serviceType)) {
+      console.log(`[TTS Coordinator] Service ${serviceType} already initializing, waiting...`);
+      // Wait for the current initialization to complete
+      while (this.initializingServices.has(serviceType)) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      return;
+    }
+
+    this.initializingServices.add(serviceType);
+    console.log(`[TTS Coordinator] Starting initialization for ${serviceType}`);
+    
+    try {
+      // Add a small delay to prevent simultaneous initialization
+      await new Promise(resolve => setTimeout(resolve, 200));
+    } finally {
+      this.initializingServices.delete(serviceType);
+      console.log(`[TTS Coordinator] Completed initialization for ${serviceType}`);
+    }
+  }
+
+  // Register an active service
+  registerService(serviceType, service) {
+    this.activeServices.set(serviceType, service);
+    console.log(`[TTS Coordinator] Registered service: ${serviceType}`);
+  }
+
+  // Unregister a service
+  unregisterService(serviceType) {
+    this.activeServices.delete(serviceType);
+    console.log(`[TTS Coordinator] Unregistered service: ${serviceType}`);
+  }
+
+  // Get active service count
+  getActiveServiceCount() {
+    return this.activeServices.size;
+  }
+}
+
+// Create global coordinator
+const ttsGlobalCoordinator = new TTSGlobalCoordinator();
+
 // Create separate singleton instances for private and public courses
-const privateTTSService = new TTSService('private');
-const publicTTSService = new TTSService('public');
+// These will be lazy-initialized to prevent conflicts
+let privateTTSService = null;
+let publicTTSService = null;
+
+// Lazy initialization functions
+const getPrivateTTSService = () => {
+  if (!privateTTSService) {
+    privateTTSService = new TTSService('private');
+    ttsGlobalCoordinator.registerService('private', privateTTSService);
+  }
+  return privateTTSService;
+};
+
+const getPublicTTSService = () => {
+  if (!publicTTSService) {
+    publicTTSService = new TTSService('public');
+    ttsGlobalCoordinator.registerService('public', publicTTSService);
+  }
+  return publicTTSService;
+};
 
 // Enhanced TTS Service Factory for session-specific instances
 class TTSServiceFactory {
@@ -1139,13 +1221,25 @@ class TTSServiceFactory {
   }
 
   // Get or create a TTS service for a specific session
-  getService(sessionId, serviceType = 'session') {
+  async getService(sessionId, serviceType = 'session') {
     const key = `${serviceType}_${sessionId}`;
     
     if (!this.services.has(key)) {
+      // Create service with coordination to prevent conflicts
       const service = new TTSService(`${serviceType}_${sessionId}`);
       this.services.set(key, service);
       console.log(`[TTS Factory] Created new TTS service for ${key}`);
+      
+      // Wait for initialization to complete
+      let attempts = 0;
+      while (!service.isInitialized && attempts < 50) { // Wait up to 5 seconds
+        await new Promise(resolve => setTimeout(resolve, 100));
+        attempts++;
+      }
+      
+      if (!service.isInitialized) {
+        console.warn(`[TTS Factory] Service ${key} failed to initialize within timeout`);
+      }
     }
     
     return this.services.get(key);
@@ -1214,8 +1308,8 @@ class TTSServiceFactory {
 // Create singleton factory instance
 const ttsServiceFactory = new TTSServiceFactory();
 
-// Export both services
-export { privateTTSService, publicTTSService, ttsServiceFactory };
+// Export both services with lazy initialization
+export { getPrivateTTSService, getPublicTTSService, ttsServiceFactory };
 
 // Default export for backward compatibility (uses private service)
-export default privateTTSService; 
+export default getPrivateTTSService(); 
