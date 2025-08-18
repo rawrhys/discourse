@@ -243,7 +243,7 @@ class TTSService {
           console.log(`[${this.serviceType} TTS] Error getting voices after timeout:`, error.message || error);
           resolve([]);
         }
-      }, 10000);
+      }, 10000); // 10 second timeout to see if it's taking too long to start
     });
   }
 
@@ -690,42 +690,50 @@ class TTSService {
           const speakConfig = {
             text: textToSpeak,
             splitSentences: false, // Ensure no sentence splitting to preserve pause state
-            onstart: () => {
-              // Only set playing state if not manually paused
-              if (!this.wasManuallyPaused) {
-                this.isPlaying = true;
-                this.isPaused = false;
-              } else {
-                // If manually paused, keep the pause state
+            listeners: {
+              onstart: () => {
+                // Only set playing state if not manually paused
+                if (!this.wasManuallyPaused) {
+                  this.isPlaying = true;
+                  this.isPaused = false;
+                } else {
+                  // If manually paused, keep the pause state
+                  this.isPlaying = false;
+                  this.isPaused = true;
+                }
+                this.speakingStartTime = Date.now(); // Track when speaking started
+                console.log(`[${this.serviceType} TTS] Started speaking (manually paused: ${this.wasManuallyPaused})`);
+              },
+              onend: () => {
                 this.isPlaying = false;
+                this.isPaused = false;
+                this.finishedNormally = true;
+                console.log(`[${this.serviceType} TTS] Finished speaking`);
+              },
+              onpause: () => {
                 this.isPaused = true;
+                this.isPlaying = false;
+                console.log(`[${this.serviceType} TTS] Paused`);
+              },
+              onresume: () => {
+                this.isPaused = false;
+                this.isPlaying = true;
+                console.log(`[${this.serviceType} TTS] Resumed`);
+              },
+              onerror: (event) => {
+                console.warn(`[${this.serviceType} TTS] Speech error occurred:`, event.error);
+                this.handleSpeechError(event);
               }
-              this.speakingStartTime = Date.now(); // Track when speaking started
-              console.log(`[${this.serviceType} TTS] Started speaking (manually paused: ${this.wasManuallyPaused})`);
-            },
-            onend: () => {
-              this.isPlaying = false;
-              this.isPaused = false;
-              this.finishedNormally = true;
-              console.log(`[${this.serviceType} TTS] Finished speaking`);
-            },
-            onpause: () => {
-              this.isPaused = true;
-              this.isPlaying = false;
-              console.log(`[${this.serviceType} TTS] Paused`);
-            },
-            onresume: () => {
-              this.isPaused = false;
-              this.isPlaying = true;
-              console.log(`[${this.serviceType} TTS] Resumed`);
-            },
-            onerror: (event) => {
-              console.warn(`[${this.serviceType} TTS] Speech error occurred:`, event.error);
-              this.handleSpeechError(event);
             }
           };
 
           // Call the speak-tts library
+          console.log(`[${this.serviceType} TTS] Calling speech.speak with config:`, {
+            textLength: textToSpeak.length,
+            splitSentences: speakConfig.splitSentences,
+            hasListeners: !!speakConfig.listeners
+          });
+          
           this.speech.speak(speakConfig).then(() => {
             console.log(`[${this.serviceType} TTS] Speak command completed successfully`);
             resolve();
@@ -753,7 +761,7 @@ class TTSService {
           this.isPlaying = false;
           this.isPaused = false;
           resolve();
-        }, 30000); // 30 second timeout
+        }, 10000); // 10 second timeout
       });
 
       // Race between the speak promise and timeout
