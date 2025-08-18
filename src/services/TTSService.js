@@ -1033,28 +1033,30 @@ class TTSService {
           }
         });
         
-        // Use a shorter timeout and add better detection of actual speech
+        // Use a more reasonable timeout that doesn't interfere with normal speech
         const timeoutPromise = new Promise((resolve) => {
           setTimeout(() => {
-            // Check if we actually started speaking
-            if (this.isPlaying && this.speakingStartTime > 0) {
-              const timeSinceStart = Date.now() - this.speakingStartTime;
-              if (timeSinceStart > 5000) { // If we've been "speaking" for more than 5 seconds
-                console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} appears to be speaking but taking too long, continuing`);
-                resolve();
-              } else {
-                console.log(`[${this.serviceType} TTS] Chunk ${i + 1} still speaking, extending timeout`);
-                // Extend timeout if we're actually speaking
-                setTimeout(() => {
-                  console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} final timeout - continuing to next chunk`);
-                  resolve();
-                }, 10000); // Additional 10 seconds
-              }
-            } else {
+            // Only timeout if we're not actually speaking or if speech has been stuck for too long
+            if (!this.isPlaying || !this.speakingStartTime) {
               console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} timeout - no speech detected, continuing to next chunk`);
               resolve();
+            } else {
+              const timeSinceStart = Date.now() - this.speakingStartTime;
+              // Only timeout if we've been "speaking" for more than 15 seconds (much more reasonable)
+              if (timeSinceStart > 15000) {
+                console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} appears to be stuck, continuing to next chunk`);
+                resolve();
+              } else {
+                // Extend timeout if we're actually speaking
+                setTimeout(() => {
+                  if (this.isPlaying) {
+                    console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} final timeout - continuing to next chunk`);
+                    resolve();
+                  }
+                }, 20000); // Additional 20 seconds for very long chunks
+              }
             }
-          }, 8000); // Reduced initial timeout to 8 seconds
+          }, 12000); // Increased initial timeout to 12 seconds
         });
         
         await Promise.race([chunkPromise, timeoutPromise]);
@@ -1287,10 +1289,33 @@ class TTSService {
         }
         
         // Check if this is chunked speech that was paused
-        if (this.isChunkedSpeech && this.currentChunks && this.currentChunkIndex >= 0) {
+        if (this.isChunkedSpeech && this.currentChunks) {
+          // Calculate the correct chunk index from pause position
+          if (pauseData && pauseData.chunkIndex !== undefined) {
+            this.currentChunkIndex = pauseData.chunkIndex;
+            console.log(`[${this.serviceType} TTS] Setting chunk index from pause data: ${this.currentChunkIndex}`);
+          } else if (this.pausePosition > 0 && this.fullText) {
+            // Calculate chunk index from pause position
+            let accumulatedLength = 0;
+            for (let i = 0; i < this.currentChunks.length; i++) {
+              accumulatedLength += this.currentChunks[i].length + 1; // +1 for space
+              if (accumulatedLength >= this.pausePosition) {
+                this.currentChunkIndex = i;
+                break;
+              }
+            }
+            console.log(`[${this.serviceType} TTS] Calculated chunk index from pause position: ${this.currentChunkIndex}`);
+          }
+          
+          // Ensure chunk index is valid
+          if (this.currentChunkIndex < 0 || this.currentChunkIndex >= this.currentChunks.length) {
+            console.warn(`[${this.serviceType} TTS] Invalid chunk index ${this.currentChunkIndex}, resetting to 0`);
+            this.currentChunkIndex = 0;
+          }
+          
           console.log(`[${this.serviceType} TTS] Resuming chunked speech from chunk ${this.currentChunkIndex + 1}/${this.currentChunks.length}`);
           
-          // Resume chunked speech from current position
+          // Resume chunked speech from calculated position
           this.resumeChunkedSpeech();
           return true;
         }

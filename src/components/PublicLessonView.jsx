@@ -166,12 +166,12 @@ const PublicLessonView = ({
                 isPlaying: serviceStatus.isPlaying,
                 isPaused: serviceStatus.isPaused
               }));
-            }, 1000); // Increased debounce to 1 second
+            }, 500); // Reduced debounce to 500ms for better responsiveness
         }
       } catch (error) {
         console.warn('[PublicLessonView] TTS state sync error:', error);
       }
-    }, 3000); // Increased to 3 seconds to reduce rapid changes
+    }, 5000); // Increased to 5 seconds to reduce rapid changes
 
     return () => {
       clearInterval(interval);
