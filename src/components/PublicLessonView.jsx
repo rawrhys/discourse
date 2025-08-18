@@ -560,19 +560,19 @@ const PublicLessonView = ({
       .replace(/\*\*\*\*\*\*/g, '**');
   };
 
-  // Function to fix citation syntax and ensure proper formatting
-  const fixCitationSyntax = (text) => {
+  // Function to remove citations from text content
+  const removeCitations = (text) => {
     if (!text) return text;
     
     return text
-      // Ensure citations are properly formatted and don't break markdown
-      .replace(/\[(\d+)\]/g, '<sup>$1</sup>')  // Convert [1], [2], etc. to superscript
-      // Fix any malformed markdown that might interfere with citations
-      .replace(/\*\*\[(\d+)\]\*\*/g, '<sup>$1</sup>')  // Fix bold citations
-      .replace(/\*\[(\d+)\]\*/g, '<sup>$1</sup>')      // Fix italic citations
-      // Ensure proper spacing around citations
-      .replace(/(\w)\[(\d+)\]/g, '$1 <sup>$2</sup>')   // Add space before citation
-      .replace(/\[(\d+)\](\w)/g, '<sup>$1</sup> $2');  // Add space after citation
+      // Remove all citation patterns [1], [2], etc.
+      .replace(/\[\d+\]/g, '')  // Remove [1], [2], [3], etc.
+      // Remove any remaining citation artifacts
+      .replace(/\s+\[\s*\d+\s*\]/g, '')  // Remove citations with spaces
+      .replace(/\[\s*\d+\s*\]\s+/g, '')  // Remove citations with spaces
+      // Clean up any double spaces that might result
+      .replace(/\s+/g, ' ')  // Normalize spaces
+      .trim();
   };
 
   // Function to ensure proper paragraph formatting and line breaks
@@ -618,13 +618,19 @@ const PublicLessonView = ({
         .replace(/\bintro\b/gi, '')
         // Remove curly brackets and quotes that might be left over
         .replace(/[{}"]/g, '')
+        // Remove any remaining JSON artifacts
+        .replace(/\bIntroduction\b/g, '')
+        .replace(/\bMain Content\b/g, '')
+        .replace(/\bConclusion\b/g, '')
+        .replace(/\bMain\b/g, '')
+        .replace(/\bIntro\b/g, '')
         .trim();
       
       // Fix line breaks - convert \n to actual line breaks
       cleaned = cleaned.replace(/\\n/g, '\n');
       
-      // Fix citation syntax before markdown processing
-      cleaned = fixCitationSyntax(cleaned);
+      // Remove citations from text content
+      cleaned = removeCitations(cleaned);
       
       // Fix paragraph formatting and line breaks
       cleaned = fixParagraphFormatting(cleaned);
@@ -642,7 +648,16 @@ const PublicLessonView = ({
         .replace(/\bconclusion\b/gi, '')
         .replace(/\bmain\b/gi, '')
         .replace(/\bintro\b/gi, '')
-        .replace(/[{}"]/g, '');
+        .replace(/\bIntroduction\b/g, '')
+        .replace(/\bMain Content\b/g, '')
+        .replace(/\bConclusion\b/g, '')
+        .replace(/\bMain\b/g, '')
+        .replace(/\bIntro\b/g, '')
+        .replace(/[{}"]/g, '')
+        // Final citation cleanup
+        .replace(/\[\d+\]/g, '')
+        .replace(/\s+/g, ' ')  // Normalize spaces
+        .trim();
       
       return cleaned;
     };

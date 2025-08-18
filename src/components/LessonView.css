@@ -969,28 +969,9 @@
   }
 } 
 
-/* Citation styles for lesson content */
-.lesson-content sup {
-  font-size: 0.75em;
-  vertical-align: super;
-  line-height: 0;
-  color: #3182ce;
-  font-weight: 600;
-  background-color: #f0f4ff;
-  padding: 0.1em 0.3em;
-  border-radius: 0.2em;
-  margin: 0 0.1em;
-  cursor: pointer;
-  transition: all 0.2s ease-in-out;
-}
 
-.lesson-content sup:hover {
-  background-color: #e0e7ff;
-  color: #1e40af;
-  transform: scale(1.1);
-}
 
-/* Ensure proper spacing around citations */
+/* Ensure proper spacing around paragraphs */
 .lesson-content p {
   line-height: 1.7;
   margin-bottom: 1rem;
