@@ -1641,7 +1641,7 @@ class TTSService {
         // Reset pause data when resuming - this ensures fresh start
         this.resetPauseData();
         
-        // Get pause position from server for accurate resume (but we'll reset it after)
+        // Get pause position from server for accurate resume (non-blocking)
         let pauseData = null;
         if (this.currentLessonId) {
           try {
@@ -1654,7 +1654,8 @@ class TTSService {
               console.log(`[${this.serviceType} TTS] Updated pause position from server: ${this.pausePosition}`);
             }
           } catch (error) {
-            console.warn(`[${this.serviceType} TTS] Failed to get pause position from server:`, error.message);
+            console.warn(`[${this.serviceType} TTS] Failed to get pause position from server (non-critical):`, error.message);
+            // Continue without server data
           }
         }
         
@@ -1836,8 +1837,10 @@ class TTSService {
       this.currentChunks = null;
       this.currentChunkIndex = 0;
 
-      // Clear server pause data to prevent auto-resume
-      this.clearServerPauseData();
+      // Clear server pause data to prevent auto-resume (non-blocking)
+      this.clearServerPauseData().catch(error => {
+        console.warn(`[${this.serviceType} TTS] Failed to clear server pause data (non-critical):`, error.message);
+      });
 
       // Clear any pending timeouts
       if (this.speakTimeout) {
@@ -1891,7 +1894,7 @@ class TTSService {
     }
   }
 
-  // Clear server pause data to prevent auto-resume
+  // Clear server pause data to prevent auto-resume (non-blocking)
   async clearServerPauseData() {
     try {
       if (this.currentLessonId) {
@@ -1909,12 +1912,14 @@ class TTSService {
         if (response.ok) {
           console.log(`[${this.serviceType} TTS] Server pause data cleared successfully`);
         } else {
-          console.warn(`[${this.serviceType} TTS] Failed to clear server pause data:`, response.status);
+          console.warn(`[${this.serviceType} TTS] Failed to clear server pause data (non-critical):`, response.status);
         }
       }
     } catch (error) {
-      console.warn(`[${this.serviceType} TTS] Error clearing server pause data:`, error);
+      console.warn(`[${this.serviceType} TTS] Error clearing server pause data (non-critical):`, error.message);
     }
+    // Always return a resolved promise to prevent blocking
+    return Promise.resolve();
   }
 
   // Test TTS functionality with a simple utterance
@@ -2363,7 +2368,7 @@ class TTSService {
     }
   }
 
-  // Clear pause position from server
+  // Clear pause position from server (non-blocking)
   async clearPausePosition(lessonId) {
     try {
       const response = await fetch(`/api/tts/clear-pause-position`, {
@@ -2380,11 +2385,13 @@ class TTSService {
       if (response.ok) {
         console.log(`[${this.serviceType} TTS] Cleared pause position for lesson ${lessonId}`);
       } else {
-        console.warn(`[${this.serviceType} TTS] Failed to clear pause position: ${response.status}`);
+        console.warn(`[${this.serviceType} TTS] Failed to clear pause position (non-critical): ${response.status}`);
       }
     } catch (error) {
-      console.warn(`[${this.serviceType} TTS] Error clearing pause position:`, error.message);
+      console.warn(`[${this.serviceType} TTS] Error clearing pause position (non-critical):`, error.message);
     }
+    // Always return a resolved promise to prevent blocking
+    return Promise.resolve();
   }
 }
 
