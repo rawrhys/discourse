@@ -1320,26 +1320,17 @@ class TTSService {
           position: `${this.pausePosition}/${this.fullText.length} (${Math.round((this.pausePosition / this.fullText.length) * 100)}%)`
         });
         
-        // If this is chunked speech, log the chunk position
-        if (this.isChunkedSpeech && this.currentChunks && Array.isArray(this.currentChunks)) {
-          console.log(`[${this.serviceType} TTS] Chunked speech paused at chunk ${this.currentChunkIndex + 1}/${this.currentChunks.length}`);
-          
-          // Ensure chunk index is valid before recording
-          if (this.currentChunkIndex >= 0 && this.currentChunkIndex < this.currentChunks.length) {
-            console.log(`[${this.serviceType} TTS] Recording valid chunk index: ${this.currentChunkIndex}`);
-          } else {
-            console.warn(`[${this.serviceType} TTS] Invalid chunk index ${this.currentChunkIndex}, not recording`);
-          }
-        }
-        
-        // Record pause position to server for accurate resume (blocking to ensure it's recorded)
+        // Record pause position to server for accurate resume
         if (this.currentLessonId) {
           try {
+            // Only record chunk index if we're in chunked speech mode and have valid chunks
             const chunkIndexToRecord = (this.isChunkedSpeech && this.currentChunks && Array.isArray(this.currentChunks) && 
                                        this.currentChunkIndex >= 0 && this.currentChunkIndex < this.currentChunks.length) 
                                        ? this.currentChunkIndex : null;
             
-            console.log(`[${this.serviceType} TTS] Recording pause position with chunk index:`, chunkIndexToRecord);
+            if (chunkIndexToRecord !== null) {
+              console.log(`[${this.serviceType} TTS] Recording pause at chunk ${this.currentChunkIndex + 1}/${this.currentChunks.length}`);
+            }
             
             await this.recordTTSPausePosition(
               this.currentLessonId, 
@@ -1930,12 +1921,9 @@ class TTSService {
       if (chunkIndex !== null && chunkIndex !== undefined) {
         if (typeof chunkIndex === 'number' && chunkIndex >= 0) {
           validatedChunkIndex = chunkIndex;
-          console.log(`[${this.serviceType} TTS] Valid chunk index provided: ${validatedChunkIndex}`);
         } else {
           console.warn(`[${this.serviceType} TTS] Invalid chunk index provided: ${chunkIndex}, using null`);
         }
-      } else {
-        console.log(`[${this.serviceType} TTS] No chunk index provided, using null`);
       }
       
       const pauseData = {
