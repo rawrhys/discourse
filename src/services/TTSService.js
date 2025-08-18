@@ -838,17 +838,7 @@ class TTSService {
           }, 5000); // 5 second timeout per chunk
         });
         
-        // Race between chunk completion and timeout, with pause checking
-        const pauseCheckInterval = setInterval(() => {
-          if (this.isPaused) {
-            console.log(`[${this.serviceType} TTS] Pause detected during chunk ${i + 1}, stopping`);
-            clearInterval(pauseCheckInterval);
-            resolve(); // Resolve to exit the race
-          }
-        }, 100); // Check for pause every 100ms
-        
         await Promise.race([chunkPromise, timeoutPromise]);
-        clearInterval(pauseCheckInterval); // Clean up interval
         
         // Check if we're paused after chunk completion
         if (this.isPaused) {
@@ -878,7 +868,11 @@ class TTSService {
   // Resume chunked speech from current position
   async resumeChunkedSpeech() {
     if (!this.isChunkedSpeech || !this.currentChunks || this.currentChunkIndex < 0) {
-      console.warn(`[${this.serviceType} TTS] Cannot resume chunked speech - invalid state`);
+      console.warn(`[${this.serviceType} TTS] Cannot resume chunked speech - invalid state:`, {
+        isChunkedSpeech: this.isChunkedSpeech,
+        hasCurrentChunks: !!this.currentChunks,
+        currentChunkIndex: this.currentChunkIndex
+      });
       return;
     }
     
