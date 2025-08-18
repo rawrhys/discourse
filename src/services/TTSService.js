@@ -850,23 +850,9 @@ class TTSService {
         }
       });
 
-      // Use a timeout to prevent hanging, but don't timeout if we're paused
-      const timeoutPromise = new Promise((resolve) => {
-        setTimeout(() => {
-          // Don't timeout if we're paused
-          if (this.isPaused) {
-            console.log(`[${this.serviceType} TTS] Speak timeout ignored - TTS is paused`);
-            return;
-          }
-          console.warn(`[${this.serviceType} TTS] Speak timeout, resolving gracefully`);
-          this.isPlaying = false;
-          this.isPaused = false;
-          resolve();
-        }, 10000); // 10 second timeout
-      });
-
-      // Race between the speak promise and timeout
-      await Promise.race([speakPromise, timeoutPromise]);
+      // Remove timeout to prevent forcing resolve when stopped
+      // Let the speak promise resolve naturally when speech completes or is cancelled
+      await speakPromise;
       
       // Clean up
       this.isPlaying = false;
@@ -1073,14 +1059,8 @@ class TTSService {
             // Handle the promise
             speechPromise.then(completeHandler).catch(errorHandler);
             
-            // Add a start detection timeout
-            setTimeout(() => {
-              if (!speechStarted && !hasResolved) {
-                console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} speech didn't start within 2 seconds`);
-                // Try to force start by resuming audio context
-                this.resumeAudioContext();
-              }
-            }, 2000);
+            // Remove start detection timeout to prevent forcing speech start
+            // Let speech start naturally or be cancelled by stop
             
             // Remove fallback timeout to prevent forcing resolve when stopped
             // The speak-tts promise will resolve naturally when speech completes or is cancelled
