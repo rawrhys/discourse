@@ -17,6 +17,7 @@ import performanceMonitor from '../services/PerformanceMonitorService';
 import api from '../services/api.js';
 import quizPersistenceService from '../services/QuizPersistenceService';
 import markdownService from '../services/MarkdownService';
+import { fixMalformedContent, formatContentForDisplay, cleanContentFormatting, validateContent } from '../utils/contentFormatter';
 
 // Import test utilities for development
 if (process.env.NODE_ENV === 'development') {

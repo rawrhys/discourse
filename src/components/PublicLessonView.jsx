@@ -4,6 +4,7 @@ import { publicTTSService } from '../services/TTSService';
 import PerformanceMonitorService from '../services/PerformanceMonitorService';
 import markdownService from '../services/MarkdownService';
 import academicReferencesService from '../services/AcademicReferencesService';
+import { fixMalformedContent, formatContentForDisplay, cleanContentFormatting, validateContent } from '../utils/contentFormatter';
 import AcademicReferencesFooter from './AcademicReferencesFooter';
 import Flashcard from './Flashcard';
 import './LessonView.css';
@@ -344,25 +345,9 @@ const PublicLessonView = ({
         
         if (view === 'content') {
           // Read the full lesson content including introduction and conclusion
-          if (lesson.content && typeof lesson.content === 'object') {
-            // For object content, combine introduction, main_content, and conclusion
-            const parts = [];
-            if (lesson.content.introduction) {
-              parts.push(lesson.content.introduction);
-            }
-            if (lesson.content.main_content) {
-              parts.push(lesson.content.main_content);
-            } else if (lesson.content.content) {
-              parts.push(lesson.content.content);
-            }
-            if (lesson.content.conclusion) {
-              parts.push(lesson.content.conclusion);
-            }
-            contentToRead = parts.join('\n\n');
-          } else if (typeof lesson.content === 'string') {
-            // For string content, use it as is
-            contentToRead = lesson.content;
-          }
+          // Use the new content formatter to handle malformed JSON
+          const formattedContent = fixMalformedContent(lesson.content);
+          contentToRead = formatContentForDisplay(formattedContent);
         } else if (view === 'flashcards') {
           // For flashcards view, read the flashcard terms and definitions
           const flashcardData = lesson?.flashcards || lesson?.content?.flashcards || [];
@@ -614,25 +599,25 @@ const PublicLessonView = ({
       return finalResult;
     }
     
-    const { introduction, main_content, conclusion } = content;
+    // Use the new content formatter to handle malformed JSON
+    const formattedContent = fixMalformedContent(content);
     
-    const cleanedIntro = introduction 
-      ? cleanupRemainingAsterisks(cleanContentPart(introduction))
+    const cleanedIntro = formattedContent.introduction 
+      ? cleanContentFormatting(formattedContent.introduction)
       : '';
 
-    const cleanedMain = main_content ? cleanupRemainingAsterisks(cleanContentPart(main_content)) : '';
-    const cleanedConclusion = conclusion ? cleanupRemainingAsterisks(cleanContentPart(conclusion)) : '';
+    const cleanedMain = formattedContent.main_content 
+      ? cleanContentFormatting(formattedContent.main_content) 
+      : '';
+    const cleanedConclusion = formattedContent.conclusion 
+      ? cleanContentFormatting(formattedContent.conclusion) 
+      : '';
     
     const result = [cleanedIntro, cleanedMain, cleanedConclusion]
       .filter(Boolean)
-      .join('\n\n')
-      .replace(/\|\|\|---\|\|\|/g, '') // Final cleanup of any remaining patterns
-      .replace(/\|\|\|/g, ''); // Final cleanup of any remaining ||| patterns
+      .join('\n\n');
     
-    // Final separator cleanup after all processing
-    return result
-      .replace(/\|\|\|---\|\|\|/g, '')
-      .replace(/\|\|\|/g, '');
+    return result;
   };
 
   // Early return if no lesson
@@ -647,7 +632,9 @@ const PublicLessonView = ({
   // Get lesson content and process with academic references
   let lessonContent = '';
   try {
-    lessonContent = cleanAndCombineContent(lesson.content);
+    // Use the new content formatter to handle malformed JSON
+    const formattedContent = fixMalformedContent(lesson.content);
+    lessonContent = formatContentForDisplay(formattedContent);
   } catch (error) {
     console.error('[PublicLessonView] Error processing lesson content:', error);
     lessonContent = typeof lesson.content === 'string' ? lesson.content : '';
