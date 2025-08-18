@@ -700,6 +700,11 @@ class TTSService {
         return;
       }
 
+      // Immediately set playing state for UI responsiveness
+      this.isPlaying = true;
+      this.isPaused = false;
+      this.speakingStartTime = Date.now();
+
       // Create a promise that wraps the speak-tts library call
       const speakPromise = new Promise((resolve) => {
         try {
@@ -780,6 +785,11 @@ class TTSService {
     this.currentChunkIndex = 0;
     this.isChunkedSpeech = true;
     
+    // Immediately set playing state for UI responsiveness
+    this.isPlaying = true;
+    this.isPaused = false;
+    this.speakingStartTime = Date.now();
+    
     for (let i = 0; i < chunks.length; i++) {
       // Check if we should stop due to pause or errors
       if (!this.isInitialized || this.errorCount >= this.maxRetries) {
@@ -828,7 +838,23 @@ class TTSService {
           }, 5000); // 5 second timeout per chunk
         });
         
+        // Race between chunk completion and timeout, with pause checking
+        const pauseCheckInterval = setInterval(() => {
+          if (this.isPaused) {
+            console.log(`[${this.serviceType} TTS] Pause detected during chunk ${i + 1}, stopping`);
+            clearInterval(pauseCheckInterval);
+            resolve(); // Resolve to exit the race
+          }
+        }, 100); // Check for pause every 100ms
+        
         await Promise.race([chunkPromise, timeoutPromise]);
+        clearInterval(pauseCheckInterval); // Clean up interval
+        
+        // Check if we're paused after chunk completion
+        if (this.isPaused) {
+          console.log(`[${this.serviceType} TTS] Paused after chunk ${i + 1}, stopping chunked speech`);
+          return;
+        }
         
         // Small delay between chunks to prevent overwhelming the system
         if (i < chunks.length - 1) {
@@ -845,6 +871,8 @@ class TTSService {
     this.isChunkedSpeech = false;
     this.currentChunks = null;
     this.currentChunkIndex = 0;
+    this.isPlaying = false;
+    this.isPaused = false;
   }
 
   // Resume chunked speech from current position
