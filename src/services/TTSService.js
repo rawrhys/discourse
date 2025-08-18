@@ -441,13 +441,18 @@ class TTSService {
       text = content;
       console.log(`[${this.serviceType} TTS] Content is string, length: ${text.length}`);
     } else if (typeof content === 'object') {
-      // Handle structured content - only get the current lesson content
+      // Handle structured content - include all lesson parts
       const parts = [];
       
       // Log the content structure for debugging
       console.log(`[${this.serviceType} TTS] Content is object, keys:`, Object.keys(content));
       
-      // Only include the main content, not introduction/conclusion from other lessons
+      // Include all lesson content parts: introduction, main content, and conclusion
+      if (content.introduction) {
+        parts.push(content.introduction);
+        console.log(`[${this.serviceType} TTS] Found introduction, length: ${content.introduction.length}`);
+      }
+      
       if (content.main_content) {
         parts.push(content.main_content);
         console.log(`[${this.serviceType} TTS] Found main_content, length: ${content.main_content.length}`);
@@ -459,8 +464,15 @@ class TTSService {
         // Fallback to text if content doesn't exist
         parts.push(content.text);
         console.log(`[${this.serviceType} TTS] Found text, length: ${content.text.length}`);
-      } else {
-        // Try to find any text-like properties
+      }
+      
+      if (content.conclusion) {
+        parts.push(content.conclusion);
+        console.log(`[${this.serviceType} TTS] Found conclusion, length: ${content.conclusion.length}`);
+      }
+      
+      // If no structured content found, try to find any text-like properties
+      if (parts.length === 0) {
         const textKeys = Object.keys(content).filter(key => 
           typeof content[key] === 'string' && 
           content[key].trim().length > 0 &&
@@ -987,6 +999,12 @@ class TTSService {
       return;
     }
     
+    // Safety check for currentChunks before accessing its properties
+    if (!this.currentChunks || !Array.isArray(this.currentChunks)) {
+      console.warn(`[${this.serviceType} TTS] Cannot resume chunked speech - currentChunks is null or invalid`);
+      return false;
+    }
+    
     console.log(`[${this.serviceType} TTS] Resuming chunked speech from chunk ${this.currentChunkIndex + 1}/${this.currentChunks.length}`);
     
     // Stop any ongoing speech before resuming
@@ -1281,7 +1299,8 @@ class TTSService {
       isInitialized: this.isInitialized,
       isChunkedSpeech: this.isChunkedSpeech,
       currentChunks: this.currentChunks ? this.currentChunks.length : 'null',
-      currentChunkIndex: this.currentChunkIndex
+      currentChunkIndex: this.currentChunkIndex,
+      pausePosition: this.pausePosition
     });
     
     // Check if we're actually paused
@@ -1301,13 +1320,19 @@ class TTSService {
           try {
             pauseData = await this.getPausePosition(this.currentLessonId);
             console.log(`[${this.serviceType} TTS] Retrieved pause data from server:`, pauseData);
+            
+            // Update local pause position with server data
+            if (pauseData && pauseData.pausePosition) {
+              this.pausePosition = pauseData.pausePosition;
+              console.log(`[${this.serviceType} TTS] Updated pause position from server: ${this.pausePosition}`);
+            }
           } catch (error) {
             console.warn(`[${this.serviceType} TTS] Failed to get pause position from server:`, error.message);
           }
         }
         
         // Always restart from recorded position instead of trying to resume in place
-        console.log(`[${this.serviceType} TTS] Restarting from recorded pause position`);
+        console.log(`[${this.serviceType} TTS] Restarting from recorded pause position: ${this.pausePosition}`);
         
         // Check if this is chunked speech that was paused
         if (this.isChunkedSpeech && this.currentChunks && Array.isArray(this.currentChunks)) {
@@ -1342,6 +1367,12 @@ class TTSService {
             this.currentChunkIndex = 0;
           }
           
+          // Safety check for currentChunks before accessing its properties
+          if (!this.currentChunks || !Array.isArray(this.currentChunks)) {
+            console.warn(`[${this.serviceType} TTS] Cannot resume chunked speech - currentChunks is null or invalid`);
+            return false;
+          }
+          
           console.log(`[${this.serviceType} TTS] Resuming chunked speech from chunk ${this.currentChunkIndex + 1}/${this.currentChunks.length}`);
           
           // Resume chunked speech from calculated position
@@ -1365,10 +1396,10 @@ class TTSService {
           }
         }
         
-        // For non-chunked speech, always restart from server-provided pause position
-        console.log(`[${this.serviceType} TTS] Restarting non-chunked speech from server pause position`);
+        // For non-chunked speech, always restart from pause position
+        console.log(`[${this.serviceType} TTS] Restarting non-chunked speech from pause position`);
         setTimeout(() => {
-          this.restartFromServerPausePosition(pauseData);
+          this.restartFromPausePosition(pauseData);
         }, 100); // Small delay to ensure state is stable
         return true; // Consider this successful for our purposes
         
@@ -1690,18 +1721,21 @@ class TTSService {
     }
   }
 
-  // Restart from server-provided pause position
-  async restartFromServerPausePosition(pauseData) {
+
+
+  // Restart from pause position (handles both server and local data)
+  async restartFromPausePosition(pauseData = null) {
     if (!this.fullText) {
-      console.warn(`[${this.serviceType} TTS] Cannot restart from server pause position - no text`);
+      console.warn(`[${this.serviceType} TTS] Cannot restart from pause position - no text`);
       return false;
     }
     
     try {
-      // Use server-provided pause position if available, otherwise fall back to local
+      // Use server-provided pause position if available, otherwise use local
       let resumePosition = this.pausePosition;
       if (pauseData && pauseData.pausePosition) {
         resumePosition = pauseData.pausePosition;
+        this.pausePosition = pauseData.pausePosition; // Update local position
         console.log(`[${this.serviceType} TTS] Using server-provided pause position: ${resumePosition}`);
       } else {
         console.log(`[${this.serviceType} TTS] Using local pause position: ${resumePosition}`);
@@ -1744,56 +1778,7 @@ class TTSService {
       }
       
       console.log(`[${this.serviceType} TTS] Speaking remaining text (${remainingText.length} characters) from position ${resumePosition}`);
-      
-      // Speak the remaining text
-      await this.speak(remainingText);
-      return true;
-    } catch (error) {
-      console.warn(`[${this.serviceType} TTS] Failed to restart from server pause position:`, error);
-      return false;
-    }
-  }
-
-  // Restart from pause position (fallback method)
-  async restartFromPausePosition() {
-    if (!this.fullText || this.pausePosition <= 0) {
-      console.warn(`[${this.serviceType} TTS] Cannot restart from pause position - no text or invalid position`);
-      return false;
-    }
-    
-    try {
-      console.log(`[${this.serviceType} TTS] Restarting from pause position ${this.pausePosition}/${this.fullText.length}`);
-      
-      // Stop current speech if any
-      if (this.isPlaying || this.isPaused) {
-        try {
-          if (this.speech && typeof this.speech.cancel === 'function') {
-            this.speech.cancel();
-            console.log(`[${this.serviceType} TTS] Canceled ongoing speech before restart`);
-          }
-        } catch (cancelError) {
-          console.warn(`[${this.serviceType} TTS] Error canceling speech:`, cancelError);
-        }
-      }
-      
-      // Reset state for restart
-      this.isPlaying = false;
-      this.isPaused = false;
-      this.errorCount = 0;
-      this.wasManuallyPaused = false;
-      this.speakingStartTime = 0;
-      
-      // Wait a moment for state to stabilize
-      await new Promise(resolve => setTimeout(resolve, 200));
-      
-      // Extract text from pause position
-      const remainingText = this.fullText.substring(this.pausePosition);
-      if (!remainingText || remainingText.trim().length === 0) {
-        console.log(`[${this.serviceType} TTS] No remaining text to speak from pause position`);
-        return true;
-      }
-      
-      console.log(`[${this.serviceType} TTS] Speaking remaining text (${remainingText.length} characters) from position ${this.pausePosition}`);
+      console.log(`[${this.serviceType} TTS] Remaining text preview: ${remainingText.substring(0, 100)}...`);
       
       // Speak the remaining text
       await this.speak(remainingText);
