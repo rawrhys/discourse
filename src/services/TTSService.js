@@ -816,11 +816,13 @@ class TTSService {
             splitSentences: false
           };
           
+          // Try speak-tts first
           this.speech.speak(speakConfig).then(() => {
             console.log(`[${this.serviceType} TTS] Chunk ${i + 1} completed successfully`);
             resolve();
           }).catch((error) => {
-            console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} failed, trying fallback:`, error);
+            console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} speak-tts failed, using fallback:`, error);
+            // Immediately try fallback if speak-tts fails
             this.fallbackToNativeSpeechSynthesis(chunk).then(() => {
               console.log(`[${this.serviceType} TTS] Chunk ${i + 1} fallback completed`);
               resolve();
@@ -833,9 +835,16 @@ class TTSService {
         
         const timeoutPromise = new Promise((resolve) => {
           setTimeout(() => {
-            console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} timeout`);
-            resolve();
-          }, 5000); // 5 second timeout per chunk
+            console.log(`[${this.serviceType} TTS] Chunk ${i + 1} speak-tts taking too long, trying fallback`);
+            // Try fallback if speak-tts is taking too long
+            this.fallbackToNativeSpeechSynthesis(chunk).then(() => {
+              console.log(`[${this.serviceType} TTS] Chunk ${i + 1} fallback completed after timeout`);
+              resolve();
+            }).catch((fallbackError) => {
+              console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} fallback failed after timeout:`, fallbackError);
+              resolve(); // Continue with next chunk
+            });
+          }, 8000); // 8 second timeout before trying fallback
         });
         
         await Promise.race([chunkPromise, timeoutPromise]);
@@ -914,11 +923,13 @@ class TTSService {
             splitSentences: false
           };
           
+          // Try speak-tts first
           this.speech.speak(speakConfig).then(() => {
             console.log(`[${this.serviceType} TTS] Chunk ${i + 1} completed successfully`);
             resolve();
           }).catch((error) => {
-            console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} failed, trying fallback:`, error);
+            console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} speak-tts failed, using fallback:`, error);
+            // Immediately try fallback if speak-tts fails
             this.fallbackToNativeSpeechSynthesis(chunk).then(() => {
               console.log(`[${this.serviceType} TTS] Chunk ${i + 1} fallback completed`);
               resolve();
@@ -931,9 +942,16 @@ class TTSService {
         
         const timeoutPromise = new Promise((resolve) => {
           setTimeout(() => {
-            console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} timeout`);
-            resolve();
-          }, 5000); // 5 second timeout per chunk
+            console.log(`[${this.serviceType} TTS] Chunk ${i + 1} speak-tts taking too long, trying fallback`);
+            // Try fallback if speak-tts is taking too long
+            this.fallbackToNativeSpeechSynthesis(chunk).then(() => {
+              console.log(`[${this.serviceType} TTS] Chunk ${i + 1} fallback completed after timeout`);
+              resolve();
+            }).catch((fallbackError) => {
+              console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} fallback failed after timeout:`, fallbackError);
+              resolve(); // Continue with next chunk
+            });
+          }, 8000); // 8 second timeout before trying fallback
         });
         
         await Promise.race([chunkPromise, timeoutPromise]);
