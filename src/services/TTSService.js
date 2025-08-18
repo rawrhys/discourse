@@ -598,14 +598,10 @@ class TTSService {
     // Prevent starting if we're stopping intentionally, but allow override after a reasonable delay
     if (this.isStoppingIntentionally) {
       console.warn(`[${this.serviceType} TTS] Service is stopping intentionally, ignoring speak request`);
-      // Force reset the flag if it's been stuck for too long (safety mechanism)
-      setTimeout(() => {
-        if (this.isStoppingIntentionally) {
-          console.log(`[${this.serviceType} TTS] Force resetting stuck stopping flag`);
-          this.isStoppingIntentionally = false;
-        }
-      }, 2000); // Force reset after 2 seconds
-      return;
+      // Force reset the flag immediately for lesson changes (safety mechanism)
+      console.log(`[${this.serviceType} TTS] Force resetting stopping flag for immediate recovery`);
+      this.isStoppingIntentionally = false;
+      // Continue with the speak request
     }
     
     // Check if service is properly initialized
@@ -921,6 +917,7 @@ class TTSService {
       }
       
       try {
+        console.log(`[${this.serviceType} TTS] Setting stopping flag for stop`);
         this.isStoppingIntentionally = true; // Mark that we're stopping intentionally
         this.speech.cancel();
         this.isPlaying = false;
@@ -940,7 +937,7 @@ class TTSService {
         setTimeout(() => {
           this.isStoppingIntentionally = false;
           console.log(`[${this.serviceType} TTS] Stop flag reset, ready for new requests`);
-        }, 500); // Reduced to 500ms for faster recovery
+        }, 200); // Reduced to 200ms for faster recovery
       }
     }
   }
@@ -956,6 +953,7 @@ class TTSService {
       }
       
       try {
+        console.log(`[${this.serviceType} TTS] Setting stopping flag for lesson change`);
         this.isStoppingIntentionally = true; // Mark that we're stopping intentionally
         this.speech.cancel();
         this.isPlaying = false;
@@ -971,11 +969,10 @@ class TTSService {
       } catch (error) {
         console.warn(`[${this.serviceType} TTS] Stop and clear failed:`, error);
       } finally {
-        // Reset the flag immediately after a short delay
-        setTimeout(() => {
-          this.isStoppingIntentionally = false;
-          console.log(`[${this.serviceType} TTS] StopAndClear flag reset, ready for new requests`);
-        }, 500); // Reduced to 500ms for faster recovery
+        // Reset the flag immediately for lesson changes
+        console.log(`[${this.serviceType} TTS] Resetting stopping flag immediately for lesson change`);
+        this.isStoppingIntentionally = false;
+        console.log(`[${this.serviceType} TTS] StopAndClear flag reset, ready for new requests`);
       }
     }
   }
@@ -1052,11 +1049,20 @@ class TTSService {
     this.isStoppingIntentionally = false;
     this.isPlaying = false;
     this.isPaused = false;
+    this.errorCount = 0;
+    console.log(`[${this.serviceType} TTS] Force reset complete, service should be ready`);
   }
 
   // Check if service is ready for new requests
   isReadyForRequests() {
-    return this.isInitialized && !this.isStoppingIntentionally && !this.isPlaying;
+    const ready = this.isInitialized && !this.isStoppingIntentionally && !this.isPlaying;
+    console.log(`[${this.serviceType} TTS] Service ready check:`, {
+      isInitialized: this.isInitialized,
+      isStoppingIntentionally: this.isStoppingIntentionally,
+      isPlaying: this.isPlaying,
+      ready: ready
+    });
+    return ready;
   }
 }
 
