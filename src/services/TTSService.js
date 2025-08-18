@@ -577,6 +577,13 @@ class TTSService {
     await ttsCoordinator.requestTTS(this.serviceId);
     console.log(`[${this.serviceType} TTS] Got TTS control for reading lesson`);
     
+    // Prevent multiple simultaneous read requests
+    if (this.isPlaying) {
+      console.warn(`[${this.serviceType} TTS] Already playing, ignoring new read request`);
+      ttsCoordinator.releaseTTS(this.serviceId);
+      return false;
+    }
+    
     if (!lesson) {
       console.warn(`[${this.serviceType} TTS] No lesson provided to readLesson`);
       ttsCoordinator.releaseTTS(this.serviceId);
@@ -596,8 +603,27 @@ class TTSService {
     console.log(`[${this.serviceType} TTS] Extracted text length: ${text ? text.length : 0}`);
     console.log(`[${this.serviceType} TTS] Text preview: ${text ? text.substring(0, 100) + '...' : 'NO TEXT'}`);
     
-    if (!text || !text.trim()) {
+    // Enhanced validation for extracted text
+    if (!text) {
       console.warn(`[${this.serviceType} TTS] No text content extracted from lesson - lessonId: ${lessonId}, lesson title: ${lesson.title || 'unknown'}`);
+      ttsCoordinator.releaseTTS(this.serviceId);
+      return false;
+    }
+    
+    if (typeof text !== 'string') {
+      console.warn(`[${this.serviceType} TTS] Extracted text is not a string: ${typeof text} - lessonId: ${lessonId}`);
+      ttsCoordinator.releaseTTS(this.serviceId);
+      return false;
+    }
+    
+    if (!text.trim()) {
+      console.warn(`[${this.serviceType} TTS] Extracted text is empty or only whitespace - lessonId: ${lessonId}, lesson title: ${lesson.title || 'unknown'}`);
+      ttsCoordinator.releaseTTS(this.serviceId);
+      return false;
+    }
+    
+    if (text.trim().length < 10) {
+      console.warn(`[${this.serviceType} TTS] Extracted text too short (${text.trim().length} chars): "${text.trim()}" - lessonId: ${lessonId}`);
       ttsCoordinator.releaseTTS(this.serviceId);
       return false;
     }
@@ -635,6 +661,19 @@ class TTSService {
 
   // Enhanced speak method with better error handling
   async speak(text) {
+    // Prevent multiple simultaneous speak calls
+    if (this.isPlaying) {
+      console.warn(`[${this.serviceType} TTS] Already playing, ignoring new speak request`);
+      return;
+    }
+    
+    // Reset if we have too many errors
+    if (this.errorCount >= this.maxRetries) {
+      console.warn(`[${this.serviceType} TTS] Too many errors, resetting TTS state`);
+      this.reset();
+      this.errorCount = 0;
+    }
+    
     try {
       console.log(`[${this.serviceType} TTS] Attempting to speak text (length: ${text ? text.length : 'undefined'})`);
       console.log(`[${this.serviceType} TTS] Text type:`, typeof text);
@@ -655,25 +694,37 @@ class TTSService {
         }
       }
 
-      // Ensure we have valid text
+      // Enhanced text validation with early return for empty content
       if (!text) {
         console.warn(`[${this.serviceType} TTS] No text provided to speak`);
+        this.isPlaying = false;
+        this.isPaused = false;
+        ttsCoordinator.releaseTTS(this.serviceId);
         return;
       }
       
       if (typeof text !== 'string') {
         console.warn(`[${this.serviceType} TTS] Text is not a string:`, typeof text, text);
+        this.isPlaying = false;
+        this.isPaused = false;
+        ttsCoordinator.releaseTTS(this.serviceId);
         return;
       }
       
       if (text.trim().length === 0) {
         console.warn(`[${this.serviceType} TTS] Text is empty or only whitespace`);
+        this.isPlaying = false;
+        this.isPaused = false;
+        ttsCoordinator.releaseTTS(this.serviceId);
         return;
       }
       
       // Additional validation to ensure text is substantial
       if (text.trim().length < 5) {
         console.warn(`[${this.serviceType} TTS] Text too short to speak: "${text.trim()}"`);
+        this.isPlaying = false;
+        this.isPaused = false;
+        ttsCoordinator.releaseTTS(this.serviceId);
         return;
       }
 
@@ -730,17 +781,22 @@ class TTSService {
                   return;
                 }
                 
-                console.warn(`[${this.serviceType} TTS] Real error occurred: ${event.error}`);
                 this.errorCount++;
                 
-                // Don't throw the error, handle it gracefully
                 if (this.errorCount < this.maxRetries) {
-                  console.log(`[${this.serviceType} TTS] Retrying... (${this.errorCount}/${this.maxRetries})`);
+                  console.log(`[${this.serviceType} TTS] Retrying after speech error... (${this.errorCount}/${this.maxRetries})`);
                   setTimeout(() => {
-                    this.speak(this.fullText).then(resolve); // Always use fullText for retries
+                    // Only retry if we have valid text to speak
+                    if (this.fullText && this.fullText.trim().length > 5) {
+                      this.speak(this.fullText).then(resolve);
+                    } else {
+                      console.warn(`[${this.serviceType} TTS] No valid text for retry, resolving gracefully`);
+                      ttsCoordinator.releaseTTS(this.serviceId);
+                      resolve();
+                    }
                   }, 1000);
                 } else {
-                  console.log(`[${this.serviceType} TTS] Max retries exceeded, stopping gracefully`);
+                  console.log(`[${this.serviceType} TTS] Max retries exceeded after speech error`);
                   ttsCoordinator.releaseTTS(this.serviceId);
                   resolve(); // Always resolve, never reject
                 }
@@ -777,7 +833,14 @@ class TTSService {
                 if (this.errorCount < this.maxRetries) {
                   console.log(`[${this.serviceType} TTS] Retrying after promise rejection... (${this.errorCount}/${this.maxRetries})`);
                   setTimeout(() => {
-                    this.speak(this.fullText).then(resolve); // Always use fullText for retries
+                    // Only retry if we have valid text to speak
+                    if (this.fullText && this.fullText.trim().length > 5) {
+                      this.speak(this.fullText).then(resolve);
+                    } else {
+                      console.warn(`[${this.serviceType} TTS] No valid text for retry, resolving gracefully`);
+                      ttsCoordinator.releaseTTS(this.serviceId);
+                      resolve();
+                    }
                   }, 1000);
                 } else {
                   console.log(`[${this.serviceType} TTS] Max retries exceeded after promise rejection`);
@@ -796,7 +859,14 @@ class TTSService {
           if (this.errorCount < this.maxRetries) {
             console.log(`[${this.serviceType} TTS] Retrying after speak error... (${this.errorCount}/${this.maxRetries})`);
             setTimeout(() => {
-              this.speak(this.fullText).then(resolve); // Always use fullText for retries
+              // Only retry if we have valid text to speak
+              if (this.fullText && this.fullText.trim().length > 5) {
+                this.speak(this.fullText).then(resolve);
+              } else {
+                console.warn(`[${this.serviceType} TTS] No valid text for retry, resolving gracefully`);
+                ttsCoordinator.releaseTTS(this.serviceId);
+                resolve();
+              }
             }, 1000);
           } else {
             console.log(`[${this.serviceType} TTS] Max retries exceeded after speak error`);
@@ -810,6 +880,9 @@ class TTSService {
       const timeoutPromise = new Promise((resolve) => {
         setTimeout(() => {
           console.warn(`[${this.serviceType} TTS] Speak timeout, resolving gracefully`);
+          this.isPlaying = false;
+          this.isPaused = false;
+          ttsCoordinator.releaseTTS(this.serviceId);
           resolve();
         }, 10000); // 10 second timeout
       });
@@ -828,7 +901,13 @@ class TTSService {
       if (this.errorCount < this.maxRetries) {
         console.log(`[${this.serviceType} TTS] Retrying after catch error... (${this.errorCount}/${this.maxRetries})`);
         setTimeout(() => {
-          this.speak(this.fullText); // Always use fullText for retries
+          // Only retry if we have valid text to speak
+          if (this.fullText && this.fullText.trim().length > 5) {
+            this.speak(this.fullText);
+          } else {
+            console.warn(`[${this.serviceType} TTS] No valid text for retry, releasing TTS`);
+            ttsCoordinator.releaseTTS(this.serviceId);
+          }
         }, 1000);
       } else {
         console.log(`[${this.serviceType} TTS] Max retries exceeded in catch block`);
@@ -883,6 +962,29 @@ class TTSService {
       } catch (error) {
         console.warn(`[${this.serviceType} TTS] Stop failed:`, error);
       }
+    }
+  }
+
+  // Reset TTS state - useful for recovery from inconsistent states
+  reset() {
+    console.log(`[${this.serviceType} TTS] Resetting TTS state`);
+    this.stop();
+    
+    // Cancel any ongoing speech synthesis
+    if (window.speechSynthesis && window.speechSynthesis.speaking) {
+      try {
+        window.speechSynthesis.cancel();
+        console.log(`[${this.serviceType} TTS] Canceled ongoing speech synthesis during reset`);
+      } catch (error) {
+        console.warn(`[${this.serviceType} TTS] Failed to cancel speech synthesis during reset:`, error);
+      }
+    }
+    
+    // Release TTS control
+    try {
+      ttsCoordinator.releaseTTS(this.serviceId);
+    } catch (error) {
+      console.warn(`[${this.serviceType} TTS] Failed to release TTS during reset:`, error);
     }
   }
 

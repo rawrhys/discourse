@@ -119,9 +119,19 @@ const PublicLessonView = ({
       try {
         if (ttsService.current && typeof ttsService.current.stop === 'function') {
           ttsService.current.stop();
+          console.log('[PublicLessonView] Stopped TTS on lesson change');
         }
       } catch (error) {
         console.warn('[PublicLessonView] TTS auto-pause error:', error);
+        // If stop fails, try to reset the service
+        try {
+          if (ttsService.current && typeof ttsService.current.reset === 'function') {
+            ttsService.current.reset();
+            console.log('[PublicLessonView] Reset TTS service after stop error');
+          }
+        } catch (resetError) {
+          console.warn('[PublicLessonView] Error resetting TTS service:', resetError);
+        }
       }
       setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
     }
@@ -224,6 +234,20 @@ const PublicLessonView = ({
     };
   }, [lesson, subject, courseId, courseDescription]);
 
+  // Cleanup TTS when component unmounts
+  useEffect(() => {
+    return () => {
+      if (ttsService.current) {
+        try {
+          ttsService.current.stopAndRelease();
+          console.log('[PublicLessonView] Cleaned up TTS service on unmount');
+        } catch (error) {
+          console.warn('[PublicLessonView] Error cleaning up TTS service:', error);
+        }
+      }
+    };
+  }, []);
+
   const handlePlayAudio = useCallback(async () => {
     if (!lesson?.content) return;
     
@@ -238,6 +262,19 @@ const PublicLessonView = ({
         // Start new reading
         if (ttsService.current && typeof ttsService.current.readLesson === 'function') {
           const contentStr = cleanAndCombineContent(lesson.content);
+          
+          // Validate content before attempting TTS
+          if (!contentStr || typeof contentStr !== 'string' || contentStr.trim().length < 10) {
+            console.warn('[PublicLessonView] Content too short or invalid for TTS:', {
+              hasContent: !!contentStr,
+              type: typeof contentStr,
+              length: contentStr ? contentStr.length : 0,
+              trimmedLength: contentStr ? contentStr.trim().length : 0
+            });
+            setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
+            return;
+          }
+          
           const started = await ttsService.current.readLesson({ ...lesson, content: contentStr }, lesson.id);
           
           if (started) {
@@ -359,14 +396,24 @@ const PublicLessonView = ({
 
   // Helper function to clean and combine lesson content
   const cleanAndCombineContent = (content) => {
-    if (!content) return '';
+    if (!content) {
+      console.warn('[PublicLessonView] No content provided to cleanAndCombineContent');
+      return '';
+    }
+    
     if (typeof content === 'string') {
       const cleaned = fixMalformedMarkdown(
         content.replace(/Content generation completed\./g, '')
                .replace(/\|\|\|---\|\|\|/g, '')
                .trim()
       );
-      return cleanupRemainingAsterisks(cleaned);
+      const result = cleanupRemainingAsterisks(cleaned);
+      console.log('[PublicLessonView] String content processed:', {
+        originalLength: content.length,
+        cleanedLength: result.length,
+        hasContent: result.trim().length > 0
+      });
+      return result;
     }
     
     const { introduction, main_content, conclusion } = content;
@@ -378,10 +425,23 @@ const PublicLessonView = ({
     const cleanedMain = main_content ? cleanupRemainingAsterisks(fixMalformedMarkdown(main_content.trim())) : '';
     const cleanedConclusion = conclusion ? cleanupRemainingAsterisks(fixMalformedMarkdown(conclusion.trim())) : '';
     
-    return [cleanedIntro, cleanedMain, cleanedConclusion]
+    const result = [cleanedIntro, cleanedMain, cleanedConclusion]
       .filter(Boolean)
       .join('\n\n')
       .replace(/\|\|\|---\|\|\|/g, '');
+      
+    console.log('[PublicLessonView] Object content processed:', {
+      hasIntro: !!introduction,
+      hasMain: !!main_content,
+      hasConclusion: !!conclusion,
+      introLength: cleanedIntro.length,
+      mainLength: cleanedMain.length,
+      conclusionLength: cleanedConclusion.length,
+      resultLength: result.length,
+      hasContent: result.trim().length > 0
+    });
+    
+    return result;
   };
 
   // Early return if no lesson
