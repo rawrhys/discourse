@@ -707,26 +707,24 @@ class TTSService {
             splitSentences: speakConfig.splitSentences
           });
           
-          try {
-            const speakResult = await this.speech.speak(speakConfig);
+          this.speech.speak(speakConfig).then((speakResult) => {
             console.log(`[${this.serviceType} TTS] Speak command completed successfully:`, speakResult);
             resolve();
-          } catch (error) {
+          }).catch((error) => {
             console.warn(`[${this.serviceType} TTS] Speak promise rejected:`, error);
             
             // Try fallback to native SpeechSynthesis API
             console.log(`[${this.serviceType} TTS] Trying fallback to native SpeechSynthesis API...`);
-            try {
-              await this.fallbackToNativeSpeechSynthesis(textToSpeak);
+            this.fallbackToNativeSpeechSynthesis(textToSpeak).then(() => {
               console.log(`[${this.serviceType} TTS] Fallback speech synthesis completed`);
               resolve();
-            } catch (fallbackError) {
+            }).catch((fallbackError) => {
               console.warn(`[${this.serviceType} TTS] Fallback also failed:`, fallbackError);
               // Handle the error and retry if needed
               this.handleSpeakError(error, textToSpeak, startPosition);
               resolve(); // Resolve to prevent hanging
-            }
-          }
+            });
+          });
         } catch (error) {
           console.warn(`[${this.serviceType} TTS] Error in speak promise:`, error);
           resolve(); // Resolve to prevent hanging
