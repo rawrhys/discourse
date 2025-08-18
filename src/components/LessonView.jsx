@@ -330,8 +330,8 @@ const LessonView = ({
   const [imageFallbackTried, setImageFallbackTried] = useState(false);
   
   // Manage used images as local state like PublicLessonView
-  const [usedImageTitles, setUsedImageTitles] = useState(new Set(usedImageTitles));
-  const [usedImageUrls, setUsedImageUrls] = useState(new Set(usedImageUrls));
+  const [localUsedImageTitles, setLocalUsedImageTitles] = useState(new Set(usedImageTitles));
+  const [localUsedImageUrls, setLocalUsedImageUrls] = useState(new Set(usedImageUrls));
   
   // Use the lesson prop as the main lesson data
   const propLesson = lesson;
@@ -395,8 +395,8 @@ const LessonView = ({
         propLesson?.title,
         subject, // Pass the course subject here
         cleanAndCombineContent(propLesson?.content),
-        usedImageTitles,
-        usedImageUrls,
+        localUsedImageTitles,
+        localUsedImageUrls,
         courseId,
         propLesson?.id || lessonId,
         courseDescription
@@ -408,8 +408,8 @@ const LessonView = ({
         
         // Update local used image tracking when a new image is found
         if (result) {
-          setUsedImageTitles(prev => new Set([...prev, result.title]));
-          setUsedImageUrls(prev => new Set([...prev, result.url]));
+          setLocalUsedImageTitles(prev => new Set([...prev, result.title]));
+          setLocalUsedImageUrls(prev => new Set([...prev, result.url]));
         }
         
         if (onUpdateLesson && propLesson?.id) {
@@ -793,8 +793,8 @@ const LessonView = ({
             propLesson.title,
             subject, // Pass the course subject here
             cleanAndCombineContent(propLesson.content),
-            usedImageTitles,
-            usedImageUrls,
+            localUsedImageTitles,
+            localUsedImageUrls,
             courseId,
             propLesson?.id || lessonId,
             courseDescription
@@ -806,8 +806,8 @@ const LessonView = ({
             
             // Update local used image tracking when a new image is found
             if (result) {
-              setUsedImageTitles(prev => new Set([...prev, result.title]));
-              setUsedImageUrls(prev => new Set([...prev, result.url]));
+              setLocalUsedImageTitles(prev => new Set([...prev, result.title]));
+              setLocalUsedImageUrls(prev => new Set([...prev, result.url]));
             }
             
             // Persist replacement image into lesson if we fetched a new one
@@ -844,7 +844,7 @@ const LessonView = ({
       // Abort any pending request
       abortController.abort();
     };
-  }, [propLesson, activeModule?.id, usedImageTitles, usedImageUrls, imageTitleCounts, imageUrlCounts, courseId, lessonId, normalizeImageUrl, onUpdateLesson, subject, courseDescription]);
+  }, [propLesson, activeModule?.id, localUsedImageTitles, localUsedImageUrls, imageTitleCounts, imageUrlCounts, courseId, lessonId, normalizeImageUrl, onUpdateLesson, subject, courseDescription]);
 
   // Cleanup TTS on unmount
   useEffect(() => {
