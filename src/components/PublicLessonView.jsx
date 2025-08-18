@@ -98,6 +98,13 @@ const PublicLessonView = ({
       return;
     }
     
+    // Only stop TTS if it's actually playing or paused
+    const currentStatus = publicTTSService.getStatus();
+    if (!currentStatus.isPlaying && !currentStatus.isPaused) {
+      console.log('[PublicLessonView] TTS not playing, no need to stop on lesson change');
+      return;
+    }
+    
     // Set flag to prevent TTS conflicts during lesson change
     isLessonChanging.current = true;
     console.log('[PublicLessonView] Lesson change detected, pausing TTS');
@@ -299,7 +306,7 @@ const PublicLessonView = ({
       console.error('[PublicLessonView] TTS error:', error);
       setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
     }
-  }, [lesson?.id, lesson?.content]); // Removed TTS status dependencies to prevent rapid recreation
+  }, []); // Removed dependencies to prevent false lesson change detection
 
   const handleStopAudio = useCallback(async () => {
     // Add a small delay to prevent rapid button clicks
