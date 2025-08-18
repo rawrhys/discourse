@@ -84,6 +84,10 @@ class TTSService {
     // Browser compatibility check
     this.browserSupport = this.checkBrowserSupport();
     
+    // Audio context for browser compatibility
+    this.audioContext = null;
+    this.initAudioContext();
+    
     // Initialize the speech engine
     this.initSpeech();
   }
@@ -107,6 +111,30 @@ class TTSService {
 
     console.log(`[${this.serviceType} TTS] Browser support:`, support);
     return support;
+  }
+
+  // Initialize audio context for browser compatibility
+  initAudioContext() {
+    try {
+      if (typeof AudioContext !== 'undefined') {
+        this.audioContext = new AudioContext();
+        console.log(`[${this.serviceType} TTS] Audio context created, state:`, this.audioContext.state);
+      }
+    } catch (error) {
+      console.warn(`[${this.serviceType} TTS] Failed to create audio context:`, error);
+    }
+  }
+
+  // Resume audio context if suspended
+  async resumeAudioContext() {
+    if (this.audioContext && this.audioContext.state === 'suspended') {
+      try {
+        await this.audioContext.resume();
+        console.log(`[${this.serviceType} TTS] Audio context resumed`);
+      } catch (error) {
+        console.warn(`[${this.serviceType} TTS] Failed to resume audio context:`, error);
+      }
+    }
   }
 
   // Enhanced initialization with multiple fallback strategies
@@ -143,6 +171,13 @@ class TTSService {
       this.isInitialized = true;
       this.initializationAttempts = 0; // Reset on success
       console.log(`[${this.serviceType} TTS] Speech engine initialized successfully`);
+      
+      // Test TTS functionality after initialization
+      if (process.env.NODE_ENV === 'development') {
+        setTimeout(() => {
+          this.testTTS();
+        }, 1000); // Test after 1 second
+      }
       
     } catch (error) {
       console.warn(`[${this.serviceType} TTS] Failed to initialize speech engine (attempt ${this.initializationAttempts}):`, error);
@@ -256,8 +291,13 @@ class TTSService {
       'listeners': {
         'onvoiceschanged': (voices) => {
           console.log(`[${this.serviceType} TTS] Voices loaded:`, voices.length);
+          // Log available voices for debugging
+          if (voices && voices.length > 0) {
+            console.log(`[${this.serviceType} TTS] Available voices:`, voices.map(v => `${v.name} (${v.lang})`));
+          }
         },
         'onstart': () => {
+          console.log(`[${this.serviceType} TTS] Speech started - audio should be playing`);
           // Only set playing state if not manually paused
           if (!this.wasManuallyPaused) {
             this.isPlaying = true;
@@ -272,17 +312,20 @@ class TTSService {
           console.log(`[${this.serviceType} TTS] Started speaking (manually paused: ${this.wasManuallyPaused})`);
         },
         'onend': () => {
+          console.log(`[${this.serviceType} TTS] Speech ended - chunk completed`);
           this.isPlaying = false;
           this.isPaused = false;
           this.finishedNormally = true;
           console.log(`[${this.serviceType} TTS] Finished speaking`);
         },
         'onpause': () => {
+          console.log(`[${this.serviceType} TTS] Speech paused`);
           this.isPaused = true;
           this.isPlaying = false;
           console.log(`[${this.serviceType} TTS] Paused`);
         },
         'onresume': () => {
+          console.log(`[${this.serviceType} TTS] Speech resumed`);
           this.isPaused = false;
           this.isPlaying = true;
           console.log(`[${this.serviceType} TTS] Resumed`);
@@ -302,7 +345,7 @@ class TTSService {
           'lang': 'en-GB',
           'rate': 0.9,
           'pitch': 1,
-          'voice': 'Google UK English Female'
+          'voice': this.selectBestVoice(['Google UK English Female', 'en-GB', 'en'])
         };
       case 2:
         return {
@@ -310,7 +353,7 @@ class TTSService {
           'lang': 'en-US',
           'rate': 1.0,
           'pitch': 1,
-          'voice': null // Let it choose default
+          'voice': this.selectBestVoice(['Google US English', 'en-US', 'en'])
         };
       default:
         return {
@@ -318,9 +361,51 @@ class TTSService {
           'lang': 'en',
           'rate': 1.0,
           'pitch': 1,
-          'voice': null,
+          'voice': this.selectBestVoice(['en']),
           'volume': 0.8 // Slightly lower volume for fallback
         };
+    }
+  }
+
+  // Select the best available voice from a list of preferences
+  selectBestVoice(preferences) {
+    try {
+      const voices = window.speechSynthesis.getVoices();
+      if (!voices || voices.length === 0) {
+        console.log(`[${this.serviceType} TTS] No voices available, using default`);
+        return null;
+      }
+
+      // Log all available voices for debugging
+      console.log(`[${this.serviceType} TTS] Available voices:`, voices.map(v => `${v.name} (${v.lang})`));
+
+      // Try to find a voice that matches our preferences
+      for (const preference of preferences) {
+        const voice = voices.find(v => 
+          v.name.includes(preference) || 
+          v.lang.startsWith(preference) ||
+          v.lang === preference
+        );
+        
+        if (voice) {
+          console.log(`[${this.serviceType} TTS] Selected voice: ${voice.name} (${voice.lang})`);
+          return voice.name;
+        }
+      }
+
+      // Fallback to first English voice
+      const englishVoice = voices.find(v => v.lang.startsWith('en'));
+      if (englishVoice) {
+        console.log(`[${this.serviceType} TTS] Fallback to English voice: ${englishVoice.name} (${englishVoice.lang})`);
+        return englishVoice.name;
+      }
+
+      // Last resort - use first available voice
+      console.log(`[${this.serviceType} TTS] Using first available voice: ${voices[0].name} (${voices[0].lang})`);
+      return voices[0].name;
+    } catch (error) {
+      console.warn(`[${this.serviceType} TTS] Error selecting voice:`, error);
+      return null;
     }
   }
 
@@ -653,6 +738,9 @@ class TTSService {
         return;
       }
       
+      // Resume audio context if suspended (browser compatibility)
+      await this.resumeAudioContext();
+      
       console.log(`[${this.serviceType} TTS] Attempting to speak text (length: ${text ? text.length : 'undefined'})`);
       console.log(`[${this.serviceType} TTS] Text type:`, typeof text);
       console.log(`[${this.serviceType} TTS] Text preview:`, text ? text.substring(0, 100) + '...' : 'NO TEXT');
@@ -924,18 +1012,22 @@ class TTSService {
           
           // Use speak-tts library with better error handling and event listeners
           try {
+            // Resume audio context before speaking
+            this.resumeAudioContext();
+            
             // Add event listeners for better state tracking
             const speechPromise = this.speech.speak(speakConfig);
             
             // Set up event listeners for better tracking
             let hasResolved = false;
+            let speechStarted = false;
             
             // Add a completion handler
             const completeHandler = (result) => {
               if (!hasResolved) {
                 hasResolved = true;
-              console.log(`[${this.serviceType} TTS] Chunk ${i + 1} speak-tts completed successfully:`, result);
-              resolve();
+                console.log(`[${this.serviceType} TTS] Chunk ${i + 1} speak-tts completed successfully:`, result);
+                resolve();
               }
             };
             
@@ -943,19 +1035,34 @@ class TTSService {
             const errorHandler = (error) => {
               if (!hasResolved) {
                 hasResolved = true;
-              console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} speak-tts failed:`, error);
-              // Try to reinitialize if there's a voice error
-              if (error && (error.includes('voice') || error.includes('not-allowed'))) {
-                console.log(`[${this.serviceType} TTS] Voice error detected, attempting reinitialization`);
-                this.isInitialized = false;
-                this.initSpeech();
+                console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} speak-tts failed:`, error);
+                // Try to reinitialize if there's a voice error
+                if (error && (error.includes('voice') || error.includes('not-allowed'))) {
+                  console.log(`[${this.serviceType} TTS] Voice error detected, attempting reinitialization`);
+                  this.isInitialized = false;
+                  this.initSpeech();
+                }
+                resolve(); // Continue with next chunk
               }
-              resolve(); // Continue with next chunk
-              }
+            };
+            
+            // Add a start handler to detect if speech actually started
+            const startHandler = () => {
+              speechStarted = true;
+              console.log(`[${this.serviceType} TTS] Chunk ${i + 1} speech actually started`);
             };
             
             // Handle the promise
             speechPromise.then(completeHandler).catch(errorHandler);
+            
+            // Add a start detection timeout
+            setTimeout(() => {
+              if (!speechStarted && !hasResolved) {
+                console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} speech didn't start within 2 seconds`);
+                // Try to force start by resuming audio context
+                this.resumeAudioContext();
+              }
+            }, 2000);
             
             // Add a fallback timeout in case the promise never resolves
             setTimeout(() => {
@@ -1704,6 +1811,36 @@ class TTSService {
       }
     } catch (error) {
       console.warn(`[${this.serviceType} TTS] Error clearing server pause data:`, error);
+    }
+  }
+
+  // Test TTS functionality with a simple utterance
+  async testTTS() {
+    try {
+      console.log(`[${this.serviceType} TTS] Testing TTS functionality...`);
+      
+      // Resume audio context
+      await this.resumeAudioContext();
+      
+      // Create a simple test utterance
+      const testUtterance = new SpeechSynthesisUtterance("Hello, this is a test.");
+      testUtterance.rate = 1.0;
+      testUtterance.pitch = 1.0;
+      testUtterance.volume = 1.0;
+      
+      // Add event listeners for debugging
+      testUtterance.onstart = () => console.log(`[${this.serviceType} TTS] Test speech started`);
+      testUtterance.onend = () => console.log(`[${this.serviceType} TTS] Test speech ended`);
+      testUtterance.onerror = (e) => console.warn(`[${this.serviceType} TTS] Test speech error:`, e);
+      
+      // Speak the test utterance
+      window.speechSynthesis.speak(testUtterance);
+      
+      console.log(`[${this.serviceType} TTS] Test utterance queued`);
+      return true;
+    } catch (error) {
+      console.error(`[${this.serviceType} TTS] Test TTS failed:`, error);
+      return false;
     }
   }
 
