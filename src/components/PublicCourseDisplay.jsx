@@ -40,6 +40,7 @@ const PublicCourseDisplay = () => {
   const [unlockedModuleName, setUnlockedModuleName] = useState('');
   const [showCaptcha, setShowCaptcha] = useState(false);
   const [captchaVerified, setCaptchaVerified] = useState(false);
+  const [captchaData, setCaptchaData] = useState(null);
   
   // Load quiz scores from session and apply to course data
   const loadSessionQuizScores = useCallback(async (courseData, sessionId) => {
@@ -80,10 +81,14 @@ const PublicCourseDisplay = () => {
   const handleCaptchaSuccess = useCallback(() => {
     setCaptchaVerified(true);
     setShowCaptcha(false);
+    setCaptchaData(null);
+    // Retry fetching the course data
+    window.location.reload();
   }, []);
 
   const handleCaptchaCancel = useCallback(() => {
     setShowCaptcha(false);
+    setCaptchaData(null);
     setError('Access denied. Please complete the security verification to continue.');
   }, []);
 
@@ -223,19 +228,21 @@ const PublicCourseDisplay = () => {
         try {
           let courseData;
           
-          // Check if CAPTCHA is required
-          if (!captchaVerified) {
-            try {
-              courseData = await api.getPublicCourse(courseId, existingSessionId);
-            } catch (error) {
-              if (error.message && error.message.includes('requiresCaptcha')) {
-                setShowCaptcha(true);
-                return;
-              }
-              throw error;
-            }
-          } else {
+          // Always try to get course data - CAPTCHA will be required for public access
+          try {
             courseData = await api.getPublicCourse(courseId, existingSessionId);
+          } catch (error) {
+            // Check if server is requesting CAPTCHA
+            if (error.response && error.response.status === 200 && error.response.data && error.response.data.requiresCaptcha) {
+              setCaptchaData({
+                challenge: error.response.data.challenge,
+                challengeKey: error.response.data.challengeKey,
+                message: error.response.data.message
+              });
+              setShowCaptcha(true);
+              return;
+            }
+            throw error;
           }
           
           // The backend will handle session management and return the appropriate sessionId
@@ -280,7 +287,7 @@ const PublicCourseDisplay = () => {
       }
     };
     fetchCourse();
-  }, [courseId, api, captchaVerified]);
+  }, [courseId, api]);
 
   useEffect(() => {
     const checkMobile = () => window.innerWidth < 768;
@@ -412,6 +419,8 @@ const PublicCourseDisplay = () => {
         <CaptchaChallenge
           onSuccess={handleCaptchaSuccess}
           onCancel={handleCaptchaCancel}
+          challengeData={captchaData?.challenge}
+          challengeKey={captchaData?.challengeKey}
         />
       )}
       <div className={`fixed inset-y-0 left-0 transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 transition-transform duration-200 ease-in-out bg-white w-80 shadow-lg z-30 flex flex-col`}>

@@ -142,32 +142,36 @@ export const captchaChallenge = (req, res, next) => {
   const challenge = req.query.challenge;
   const response = req.query.response;
   
-  // Generate simple math challenge
+  // Generate simple math challenge for every public access
   if (!challenge) {
     const num1 = Math.floor(Math.random() * 10) + 1;
     const num2 = Math.floor(Math.random() * 10) + 1;
     const challengeData = `${num1}+${num2}`;
     const expectedResponse = num1 + num2;
     
-    // Store challenge in session
+    // Store challenge in session with unique key for each request
     if (!req.session.captchaChallenges) {
       req.session.captchaChallenges = {};
     }
-    req.session.captchaChallenges[sessionId] = {
+    const challengeKey = `${sessionId}_${Date.now()}`;
+    req.session.captchaChallenges[challengeKey] = {
       challenge: challengeData,
       expectedResponse: expectedResponse,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      sessionId: sessionId
     };
     
     return res.status(200).json({
       requiresCaptcha: true,
       challenge: challengeData,
+      challengeKey: challengeKey,
       message: 'Please solve this simple math problem to continue'
     });
   }
   
-  // Verify response
-  const storedChallenge = req.session.captchaChallenges?.[sessionId];
+  // Verify response using challenge key
+  const challengeKey = req.query.challengeKey;
+  const storedChallenge = req.session.captchaChallenges?.[challengeKey];
   if (!storedChallenge) {
     return res.status(400).json({
       error: 'Invalid challenge session'
@@ -189,15 +193,13 @@ export const captchaChallenge = (req, res, next) => {
     });
   }
   
-  // Mark as verified
-  delete req.session.captchaChallenges[sessionId];
-  req.session.verifiedSessions = req.session.verifiedSessions || new Set();
-  req.session.verifiedSessions.add(sessionId);
+  // Mark this specific challenge as completed and allow access
+  delete req.session.captchaChallenges[challengeKey];
   
   next();
 };
 
-// Session verification middleware
+// Session verification middleware - Always require CAPTCHA for public access
 export const verifySession = (req, res, next) => {
   const sessionId = req.query.sessionId;
   
@@ -206,12 +208,7 @@ export const verifySession = (req, res, next) => {
     return next();
   }
   
-  // Check if session is verified
-  if (req.session.verifiedSessions && req.session.verifiedSessions.has(sessionId)) {
-    return next();
-  }
-  
-  // Require CAPTCHA for unverified sessions
+  // Always require CAPTCHA for public course access
   return captchaChallenge(req, res, next);
 };
 

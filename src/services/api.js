@@ -133,6 +133,19 @@ const api = {
                 'Content-Type': 'application/json',
             },
         }).then(response => {
+            // Handle CAPTCHA response (200 status with requiresCaptcha flag)
+            if (response.status === 200) {
+                return response.json().then(data => {
+                    if (data.requiresCaptcha) {
+                        // Create a custom error that includes the CAPTCHA data
+                        const error = new Error('CAPTCHA required');
+                        error.response = { status: 200, data: data };
+                        throw error;
+                    }
+                    return data;
+                });
+            }
+            
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }

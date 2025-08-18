@@ -1,15 +1,20 @@
 import React, { useState, useEffect } from 'react';
 
-const CaptchaChallenge = ({ onSuccess, onCancel }) => {
+const CaptchaChallenge = ({ onSuccess, onCancel, challengeData, challengeKey }) => {
   const [challenge, setChallenge] = useState('');
   const [response, setResponse] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    // Generate initial challenge
-    generateChallenge();
-  }, []);
+    // Use the challenge data from server
+    if (challengeData) {
+      setChallenge(challengeData);
+    } else {
+      // Fallback to local generation
+      generateChallenge();
+    }
+  }, [challengeData]);
 
   const generateChallenge = () => {
     const num1 = Math.floor(Math.random() * 10) + 1;
@@ -25,13 +30,33 @@ const CaptchaChallenge = ({ onSuccess, onCancel }) => {
     setError('');
 
     try {
-      const expectedResponse = eval(challenge.replace(' + ', '+'));
-      
-      if (parseInt(response) === expectedResponse) {
-        onSuccess();
+      // If we have a challenge key, verify with server
+      if (challengeKey) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const sessionId = urlParams.get('sessionId');
+        const courseId = window.location.pathname.split('/').pop();
+        
+        const verifyUrl = `/api/public/courses/${courseId}?sessionId=${sessionId}&challenge=${challenge}&response=${response}&challengeKey=${challengeKey}`;
+        
+        const response = await fetch(verifyUrl);
+        if (response.ok) {
+          onSuccess();
+        } else {
+          const errorData = await response.json();
+          setError(errorData.message || 'Incorrect answer. Please try again.');
+          // Request new challenge from server
+          onCancel(); // This will trigger a new request
+        }
       } else {
-        setError('Incorrect answer. Please try again.');
-        generateChallenge();
+        // Fallback to local verification
+        const expectedResponse = eval(challenge.replace(' + ', '+'));
+        
+        if (parseInt(response) === expectedResponse) {
+          onSuccess();
+        } else {
+          setError('Incorrect answer. Please try again.');
+          generateChallenge();
+        }
       }
     } catch (err) {
       setError('Invalid input. Please try again.');
