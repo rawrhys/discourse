@@ -232,8 +232,12 @@ const PublicCourseDisplay = () => {
           try {
             courseData = await api.getPublicCourse(courseId, existingSessionId);
           } catch (error) {
+            console.log('[PublicCourseDisplay] API error caught:', error);
+            console.log('[PublicCourseDisplay] Error response:', error.response);
+            
             // Check if server is requesting CAPTCHA
             if (error.response && error.response.status === 200 && error.response.data && error.response.data.requiresCaptcha) {
+              console.log('[PublicCourseDisplay] CAPTCHA required, setting up CAPTCHA:', error.response.data);
               setCaptchaData({
                 challenge: error.response.data.challenge,
                 challengeKey: error.response.data.challengeKey,

@@ -133,10 +133,13 @@ const api = {
                 'Content-Type': 'application/json',
             },
         }).then(response => {
+            console.log('📡 [API SERVICE] Response status:', response.status);
             // Handle CAPTCHA response (200 status with requiresCaptcha flag)
             if (response.status === 200) {
                 return response.json().then(data => {
+                    console.log('📡 [API SERVICE] Response data:', data);
                     if (data.requiresCaptcha) {
+                        console.log('📡 [API SERVICE] CAPTCHA detected, throwing error');
                         // Create a custom error that includes the CAPTCHA data
                         const error = new Error('CAPTCHA required');
                         error.response = { status: 200, data: data };
