@@ -43,6 +43,7 @@ const PublicLessonView = ({
   const renderStartTime = useRef(performance.now());
   const abortControllerRef = useRef(null);
   const ttsStateUpdateTimeoutRef = useRef(null); // For debouncing state updates
+  const isLessonChanging = useRef(false); // Track lesson changes to prevent TTS conflicts
 
   // Initialize session-specific TTS service
   useEffect(() => {
@@ -115,9 +116,15 @@ const PublicLessonView = ({
 
   // Auto-pause TTS when lesson changes
   useEffect(() => {
+    // Set flag to prevent TTS conflicts during lesson change
+    isLessonChanging.current = true;
+    
     if (ttsStatus.isPlaying || ttsStatus.isPaused) {
       try {
-        if (ttsService.current && typeof ttsService.current.stop === 'function') {
+        if (ttsService.current && typeof ttsService.current.stopAndClear === 'function') {
+          ttsService.current.stopAndClear();
+          console.log('[PublicLessonView] Stopped and cleared TTS on lesson change');
+        } else if (ttsService.current && typeof ttsService.current.stop === 'function') {
           ttsService.current.stop();
           console.log('[PublicLessonView] Stopped TTS on lesson change');
         }
@@ -135,6 +142,11 @@ const PublicLessonView = ({
       }
       setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
     }
+    
+    // Clear the flag after a short delay to allow TTS to settle
+    setTimeout(() => {
+      isLessonChanging.current = false;
+    }, 500);
   }, [lesson?.id, ttsStatus.isPlaying, ttsStatus.isPaused]);
 
   // Sync TTS state with service state periodically
@@ -250,6 +262,12 @@ const PublicLessonView = ({
 
   const handlePlayAudio = useCallback(async () => {
     if (!lesson?.content) return;
+    
+    // Prevent TTS during lesson changes
+    if (isLessonChanging.current) {
+      console.log('[PublicLessonView] Skipping TTS request during lesson change');
+      return;
+    }
     
     try {
       if (ttsStatus.isPaused) {

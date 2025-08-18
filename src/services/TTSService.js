@@ -251,6 +251,11 @@ class TTSService {
       
       const checkVoices = () => {
         try {
+          if (!window.speechSynthesis) {
+            console.warn(`[${this.serviceType} TTS] Speech synthesis not available`);
+            return false;
+          }
+          
           const voices = window.speechSynthesis.getVoices();
           if (voices && voices.length > 0) {
             console.log(`[${this.serviceType} TTS] Voices loaded:`, voices.length);
@@ -260,6 +265,7 @@ class TTSService {
           }
         } catch (error) {
           console.warn(`[${this.serviceType} TTS] Error checking voices:`, error);
+          // Don't throw, just return false to continue checking
         }
         return false;
       };
@@ -667,6 +673,16 @@ class TTSService {
       return;
     }
     
+    // Check if service is properly initialized
+    if (!this.isInitialized || !this.speech) {
+      console.warn(`[${this.serviceType} TTS] Service not properly initialized, attempting to reinitialize`);
+      await this.initSpeech();
+      if (!this.isInitialized) {
+        console.warn(`[${this.serviceType} TTS] Failed to initialize speech engine for speak`);
+        return;
+      }
+    }
+    
     // Reset if we have too many errors
     if (this.errorCount >= this.maxRetries) {
       console.warn(`[${this.serviceType} TTS] Too many errors, resetting TTS state`);
@@ -835,9 +851,10 @@ class TTSService {
                   setTimeout(() => {
                     // Only retry if we have valid text to speak
                     if (this.fullText && this.fullText.trim().length > 5) {
+                      console.log(`[${this.serviceType} TTS] Retrying with text length: ${this.fullText.trim().length}`);
                       this.speak(this.fullText).then(resolve);
                     } else {
-                      console.warn(`[${this.serviceType} TTS] No valid text for retry, resolving gracefully`);
+                      console.warn(`[${this.serviceType} TTS] No valid text for retry (fullText: ${this.fullText ? this.fullText.length : 'undefined'}), resolving gracefully`);
                       ttsCoordinator.releaseTTS(this.serviceId);
                       resolve();
                     }
@@ -861,9 +878,10 @@ class TTSService {
             setTimeout(() => {
               // Only retry if we have valid text to speak
               if (this.fullText && this.fullText.trim().length > 5) {
+                console.log(`[${this.serviceType} TTS] Retrying with text length: ${this.fullText.trim().length}`);
                 this.speak(this.fullText).then(resolve);
               } else {
-                console.warn(`[${this.serviceType} TTS] No valid text for retry, resolving gracefully`);
+                console.warn(`[${this.serviceType} TTS] No valid text for retry (fullText: ${this.fullText ? this.fullText.length : 'undefined'}), resolving gracefully`);
                 ttsCoordinator.releaseTTS(this.serviceId);
                 resolve();
               }
@@ -903,9 +921,10 @@ class TTSService {
         setTimeout(() => {
           // Only retry if we have valid text to speak
           if (this.fullText && this.fullText.trim().length > 5) {
+            console.log(`[${this.serviceType} TTS] Retrying with text length: ${this.fullText.trim().length}`);
             this.speak(this.fullText);
           } else {
-            console.warn(`[${this.serviceType} TTS] No valid text for retry, releasing TTS`);
+            console.warn(`[${this.serviceType} TTS] No valid text for retry (fullText: ${this.fullText ? this.fullText.length : 'undefined'}), releasing TTS`);
             ttsCoordinator.releaseTTS(this.serviceId);
           }
         }, 1000);
@@ -953,14 +972,35 @@ class TTSService {
         this.isPaused = false;
         this.errorCount = 0; // Reset error count when stopping
         
-        // Clear text when stopping
+        // Clear current text but preserve fullText for potential retries
         this.currentText = '';
         this.currentLessonId = null;
-        this.fullText = '';
+        // Don't clear fullText here - it's needed for retries
         
         console.log(`[${this.serviceType} TTS] Stopped`);
       } catch (error) {
         console.warn(`[${this.serviceType} TTS] Stop failed:`, error);
+      }
+    }
+  }
+
+  // Stop and clear all text (for lesson changes)
+  stopAndClear() {
+    if (this.isInitialized) {
+      try {
+        this.speech.cancel();
+        this.isPlaying = false;
+        this.isPaused = false;
+        this.errorCount = 0;
+        
+        // Clear all text when stopping for lesson changes
+        this.currentText = '';
+        this.currentLessonId = null;
+        this.fullText = '';
+        
+        console.log(`[${this.serviceType} TTS] Stopped and cleared`);
+      } catch (error) {
+        console.warn(`[${this.serviceType} TTS] Stop and clear failed:`, error);
       }
     }
   }
