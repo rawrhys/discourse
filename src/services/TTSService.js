@@ -782,6 +782,12 @@ class TTSService {
     this.speakingStartTime = Date.now();
     
     for (let i = 0; i < chunks.length; i++) {
+      // Additional safety check - chunks might become invalid during execution
+      if (!chunks || !Array.isArray(chunks)) {
+        console.warn(`[${this.serviceType} TTS] chunks became invalid during execution, stopping`);
+        break;
+      }
+      
       // Check if we should stop due to pause or errors
       if (!this.isInitialized || this.errorCount >= this.maxRetries) {
         console.log(`[${this.serviceType} TTS] Stopping chunked speech due to errors or initialization issues`);
@@ -795,7 +801,18 @@ class TTSService {
         return; // Exit but don't reset state
       }
       
+      // Safety check for chunk access
+      if (i >= chunks.length) {
+        console.warn(`[${this.serviceType} TTS] Chunk index ${i} is out of bounds, stopping`);
+        break;
+      }
+      
       const chunk = chunks[i];
+      if (!chunk) {
+        console.warn(`[${this.serviceType} TTS] Chunk ${i} is null or undefined, skipping`);
+        continue;
+      }
+      
       this.currentChunkIndex = i;
       console.log(`[${this.serviceType} TTS] Speaking chunk ${i + 1}/${chunks.length} (${chunk.length} chars)`);
       
@@ -816,16 +833,24 @@ class TTSService {
           }
         }
         
-        // Use speak-tts library only (no native fallback)
+        // Use speak-tts library with better debugging
         const chunkPromise = new Promise((resolve) => {
           const speakConfig = {
             text: chunk,
             splitSentences: false
           };
           
-          // Use speak-tts library only (no native fallback)
-          this.speech.speak(speakConfig).then(() => {
-            console.log(`[${this.serviceType} TTS] Chunk ${i + 1} completed successfully`);
+          console.log(`[${this.serviceType} TTS] Calling speech.speak for chunk ${i + 1} with config:`, {
+            textLength: chunk.length,
+            textPreview: chunk.substring(0, 50) + '...',
+            splitSentences: speakConfig.splitSentences,
+            speechInitialized: this.isInitialized,
+            speechObject: !!this.speech
+          });
+          
+          // Use speak-tts library
+          this.speech.speak(speakConfig).then((result) => {
+            console.log(`[${this.serviceType} TTS] Chunk ${i + 1} speak-tts completed successfully:`, result);
             resolve();
           }).catch((error) => {
             console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} speak-tts failed:`, error);
@@ -849,7 +874,7 @@ class TTSService {
         }
         
         // Small delay between chunks to prevent overwhelming the system
-        if (i < chunks.length - 1) {
+        if (chunks && i < chunks.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 100));
         }
         
@@ -872,18 +897,32 @@ class TTSService {
 
   // Resume chunked speech from current position
   async resumeChunkedSpeech() {
-    if (!this.isChunkedSpeech || !this.currentChunks || this.currentChunkIndex < 0) {
-      console.warn(`[${this.serviceType} TTS] Cannot resume chunked speech - invalid state:`, {
-        isChunkedSpeech: this.isChunkedSpeech,
-        hasCurrentChunks: !!this.currentChunks,
-        currentChunkIndex: this.currentChunkIndex
-      });
+    // Enhanced null checks to prevent the error
+    if (!this.isChunkedSpeech) {
+      console.warn(`[${this.serviceType} TTS] Cannot resume chunked speech - not in chunked speech mode`);
       return;
     }
     
-    // Additional null check for currentChunks
-    if (!this.currentChunks || !Array.isArray(this.currentChunks) || this.currentChunks.length === 0) {
-      console.warn(`[${this.serviceType} TTS] Cannot resume chunked speech - currentChunks is invalid:`, this.currentChunks);
+    if (!this.currentChunks) {
+      console.warn(`[${this.serviceType} TTS] Cannot resume chunked speech - currentChunks is null`);
+      return;
+    }
+    
+    if (!Array.isArray(this.currentChunks)) {
+      console.warn(`[${this.serviceType} TTS] Cannot resume chunked speech - currentChunks is not an array:`, typeof this.currentChunks);
+      return;
+    }
+    
+    if (this.currentChunks.length === 0) {
+      console.warn(`[${this.serviceType} TTS] Cannot resume chunked speech - currentChunks is empty`);
+      return;
+    }
+    
+    if (this.currentChunkIndex < 0 || this.currentChunkIndex >= this.currentChunks.length) {
+      console.warn(`[${this.serviceType} TTS] Cannot resume chunked speech - invalid chunk index:`, {
+        currentChunkIndex: this.currentChunkIndex,
+        chunksLength: this.currentChunks.length
+      });
       return;
     }
     
@@ -897,6 +936,12 @@ class TTSService {
     
     // Continue from the current chunk
     for (let i = this.currentChunkIndex; i < this.currentChunks.length; i++) {
+      // Additional safety check - currentChunks might become null during execution
+      if (!this.currentChunks || !Array.isArray(this.currentChunks)) {
+        console.warn(`[${this.serviceType} TTS] currentChunks became invalid during resume, stopping`);
+        break;
+      }
+      
       // Check if we should stop due to pause or errors
       if (!this.isInitialized || this.errorCount >= this.maxRetries) {
         console.log(`[${this.serviceType} TTS] Stopping chunked speech due to errors or initialization issues`);
@@ -910,7 +955,18 @@ class TTSService {
         return;
       }
       
+      // Safety check for chunk access
+      if (i >= this.currentChunks.length) {
+        console.warn(`[${this.serviceType} TTS] Chunk index ${i} is out of bounds, stopping`);
+        break;
+      }
+      
       const chunk = this.currentChunks[i];
+      if (!chunk) {
+        console.warn(`[${this.serviceType} TTS] Chunk ${i} is null or undefined, skipping`);
+        continue;
+      }
+      
       this.currentChunkIndex = i;
       console.log(`[${this.serviceType} TTS] Speaking chunk ${i + 1}/${this.currentChunks.length} (${chunk.length} chars)`);
       
@@ -958,7 +1014,7 @@ class TTSService {
         await Promise.race([chunkPromise, timeoutPromise]);
         
         // Small delay between chunks to prevent overwhelming the system
-        if (i < this.currentChunks.length - 1) {
+        if (this.currentChunks && i < this.currentChunks.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 100));
         }
         
