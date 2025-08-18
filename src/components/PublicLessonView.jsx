@@ -749,6 +749,46 @@ const PublicLessonView = ({
     parsedContent = displayContent || '';
   }
   
+  // Final cleanup of any remaining JSON structure words after markdown processing
+  const beforeCleanup = parsedContent;
+  parsedContent = parsedContent
+    // Remove any remaining JSON structure words that might have survived
+    .replace(/\bintroduction\b/gi, '')
+    .replace(/\bmain_content\b/gi, '')
+    .replace(/\bconclusion\b/gi, '')
+    .replace(/\bmain\b/gi, '')
+    .replace(/\bintro\b/gi, '')
+    .replace(/\bIntroduction\b/g, '')
+    .replace(/\bMain Content\b/g, '')
+    .replace(/\bConclusion\b/g, '')
+    .replace(/\bMain\b/g, '')
+    .replace(/\bIntro\b/g, '')
+    .replace(/\bINTRODUCTION\b/g, '')
+    .replace(/\bMAIN_CONTENT\b/g, '')
+    .replace(/\bCONCLUSION\b/g, '')
+    .replace(/\bMAIN\b/g, '')
+    .replace(/\bINTRO\b/g, '')
+    // Remove any remaining JSON patterns
+    .replace(/"introduction":/gi, '')
+    .replace(/"main_content":/gi, '')
+    .replace(/"conclusion":/gi, '')
+    .replace(/"main":/gi, '')
+    .replace(/"intro":/gi, '')
+    // Final space normalization
+    .replace(/\s+/g, ' ')
+    .trim();
+  
+  // Debug logging to see if cleanup made a difference
+  if (beforeCleanup !== parsedContent) {
+    console.log('[PublicLessonView] Final cleanup removed JSON artifacts:', {
+      beforeLength: beforeCleanup.length,
+      afterLength: parsedContent.length,
+      removed: beforeCleanup.length - parsedContent.length,
+      sampleBefore: beforeCleanup.substring(0, 200) + '...',
+      sampleAfter: parsedContent.substring(0, 200) + '...'
+    });
+  }
+  
   // Create academic references footer
   let referencesFooter = null;
   try {
