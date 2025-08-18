@@ -231,6 +231,18 @@ const PublicCourseDisplay = () => {
           // Always try to get course data - CAPTCHA will be required for public access
           try {
             courseData = await api.getPublicCourse(courseId, existingSessionId);
+            
+            // Check if the response contains CAPTCHA data (successful response with CAPTCHA)
+            if (courseData && courseData.requiresCaptcha) {
+              console.log('[PublicCourseDisplay] CAPTCHA required from successful response:', courseData);
+              setCaptchaData({
+                challenge: courseData.challenge,
+                challengeKey: courseData.challengeKey,
+                message: courseData.message
+              });
+              setShowCaptcha(true);
+              return;
+            }
           } catch (error) {
             console.log('[PublicCourseDisplay] API error caught:', error);
             console.log('[PublicCourseDisplay] Error response:', error.response);
