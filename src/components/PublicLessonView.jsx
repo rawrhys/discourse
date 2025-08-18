@@ -527,19 +527,27 @@ const PublicLessonView = ({
   const fixMalformedMarkdown = (text) => {
     if (!text) return text;
     
+    // Remove in-text citations first, then apply markdown fix
+    let processedText = markdownService.removeInTextCitations(text);
+    
     // Use the efficient MarkdownService with content-specific parsing
-    if (text.includes('The Formation of the Greek City-States') || 
-        (text.includes('Polis') && (text.includes('Acropolis') || text.includes('Agora')))) {
-      return markdownService.parseGreekCityStates(text);
+    if (processedText.includes('The Formation of the Greek City-States') || 
+        (processedText.includes('Polis') && (processedText.includes('Acropolis') || processedText.includes('Agora')))) {
+      return markdownService.parseGreekCityStates(processedText);
     }
     
     // Try the Archaic Period parser
-    if (text.includes('Archaic Period') && text.includes('Lyric Poetry')) {
-      return markdownService.parseGreekContent(text);
+    if (processedText.includes('Archaic Period') && processedText.includes('Lyric Poetry')) {
+      return markdownService.parseGreekContent(processedText);
+    }
+    
+    // Check if content has bibliography and use bibliography-aware parsing
+    if (processedText.includes('## References')) {
+      return markdownService.parseWithBibliography(processedText);
     }
     
     // Fall back to general parsing
-    return markdownService.parse(text);
+    return markdownService.parse(processedText);
   };
 
   // Additional cleanup function for any remaining malformed asterisks and citations
@@ -659,8 +667,6 @@ const PublicLessonView = ({
         .replace(/"conclusion":/gi, '')
         .replace(/"main":/gi, '')
         .replace(/"intro":/gi, '')
-        // Remove citations
-        .replace(/\[\d+\]/g, '')
         // Remove JSON artifacts and formatting issues
         .replace(/[{}]/g, '')  // Remove curly brackets
         .replace(/[""]/g, '"')  // Replace smart quotes with standard quotes
@@ -686,7 +692,7 @@ const PublicLessonView = ({
         .replace(/\\n\\n/g, '\n\n')  // Convert \n\n to actual paragraph breaks
         .replace(/\n\s*\n\s*\n/g, '\n\n')  // Normalize multiple line breaks to double
         .replace(/\n\s*\n/g, '\n\n')  // Normalize double line breaks
-        .replace(/\n{3,}/g, '\n\n')  // Limit to max 2 consecutive line breaks
+        .replace(/\n{3,}/g, '\n\n');  // Limit to max 2 consecutive line breaks
         // Normalize spaces
         .replace(/\s+/g, ' ')
         .trim();
