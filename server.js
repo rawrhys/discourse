@@ -4783,8 +4783,8 @@ app.delete('/api/images/:id', authenticateToken, requireAdminIfConfigured, async
   }
 });
 
-// TTS timing optimization endpoints
-app.post('/api/tts/record-stop', authenticateToken, async (req, res) => {
+// TTS timing optimization endpoints (no auth required)
+app.post('/api/tts/record-stop', async (req, res) => {
   try {
     const { lessonId, serviceType, stopTime, stopReason, chunkIndex, totalSpokenTime, pausePosition, fullTextLength } = req.body;
     
@@ -4808,7 +4808,7 @@ app.post('/api/tts/record-stop', authenticateToken, async (req, res) => {
       totalSpokenTime,
       pausePosition,
       fullTextLength,
-      userId: req.user.id,
+      userId: req.user?.id || 'anonymous',
       timestamp: new Date().toISOString()
     };
     
@@ -4830,7 +4830,7 @@ app.post('/api/tts/record-stop', authenticateToken, async (req, res) => {
   }
 });
 
-app.get('/api/tts/chunk-timing', authenticateToken, async (req, res) => {
+app.get('/api/tts/chunk-timing', async (req, res) => {
   try {
     const { lessonId, chunkIndex } = req.query;
     
@@ -4838,7 +4838,7 @@ app.get('/api/tts/chunk-timing', authenticateToken, async (req, res) => {
     
     // For now, return a default optimal timeout
     // You can extend this to analyze historical data and return optimized timeouts
-    const optimalTimeout = 5000; // 5 seconds default
+    const optimalTimeout = 20000; // 20 seconds default (increased from 15)
     
     // You could implement logic here to:
     // 1. Query historical TTS data for this lesson/chunk
