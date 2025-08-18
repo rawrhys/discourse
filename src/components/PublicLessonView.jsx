@@ -229,6 +229,13 @@ const PublicLessonView = ({
     };
   }, [lesson, subject, courseId, courseDescription]);
 
+  // Process references when lesson changes
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[PublicLessonView] Lesson changed, processing references for:', lesson?.title);
+    }
+  }, [lesson?.id, lesson?.title]);
+
   // Cleanup TTS when component unmounts
   useEffect(() => {
     return () => {
@@ -660,16 +667,42 @@ const PublicLessonView = ({
 
   const lessonContent = cleanAndCombineContent(lesson.content);
   
+  // Immediate debugging to see what we're working with
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[PublicLessonView] Content processing started:', {
+      hasLessonContent: !!lessonContent,
+      lessonContentLength: lessonContent?.length || 0,
+      lessonContentType: typeof lessonContent,
+      hasReferencesInContent: lessonContent?.includes('## References'),
+      lessonBibliography: lesson.bibliography,
+      lessonBibliographyLength: lesson.bibliography?.length || 0,
+      lessonContentPreview: lessonContent?.substring(0, 300) + '...'
+    });
+  }
+  
+  // Ensure we have a string to work with
+  const contentString = typeof lessonContent === 'string' ? lessonContent : '';
+  
   // Apply markdown fix before rendering - use bibliography-aware parsing
-  let fixedContent = lessonContent.includes('## References') 
-    ? markdownService.parseWithBibliography(lessonContent)
-    : fixMalformedMarkdown(lessonContent);
+  let fixedContent = contentString.includes('## References') 
+    ? markdownService.parseWithBibliography(contentString)
+    : fixMalformedMarkdown(contentString);
 
   // Frontend-level fix for malformed References sections
   fixedContent = fixMalformedReferencesAtFrontend(fixedContent);
 
   // Extract references from the content
   const { contentWithoutRefs, references } = extractReferences(fixedContent);
+
+  // Debug the extraction results immediately
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[PublicLessonView] References extraction results:', {
+      extractedReferencesCount: references?.length || 0,
+      extractedReferences: references,
+      contentWithoutRefsLength: contentWithoutRefs?.length || 0,
+      fixedContentLength: fixedContent?.length || 0
+    });
+  }
 
   // Apply markdown parsing to content without references
   const parsedContent = fixMalformedMarkdown(contentWithoutRefs);
