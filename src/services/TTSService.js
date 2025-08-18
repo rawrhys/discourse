@@ -1260,7 +1260,7 @@ class TTSService {
         console.log(`[${this.serviceType} TTS] Pause operation completed - state:`, {
           isPlaying: this.isPlaying,
           isPaused: this.isPaused,
-          stopSuccessful: stopSuccessful,
+          pauseSuccessful: pauseSuccessful,
           position: `${this.pausePosition}/${this.fullText.length} (${Math.round((this.pausePosition / this.fullText.length) * 100)}%)`
         });
         
@@ -1295,7 +1295,7 @@ class TTSService {
           }
         }
         
-        return stopSuccessful;
+        return pauseSuccessful;
       } catch (error) {
         console.warn(`[${this.serviceType} TTS] Pause failed completely:`, error);
         // If pause fails completely, reset state
