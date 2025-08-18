@@ -8,6 +8,7 @@ import ErrorState from './ErrorState';
 import NoCourseState from './NoCourseState';
 import Module from '../models/Module';
 import publicCourseSessionService from '../services/PublicCourseSessionService';
+import CaptchaChallenge from './CaptchaChallenge';
 
 // Lazy load QuizView
 const QuizView = lazy(() => import('./QuizView'));
@@ -37,6 +38,8 @@ const PublicCourseDisplay = () => {
   const [unlockedModules, setUnlockedModules] = useState(new Set());
   const [showUnlockToast, setShowUnlockToast] = useState(false);
   const [unlockedModuleName, setUnlockedModuleName] = useState('');
+  const [showCaptcha, setShowCaptcha] = useState(false);
+  const [captchaVerified, setCaptchaVerified] = useState(false);
   
   // Load quiz scores from session and apply to course data
   const loadSessionQuizScores = useCallback(async (courseData, sessionId) => {
@@ -73,6 +76,16 @@ const PublicCourseDisplay = () => {
     
     return courseData;
   }, [courseId]);
+
+  const handleCaptchaSuccess = useCallback(() => {
+    setCaptchaVerified(true);
+    setShowCaptcha(false);
+  }, []);
+
+  const handleCaptchaCancel = useCallback(() => {
+    setShowCaptcha(false);
+    setError('Access denied. Please complete the security verification to continue.');
+  }, []);
 
   const handleQuizCompletion = useCallback(async (lessonId, score) => {
     if (!course || !sessionId) return;
@@ -208,7 +221,22 @@ const PublicCourseDisplay = () => {
         
         // Try to use existing session or create new one through backend API
         try {
-          const courseData = await api.getPublicCourse(courseId, existingSessionId);
+          let courseData;
+          
+          // Check if CAPTCHA is required
+          if (!captchaVerified) {
+            try {
+              courseData = await api.getPublicCourse(courseId, existingSessionId);
+            } catch (error) {
+              if (error.message && error.message.includes('requiresCaptcha')) {
+                setShowCaptcha(true);
+                return;
+              }
+              throw error;
+            }
+          } else {
+            courseData = await api.getPublicCourse(courseId, existingSessionId);
+          }
           
           // The backend will handle session management and return the appropriate sessionId
           currentSessionId = courseData.sessionId;
@@ -252,7 +280,7 @@ const PublicCourseDisplay = () => {
       }
     };
     fetchCourse();
-  }, [courseId, api]);
+  }, [courseId, api, captchaVerified]);
 
   useEffect(() => {
     const checkMobile = () => window.innerWidth < 768;
@@ -380,6 +408,12 @@ const PublicCourseDisplay = () => {
 
   return (
     <div className="flex h-screen bg-gray-100">
+      {showCaptcha && (
+        <CaptchaChallenge
+          onSuccess={handleCaptchaSuccess}
+          onCancel={handleCaptchaCancel}
+        />
+      )}
       <div className={`fixed inset-y-0 left-0 transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 transition-transform duration-200 ease-in-out bg-white w-80 shadow-lg z-30 flex flex-col`}>
         <div className="p-5 border-b">
           <div className="flex justify-between items-center">

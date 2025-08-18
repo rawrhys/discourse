@@ -26,6 +26,15 @@ import { compressImage, getOptimalFormat, getFileExtension, formatFileSize } fro
 import sharp from 'sharp';
 import imageProxyHandler from './server/utils/proxy.js';
 import enhancedImageProxy from './server/utils/enhancedImageProxy.js';
+import { 
+  publicCourseRateLimit, 
+  publicCourseSlowDown, 
+  botDetection, 
+  captchaChallenge, 
+  verifySession, 
+  securityHeaders, 
+  securityLogging 
+} from './server/middleware/security.js';
 // import { isValidFlashcardTerm } from './src/utils/flashcardUtils.js';
 
 
@@ -3769,7 +3778,14 @@ app.post('/api/courses/:courseId/unpublish', authenticateToken, async (req, res)
 });
 
 // Get a published course (public access, no authentication required)
-app.get('/api/public/courses/:courseId', async (req, res) => {
+app.get('/api/public/courses/:courseId', 
+  securityHeaders,
+  securityLogging,
+  botDetection,
+  publicCourseRateLimit,
+  publicCourseSlowDown,
+  verifySession,
+  async (req, res) => {
   try {
     const { courseId } = req.params;
     const { sessionId } = req.query;
@@ -3827,7 +3843,14 @@ app.get('/api/public/courses/:courseId', async (req, res) => {
 });
 
 // Save quiz score for public course session
-app.post('/api/public/courses/:courseId/quiz-score', async (req, res) => {
+app.post('/api/public/courses/:courseId/quiz-score', 
+  securityHeaders,
+  securityLogging,
+  botDetection,
+  publicCourseRateLimit,
+  publicCourseSlowDown,
+  verifySession,
+  async (req, res) => {
   try {
     const { courseId } = req.params;
     const { sessionId, lessonId, score } = req.body;
@@ -3887,7 +3910,14 @@ app.post('/api/public/courses/:courseId/quiz-score', async (req, res) => {
 });
 
 // Get quiz score for public course session
-app.get('/api/public/courses/:courseId/quiz-score/:lessonId', async (req, res) => {
+app.get('/api/public/courses/:courseId/quiz-score/:lessonId', 
+  securityHeaders,
+  securityLogging,
+  botDetection,
+  publicCourseRateLimit,
+  publicCourseSlowDown,
+  verifySession,
+  async (req, res) => {
   try {
     const { courseId, lessonId } = req.params;
     const { sessionId } = req.query;
@@ -3919,7 +3949,14 @@ app.get('/api/public/courses/:courseId/quiz-score/:lessonId', async (req, res) =
 });
 
 // Create session for public course
-app.post('/api/public/courses/:courseId/session', async (req, res) => {
+app.post('/api/public/courses/:courseId/session', 
+  securityHeaders,
+  securityLogging,
+  botDetection,
+  publicCourseRateLimit,
+  publicCourseSlowDown,
+  verifySession,
+  async (req, res) => {
   try {
     const { courseId } = req.params;
     const { oldSessionId } = req.body; // Ignore old session ID
@@ -3946,7 +3983,14 @@ app.post('/api/public/courses/:courseId/session', async (req, res) => {
 });
 
 // Get all quiz scores for public course session
-app.get('/api/public/courses/:courseId/quiz-scores', async (req, res) => {
+app.get('/api/public/courses/:courseId/quiz-scores', 
+  securityHeaders,
+  securityLogging,
+  botDetection,
+  publicCourseRateLimit,
+  publicCourseSlowDown,
+  verifySession,
+  async (req, res) => {
   try {
     const { courseId } = req.params;
     const { sessionId } = req.query;
