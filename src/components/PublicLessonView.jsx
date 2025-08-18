@@ -572,131 +572,67 @@ const PublicLessonView = ({
 
 
 
-  // Function to ensure proper paragraph formatting and line breaks
-  const fixParagraphFormatting = (text) => {
-    if (!text) return text;
-    
-    return text
-      // Ensure double line breaks create proper paragraphs
-      .replace(/\n\n+/g, '\n\n')  // Normalize multiple line breaks to double
-      .replace(/\n\s*\n/g, '\n\n')  // Remove extra spaces between paragraphs
-      // Ensure proper paragraph breaks after sentences
-      .replace(/([.!?])\s*\n\s*([A-Z])/g, '$1\n\n$2')  // Add paragraph break after sentences
-      .replace(/([.!?])\s*([A-Z][a-z])/g, '$1\n\n$2')  // Add paragraph break when no line break exists
-      // Ensure proper spacing around paragraph breaks
-      .replace(/\n\s*([A-Z][a-z])/g, '\n\n$1')  // Add extra line break before capitalized words
-      .replace(/([.!?])\s*\n/g, '$1\n\n')  // Add extra line break after sentences
-      // Clean up any remaining formatting issues
-      .replace(/\n{3,}/g, '\n\n')  // Limit to max 2 consecutive line breaks
-      .trim();
-  };
 
 
 
-  // Helper function to clean and combine lesson content
+
+  // Helper function to clean and combine lesson content (copied from working LessonView)
   const cleanAndCombineContent = (content) => {
-    if (!content) {
-      console.warn('[PublicLessonView] No content provided to cleanAndCombineContent');
-      return '';
-    }
+    if (!content) return '';
     
-    // Single-pass content cleaning function
-    const cleanContentOnce = (text) => {
-      if (!text) return '';
+    // Helper function to clean individual content parts
+    const cleanContentPart = (part) => {
+      if (!part) return '';
       
-      // Ensure text is a string
-      const textString = typeof text === 'string' ? text : String(text);
-      
-      console.log('[PublicLessonView] Processing content:', {
-        originalLength: textString.length,
-        isJson: textString.trim().startsWith('{') && textString.trim().endsWith('}')
-      });
-      
-      let cleaned = textString;
-      
-      // Step 1: Simple JSON structure detection and content extraction
-      if (cleaned.trim().startsWith('{') && cleaned.trim().endsWith('}')) {
-        console.log('[PublicLessonView] Detected JSON-like structure, extracting content...');
-        
-        // Simple approach: Extract content between quotes, ignoring JSON structure
-        const contentMatches = cleaned.match(/"([^"]+)"/g);
-        if (contentMatches && contentMatches.length > 0) {
-          // Extract all quoted content and join with paragraph breaks
-          cleaned = contentMatches
-            .map(match => match.slice(1, -1)) // Remove quotes
-            .filter(content => content.length > 10) // Filter out short keys
-            .join('\n\n');
-          
-          console.log('[PublicLessonView] Content extracted from JSON:', {
-            matchesFound: contentMatches.length,
-            contentLength: cleaned.length,
-            sampleContent: cleaned.substring(0, 200) + '...'
-          });
-        } else {
-          // Fallback: Remove JSON structure and clean up
-          cleaned = cleaned
-            .replace(/^\{/, '')
-            .replace(/\}$/, '')
-            .replace(/""\s*:\s*"/g, '')  // Remove empty key patterns
-            .replace(/""\s*:/g, '')  // Remove empty keys
-            .replace(/",\s*"/g, '\n\n')  // Convert JSON separators to paragraph breaks
-            .replace(/"/g, '')  // Remove remaining quotes
-            .replace(/,\s*$/g, '')  // Remove trailing commas
-            .trim();
-          
-          console.log('[PublicLessonView] Fallback JSON cleanup applied');
-        }
-      }
-      
-      // Step 2: Simple cleanup (much less aggressive)
-      cleaned = cleaned
-        // Remove basic separator patterns
+      // First, remove all separator patterns before any other processing
+      let cleaned = part
         .replace(/Content generation completed\./g, '')
-        .replace(/\|\|\|---\|\|\|/g, '')
-        .replace(/\|\|\|/g, '')
-        // Remove basic JSON artifacts
-        .replace(/\[object Object\]/g, '')
-        .replace(/\[object\s+Object\]/g, '')
-        // Remove basic JSON structure words (only if they appear alone)
-        .replace(/\bintroduction\b/gi, '')
-        .replace(/\bmain_content\b/gi, '')
-        .replace(/\bconclusion\b/gi, '')
-        // Fix line breaks
-        .replace(/\\n/g, '\n')
-        .replace(/\n{3,}/g, '\n\n')
-        // Normalize spaces
-        .replace(/\s+/g, ' ')
+        .replace(/\|\|\|---\|\|\|/g, '') // Remove |||---||| patterns
+        .replace(/\|\|\|/g, '') // Remove all remaining ||| patterns
         .trim();
       
-      // Step 3: Apply paragraph formatting
-      cleaned = fixParagraphFormatting(cleaned);
-      
-      // Step 4: Apply markdown processing
+      // Then apply markdown processing
       cleaned = fixMalformedMarkdown(cleaned);
       
-      // Step 5: Final cleanup
-      cleaned = cleanupRemainingAsterisks(cleaned);
-      
-      // Step 6: Minimal final cleanup
+      // Final cleanup of any separators that might have been reintroduced
       cleaned = cleaned
-        // Only remove obvious artifacts
-        .replace(/\[object Object\]/g, '')
-        .replace(/\[object\s+Object\]/g, '')
-        // Final space normalization
-        .replace(/\s+/g, ' ')
-        .trim();
-      
-      console.log('[PublicLessonView] Content processing complete:', {
-        finalLength: cleaned.length,
-        hasContent: cleaned.trim().length > 0,
-        sampleContent: cleaned.substring(0, 200) + '...'
-      });
+        .replace(/\|\|\|---\|\|\|/g, '')
+        .replace(/\|\|\|/g, '');
       
       return cleaned;
     };
     
-    // Process content once
-    return cleanContentOnce(content);
+    if (typeof content === 'string') {
+      const cleaned = cleanContentPart(content);
+      const result = cleanupRemainingAsterisks(cleaned);
+      
+      // Final separator cleanup after all processing
+      const finalResult = result
+        .replace(/\|\|\|---\|\|\|/g, '')
+        .replace(/\|\|\|/g, '');
+      
+      return finalResult;
+    }
+    
+    const { introduction, main_content, conclusion } = content;
+    
+    const cleanedIntro = introduction 
+      ? cleanupRemainingAsterisks(cleanContentPart(introduction))
+      : '';
+
+    const cleanedMain = main_content ? cleanupRemainingAsterisks(cleanContentPart(main_content)) : '';
+    const cleanedConclusion = conclusion ? cleanupRemainingAsterisks(cleanContentPart(conclusion)) : '';
+    
+    const result = [cleanedIntro, cleanedMain, cleanedConclusion]
+      .filter(Boolean)
+      .join('\n\n')
+      .replace(/\|\|\|---\|\|\|/g, '') // Final cleanup of any remaining patterns
+      .replace(/\|\|\|/g, ''); // Final cleanup of any remaining ||| patterns
+    
+    // Final separator cleanup after all processing
+    return result
+      .replace(/\|\|\|---\|\|\|/g, '')
+      .replace(/\|\|\|/g, '');
   };
 
   // Early return if no lesson
