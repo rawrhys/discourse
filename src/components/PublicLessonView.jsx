@@ -631,6 +631,11 @@ const PublicLessonView = ({
             // Fix empty keys
             .replace(/""\s*:/g, '"content":')
             .replace(/,\s*""\s*:/g, ',"content":')
+            // Fix malformed JSON patterns that are close to words
+            .replace(/(\w)\s*""\s*:\s*""/g, '$1')
+            .replace(/(\w)\s*""\s*:/g, '$1')
+            .replace(/""\s*:\s*""\s*(\w)/g, '$1')
+            .replace(/""\s*:\s*(\w)/g, '$1')
             // Fix unescaped quotes in content
             .replace(/"([^"]*)"([^"]*)"([^"]*)"/g, '"$1\\"$2\\"$3"')
             // Fix newlines in strings
@@ -885,20 +890,30 @@ const PublicLessonView = ({
     // Remove any remaining JSON artifacts
     .replace(/\[object Object\]/g, '')  // Remove [object Object] artifacts
     .replace(/\[object\s+Object\]/g, '')  // Remove [object Object] with spaces
-    // Remove specific JSON patterns that are still appearing
+    // Remove specific JSON patterns that are still appearing (more comprehensive)
     .replace(/""\s*:\s*""/g, '')  // Remove "" : "" patterns
     .replace(/""\s*:/g, '')  // Remove "" : patterns
     .replace(/:\s*""/g, '')  // Remove : "" patterns
     .replace(/,\s*""\s*:\s*""/g, '')  // Remove ,"" : "" patterns
     .replace(/,\s*""\s*:/g, '')  // Remove ,"" : patterns
+    // Remove JSON patterns that are close to words
+    .replace(/(\w)\s*""\s*:\s*""/g, '$1')  // Remove "" : "" after words
+    .replace(/(\w)\s*""\s*:/g, '$1')  // Remove "" : after words
+    .replace(/""\s*:\s*""\s*(\w)/g, '$1')  // Remove "" : "" before words
+    .replace(/""\s*:\s*(\w)/g, '$1')  // Remove "" : before words
     // Remove any remaining quotes that are artifacts
     .replace(/^"/g, '')  // Remove leading quotes
     .replace(/"$/g, '')  // Remove trailing quotes
     .replace(/^,\s*/g, '')  // Remove leading commas
     .replace(/,\s*$/g, '')  // Remove trailing commas
-    // Improve paragraph break handling
+    // Improve paragraph break handling (more aggressive)
     .replace(/([.!?])\s*([A-Z])/g, '$1\n\n$2')  // Add paragraph breaks after sentences
+    .replace(/([.!?])\s*([A-Z][a-z])/g, '$1\n\n$2')  // Add paragraph breaks after sentences (no space)
     .replace(/\n\s*([A-Z][a-z])/g, '\n\n$1')  // Ensure proper spacing before capitalized words
+    // Convert paragraph breaks to HTML
+    .replace(/\n\n/g, '</p><p>')  // Convert double line breaks to paragraph tags
+    .replace(/^([^<])/, '<p>$1')  // Wrap first paragraph
+    .replace(/([^>])$/, '$1</p>')  // Wrap last paragraph
     // Final space normalization
     .replace(/\s+/g, ' ')
     .trim();
