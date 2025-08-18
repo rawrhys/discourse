@@ -792,3 +792,164 @@
     background-color: transparent !important;
   }
 } 
+
+/* Academic References Footer Styles */
+.academic-references-footer {
+  font-family: 'Georgia', serif;
+  line-height: 1.6;
+}
+
+.academic-references-header {
+  font-family: 'Georgia', serif;
+  color: #1a202c;
+  border-bottom: 2px solid #e2e8f0;
+  padding-bottom: 0.5rem;
+}
+
+.academic-references-list {
+  counter-reset: citation-counter;
+}
+
+.citation-item {
+  position: relative;
+  transition: all 0.2s ease-in-out;
+}
+
+.citation-item:hover {
+  transform: translateY(-1px);
+}
+
+.citation-number {
+  font-family: 'Georgia', serif;
+  font-weight: bold;
+  min-width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #3182ce, #2c5aa0);
+  color: white;
+  border-radius: 50%;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.citation-number:hover {
+  background: linear-gradient(135deg, #2c5aa0, #1e40af);
+  transform: scale(1.05);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.citation-text {
+  font-family: 'Georgia', serif;
+  color: #2d3748;
+  line-height: 1.7;
+}
+
+.citation-text em {
+  font-style: italic;
+  color: #2d3748;
+}
+
+.citation-text strong {
+  font-weight: bold;
+  color: #1a202c;
+}
+
+.citation-text a {
+  color: #3182ce;
+  text-decoration: underline;
+  transition: color 0.2s ease-in-out;
+}
+
+.citation-text a:hover {
+  color: #2c5aa0;
+}
+
+/* Print styles for academic references */
+@media print {
+  .academic-references-footer {
+    page-break-inside: avoid;
+    background: white !important;
+    border-top: 2px solid #000 !important;
+  }
+  
+  .citation-item {
+    page-break-inside: avoid;
+    background: white !important;
+    border: 1px solid #000 !important;
+    box-shadow: none !important;
+  }
+  
+  .citation-number {
+    background: #000 !important;
+    color: white !important;
+    -webkit-print-color-adjust: exact;
+    color-adjust: exact;
+  }
+}
+
+/* Accessibility improvements */
+.citation-number:focus {
+  outline: 2px solid #3182ce;
+  outline-offset: 2px;
+}
+
+.academic-references-footer:focus-within {
+  outline: 2px solid #3182ce;
+  outline-offset: 2px;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .academic-references-footer {
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+  }
+  
+  .academic-references-header {
+    font-size: 1.5rem;
+  }
+  
+  .citation-item {
+    padding: 1rem;
+  }
+  
+  .citation-number {
+    width: 1.75rem;
+    height: 1.75rem;
+    font-size: 0.75rem;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .academic-references-footer {
+    background-color: #1a202c;
+    border-top-color: #4a5568;
+  }
+  
+  .academic-references-header {
+    color: #f7fafc;
+    border-bottom-color: #4a5568;
+  }
+  
+  .citation-item {
+    background-color: #2d3748;
+    border-color: #4a5568;
+  }
+  
+  .citation-text {
+    color: #e2e8f0;
+  }
+  
+  .citation-text em {
+    color: #e2e8f0;
+  }
+  
+  .citation-text strong {
+    color: #f7fafc;
+  }
+} 

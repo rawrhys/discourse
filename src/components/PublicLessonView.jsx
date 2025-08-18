@@ -3,6 +3,8 @@ import SimpleImageService from '../services/SimpleImageService';
 import { publicTTSService } from '../services/TTSService';
 import PerformanceMonitorService from '../services/PerformanceMonitorService';
 import markdownService from '../services/MarkdownService';
+import academicReferencesService from '../services/AcademicReferencesService';
+import AcademicReferencesFooter from './AcademicReferencesFooter';
 import Flashcard from './Flashcard';
 import './LessonView.css';
 
@@ -235,12 +237,57 @@ const PublicLessonView = ({
     };
   }, [lesson, subject, courseId, courseDescription]);
 
-  // Process references when lesson changes
+  // Academic references state
+  const [academicReferences, setAcademicReferences] = useState([]);
+  const [contentWithCitations, setContentWithCitations] = useState('');
+  const [highlightedCitation, setHighlightedCitation] = useState(null);
+
+  // Generate academic references when lesson changes
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[PublicLessonView] Lesson changed, processing references for:', lesson?.title);
+    if (!lesson?.content || !subject) return;
+
+    try {
+      console.log('[PublicLessonView] Generating academic references for:', lesson.title);
+      
+      // Generate academic references
+      const references = academicReferencesService.generateReferences(
+        lesson.content,
+        subject,
+        lesson.title
+      );
+      
+      setAcademicReferences(references);
+      
+      // Generate content with inline citations
+      const { content: contentWithInlineCitations } = academicReferencesService.generateInlineCitations(
+        lesson.content,
+        references
+      );
+      
+      setContentWithCitations(contentWithInlineCitations);
+      
+      console.log('[PublicLessonView] Academic references generated:', {
+        referencesCount: references.length,
+        hasCitations: !!contentWithInlineCitations
+      });
+    } catch (error) {
+      console.error('[PublicLessonView] Error generating academic references:', error);
+      setAcademicReferences([]);
+      setContentWithCitations(lesson.content);
     }
-  }, [lesson?.id, lesson?.title]);
+  }, [lesson?.id, lesson?.title, lesson?.content, subject]);
+
+  // Handle citation click
+  const handleCitationClick = useCallback((referenceId) => {
+    setHighlightedCitation(referenceId);
+    
+    // Remove highlight after 3 seconds
+    setTimeout(() => {
+      setHighlightedCitation(null);
+    }, 3000);
+    
+    console.log('[PublicLessonView] Citation clicked:', referenceId);
+  }, []);
 
   // Cleanup TTS when component unmounts
   useEffect(() => {
@@ -508,122 +555,7 @@ const PublicLessonView = ({
       .replace(/\*\*\*\*\*\*/g, '**');
   };
 
-  // Function to extract references from content
-  const extractReferences = (content) => {
-    if (!content || typeof content !== 'string') return { contentWithoutRefs: content, references: [] };
-    
-    // Look for References section with various patterns
-    const refPatterns = [
-      /## References\s*([\s\S]*?)(?=\n## |\n# |$)/i,
-      /## References\s*\[(\d+)\]\s*([\s\S]*?)(?=\n## |\n# |$)/i,
-      /References\s*\[(\d+)\]\s*([\s\S]*?)(?=\n## |\n# |$)/i
-    ];
-    
-    let refMatch = null;
-    let referencesText = '';
-    
-    // Try each pattern
-    for (const pattern of refPatterns) {
-      refMatch = content.match(pattern);
-      if (refMatch) {
-        referencesText = refMatch[1] || refMatch[2] || '';
-        break;
-      }
-    }
-    
-    if (!refMatch) return { contentWithoutRefs: content, references: [] };
-    
-    const references = [];
-    
-    // Parse individual references - handle multiple formats
-    const refLines = referencesText.split(/\n+/).filter(line => line.trim());
-    
-    refLines.forEach(line => {
-      const trimmedLine = line.trim();
-      if (trimmedLine) {
-        // Look for numbered references like [1], [2], etc.
-        const numberedMatch = trimmedLine.match(/^\[(\d+)\]\s*(.+)$/);
-        if (numberedMatch) {
-          references.push({
-            number: numberedMatch[1],
-            citation: numberedMatch[2].trim()
-          });
-        } else {
-          // Look for patterns like "## References [1] Encyclopaedia Britannica..."
-          const inlineMatch = trimmedLine.match(/\[(\d+)\]\s*(.+)$/);
-          if (inlineMatch) {
-            references.push({
-              number: inlineMatch[1],
-              citation: inlineMatch[2].trim()
-            });
-          } else {
-            // If no number found, just add the line as a reference
-            references.push({
-              number: (references.length + 1).toString(),
-              citation: trimmedLine
-            });
-          }
-        }
-      }
-    });
-    
-    // Remove the References section from the content
-    const contentWithoutRefs = content.replace(/## References\s*[\s\S]*?(?=\n## |\n# |$)/i, '').trim();
-    
-    return { contentWithoutRefs, references };
-  };
 
-  // Frontend-level fix for malformed References sections
-  const fixMalformedReferencesAtFrontend = (text) => {
-    if (!text || typeof text !== 'string') {
-      return text;
-    }
-
-    let fixedText = text
-      // Fix the specific problematic pattern: "## References [1] ... [2] ..."
-      .replace(/## References\s*\[(\d+)\]/g, '\n## References\n\n[$1]')
-      // Ensure each citation is on its own line
-      .replace(/\]\s*\[(\d+)\]/g, '.\n\n[$1]')
-      // Add proper line breaks between citations
-      .replace(/\.\s*\[(\d+)\]/g, '.\n\n[$1]')
-      // Clean up any remaining issues
-      .replace(/\n{3,}/g, '\n\n'); // Normalize multiple line breaks
-
-    return fixedText;
-  };
-
-  // ReferencesFooter component
-  const ReferencesFooter = memo(({ references }) => {
-    if (!references || references.length === 0) return null;
-
-    // Debug logging for references footer
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[ReferencesFooter] Rendering references:', references);
-    }
-
-    return (
-      <footer className="references-footer mt-8 pt-6 border-t border-gray-200">
-        <h2 className="references-header text-xl font-semibold text-gray-900 mb-4">
-          References
-        </h2>
-        <div className="references-list space-y-3">
-          {references.map((ref, index) => {
-            // Parse the citation to handle markdown formatting
-            const parsedCitation = fixMalformedMarkdown(ref.citation);
-            
-            return (
-              <div key={index} className="citation-item p-3 bg-gray-50 border-l-4 border-blue-500 rounded">
-                <span className="font-medium text-blue-600">[{ref.number}]</span>
-                <span className="ml-2" dangerouslySetInnerHTML={{ 
-                  __html: parsedCitation 
-                }} />
-              </div>
-            );
-          })}
-        </div>
-      </footer>
-    );
-  });
 
   // Helper function to clean and combine lesson content
   const cleanAndCombineContent = (content) => {
@@ -709,116 +641,19 @@ const PublicLessonView = ({
     );
   }
 
+  // Get lesson content and process with academic references
   const lessonContent = cleanAndCombineContent(lesson.content);
   
-  // Immediate debugging to see what we're working with
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[PublicLessonView] Content processing started:', {
-      hasLessonContent: !!lessonContent,
-      lessonContentLength: lessonContent?.length || 0,
-      lessonContentType: typeof lessonContent,
-      hasReferencesInContent: lessonContent?.includes('## References'),
-      lessonBibliography: lesson.bibliography,
-      lessonBibliographyLength: lesson.bibliography?.length || 0,
-      lessonContentPreview: lessonContent?.substring(0, 300) + '...'
-    });
-  }
+  // Use content with citations if available, otherwise use original content
+  const displayContent = contentWithCitations || lessonContent;
   
-  // Ensure we have a string to work with
-  const contentString = typeof lessonContent === 'string' ? lessonContent : '';
+  // Apply markdown parsing to the content
+  const parsedContent = fixMalformedMarkdown(displayContent);
   
-  // Apply markdown fix before rendering - use bibliography-aware parsing
-  let fixedContent = contentString.includes('## References') 
-    ? markdownService.parseWithBibliography(contentString)
-    : fixMalformedMarkdown(contentString);
-
-  // Frontend-level fix for malformed References sections
-  fixedContent = fixMalformedReferencesAtFrontend(fixedContent);
-
-  // Extract references from the content
-  const { contentWithoutRefs, references } = extractReferences(fixedContent);
-
-  // Debug the extraction results immediately
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[PublicLessonView] References extraction results:', {
-      extractedReferencesCount: references?.length || 0,
-      extractedReferences: references,
-      contentWithoutRefsLength: contentWithoutRefs?.length || 0,
-      fixedContentLength: fixedContent?.length || 0
-    });
-  }
-
-  // Apply markdown parsing to content without references
-  const parsedContent = fixMalformedMarkdown(contentWithoutRefs);
-
-  // Debug logging for references processing
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[PublicLessonView] References processing:', {
-      hasReferences: lessonContent?.includes('## References'),
-      referencesCount: references?.length || 0,
-      references: references,
-      contentWithoutRefsLength: contentWithoutRefs?.length || 0,
-      parsedContentLength: parsedContent?.length || 0,
-      lessonContentPreview: lessonContent?.substring(0, 200) + '...',
-      fixedContentPreview: fixedContent?.substring(0, 200) + '...'
-    });
-  }
-
-  // Add bibliography if available and not already in content
-  let finalReferences = references;
-  if (lesson.bibliography && lesson.bibliography.length > 0 && !lessonContent.includes('## References')) {
-    const bibliographyMarkdown = '\n\n## References\n\n' + 
-      lesson.bibliography.map((ref, index) => `[${index + 1}] ${ref}`).join('\n\n');
-    const { contentWithoutRefs: contentWithoutBib, references: bibRefs } = extractReferences(bibliographyMarkdown);
-    finalReferences = bibRefs;
-    
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[PublicLessonView] Bibliography processing:', {
-        bibliographyCount: lesson.bibliography?.length || 0,
-        bibRefsCount: bibRefs?.length || 0,
-        bibRefs: bibRefs
-      });
-    }
-  }
-
-  // Fallback: if no references were extracted but lesson has bibliography, create references from it
-  if ((!finalReferences || finalReferences.length === 0) && lesson.bibliography && lesson.bibliography.length > 0) {
-    finalReferences = lesson.bibliography.map((ref, index) => ({
-      number: (index + 1).toString(),
-      citation: ref
-    }));
-    
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[PublicLessonView] Using fallback bibliography:', {
-        bibliographyCount: lesson.bibliography?.length || 0,
-        finalReferences: finalReferences
-      });
-    }
-  }
-
-  // Final debug logging
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[PublicLessonView] Final references state:', {
-      finalReferencesCount: finalReferences?.length || 0,
-      finalReferences: finalReferences,
-      willShowFooter: finalReferences && finalReferences.length > 0
-    });
-  }
-
-  // Temporary test: Add a test reference if none exist (for debugging)
-  if (process.env.NODE_ENV === 'development' && (!finalReferences || finalReferences.length === 0)) {
-    finalReferences = [
-      {
-        number: '1',
-        citation: 'Test Reference - Encyclopaedia Britannica. (2024). *Academic Edition*. Encyclopaedia Britannica, Inc.'
-      },
-      {
-        number: '2', 
-        citation: 'Test Reference - Oxford University Press. (2012). *Oxford Classical Dictionary*. Oxford University Press.'
-      }
-    ];
-    console.log('[PublicLessonView] Added test references for debugging:', finalReferences);
-  }
+  // Create academic references footer
+  const referencesFooter = academicReferences.length > 0 
+    ? academicReferencesService.createReferencesFooter(academicReferences)
+    : null;
 
   return (
     <div className="lesson-view bg-white rounded-lg shadow-sm overflow-hidden">
@@ -990,10 +825,13 @@ const PublicLessonView = ({
             />
           </div>
           
-          {/* References Footer */}
-          {finalReferences && finalReferences.length > 0 && (
-            <ReferencesFooter references={finalReferences} />
-          )}
+                  {/* Academic References Footer */}
+        {referencesFooter && (
+          <AcademicReferencesFooter 
+            references={referencesFooter.references}
+            onCitationClick={handleCitationClick}
+          />
+        )}
         </div>
       )}
 
