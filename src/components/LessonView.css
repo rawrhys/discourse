@@ -797,6 +797,8 @@
 .academic-references-footer {
   font-family: 'Georgia', serif;
   line-height: 1.6;
+  background-color: #f8f9fa !important;
+  color: #1a202c !important;
 }
 
 .academic-references-header {
@@ -813,6 +815,8 @@
 .citation-item {
   position: relative;
   transition: all 0.2s ease-in-out;
+  background-color: #ffffff !important;
+  color: #1a202c !important;
 }
 
 .citation-item:hover {
@@ -844,28 +848,39 @@
 
 .citation-text {
   font-family: 'Georgia', serif;
-  color: #2d3748;
+  color: #1a202c !important;
   line-height: 1.7;
+  font-weight: 400;
 }
 
 .citation-text em {
   font-style: italic;
-  color: #2d3748;
+  color: #1a202c !important;
 }
 
 .citation-text strong {
   font-weight: bold;
-  color: #1a202c;
+  color: #000000 !important;
 }
 
 .citation-text a {
-  color: #3182ce;
+  color: #3182ce !important;
   text-decoration: underline;
   transition: color 0.2s ease-in-out;
 }
 
 .citation-text a:hover {
-  color: #2c5aa0;
+  color: #2c5aa0 !important;
+}
+
+/* Ensure all text within citation items is readable */
+.citation-item * {
+  color: inherit !important;
+}
+
+.citation-item .citation-text,
+.citation-item .citation-text * {
+  color: #1a202c !important;
 }
 
 /* Print styles for academic references */
