@@ -707,15 +707,26 @@ class TTSService {
             splitSentences: speakConfig.splitSentences
           });
           
-          this.speech.speak(speakConfig).then(() => {
-            console.log(`[${this.serviceType} TTS] Speak command completed successfully`);
+          try {
+            const speakResult = await this.speech.speak(speakConfig);
+            console.log(`[${this.serviceType} TTS] Speak command completed successfully:`, speakResult);
             resolve();
-          }).catch((error) => {
+          } catch (error) {
             console.warn(`[${this.serviceType} TTS] Speak promise rejected:`, error);
-            // Handle the error and retry if needed
-            this.handleSpeakError(error, textToSpeak, startPosition);
-            resolve(); // Resolve to prevent hanging
-          });
+            
+            // Try fallback to native SpeechSynthesis API
+            console.log(`[${this.serviceType} TTS] Trying fallback to native SpeechSynthesis API...`);
+            try {
+              await this.fallbackToNativeSpeechSynthesis(textToSpeak);
+              console.log(`[${this.serviceType} TTS] Fallback speech synthesis completed`);
+              resolve();
+            } catch (fallbackError) {
+              console.warn(`[${this.serviceType} TTS] Fallback also failed:`, fallbackError);
+              // Handle the error and retry if needed
+              this.handleSpeakError(error, textToSpeak, startPosition);
+              resolve(); // Resolve to prevent hanging
+            }
+          }
         } catch (error) {
           console.warn(`[${this.serviceType} TTS] Error in speak promise:`, error);
           resolve(); // Resolve to prevent hanging
@@ -749,6 +760,67 @@ class TTSService {
       this.isPlaying = false;
       this.isPaused = false;
     }
+  }
+
+  // Fallback to native SpeechSynthesis API
+  async fallbackToNativeSpeechSynthesis(text) {
+    return new Promise((resolve, reject) => {
+      if (!window.speechSynthesis) {
+        reject(new Error('SpeechSynthesis not supported'));
+        return;
+      }
+
+      console.log(`[${this.serviceType} TTS] Using native SpeechSynthesis fallback`);
+      
+      // Cancel any ongoing speech
+      window.speechSynthesis.cancel();
+      
+      // Create utterance
+      const utterance = new SpeechSynthesisUtterance(text);
+      
+      // Set properties
+      utterance.rate = 0.9;
+      utterance.pitch = 1;
+      utterance.volume = 1;
+      
+      // Set up event handlers
+      utterance.onstart = () => {
+        console.log(`[${this.serviceType} TTS] Native SpeechSynthesis started`);
+        this.isPlaying = true;
+        this.isPaused = false;
+        this.speakingStartTime = Date.now();
+      };
+      
+      utterance.onend = () => {
+        console.log(`[${this.serviceType} TTS] Native SpeechSynthesis ended`);
+        this.isPlaying = false;
+        this.isPaused = false;
+        this.finishedNormally = true;
+        resolve();
+      };
+      
+      utterance.onerror = (event) => {
+        console.warn(`[${this.serviceType} TTS] Native SpeechSynthesis error:`, event);
+        this.isPlaying = false;
+        this.isPaused = false;
+        reject(event);
+      };
+      
+      utterance.onpause = () => {
+        console.log(`[${this.serviceType} TTS] Native SpeechSynthesis paused`);
+        this.isPaused = true;
+        this.isPlaying = false;
+      };
+      
+      utterance.onresume = () => {
+        console.log(`[${this.serviceType} TTS] Native SpeechSynthesis resumed`);
+        this.isPaused = false;
+        this.isPlaying = true;
+      };
+      
+      // Speak
+      window.speechSynthesis.speak(utterance);
+    });
   }
 
   // Pause reading
@@ -790,14 +862,26 @@ class TTSService {
         // Reset error count to allow pause to work
         this.errorCount = 0;
         
-        // Try to pause using the speak-tts library
+        // Try to pause using the speak-tts library first
         try {
-          this.speech.pause();
-          console.log(`[${this.serviceType} TTS] Successfully called speech.pause()`);
+          if (this.speech && typeof this.speech.pause === 'function') {
+            this.speech.pause();
+            console.log(`[${this.serviceType} TTS] Successfully called speech.pause()`);
+          } else {
+            // Fallback to native SpeechSynthesis
+            if (window.speechSynthesis) {
+              window.speechSynthesis.pause();
+              console.log(`[${this.serviceType} TTS] Used native SpeechSynthesis.pause()`);
+            }
+          }
         } catch (pauseError) {
           console.warn(`[${this.serviceType} TTS] speech.pause() failed, using fallback:`, pauseError);
           // Fallback: cancel and restart from position later
-          this.speech.cancel();
+          if (this.speech && typeof this.speech.cancel === 'function') {
+            this.speech.cancel();
+          } else if (window.speechSynthesis) {
+            window.speechSynthesis.cancel();
+          }
         }
         
         // Ensure state is properly set
@@ -829,14 +913,26 @@ class TTSService {
         // Reset error count to allow resume to work
         this.errorCount = 0;
         
-        // Try to resume using the speak-tts library
+        // Try to resume using the speak-tts library first
         try {
-          this.speech.resume();
-          console.log(`[${this.serviceType} TTS] Successfully called speech.resume()`);
-          this.speakingStartTime = Date.now(); // Reset speaking start time
-          this.wasManuallyPaused = false; // Clear manual pause flag
-          this.isPlaying = true;
-          this.isPaused = false;
+          if (this.speech && typeof this.speech.resume === 'function') {
+            this.speech.resume();
+            console.log(`[${this.serviceType} TTS] Successfully called speech.resume()`);
+            this.speakingStartTime = Date.now(); // Reset speaking start time
+            this.wasManuallyPaused = false; // Clear manual pause flag
+            this.isPlaying = true;
+            this.isPaused = false;
+          } else {
+            // Fallback to native SpeechSynthesis
+            if (window.speechSynthesis) {
+              window.speechSynthesis.resume();
+              console.log(`[${this.serviceType} TTS] Used native SpeechSynthesis.resume()`);
+              this.speakingStartTime = Date.now(); // Reset speaking start time
+              this.wasManuallyPaused = false; // Clear manual pause flag
+              this.isPlaying = true;
+              this.isPaused = false;
+            }
+          }
         } catch (resumeError) {
           console.warn(`[${this.serviceType} TTS] speech.resume() failed, using fallback:`, resumeError);
           // Fallback: restart from pause position
