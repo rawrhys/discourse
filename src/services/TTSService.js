@@ -863,9 +863,14 @@ class TTSService {
         }
       });
 
-      // Use a timeout to prevent hanging
+      // Use a timeout to prevent hanging, but don't timeout if we're paused
       const timeoutPromise = new Promise((resolve) => {
         setTimeout(() => {
+          // Don't timeout if we're paused
+          if (this.isPaused) {
+            console.log(`[${this.serviceType} TTS] Speak timeout ignored - TTS is paused`);
+            return;
+          }
           console.warn(`[${this.serviceType} TTS] Speak timeout, resolving gracefully`);
           this.isPlaying = false;
           this.isPaused = false;
@@ -920,23 +925,37 @@ class TTSService {
         this.totalSpokenTime += timeSpentSpeaking;
         
         // Estimate position based on time (rough approximation)
-        // Assuming average speaking rate of 150 words per minute
-        const wordsPerMinute = 150;
+        // Using a more conservative speaking rate of 120 words per minute
+        const wordsPerMinute = 120;
         const wordsPerSecond = wordsPerMinute / 60;
         const estimatedWordsSpoken = (this.totalSpokenTime / 1000) * wordsPerSecond;
         
         // Convert words to approximate character position
-        const averageWordLength = 5; // Rough average
+        // Use a more realistic average word length of 4.7 characters
+        const averageWordLength = 4.7;
+        const estimatedPosition = Math.floor(estimatedWordsSpoken * averageWordLength);
+        
+        // Ensure position is reasonable (not too far ahead)
         this.pausePosition = Math.min(
-          Math.floor(estimatedWordsSpoken * averageWordLength),
+          Math.max(estimatedPosition, 0),
           this.fullText.length
         );
+        
+        // If position is too small, use a minimum threshold
+        if (this.pausePosition < 50 && this.totalSpokenTime > 2000) {
+          this.pausePosition = Math.min(50, this.fullText.length);
+        }
         
         this.pauseTime = currentTime;
         
         // Reset error count to allow pause to work
         this.errorCount = 0;
         this.speech.pause();
+        
+        // Ensure state is properly set
+        this.isPlaying = false;
+        this.isPaused = true;
+        
         console.log(`[${this.serviceType} TTS] Paused at position ${this.pausePosition}/${this.fullText.length} (${Math.round((this.pausePosition / this.fullText.length) * 100)}%)`);
       } catch (error) {
         console.warn(`[${this.serviceType} TTS] Pause failed:`, error);
@@ -946,7 +965,10 @@ class TTSService {
 
   // Resume reading
   resume() {
-    if (this.isPaused && !this.isPlaying && this.isInitialized) {
+    // Check if we're actually paused
+    const actuallyPaused = this.isActuallyPaused();
+    
+    if ((this.isPaused || actuallyPaused) && !this.isPlaying && this.isInitialized) {
       try {
         // Reset error count to allow resume to work
         this.errorCount = 0;
@@ -956,8 +978,17 @@ class TTSService {
       } catch (error) {
         console.warn(`[${this.serviceType} TTS] Resume failed:`, error);
         // If resume fails, try to restart from pause position
-        this.restartFromPausePosition();
+        console.log(`[${this.serviceType} TTS] Attempting to restart from pause position...`);
+        setTimeout(() => {
+          this.restartFromPausePosition();
+        }, 100); // Small delay to ensure state is stable
       }
+    } else {
+      console.log(`[${this.serviceType} TTS] Cannot resume - not paused or not initialized. State:`, {
+        isPaused: this.isPaused,
+        isPlaying: this.isPlaying,
+        isInitialized: this.isInitialized
+      });
     }
   }
 
@@ -1126,6 +1157,29 @@ class TTSService {
     return this.isPaused && this.fullText && this.currentLessonId;
   }
 
+  // Check if TTS is actually paused by checking browser state
+  isActuallyPaused() {
+    if (!window.speechSynthesis) return false;
+    
+    try {
+      // Check if speech synthesis is paused
+      const isPaused = window.speechSynthesis.paused;
+      const isSpeaking = window.speechSynthesis.speaking;
+      
+      console.log(`[${this.serviceType} TTS] Browser TTS state:`, {
+        paused: isPaused,
+        speaking: isSpeaking,
+        ourPaused: this.isPaused,
+        ourPlaying: this.isPlaying
+      });
+      
+      return isPaused && !isSpeaking;
+    } catch (error) {
+      console.warn(`[${this.serviceType} TTS] Error checking browser TTS state:`, error);
+      return this.isPaused; // Fallback to our state
+    }
+  }
+
   // Restart from pause position
   async restartFromPausePosition() {
     if (!this.fullText || this.pausePosition <= 0) {
@@ -1138,13 +1192,21 @@ class TTSService {
       
       // Stop current speech if any
       if (this.isPlaying || this.isPaused) {
-        this.speech.cancel();
+        try {
+          this.speech.cancel();
+        } catch (cancelError) {
+          console.warn(`[${this.serviceType} TTS] Error canceling speech:`, cancelError);
+        }
       }
       
       // Reset state
       this.isPlaying = false;
       this.isPaused = false;
       this.errorCount = 0;
+      this.isStoppingIntentionally = false;
+      
+      // Wait a moment for state to stabilize
+      await new Promise(resolve => setTimeout(resolve, 200));
       
       // Speak from the pause position
       await this.speak(this.fullText, this.pausePosition);
@@ -1190,6 +1252,23 @@ class TTSService {
       ready: ready
     });
     return ready;
+  }
+
+  // Debug method to show current TTS state
+  debugState() {
+    const browserState = this.isActuallyPaused();
+    console.log(`[${this.serviceType} TTS] Debug State:`, {
+      isInitialized: this.isInitialized,
+      isPlaying: this.isPlaying,
+      isPaused: this.isPaused,
+      isStoppingIntentionally: this.isStoppingIntentionally,
+      browserPaused: browserState,
+      pausePosition: this.pausePosition,
+      totalSpokenTime: this.totalSpokenTime,
+      fullTextLength: this.fullText ? this.fullText.length : 0,
+      currentLessonId: this.currentLessonId,
+      errorCount: this.errorCount
+    });
   }
 }
 
