@@ -493,20 +493,16 @@ const PublicLessonView = ({
       .join('\n\n')
       .replace(/\|\|\|---\|\|\|/g, '');
       
-    // Only log content processing once per lesson to reduce spam
-    if (!this._contentProcessed) {
-      console.log('[PublicLessonView] Object content processed:', {
-        hasIntro: !!introduction,
-        hasMain: !!main_content,
-        hasConclusion: !!conclusion,
-        introLength: cleanedIntro.length,
-        mainLength: cleanedMain.length,
-        conclusionLength: cleanedConclusion.length,
-        resultLength: result.length,
-        hasContent: result.trim().length > 0
-      });
-      this._contentProcessed = true;
-    }
+    console.log('[PublicLessonView] Object content processed:', {
+      hasIntro: !!introduction,
+      hasMain: !!main_content,
+      hasConclusion: !!conclusion,
+      introLength: cleanedIntro.length,
+      mainLength: cleanedMain.length,
+      conclusionLength: cleanedConclusion.length,
+      resultLength: result.length,
+      hasContent: result.trim().length > 0
+    });
     
     return result;
   };

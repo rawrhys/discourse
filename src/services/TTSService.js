@@ -996,53 +996,44 @@ class TTSService {
     // Don't clear isPaused here - let the pause method handle it
   }
 
-  // Resume chunked speech from current position
-  async resumeChunkedSpeech() {
-    // Enhanced null checks to prevent the error
+  // Speak chunks from a specific index with proper async handling
+  async speakChunksFrom(startIndex) {
+    console.log(`[${this.serviceType} TTS] Speaking chunks from index ${startIndex}/${this.currentChunks.length}`);
+    
+    // Enhanced null checks to prevent errors
     if (!this.isChunkedSpeech) {
-      console.warn(`[${this.serviceType} TTS] Cannot resume chunked speech - not in chunked speech mode`);
+      console.warn(`[${this.serviceType} TTS] Cannot speak chunks - not in chunked speech mode`);
       return;
     }
     
     if (!this.currentChunks) {
-      console.warn(`[${this.serviceType} TTS] Cannot resume chunked speech - currentChunks is null`);
+      console.warn(`[${this.serviceType} TTS] Cannot speak chunks - currentChunks is null`);
       return;
     }
     
     if (!Array.isArray(this.currentChunks)) {
-      console.warn(`[${this.serviceType} TTS] Cannot resume chunked speech - currentChunks is not an array:`, typeof this.currentChunks);
+      console.warn(`[${this.serviceType} TTS] Cannot speak chunks - currentChunks is not an array:`, typeof this.currentChunks);
       return;
     }
     
     if (this.currentChunks.length === 0) {
-      console.warn(`[${this.serviceType} TTS] Cannot resume chunked speech - currentChunks is empty`);
+      console.warn(`[${this.serviceType} TTS] Cannot speak chunks - currentChunks is empty`);
       return;
     }
     
-    if (this.currentChunkIndex < 0 || this.currentChunkIndex >= this.currentChunks.length) {
-      console.warn(`[${this.serviceType} TTS] Cannot resume chunked speech - invalid chunk index:`, {
-        currentChunkIndex: this.currentChunkIndex,
-        chunksLength: this.currentChunks.length
-      });
-      return;
+    if (startIndex < 0 || startIndex >= this.currentChunks.length) {
+      console.warn(`[${this.serviceType} TTS] Invalid start index ${startIndex}, resetting to 0`);
+      startIndex = 0;
     }
     
-    // Safety check for currentChunks before accessing its properties
-    if (!this.currentChunks || !Array.isArray(this.currentChunks)) {
-      console.warn(`[${this.serviceType} TTS] Cannot resume chunked speech - currentChunks is null or invalid`);
-      return false;
-    }
-    
-    console.log(`[${this.serviceType} TTS] Resuming chunked speech from chunk ${this.currentChunkIndex + 1}/${this.currentChunks.length}`);
-    
-    // Stop any ongoing speech before resuming
+    // Stop any ongoing speech before starting
     try {
       if (this.speech && typeof this.speech.cancel === 'function') {
         this.speech.cancel();
-        console.log(`[${this.serviceType} TTS] Canceled ongoing speech before resuming chunks`);
+        console.log(`[${this.serviceType} TTS] Canceled ongoing speech before speaking chunks`);
       }
     } catch (cancelError) {
-      console.warn(`[${this.serviceType} TTS] Error canceling speech before resume:`, cancelError);
+      console.warn(`[${this.serviceType} TTS] Error canceling speech before speaking chunks:`, cancelError);
     }
     
     // Set playing state
@@ -1054,11 +1045,11 @@ class TTSService {
     // Wait a moment for state to stabilize
     await new Promise(resolve => setTimeout(resolve, 100));
     
-    // Continue from the current chunk
-    for (let i = this.currentChunkIndex; i < this.currentChunks.length; i++) {
+    // Speak chunks sequentially from startIndex
+    for (let i = startIndex; i < this.currentChunks.length; i++) {
       // Additional safety check - currentChunks might become null during execution
       if (!this.currentChunks || !Array.isArray(this.currentChunks)) {
-        console.warn(`[${this.serviceType} TTS] currentChunks became invalid during resume, stopping`);
+        console.warn(`[${this.serviceType} TTS] currentChunks became invalid during chunk processing, stopping`);
         break;
       }
       
@@ -1113,7 +1104,7 @@ class TTSService {
             return;
           }
           
-          // Use speak-tts library with better error handling
+          // Use speak-tts library with better error handling and event listeners
           try {
             // Set speaking start time when we actually call speak
             this.speakingStartTime = Date.now();
@@ -1214,6 +1205,12 @@ class TTSService {
         
         await Promise.race([chunkPromise, timeoutPromise]);
         
+        // Check if we're paused after chunk completion
+        if (this.isPaused) {
+          console.log(`[${this.serviceType} TTS] Paused after chunk ${i + 1}, stopping chunked speech`);
+          return;
+        }
+        
         // Small delay between chunks to prevent overwhelming the system
         if (this.currentChunks && i < this.currentChunks.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 100));
@@ -1234,6 +1231,11 @@ class TTSService {
     }
     this.isPlaying = false;
     // Don't clear isPaused here - let the pause method handle it
+  }
+
+  // Resume chunked speech from current position (now uses speakChunksFrom)
+  async resumeChunkedSpeech() {
+    return this.speakChunksFrom(this.currentChunkIndex);
   }
 
   // Pause reading
@@ -1320,17 +1322,26 @@ class TTSService {
           position: `${this.pausePosition}/${this.fullText.length} (${Math.round((this.pausePosition / this.fullText.length) * 100)}%)`
         });
         
-        // Record pause position to server for accurate resume
+        // If this is chunked speech, log the chunk position
+        if (this.isChunkedSpeech && this.currentChunks && Array.isArray(this.currentChunks)) {
+          console.log(`[${this.serviceType} TTS] Chunked speech paused at chunk ${this.currentChunkIndex + 1}/${this.currentChunks.length}`);
+          
+          // Ensure chunk index is valid before recording
+          if (this.currentChunkIndex >= 0 && this.currentChunkIndex < this.currentChunks.length) {
+            console.log(`[${this.serviceType} TTS] Recording valid chunk index: ${this.currentChunkIndex}`);
+          } else {
+            console.warn(`[${this.serviceType} TTS] Invalid chunk index ${this.currentChunkIndex}, not recording`);
+          }
+        }
+        
+        // Record pause position to server for accurate resume (blocking to ensure it's recorded)
         if (this.currentLessonId) {
           try {
-            // Only record chunk index if we're in chunked speech mode and have valid chunks
             const chunkIndexToRecord = (this.isChunkedSpeech && this.currentChunks && Array.isArray(this.currentChunks) && 
                                        this.currentChunkIndex >= 0 && this.currentChunkIndex < this.currentChunks.length) 
                                        ? this.currentChunkIndex : null;
             
-            if (chunkIndexToRecord !== null) {
-              console.log(`[${this.serviceType} TTS] Recording pause at chunk ${this.currentChunkIndex + 1}/${this.currentChunks.length}`);
-            }
+            console.log(`[${this.serviceType} TTS] Recording pause position with chunk index:`, chunkIndexToRecord);
             
             await this.recordTTSPausePosition(
               this.currentLessonId, 
@@ -1466,8 +1477,8 @@ class TTSService {
           
           console.log(`[${this.serviceType} TTS] Resuming chunked speech from chunk ${this.currentChunkIndex + 1}/${this.currentChunks.length}`);
           
-          // Resume chunked speech from calculated position
-          await this.resumeChunkedSpeech();
+          // Resume chunked speech from calculated position using speakChunksFrom
+          await this.speakChunksFrom(this.currentChunkIndex);
           return true;
         } else if (this.isChunkedSpeech && (!this.currentChunks || !Array.isArray(this.currentChunks))) {
           console.warn(`[${this.serviceType} TTS] Chunked speech detected but chunks are missing, attempting to recreate chunks`);
@@ -1480,7 +1491,7 @@ class TTSService {
             console.log(`[${this.serviceType} TTS] Recreated ${this.currentChunks.length} chunks from fullText`);
             
             // Resume chunked speech from beginning
-            await this.resumeChunkedSpeech();
+            await this.speakChunksFrom(0);
             return true;
           } else {
             console.warn(`[${this.serviceType} TTS] Cannot recreate chunks - no fullText available`);
@@ -1921,9 +1932,12 @@ class TTSService {
       if (chunkIndex !== null && chunkIndex !== undefined) {
         if (typeof chunkIndex === 'number' && chunkIndex >= 0) {
           validatedChunkIndex = chunkIndex;
+          console.log(`[${this.serviceType} TTS] Valid chunk index provided: ${validatedChunkIndex}`);
         } else {
           console.warn(`[${this.serviceType} TTS] Invalid chunk index provided: ${chunkIndex}, using null`);
         }
+      } else {
+        console.log(`[${this.serviceType} TTS] No chunk index provided, using null`);
       }
       
       const pauseData = {
