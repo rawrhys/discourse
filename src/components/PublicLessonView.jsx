@@ -542,7 +542,7 @@ const PublicLessonView = ({
     return markdownService.parse(text);
   };
 
-  // Additional cleanup function for any remaining malformed asterisks
+  // Additional cleanup function for any remaining malformed asterisks and citations
   const cleanupRemainingAsterisks = (text) => {
     if (!text) return text;
     
@@ -558,6 +558,21 @@ const PublicLessonView = ({
       .replace(/\*\*\*\*/g, '**')
       .replace(/\*\*\*\*\*/g, '**')
       .replace(/\*\*\*\*\*\*/g, '**');
+  };
+
+  // Function to fix citation syntax and ensure proper formatting
+  const fixCitationSyntax = (text) => {
+    if (!text) return text;
+    
+    return text
+      // Ensure citations are properly formatted and don't break markdown
+      .replace(/\[(\d+)\]/g, '<sup>$1</sup>')  // Convert [1], [2], etc. to superscript
+      // Fix any malformed markdown that might interfere with citations
+      .replace(/\*\*\[(\d+)\]\*\*/g, '<sup>$1</sup>')  // Fix bold citations
+      .replace(/\*\[(\d+)\]\*/g, '<sup>$1</sup>')      // Fix italic citations
+      // Ensure proper spacing around citations
+      .replace(/(\w)\[(\d+)\]/g, '$1 <sup>$2</sup>')   // Add space before citation
+      .replace(/\[(\d+)\](\w)/g, '<sup>$1</sup> $2');  // Add space after citation
   };
 
 
@@ -582,6 +597,9 @@ const PublicLessonView = ({
         .replace(/\|\|\|---\|\|\|/g, '') // Remove |||---||| patterns
         .replace(/\|\|\|/g, '') // Remove all remaining ||| patterns
         .trim();
+      
+      // Fix citation syntax before markdown processing
+      cleaned = fixCitationSyntax(cleaned);
       
       // Then apply markdown processing
       cleaned = fixMalformedMarkdown(cleaned);
