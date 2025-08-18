@@ -565,24 +565,21 @@ class TTSService {
     }
 
     try {
-      // Stop any current reading BEFORE setting the new text
-      this.stop();
+      // Set the new text properties
+      this.currentText = text;
+      this.currentLessonId = lessonId;
+      this.fullText = text;
+      this.errorCount = 0;
       
-             // Set the new text properties
-       this.currentText = text;
-       this.currentLessonId = lessonId;
-       this.fullText = text;
-       this.errorCount = 0;
-       
-               // Reset position tracking for new lesson
-        this.pausePosition = 0;
-        this.pauseTime = 0;
-        this.totalSpokenTime = 0;
-        this.speakingStartTime = 0;
-                 this.finishedNormally = false;
-         this.wasManuallyPaused = false;
-        
-        console.log(`[${this.serviceType} TTS] Starting to read lesson:`, lesson.title);
+      // Reset position tracking for new lesson
+      this.pausePosition = 0;
+      this.pauseTime = 0;
+      this.totalSpokenTime = 0;
+      this.speakingStartTime = 0;
+      this.finishedNormally = false;
+      this.wasManuallyPaused = false;
+      
+      console.log(`[${this.serviceType} TTS] Starting to read lesson:`, lesson.title);
       console.log(`[${this.serviceType} TTS] Full text length before speak: ${this.fullText.length}`);
       
       // Ensure we have the text before speaking
@@ -604,15 +601,6 @@ class TTSService {
 
   // Speak text with enhanced error handling and retry logic
   async speak(text, startPosition = 0) {
-    // Set a debounce timeout to prevent rapid calls
-    if (this.speakTimeout) {
-      clearTimeout(this.speakTimeout);
-    }
-    
-    this.speakTimeout = setTimeout(() => {
-      this.speakTimeout = null;
-    }, 500);
-    
     // Check if service is properly initialized
     if (!this.isInitialized || !this.speech) {
       console.warn(`[${this.serviceType} TTS] Service not properly initialized, attempting to reinitialize`);
