@@ -87,6 +87,12 @@ class MarkdownService {
       .replace(/\bstasis\*/g, '**stasis**')
       .replace(/\bGerousia\*/g, '**Gerousia**')
       
+      // Fix references-specific patterns
+      .replace(/\*Academic Edition\*/g, '*Academic Edition*')
+      .replace(/\*Oxford Classical Dictionary\*/g, '*Oxford Classical Dictionary*')
+      .replace(/\*Encyclopaedia Britannica\*/g, '*Encyclopaedia Britannica*')
+      .replace(/\*Oxford University Press\*/g, '*Oxford University Press*')
+      
       // Clean up multiple consecutive asterisks
       .replace(/\*\*\*\*/g, '**')
       .replace(/\*\*\*\*\*/g, '**')
@@ -192,7 +198,7 @@ class MarkdownService {
     // First, handle the specific problematic pattern
     let processedContent = content;
     
-    // Fix the specific pattern: "## References [1] ... [2] ..."
+    // Fix the specific pattern: "## References [1] Encyclopaedia Britannica. (2024). *Academic Edition*. Encyclopaedia Britannica, Inc.. [2] Oxford University Press. (2012). *Oxford Classical Dictionary*. Oxford University Press."
     if (processedContent.includes('## References [')) {
       processedContent = processedContent
         // Replace the problematic pattern with proper formatting
@@ -200,7 +206,13 @@ class MarkdownService {
         // Ensure each citation is on its own line
         .replace(/\]\s*\[(\d+)\]/g, '.\n\n[$1]')
         // Add proper line breaks between citations
-        .replace(/\.\s*\[(\d+)\]/g, '.\n\n[$1]');
+        .replace(/\.\s*\[(\d+)\]/g, '.\n\n[$1]')
+        // Handle the specific pattern with inline citations
+        .replace(/## References\s*\[(\d+)\]\s*([^[]+?)\s*\[(\d+)\]/g, '\n## References\n\n[$1] $2\n\n[$3]')
+        // Ensure proper spacing after periods before citations
+        .replace(/\.\s*\[(\d+)\]/g, '.\n\n[$1]')
+        // Handle multiple citations on the same line
+        .replace(/\]\.\s*\[(\d+)\]/g, '].\n\n[$1]');
     }
     
     // Handle other bibliography patterns

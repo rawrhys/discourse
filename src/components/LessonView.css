@@ -599,4 +599,196 @@
     font-size: 1.25rem !important;
     margin: 1.5rem 0 0.75rem 0 !important;
   }
+}
+
+/* ===== NEW REFERENCES FOOTER STYLING ===== */
+
+/* References footer container */
+.references-footer {
+  background-color: #f9fafb;
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  margin-top: 2rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* References footer header */
+.references-footer .references-header {
+  color: #1f2937 !important;
+  font-size: 1.25rem !important;
+  font-weight: 600 !important;
+  margin: 0 0 1rem 0 !important;
+  padding-bottom: 0.5rem !important;
+  border-bottom: 2px solid #d1d5db !important;
+}
+
+/* References list container */
+.references-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Individual reference item styling */
+.references-footer .citation-item {
+  background-color: #ffffff !important;
+  border: 1px solid #e5e7eb !important;
+  border-left: 4px solid #3b82f6 !important;
+  border-radius: 0.375rem !important;
+  padding: 1rem !important;
+  margin: 0 !important;
+  font-size: 0.875rem !important;
+  line-height: 1.5 !important;
+  color: #374151 !important;
+  font-family: 'Georgia', 'Times New Roman', serif !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+  transition: all 0.2s ease-in-out !important;
+}
+
+/* Hover effect for reference items */
+.references-footer .citation-item:hover {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+  border-left-color: #2563eb !important;
+}
+
+/* Reference number styling */
+.references-footer .citation-item span:first-child {
+  font-weight: 600 !important;
+  color: #3b82f6 !important;
+  margin-right: 0.5rem !important;
+  font-family: 'Arial', sans-serif !important;
+}
+
+/* Italicized text in references (book titles, etc.) */
+.references-footer .citation-item em {
+  font-style: italic !important;
+  font-weight: 500 !important;
+  color: #1f2937 !important;
+  background-color: rgba(59, 130, 246, 0.05) !important;
+  padding: 0.1rem 0.2rem !important;
+  border-radius: 0.2rem !important;
+}
+
+/* Bold text in references */
+.references-footer .citation-item strong {
+  font-weight: 600 !important;
+  color: #1f2937 !important;
+}
+
+/* Links in references */
+.references-footer .citation-item a {
+  color: #3b82f6 !important;
+  text-decoration: none !important;
+  font-weight: 500 !important;
+}
+
+.references-footer .citation-item a:hover {
+  text-decoration: underline !important;
+  color: #2563eb !important;
+}
+
+/* Mobile responsive styling for references footer */
+@media (max-width: 768px) {
+  .references-footer {
+    padding: 1rem !important;
+    margin-top: 1.5rem !important;
+  }
+  
+  .references-footer .references-header {
+    font-size: 1.125rem !important;
+    margin-bottom: 0.75rem !important;
+  }
+  
+  .references-footer .citation-item {
+    padding: 0.75rem !important;
+    font-size: 0.8rem !important;
+    line-height: 1.4 !important;
+  }
+  
+  .references-list {
+    gap: 0.5rem !important;
+  }
+}
+
+/* Ensure proper spacing between content and references footer */
+.lesson-content .references-footer {
+  margin-top: 2rem !important;
+  clear: both !important;
+}
+
+/* Prevent references footer from being affected by prose styles */
+.prose .references-footer {
+  max-width: none !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+/* Ensure references footer doesn't inherit unwanted prose styles */
+.prose .references-footer * {
+  font-family: inherit !important;
+  line-height: inherit !important;
+}
+
+/* Additional styling for better references display */
+.references-footer {
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.references-footer .citation-item {
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+/* Ensure proper typography for academic citations */
+.references-footer .citation-item {
+  font-variant-numeric: oldstyle-nums;
+  text-rendering: optimizeLegibility;
+}
+
+/* Improve readability of citation numbers */
+.references-footer .citation-item span:first-child {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Ensure proper spacing for long citations */
+.references-footer .citation-item {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
+/* Add subtle hover effect for better UX */
+.references-footer .citation-item:hover {
+  transform: translateX(2px);
+  transition: transform 0.2s ease-in-out;
+}
+
+/* Ensure proper contrast for accessibility */
+.references-footer .citation-item {
+  color: #1f2937 !important;
+  background-color: #ffffff !important;
+}
+
+.references-footer .citation-item em {
+  color: #1f2937 !important;
+  background-color: rgba(59, 130, 246, 0.08) !important;
+}
+
+/* Print-friendly styles */
+@media print {
+  .references-footer {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    background-color: transparent !important;
+    box-shadow: none !important;
+  }
+  
+  .references-footer .citation-item {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    border-left-color: #000 !important;
+    background-color: transparent !important;
+  }
 } 

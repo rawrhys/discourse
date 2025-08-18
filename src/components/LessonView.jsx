@@ -10,13 +10,21 @@ import logger from '../utils/logger';
 import SimpleImageService from '../services/SimpleImageService.js';
 import Image from './Image.jsx';
 
-import { privateTTSService } from '../services/TTSService.js';
+import { publicTTSService } from '../services/TTSService.js';
 import Flashcard from './Flashcard';
 import { useThrottledLogger, useDebounce, useStableValue } from '../hooks/usePerformanceOptimization';
 import performanceMonitor from '../services/PerformanceMonitorService';
 import api from '../services/api.js';
 import quizPersistenceService from '../services/QuizPersistenceService';
 import markdownService from '../services/MarkdownService';
+
+// Import test utility for development
+if (process.env.NODE_ENV === 'development') {
+  import('../utils/testReferences.js').then(module => {
+    module.testReferencesFormat();
+    module.testBibliographyFormatting();
+  });
+}
 
 // Enhanced markdown parsing with resilient error handling using Marked
 const fixMalformedMarkdown = (text) => {
@@ -37,6 +45,90 @@ const fixMalformedMarkdown = (text) => {
   return markdownService.parse(text);
 };
 
+// Function to extract references from content
+const extractReferences = (content) => {
+  if (!content || typeof content !== 'string') return { contentWithoutRefs: content, references: [] };
+  
+  // Look for References section with various patterns
+  const refPatterns = [
+    /## References\s*([\s\S]*?)(?=\n## |\n# |$)/i,
+    /## References\s*\[(\d+)\]\s*([\s\S]*?)(?=\n## |\n# |$)/i,
+    /References\s*\[(\d+)\]\s*([\s\S]*?)(?=\n## |\n# |$)/i
+  ];
+  
+  let refMatch = null;
+  let referencesText = '';
+  
+  // Try each pattern
+  for (const pattern of refPatterns) {
+    refMatch = content.match(pattern);
+    if (refMatch) {
+      referencesText = refMatch[1] || refMatch[2] || '';
+      break;
+    }
+  }
+  
+  if (!refMatch) return { contentWithoutRefs: content, references: [] };
+  
+  const references = [];
+  
+  // Parse individual references - handle multiple formats
+  const refLines = referencesText.split(/\n+/).filter(line => line.trim());
+  
+  refLines.forEach(line => {
+    const trimmedLine = line.trim();
+    if (trimmedLine) {
+      // Look for numbered references like [1], [2], etc.
+      const numberedMatch = trimmedLine.match(/^\[(\d+)\]\s*(.+)$/);
+      if (numberedMatch) {
+        references.push({
+          number: numberedMatch[1],
+          citation: numberedMatch[2].trim()
+        });
+      } else {
+        // Look for patterns like "## References [1] Encyclopaedia Britannica..."
+        const inlineMatch = trimmedLine.match(/\[(\d+)\]\s*(.+)$/);
+        if (inlineMatch) {
+          references.push({
+            number: inlineMatch[1],
+            citation: inlineMatch[2].trim()
+          });
+        } else {
+          // If no number found, just add the line as a reference
+          references.push({
+            number: (references.length + 1).toString(),
+            citation: trimmedLine
+          });
+        }
+      }
+    }
+  });
+  
+  // Remove the References section from the content
+  const contentWithoutRefs = content.replace(/## References\s*[\s\S]*?(?=\n## |\n# |$)/i, '').trim();
+  
+  return { contentWithoutRefs, references };
+};
+
+// Test function for references extraction (development only)
+const testReferencesExtraction = () => {
+  if (process.env.NODE_ENV !== 'development') return;
+  
+  const testContent = `Some lesson content here.
+
+## References [1] Encyclopaedia Britannica. (2024). *Academic Edition*. Encyclopaedia Britannica, Inc.. [2] Oxford University Press. (2012). *Oxford Classical Dictionary*. Oxford University Press.`;
+
+  const result = extractReferences(testContent);
+  console.log('[Test] References extraction result:', result);
+  
+  return result;
+};
+
+// Run test in development
+if (process.env.NODE_ENV === 'development') {
+  testReferencesExtraction();
+}
+
 // Frontend-level fix for malformed References sections
 const fixMalformedReferencesAtFrontend = (text) => {
   if (!text || typeof text !== 'string') {
@@ -52,18 +144,6 @@ const fixMalformedReferencesAtFrontend = (text) => {
     .replace(/\.\s*\[(\d+)\]/g, '.\n\n[$1]')
     // Clean up any remaining issues
     .replace(/\n{3,}/g, '\n\n'); // Normalize multiple line breaks
-
-  // Add CSS classes for styling
-  fixedText = fixedText
-    // Add class to References headers
-    .replace(/<h2>References<\/h2>/g, '<h2 class="references-header">References</h2>')
-    // Add class to citation paragraphs
-    .replace(/<p>\[(\d+)\]/g, '<p class="citation-item">[$1]')
-    // Fix citations that are running together in the same paragraph
-    .replace(/<p class="citation-item">\[(\d+)\](.*?)<\/p>\s*<p class="citation-item">\[(\d+)\]/g, 
-             '<p class="citation-item">[$1]$2</p>\n\n<p class="citation-item">[$3]')
-    // Ensure proper paragraph separation
-    .replace(/<\/p>\s*<p class="citation-item">/g, '</p>\n\n<p class="citation-item">');
 
   return fixedText;
 };
@@ -155,43 +235,6 @@ const LoadingSpinner = memo(() => (
   </div>
 ));
 
-// Memoized TTS Button component
-const TTSButton = memo(({ isPlaying, isPaused, onToggle, isSupported }) => {
-  if (!isSupported) {
-    return (
-      <button
-        disabled
-        className="px-4 py-2 text-sm font-medium rounded-md bg-gray-200 text-gray-500 cursor-not-allowed transition-colors"
-        title="Text-to-speech not supported in this browser"
-      >
-        <i className="fas fa-volume-mute mr-2"></i>Read Aloud
-      </button>
-    );
-  }
-
-  return (
-    <button
-      onClick={onToggle}
-      className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-        isPlaying || isPaused
-          ? 'bg-green-600 text-white hover:bg-green-700'
-          : 'bg-blue-600 text-white hover:bg-blue-700'
-      }`}
-      title={isPlaying ? 'Pause reading' : isPaused ? 'Resume reading' : 'Start reading aloud'}
-    >
-      <i className={`mr-2 ${isPlaying ? 'fas fa-pause' : isPaused ? 'fas fa-play' : 'fas fa-volume-up'}`}></i>
-      {isPlaying ? 'Pause' : isPaused ? 'Resume' : 'Read Aloud'}
-    </button>
-  );
-});
-
-TTSButton.propTypes = {
-  isPlaying: PropTypes.bool.isRequired,
-  isPaused: PropTypes.bool.isRequired,
-  onToggle: PropTypes.func.isRequired,
-  isSupported: PropTypes.bool.isRequired
-};
-
 // Memoized Content component to prevent unnecessary re-renders
 const Content = memo(({ content, bibliography, lessonTitle, courseSubject }) => {
   const contentStr = typeof content === 'string' 
@@ -226,10 +269,50 @@ const Content = memo(({ content, bibliography, lessonTitle, courseSubject }) => 
   // Frontend-level fix for malformed References sections
   fixedContent = fixMalformedReferencesAtFrontend(fixedContent);
 
+  // Extract references from the content
+  const { contentWithoutRefs, references } = extractReferences(fixedContent);
+
+  // Apply markdown parsing to content without references
+  const parsedContent = fixMalformedMarkdown(contentWithoutRefs);
+
+  // Debug logging for references processing
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[LessonView] References processing:', {
+      hasReferences: contentStr?.includes('## References'),
+      referencesCount: references?.length || 0,
+      references: references,
+      contentWithoutRefsLength: contentWithoutRefs?.length || 0,
+      parsedContentLength: parsedContent?.length || 0
+    });
+  }
+
   // Append bibliography to the content if we have references and it's not already in the content
   if (finalBibliography && finalBibliography.length > 0 && !contentStr.includes('## References')) {
     const bibliographyMarkdown = api.formatBibliographyAsMarkdown(finalBibliography);
-    fixedContent += bibliographyMarkdown;
+    const { contentWithoutRefs: contentWithoutBib, references: bibRefs } = extractReferences(bibliographyMarkdown);
+    const parsedBibContent = fixMalformedMarkdown(contentWithoutBib);
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[LessonView] Bibliography processing:', {
+        bibliographyCount: finalBibliography?.length || 0,
+        bibRefsCount: bibRefs?.length || 0,
+        bibRefs: bibRefs
+      });
+    }
+    
+    return (
+      <div className="prose max-w-none lesson-content">
+        <div 
+          className="markdown-body"
+          dangerouslySetInnerHTML={{ __html: parsedContent }}
+        />
+        <div 
+          className="markdown-body"
+          dangerouslySetInnerHTML={{ __html: parsedBibContent }}
+        />
+        <ReferencesFooter references={bibRefs} />
+      </div>
+    );
   }
 
   // Debug logging for markdown processing
@@ -239,7 +322,8 @@ const Content = memo(({ content, bibliography, lessonTitle, courseSubject }) => 
       fixed: fixedContent?.substring(0, 200) + '...',
       hasAsterisks: contentStr?.includes('**'),
       hasFixedAsterisks: fixedContent?.includes('**'),
-      bibliographyCount: finalBibliography?.length || 0
+      bibliographyCount: finalBibliography?.length || 0,
+      referencesCount: references?.length || 0
     });
   }
 
@@ -247,11 +331,54 @@ const Content = memo(({ content, bibliography, lessonTitle, courseSubject }) => 
     <div className="prose max-w-none lesson-content">
       <div 
         className="markdown-body"
-        dangerouslySetInnerHTML={{ __html: fixedContent }}
+        dangerouslySetInnerHTML={{ __html: parsedContent }}
       />
+      {references && references.length > 0 && (
+        <ReferencesFooter references={references} />
+      )}
     </div>
   );
 });
+
+// New ReferencesFooter component
+const ReferencesFooter = memo(({ references }) => {
+  if (!references || references.length === 0) return null;
+
+  // Debug logging for references footer
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[ReferencesFooter] Rendering references:', references);
+  }
+
+  return (
+    <footer className="references-footer mt-8 pt-6 border-t border-gray-200">
+      <h2 className="references-header text-xl font-semibold text-gray-900 mb-4">
+        References
+      </h2>
+      <div className="references-list space-y-3">
+        {references.map((ref, index) => {
+          // Parse the citation to handle markdown formatting
+          const parsedCitation = fixMalformedMarkdown(ref.citation);
+          
+          return (
+            <div key={index} className="citation-item p-3 bg-gray-50 border-l-4 border-blue-500 rounded">
+              <span className="font-medium text-blue-600">[{ref.number}]</span>
+              <span className="ml-2" dangerouslySetInnerHTML={{ 
+                __html: parsedCitation 
+              }} />
+            </div>
+          );
+        })}
+      </div>
+    </footer>
+  );
+});
+
+ReferencesFooter.propTypes = {
+  references: PropTypes.arrayOf(PropTypes.shape({
+    number: PropTypes.string.isRequired,
+    citation: PropTypes.string.isRequired
+  }))
+};
 
 Content.propTypes = {
   content: PropTypes.oneOfType([PropTypes.string, PropTypes.object]),
@@ -482,19 +609,109 @@ const LessonView = ({
   const [ttsStatus, setTtsStatus] = useState({
     isPlaying: false,
     isPaused: false,
-    isSupported: privateTTSService.isSupported()
+    isSupported: publicTTSService.isSupported()
   });
 
-  // Synchronize TTS service state with UI state
+  // TTS state management (matching PublicLessonView)
+  const ttsStateUpdateTimeoutRef = useRef(null); // For debouncing state updates
+  const isLessonChanging = useRef(false); // Track lesson changes to prevent TTS conflicts
+
+  // Clean up TTS on unmount
+  useEffect(() => {
+    return () => {
+      try {
+        publicTTSService.stop();
+      } catch (error) {
+        console.warn('[LessonView] TTS cleanup error:', error);
+      }
+    };
+  }, []);
+
+  // Auto-pause TTS when lesson changes
+  useEffect(() => {
+    if (!propLesson?.id) return;
+    
+    // Only trigger on actual lesson ID changes, not TTS status changes
+    if (isLessonChanging.current) {
+      console.log('[LessonView] Lesson change already in progress, skipping');
+      return;
+    }
+
+    try {
+      // Only stop TTS if it's actually playing or paused
+      const currentStatus = publicTTSService.getStatus();
+      if (!currentStatus.isPlaying && !currentStatus.isPaused) {
+        console.log('[LessonView] TTS not playing, no need to stop on lesson change');
+        return;
+      }
+
+      // Set flag to prevent TTS conflicts during lesson change
+      isLessonChanging.current = true;
+      console.log('[LessonView] Lesson change detected, pausing TTS');
+
+      // Stop TTS if it's currently playing or paused
+      try {
+        publicTTSService.stop(); // This will reset pause data via resetPauseData()
+        console.log('[LessonView] Stopped TTS and reset pause data on lesson change');
+      } catch (error) {
+        console.warn('[LessonView] TTS auto-pause error:', error);
+        try {
+          publicTTSService.reset();
+          console.log('[LessonView] Reset TTS service after stop error');
+        } catch (resetError) {
+          console.warn('[LessonView] Error resetting TTS service:', resetError);
+        }
+      }
+
+      // Update TTS status to reflect stopped state
+      setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
+
+      // Clear lesson change flag after a delay
+      setTimeout(() => {
+        isLessonChanging.current = false;
+        console.log('[LessonView] Lesson change flag cleared, TTS can resume');
+      }, 1000);
+    } catch (error) {
+      console.warn('[LessonView] Lesson change TTS handling error:', error);
+      isLessonChanging.current = false;
+    }
+  }, [propLesson?.id]); // Only depend on lesson ID, not TTS status
+
+  // Sync TTS state with service state periodically
   useEffect(() => {
     const syncTTSState = () => {
-      const serviceStatus = privateTTSService.getStatus();
-      setTtsStatus(prev => ({
-        ...prev,
-        isPlaying: serviceStatus.isPlaying,
-        isPaused: serviceStatus.isPaused,
-        isSupported: serviceStatus.isSupported
-      }));
+      try {
+        const serviceStatus = publicTTSService.getStableStatus();
+        
+        // Only update if there's an actual change
+        if (
+          serviceStatus.isPlaying !== ttsStatus.isPlaying ||
+          serviceStatus.isPaused !== ttsStatus.isPaused
+        ) {
+          // Debounce state updates to prevent rapid changes
+          if (ttsStateUpdateTimeoutRef.current) {
+            clearTimeout(ttsStateUpdateTimeoutRef.current);
+          }
+
+          ttsStateUpdateTimeoutRef.current = setTimeout(() => {
+            console.log('[LessonView] TTS state changed:', {
+              wasPlaying: ttsStatus.isPlaying,
+              wasPaused: ttsStatus.isPaused,
+              newPlaying: serviceStatus.isPlaying,
+              newPaused: serviceStatus.isPaused
+            });
+
+            setTtsStatus(prev => ({
+              ...prev,
+              isPlaying: serviceStatus.isPlaying,
+              isPaused: serviceStatus.isPaused,
+              isSupported: serviceStatus.isSupported
+            }));
+          }, 100);
+        }
+      } catch (error) {
+        console.warn('[LessonView] TTS state sync error:', error);
+      }
     };
 
     // Sync immediately
@@ -503,8 +720,170 @@ const LessonView = ({
     // Set up interval to sync state periodically
     const intervalId = setInterval(syncTTSState, 500);
 
-    return () => clearInterval(intervalId);
+    return () => {
+      clearInterval(intervalId);
+      if (ttsStateUpdateTimeoutRef.current) {
+        clearTimeout(ttsStateUpdateTimeoutRef.current);
+      }
+    };
+  }, [ttsStatus.isPlaying, ttsStatus.isPaused]);
+
+  // Cleanup TTS when component unmounts
+  useEffect(() => {
+    return () => {
+      try {
+        publicTTSService.stop();
+        console.log('[LessonView] Cleaned up TTS service on unmount');
+      } catch (error) {
+        console.warn('[LessonView] Error cleaning up TTS service:', error);
+      }
+
+      if (ttsStateUpdateTimeoutRef.current) {
+        clearTimeout(ttsStateUpdateTimeoutRef.current);
+      }
+    };
   }, []);
+
+  const handleStartAudio = useCallback(async () => {
+    // Add a small delay to prevent rapid button clicks
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    try {
+      // Check if TTS is already playing
+      if (ttsStatus.isPlaying) {
+        console.log('[LessonView] TTS already playing, stopping first');
+        publicTTSService.stop();
+        setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
+        return;
+      }
+
+      // Check if TTS is paused and can resume
+      if (ttsStatus.isPaused) {
+        console.log('[LessonView] Resuming paused TTS');
+        publicTTSService.resume();
+        setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
+        return;
+      } else {
+        // Start new reading - only read the currently displayed content
+        let contentToRead = '';
+        
+        if (view === 'content') {
+          // Read the full lesson content including introduction and conclusion
+          if (propLesson.content && typeof propLesson.content === 'object') {
+            // For object content, combine introduction, main_content, and conclusion
+            const parts = [];
+            if (propLesson.content.introduction) {
+              parts.push(propLesson.content.introduction);
+            }
+            if (propLesson.content.main_content) {
+              parts.push(propLesson.content.main_content);
+            } else if (propLesson.content.content) {
+              parts.push(propLesson.content.content);
+            }
+            if (propLesson.content.conclusion) {
+              parts.push(propLesson.content.conclusion);
+            }
+            contentToRead = parts.join('\n\n');
+          } else if (typeof propLesson.content === 'string') {
+            // For string content, use it as is
+            contentToRead = propLesson.content;
+          }
+        } else if (view === 'flashcards') {
+          // For flashcards view, read the flashcard terms and definitions
+          const flashcardData = propLesson?.flashcards || propLesson?.content?.flashcards || [];
+          if (flashcardData.length > 0) {
+            contentToRead = flashcardData.map((fc, index) => 
+              `Flashcard ${index + 1}: ${fc.term || 'Unknown Term'}. Definition: ${fc.definition || 'Definition not provided.'}`
+            ).join('. ');
+          }
+        }
+        
+        // Clean the content for TTS
+        if (contentToRead) {
+          contentToRead = contentToRead
+            .replace(/Content generation completed\./g, '')
+            .replace(/\|\|\|---\|\|\|/g, '')
+            .replace(/\*\*\*\*/g, '**')
+            .replace(/\*\*\*\*\*/g, '**')
+            .replace(/\*\*\*\*\*\*/g, '**')
+            .trim();
+        }
+        
+        // Validate content before attempting TTS
+        if (!contentToRead || typeof contentToRead !== 'string' || contentToRead.trim().length < 10) {
+          console.warn('[LessonView] Content too short or invalid for TTS:', {
+            view: view,
+            hasContent: !!contentToRead,
+            type: typeof contentToRead,
+            length: contentToRead ? contentToRead.length : 0,
+            trimmedLength: contentToRead ? contentToRead.trim().length : 0
+          });
+          setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
+          return;
+        }
+        
+        console.log('[LessonView] Starting TTS with content:', {
+          view: view,
+          contentLength: contentToRead.length,
+          contentPreview: contentToRead.substring(0, 100) + '...'
+        });
+        
+        const started = await publicTTSService.readLesson({ ...propLesson, content: contentToRead }, propLesson.id);
+        
+        if (started) {
+          setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
+        } else {
+          console.warn('[LessonView] TTS failed to start');
+          setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
+        }
+      }
+    } catch (error) {
+      console.error('[LessonView] TTS error:', error);
+      setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
+    }
+  }, [ttsStatus.isPlaying, ttsStatus.isPaused, view, propLesson]); // Added view and propLesson dependencies
+
+  const handleStopAudio = useCallback(async () => {
+    // Add a small delay to prevent rapid button clicks
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    try {
+      publicTTSService.stop();
+    } catch (error) {
+      console.warn('[LessonView] TTS stop error:', error);
+    }
+    // Always reset state when stopping
+    setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
+  }, []);
+
+  const handlePauseResumeAudio = useCallback(async () => {
+    // Add a small delay to prevent rapid button clicks
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    console.log('[LessonView] handlePauseResumeAudio called with state:', {
+      isPlaying: ttsStatus.isPlaying,
+      isPaused: ttsStatus.isPaused
+    });
+    
+    try {
+      if (ttsStatus.isPaused) {
+        console.log('[LessonView] Attempting to resume TTS');
+        const resumed = await publicTTSService.resume();
+        console.log('[LessonView] Resume result:', resumed);
+        if (resumed) {
+          setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
+        }
+      } else if (ttsStatus.isPlaying) {
+        console.log('[LessonView] Attempting to pause TTS');
+        await publicTTSService.pause();
+        setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: true }));
+      }
+    } catch (error) {
+      console.warn('[LessonView] TTS pause/resume error:', error);
+      // Reset state on error
+      setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
+    }
+  }, [ttsStatus.isPlaying, ttsStatus.isPaused]);
 
   // Comprehensive quiz and flashcard data extraction
   const quizData = useMemo(() => {
@@ -565,9 +944,9 @@ const LessonView = ({
     setIsLoading(false);
     
     // Reset TTS if lesson changes
-    if (propLesson?.id && privateTTSService.getStatus().currentLessonId !== propLesson.id) {
+    if (propLesson?.id && publicTTSService.getStatus().currentLessonId !== propLesson.id) {
       console.log('[LessonView] Lesson changed, stopping TTS and resetting pause data');
-      privateTTSService.stop(); // This will also reset pause data via resetPauseData()
+      publicTTSService.stop(); // This will also reset pause data via resetPauseData()
       setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
     }
   }, [propLesson]);
@@ -697,88 +1076,6 @@ const LessonView = ({
     );
   }, [quizData, propLesson, activeModule, handleQuizComplete]);
 
-  // Handle TTS toggle
-  const handleTTSToggle = useCallback(async () => {
-    if (!propLesson) return;
-    
-    const contentStr = cleanAndCombineContent(propLesson.content);
-    
-    // Get current TTS service status
-    const serviceStatus = privateTTSService.getStatus();
-    
-    // Check if TTS service is ready for requests
-    if (!privateTTSService.isReadyForRequests()) {
-      console.log('[LessonView] TTS service not ready, attempting to reset...');
-      privateTTSService.forceResetStoppingFlag();
-      // Wait a moment for the reset to take effect
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-    
-    try {
-      if (serviceStatus.isPlaying) {
-        console.log('[LessonView] Attempting to pause TTS...');
-        await privateTTSService.pause();
-        
-        // Wait a moment and check if pause was successful
-        await new Promise(resolve => setTimeout(resolve, 100));
-        const newStatus = privateTTSService.getStatus();
-        
-        if (newStatus.isPaused) {
-          console.log('[LessonView] TTS paused successfully');
-          setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: true }));
-        } else {
-          console.warn('[LessonView] TTS pause may not have worked, forcing state update');
-          setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: true }));
-        }
-      } else if (serviceStatus.isPaused) {
-        console.log('[LessonView] Attempting to resume TTS...');
-        privateTTSService.resume();
-        
-        // Wait a moment and check if resume was successful
-        await new Promise(resolve => setTimeout(resolve, 100));
-        const newStatus = privateTTSService.getStatus();
-        
-        if (newStatus.isPlaying) {
-          console.log('[LessonView] TTS resumed successfully');
-          setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
-        } else {
-          console.warn('[LessonView] TTS resume may not have worked, forcing state update');
-          setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
-        }
-      } else {
-        console.log('[LessonView] Starting TTS...');
-        // Use readLesson instead of speak
-        const success = await privateTTSService.readLesson({ ...propLesson, content: contentStr }, propLesson.id);
-        
-        if (success) {
-          console.log('[LessonView] TTS started successfully');
-          setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
-        } else {
-          console.warn('[LessonView] TTS start failed');
-          setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
-        }
-      }
-    } catch (error) {
-      console.error('[LessonView] Error in TTS toggle:', error);
-      // Reset state on error
-      setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
-    }
-  }, [propLesson]);
-
-  // Handle next lesson with TTS cleanup
-  const handleNextLessonWithTTS = useCallback(() => {
-    privateTTSService.stop();
-    setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
-    if (onNextLesson) onNextLesson();
-  }, [onNextLesson]);
-
-  // Handle previous lesson with TTS cleanup
-  const handlePreviousLessonWithTTS = useCallback(() => {
-    privateTTSService.stop();
-    setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
-    if (onPreviousLesson) onPreviousLesson();
-  }, [onPreviousLesson]);
-
   // Handle tab change
   const handleTabChange = useCallback((newView) => {
     if (process.env.NODE_ENV === 'development') {
@@ -874,13 +1171,6 @@ const LessonView = ({
       abortController.abort();
     };
   }, [propLesson, subject, courseId, courseDescription]);
-
-  // Cleanup TTS on unmount
-  useEffect(() => {
-    return () => {
-      privateTTSService.stop();
-    };
-  }, []);
 
   // Clean up any remaining malformed asterisks after content is rendered
   useEffect(() => {
@@ -1061,23 +1351,27 @@ const LessonView = ({
             <i className="fas fa-clone mr-2"></i>Flashcards {flashcardData?.length ? `(${flashcardData.length})` : ''}
           </button>
           <button
-            onClick={() => {
-              if (process.env.NODE_ENV === 'development') {
-                console.log('[LessonView] TTS toggle clicked');
-              }
-              handleTTSToggle();
-            }}
+            onClick={ttsStatus.isPlaying ? handlePauseResumeAudio : ttsStatus.isPaused ? handlePauseResumeAudio : handleStartAudio}
             className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
               ttsStatus.isPlaying || ttsStatus.isPaused
                 ? 'bg-green-600 text-white hover:bg-green-700'
                 : 'bg-blue-600 text-white hover:bg-blue-700'
             }`}
-            disabled={!ttsStatus.isSupported}
             title={ttsStatus.isPlaying ? 'Pause reading' : ttsStatus.isPaused ? 'Resume reading' : 'Start reading aloud'}
           >
-            <i className={'mr-2 ' + (ttsStatus.isPlaying ? 'fas fa-pause' : ttsStatus.isPaused ? 'fas fa-play' : 'fas fa-volume-up')}></i>
+            <i className={`mr-2 ${ttsStatus.isPlaying ? 'fas fa-pause' : ttsStatus.isPaused ? 'fas fa-play' : 'fas fa-volume-up'}`}></i>
             {ttsStatus.isPlaying ? 'Pause' : ttsStatus.isPaused ? 'Resume' : 'Read Aloud'}
           </button>
+          {(ttsStatus.isPlaying || ttsStatus.isPaused) && (
+            <button
+              onClick={handleStopAudio}
+              className="px-3 py-2 text-sm font-medium rounded-md transition-colors bg-red-600 text-white hover:bg-red-700"
+              title="Stop reading"
+            >
+              <i className="fas fa-stop mr-2"></i>
+              Stop
+            </button>
+          )}
         </div>
         
         <div className="flex-1 overflow-y-auto">
@@ -1121,7 +1415,10 @@ const LessonView = ({
         <div className="flex flex-col sm:flex-row items-center space-y-3 sm:space-y-0 sm:justify-between">
           <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-2">
             <button
-              onClick={handlePreviousLessonWithTTS}
+              onClick={() => {
+                handleStopAudio();
+                if (onPreviousLesson) onPreviousLesson();
+              }}
               disabled={currentLessonIndex === 0}
               className="px-4 py-2 text-sm font-medium rounded-md bg-gray-200 text-gray-700 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
             >
@@ -1131,7 +1428,10 @@ const LessonView = ({
               {currentLessonIndex + 1} / {Math.max(totalLessonsInModule, 1)}
             </span>
             <button
-              onClick={handleNextLessonWithTTS}
+              onClick={() => {
+                handleStopAudio();
+                if (onNextLesson) onNextLesson();
+              }}
               disabled={currentLessonIndex >= totalLessonsInModule - 1}
               className="px-4 py-2 text-sm font-medium rounded-md bg-gray-200 text-gray-700 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
             >
