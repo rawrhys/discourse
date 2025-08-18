@@ -4783,27 +4783,27 @@ app.delete('/api/images/:id', authenticateToken, requireAdminIfConfigured, async
   }
 });
 
-// TTS timing optimization endpoints (no auth required)
-app.post('/api/tts/record-stop', async (req, res) => {
+// TTS pause position tracking endpoints (no auth required)
+app.post('/api/tts/record-pause', async (req, res) => {
   try {
-    const { lessonId, serviceType, stopTime, stopReason, chunkIndex, totalSpokenTime, pausePosition, fullTextLength } = req.body;
+    const { lessonId, serviceType, pauseTime, pauseReason, chunkIndex, totalSpokenTime, pausePosition, fullTextLength } = req.body;
     
-    console.log('[TTS] Recording stop time:', {
+    console.log('[TTS] Recording pause position:', {
       lessonId,
       serviceType,
-      stopReason,
+      pauseReason,
       chunkIndex,
       totalSpokenTime,
       pausePosition,
       fullTextLength
     });
     
-    // Store the timing data (you can extend this to use a database)
-    const timingData = {
+    // Store the pause data (you can extend this to use a database)
+    const pauseData = {
       lessonId,
       serviceType,
-      stopTime,
-      stopReason,
+      pauseTime,
+      pauseReason,
       chunkIndex,
       totalSpokenTime,
       pausePosition,
@@ -4813,50 +4813,55 @@ app.post('/api/tts/record-stop', async (req, res) => {
     };
     
     // For now, just log the data. You can extend this to store in a database
-    console.log('[TTS] Timing data recorded:', timingData);
+    console.log('[TTS] Pause data recorded:', pauseData);
     
     res.json({ 
       success: true, 
-      message: 'TTS stop time recorded',
-      data: timingData
+      message: 'TTS pause position recorded',
+      data: pauseData
     });
   } catch (error) {
-    console.error('[TTS] Error recording stop time:', error);
+    console.error('[TTS] Error recording pause position:', error);
     res.status(500).json({ 
       success: false, 
-      error: 'Failed to record TTS stop time',
+      error: 'Failed to record TTS pause position',
       details: error.message 
     });
   }
 });
 
-app.get('/api/tts/chunk-timing', async (req, res) => {
+app.get('/api/tts/pause-position', async (req, res) => {
   try {
-    const { lessonId, chunkIndex } = req.query;
+    const { lessonId } = req.query;
     
-    console.log('[TTS] Requesting chunk timing:', { lessonId, chunkIndex });
+    console.log('[TTS] Requesting pause position for lesson:', lessonId);
     
-    // For now, return a default optimal timeout
-    // You can extend this to analyze historical data and return optimized timeouts
-    const optimalTimeout = 20000; // 20 seconds default (increased from 15)
+    // For now, return a mock pause position
+    // You can extend this to query a database for the actual pause position
+    const mockPauseData = {
+      lessonId,
+      pausePosition: 1000, // Mock position - replace with actual database query
+      chunkIndex: 0,
+      totalSpokenTime: 5000,
+      fullTextLength: 5000,
+      timestamp: new Date().toISOString()
+    };
     
     // You could implement logic here to:
-    // 1. Query historical TTS data for this lesson/chunk
-    // 2. Calculate average completion times
-    // 3. Return optimized timeout based on patterns
+    // 1. Query database for the last pause position for this lesson
+    // 2. Return the exact position where TTS was paused
+    // 3. Include additional context like chunk index, spoken time, etc.
     
     res.json({
       success: true,
-      lessonId,
-      chunkIndex: parseInt(chunkIndex),
-      optimalTimeout,
-      message: 'Using default optimal timeout'
+      ...mockPauseData,
+      message: 'Using mock pause position (replace with database query)'
     });
   } catch (error) {
-    console.error('[TTS] Error getting chunk timing:', error);
+    console.error('[TTS] Error getting pause position:', error);
     res.status(500).json({ 
       success: false, 
-      error: 'Failed to get chunk timing',
+      error: 'Failed to get pause position',
       details: error.message 
     });
   }
