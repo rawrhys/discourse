@@ -628,14 +628,16 @@ const PublicLessonView = ({
           
           // Try to fix common JSON issues before parsing
           cleaned = cleaned
-            // Fix empty keys
-            .replace(/""\s*:/g, '"content":')
-            .replace(/,\s*""\s*:/g, ',"content":')
-            // Fix malformed JSON patterns that are close to words
-            .replace(/(\w)\s*""\s*:\s*""/g, '$1')
-            .replace(/(\w)\s*""\s*:/g, '$1')
-            .replace(/""\s*:\s*""\s*(\w)/g, '$1')
-            .replace(/""\s*:\s*(\w)/g, '$1')
+            // Fix empty keys by making them transparent
+            .replace(/""\s*:\s*"/g, '"content":"')  // Fix "" : " patterns
+            .replace(/""\s*:/g, '"content":')  // Fix "" : patterns
+            .replace(/,\s*""\s*:\s*"/g, ',"content":"')  // Fix ,"" : " patterns
+            .replace(/,\s*""\s*:/g, ',"content":')  // Fix ,"" : patterns
+            // Remove malformed JSON patterns that are close to words (make them transparent)
+            .replace(/(\w)\s*""\s*:\s*""/g, '$1')  // Remove "" : "" after words
+            .replace(/(\w)\s*""\s*:/g, '$1')  // Remove "" : after words
+            .replace(/""\s*:\s*""\s*(\w)/g, '$1')  // Remove "" : "" before words
+            .replace(/""\s*:\s*(\w)/g, '$1')  // Remove "" : before words
             // Fix unescaped quotes in content
             .replace(/"([^"]*)"([^"]*)"([^"]*)"/g, '"$1\\"$2\\"$3"')
             // Fix newlines in strings
@@ -663,12 +665,18 @@ const PublicLessonView = ({
             // Remove JSON structure indicators
             .replace(/^\{/, '')
             .replace(/\}$/, '')
-            // Remove JSON key patterns
+            // Remove JSON key patterns (more comprehensive)
             .replace(/"introduction"\s*:\s*"/g, '')
             .replace(/"main_content"\s*:\s*"/g, '')
             .replace(/"conclusion"\s*:\s*"/g, '')
             .replace(/"content"\s*:\s*"/g, '')
-            .replace(/""\s*:\s*"/g, '')
+            .replace(/""\s*:\s*"/g, '')  // Remove "" : " patterns
+            .replace(/""\s*:/g, '')  // Remove "" : patterns
+            // Remove malformed JSON patterns that are close to words
+            .replace(/(\w)\s*""\s*:\s*""/g, '$1')  // Remove "" : "" after words
+            .replace(/(\w)\s*""\s*:/g, '$1')  // Remove "" : after words
+            .replace(/""\s*:\s*""\s*(\w)/g, '$1')  // Remove "" : "" before words
+            .replace(/""\s*:\s*(\w)/g, '$1')  // Remove "" : before words
             // Remove trailing quotes and commas
             .replace(/",?\s*$/g, '')
             .replace(/",\s*"/g, '\n\n')
@@ -896,11 +904,14 @@ const PublicLessonView = ({
     .replace(/:\s*""/g, '')  // Remove : "" patterns
     .replace(/,\s*""\s*:\s*""/g, '')  // Remove ,"" : "" patterns
     .replace(/,\s*""\s*:/g, '')  // Remove ,"" : patterns
-    // Remove JSON patterns that are close to words
+    // Remove JSON patterns that are close to words (make them transparent)
     .replace(/(\w)\s*""\s*:\s*""/g, '$1')  // Remove "" : "" after words
     .replace(/(\w)\s*""\s*:/g, '$1')  // Remove "" : after words
     .replace(/""\s*:\s*""\s*(\w)/g, '$1')  // Remove "" : "" before words
     .replace(/""\s*:\s*(\w)/g, '$1')  // Remove "" : before words
+    // Add space between words when JSON patterns are removed
+    .replace(/(\w)(\w)/g, '$1 $2')  // Add space between words that got stuck together
+    .replace(/\s{2,}/g, ' ')  // Normalize multiple spaces
     // Remove any remaining quotes that are artifacts
     .replace(/^"/g, '')  // Remove leading quotes
     .replace(/"$/g, '')  // Remove trailing quotes
