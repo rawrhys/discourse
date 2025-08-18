@@ -1082,62 +1082,17 @@ class TTSService {
               }
             }, 2000);
             
-            // Add a fallback timeout in case the promise never resolves
-            setTimeout(() => {
-              if (!hasResolved) {
-                hasResolved = true;
-                console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} speak-tts promise timeout, forcing resolve`);
-                // Check if we've been stopped during timeout
-                if (this.isStopped) {
-                  console.log(`[${this.serviceType} TTS] Stop detected during chunk ${i + 1} fallback timeout, ending chunked speech`);
-                }
-                resolve();
-              }
-            }, 15000); // 15 second fallback timeout
+            // Remove fallback timeout to prevent forcing resolve when stopped
+            // The speak-tts promise will resolve naturally when speech completes or is cancelled
           } catch (error) {
             console.warn(`[${this.serviceType} TTS] Error calling speech.speak for chunk ${i + 1}:`, error);
             resolve(); // Continue with next chunk
           }
         });
         
-        // Use a shorter timeout and add better detection of actual speech
-        const timeoutPromise = new Promise((resolve) => {
-          setTimeout(() => {
-            // Check if we've been stopped before processing timeout
-            if (this.isStopped) {
-              console.log(`[${this.serviceType} TTS] Stop detected during chunk ${i + 1} timeout, ending chunked speech`);
-              resolve();
-              return;
-            }
-            
-            // Check if we actually started speaking
-            if (this.isPlaying && this.speakingStartTime > 0) {
-              const timeSinceStart = Date.now() - this.speakingStartTime;
-              if (timeSinceStart > 5000) { // If we've been "speaking" for more than 5 seconds
-                console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} appears to be speaking but taking too long, continuing`);
-                resolve();
-              } else {
-                console.log(`[${this.serviceType} TTS] Chunk ${i + 1} still speaking, extending timeout`);
-                // Extend timeout if we're actually speaking
-                setTimeout(() => {
-                  // Check again if we've been stopped during extended timeout
-                  if (this.isStopped) {
-                    console.log(`[${this.serviceType} TTS] Stop detected during chunk ${i + 1} extended timeout, ending chunked speech`);
-                    resolve();
-                    return;
-                  }
-                  console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} final timeout - continuing to next chunk`);
-                  resolve();
-                }, 10000); // Additional 10 seconds
-              }
-            } else {
-              console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} timeout - no speech detected, continuing to next chunk`);
-              resolve();
-            }
-          }, 8000); // Reduced initial timeout to 8 seconds
-        });
-        
-        await Promise.race([chunkPromise, timeoutPromise]);
+        // Remove timeout promise to prevent forcing chunk completion
+        // Let the speak-tts promise resolve naturally when speech completes or is cancelled
+        await chunkPromise;
         
         // Check if we're paused or stopped after chunk completion
         if (this.isPaused) {
@@ -1354,85 +1309,17 @@ class TTSService {
             // Handle the promise
             speechPromise.then(completeHandler).catch(errorHandler);
             
-            // Add a fallback timeout in case the promise never resolves
-            setTimeout(() => {
-              if (!hasResolved) {
-                hasResolved = true;
-                console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} speak-tts promise timeout, forcing resolve`);
-                // Check if we've been stopped during fallback timeout
-                if (this.isStopped) {
-                  console.log(`[${this.serviceType} TTS] Stop detected during chunk ${i + 1} fallback timeout in speakChunksFrom, ending chunked speech`);
-                }
-                resolve();
-              }
-            }, 15000); // 15 second fallback timeout
+            // Remove fallback timeout to prevent forcing resolve when stopped
+            // The speak-tts promise will resolve naturally when speech completes or is cancelled
               } catch (error) {
                 console.warn(`[${this.serviceType} TTS] Error calling speech.speak for chunk ${i + 1}:`, error);
                 resolve(); // Continue with next chunk
               }
             });
         
-        // Use a more intelligent timeout that waits for speech to actually start
-        const timeoutPromise = new Promise((resolve) => {
-          let timeoutId;
-          
-          const checkSpeechStatus = () => {
-            // Check if we've been stopped - don't continue if stopped
-            if (this.isStopped) {
-              console.log(`[${this.serviceType} TTS] Stop detected during chunk ${i + 1} timeout check, ending chunked speech`);
-              if (timeoutId) clearTimeout(timeoutId);
-              resolve();
-              return;
-            }
-            
-            // Check if we're paused - don't timeout if user paused
-            if (this.isPaused) {
-              console.log(`[${this.serviceType} TTS] Chunk ${i + 1} paused by user, stopping timeout check`);
-              if (timeoutId) clearTimeout(timeoutId);
-              return;
-            }
-            
-            // Check if speech has actually started
-            if (this.isPlaying && this.speakingStartTime > 0) {
-              const timeSinceStart = Date.now() - this.speakingStartTime;
-              // Only timeout if we've been "speaking" for more than 20 seconds
-              if (timeSinceStart > 20000) {
-                console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} appears to be stuck after ${timeSinceStart}ms, continuing to next chunk`);
-                resolve();
-              } else {
-                // Speech is active, extend the timeout
-                timeoutId = setTimeout(checkSpeechStatus, 5000); // Check every 5 seconds
-              }
-            } else {
-              // Speech hasn't started yet, give it more time
-              console.log(`[${this.serviceType} TTS] Chunk ${i + 1} waiting for speech to start...`);
-              timeoutId = setTimeout(checkSpeechStatus, 2000); // Check every 2 seconds
-            }
-          };
-          
-          // Start checking after a reasonable delay
-          timeoutId = setTimeout(checkSpeechStatus, 8000); // Initial 8 second delay
-          
-          // Also set a maximum timeout to prevent infinite waiting
-          setTimeout(() => {
-            if (timeoutId) {
-              clearTimeout(timeoutId);
-              // Check if we've been stopped before processing maximum timeout
-              if (this.isStopped) {
-                console.log(`[${this.serviceType} TTS] Stop detected during chunk ${i + 1} maximum timeout, ending chunked speech`);
-                resolve();
-                return;
-              }
-              // Only timeout if not paused by user
-              if (!this.isPaused) {
-              console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} maximum timeout reached, continuing to next chunk`);
-              resolve();
-              }
-            }
-          }, 30000); // Maximum 30 seconds total
-        });
-        
-        await Promise.race([chunkPromise, timeoutPromise]);
+        // Remove timeout promise to prevent forcing chunk completion
+        // Let the speak-tts promise resolve naturally when speech completes or is cancelled
+        await chunkPromise;
         
         // Check if we're paused or stopped after chunk completion
         if (this.isPaused) {
