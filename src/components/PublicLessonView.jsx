@@ -692,7 +692,7 @@ const PublicLessonView = ({
         .replace(/\\n\\n/g, '\n\n')  // Convert \n\n to actual paragraph breaks
         .replace(/\n\s*\n\s*\n/g, '\n\n')  // Normalize multiple line breaks to double
         .replace(/\n\s*\n/g, '\n\n')  // Normalize double line breaks
-        .replace(/\n{3,}/g, '\n\n');  // Limit to max 2 consecutive line breaks
+        .replace(/\n{3,}/g, '\n\n')  // Limit to max 2 consecutive line breaks
         // Normalize spaces
         .replace(/\s+/g, ' ')
         .trim();
