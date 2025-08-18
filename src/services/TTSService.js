@@ -859,10 +859,13 @@ class TTSService {
     
     console.log(`[${this.serviceType} TTS] Chunked speech completed`);
     this.isChunkedSpeech = false;
-    this.currentChunks = null;
-    this.currentChunkIndex = 0;
+    // Only clear chunks if we're not paused (preserve for resume)
+    if (!this.isPaused) {
+      this.currentChunks = null;
+      this.currentChunkIndex = 0;
+    }
     this.isPlaying = false;
-    this.isPaused = false;
+    // Don't clear isPaused here - let the pause method handle it
   }
 
   // Resume chunked speech from current position
@@ -948,10 +951,13 @@ class TTSService {
     
     console.log(`[${this.serviceType} TTS] Chunked speech completed`);
     this.isChunkedSpeech = false;
-    this.currentChunks = null;
-    this.currentChunkIndex = 0;
+    // Only clear chunks if we're not paused (preserve for resume)
+    if (!this.isPaused) {
+      this.currentChunks = null;
+      this.currentChunkIndex = 0;
+    }
     this.isPlaying = false;
-    this.isPaused = false;
+    // Don't clear isPaused here - let the pause method handle it
   }
 
   // Split text into chunks at sentence boundaries
@@ -1299,6 +1305,11 @@ class TTSService {
         this.speakingStartTime = 0;
         this.finishedNormally = false;
         this.wasManuallyPaused = false;
+        
+        // Clear chunked speech state
+        this.isChunkedSpeech = false;
+        this.currentChunks = null;
+        this.currentChunkIndex = 0;
         
         console.log(`[${this.serviceType} TTS] Stopped and cleared`);
       } catch (error) {
