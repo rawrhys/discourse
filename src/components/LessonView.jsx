@@ -86,41 +86,64 @@ const cleanupRemainingAsterisks = (text) => {
     .replace(/\*\*\*\*\*\*/g, '**');
 };
 
-// Helper function to clean and combine lesson content
-const cleanAndCombineContent = (content) => {
-  if (!content) return '';
-  
-  // Helper function to clean individual content parts
-  const cleanContentPart = (part) => {
-    if (!part) return '';
-    return fixMalformedMarkdown(
-      part.replace(/Content generation completed\./g, '')
-          .replace(/\|\|\|---\|\|\|/g, '') // Remove |||---||| patterns
-          .replace(/\|\|\|/g, '') // Remove all remaining ||| patterns
-          .trim()
-    );
-  };
-  
-  if (typeof content === 'string') {
-    const cleaned = cleanContentPart(content);
-    return cleanupRemainingAsterisks(cleaned);
-  }
-  
-  const { introduction, main_content, conclusion } = content;
-  
-  const cleanedIntro = introduction 
-    ? cleanupRemainingAsterisks(cleanContentPart(introduction))
-    : '';
+  // Helper function to clean and combine lesson content
+  const cleanAndCombineContent = (content) => {
+    if (!content) return '';
+    
+    // Helper function to clean individual content parts
+    const cleanContentPart = (part) => {
+      if (!part) return '';
+      
+      // First, remove all separator patterns before any other processing
+      let cleaned = part
+        .replace(/Content generation completed\./g, '')
+        .replace(/\|\|\|---\|\|\|/g, '') // Remove |||---||| patterns
+        .replace(/\|\|\|/g, '') // Remove all remaining ||| patterns
+        .trim();
+      
+      // Then apply markdown processing
+      cleaned = fixMalformedMarkdown(cleaned);
+      
+      // Final cleanup of any separators that might have been reintroduced
+      cleaned = cleaned
+        .replace(/\|\|\|---\|\|\|/g, '')
+        .replace(/\|\|\|/g, '');
+      
+      return cleaned;
+    };
+    
+    if (typeof content === 'string') {
+      const cleaned = cleanContentPart(content);
+      const result = cleanupRemainingAsterisks(cleaned);
+      
+      // Final separator cleanup after all processing
+      const finalResult = result
+        .replace(/\|\|\|---\|\|\|/g, '')
+        .replace(/\|\|\|/g, '');
+      
+      return finalResult;
+    }
+    
+    const { introduction, main_content, conclusion } = content;
+    
+    const cleanedIntro = introduction 
+      ? cleanupRemainingAsterisks(cleanContentPart(introduction))
+      : '';
 
-  const cleanedMain = main_content ? cleanupRemainingAsterisks(cleanContentPart(main_content)) : '';
-  const cleanedConclusion = conclusion ? cleanupRemainingAsterisks(cleanContentPart(conclusion)) : '';
-  
-  return [cleanedIntro, cleanedMain, cleanedConclusion]
-    .filter(Boolean)
-    .join('\n\n')
-    .replace(/\|\|\|---\|\|\|/g, '') // Final cleanup of any remaining patterns
-    .replace(/\|\|\|/g, ''); // Final cleanup of any remaining ||| patterns
-};
+    const cleanedMain = main_content ? cleanupRemainingAsterisks(cleanContentPart(main_content)) : '';
+    const cleanedConclusion = conclusion ? cleanupRemainingAsterisks(cleanContentPart(conclusion)) : '';
+    
+    const result = [cleanedIntro, cleanedMain, cleanedConclusion]
+      .filter(Boolean)
+      .join('\n\n')
+      .replace(/\|\|\|---\|\|\|/g, '') // Final cleanup of any remaining patterns
+      .replace(/\|\|\|/g, ''); // Final cleanup of any remaining ||| patterns
+    
+    // Final separator cleanup after all processing
+    return result
+      .replace(/\|\|\|---\|\|\|/g, '')
+      .replace(/\|\|\|/g, '');
+  };
 
 // Lazy load components
 const LazyQuizView = lazy(() => import('./QuizView'));

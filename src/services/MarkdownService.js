@@ -41,6 +41,10 @@ class MarkdownService {
   // Pre-process content to fix malformed patterns
   preprocessContent(content) {
     return content
+      // Remove any separator patterns first
+      .replace(/\|\|\|---\|\|\|/g, '') // Remove |||---||| patterns
+      .replace(/\|\|\|/g, '') // Remove all remaining ||| patterns
+      
       // Fix malformed headers (more conservative)
       .replace(/^\*\*##\s*/gm, '## ')  // Fix malformed headers
       .replace(/^\*##\s*/gm, '## ')    // Fix malformed headers
@@ -86,7 +90,11 @@ class MarkdownService {
       // Clean up multiple consecutive asterisks
       .replace(/\*\*\*\*/g, '**')
       .replace(/\*\*\*\*\*/g, '**')
-      .replace(/\*\*\*\*\*\*/g, '**');
+      .replace(/\*\*\*\*\*\*/g, '**')
+      
+      // Final separator cleanup
+      .replace(/\|\|\|---\|\|\|/g, '')
+      .replace(/\|\|\|/g, '');
   }
 
   // Post-process HTML to clean up any remaining issues
@@ -97,6 +105,10 @@ class MarkdownService {
       .replace(/<em>\s*<\/em>/g, '')          // Remove empty em tags
       .replace(/<p>\s*<\/p>/g, '')            // Remove empty p tags
       .replace(/<li>\s*<\/li>/g, '')          // Remove empty li tags
+      
+      // Remove any separator patterns that might have been converted to HTML
+      .replace(/\|\|\|---\|\|\|/g, '')        // Remove |||---||| patterns
+      .replace(/\|\|\|/g, '')                 // Remove all remaining ||| patterns
       
       // Fix any malformed HTML
       .replace(/<([^>]+)\s*\/>/g, '<$1 />')   // Fix self-closing tags

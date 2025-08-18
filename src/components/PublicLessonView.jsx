@@ -467,23 +467,40 @@ const PublicLessonView = ({
     // Helper function to clean individual content parts
     const cleanContentPart = (part) => {
       if (!part) return '';
-      return fixMalformedMarkdown(
-        part.replace(/Content generation completed\./g, '')
-            .replace(/\|\|\|---\|\|\|/g, '') // Remove |||---||| patterns
-            .replace(/\|\|\|/g, '') // Remove all remaining ||| patterns
-            .trim()
-      );
+      
+      // First, remove all separator patterns before any other processing
+      let cleaned = part
+        .replace(/Content generation completed\./g, '')
+        .replace(/\|\|\|---\|\|\|/g, '') // Remove |||---||| patterns
+        .replace(/\|\|\|/g, '') // Remove all remaining ||| patterns
+        .trim();
+      
+      // Then apply markdown processing
+      cleaned = fixMalformedMarkdown(cleaned);
+      
+      // Final cleanup of any separators that might have been reintroduced
+      cleaned = cleaned
+        .replace(/\|\|\|---\|\|\|/g, '')
+        .replace(/\|\|\|/g, '');
+      
+      return cleaned;
     };
     
     if (typeof content === 'string') {
       const cleaned = cleanContentPart(content);
       const result = cleanupRemainingAsterisks(cleaned);
+      
+      // Final separator cleanup after all processing
+      const finalResult = result
+        .replace(/\|\|\|---\|\|\|/g, '')
+        .replace(/\|\|\|/g, '');
+      
       console.log('[PublicLessonView] String content processed:', {
         originalLength: content.length,
-        cleanedLength: result.length,
-        hasContent: result.trim().length > 0
+        cleanedLength: finalResult.length,
+        hasContent: finalResult.trim().length > 0
       });
-      return result;
+      return finalResult;
     }
     
     const { introduction, main_content, conclusion } = content;

@@ -151,6 +151,93 @@ This ensures that:
 - Content is properly cleaned before display
 - Both string and object content types are handled
 
+## Additional Fix: Enhanced Separator Removal
+
+### Problem
+Despite the initial fix, `|||` separators were still appearing in the public course display, indicating that the separator removal wasn't comprehensive enough.
+
+### Enhanced Solution
+Implemented multi-stage separator removal to ensure `|||` patterns are completely hidden from view:
+
+#### 1. Enhanced Content Parsing
+Updated `cleanAndCombineContent` function in both components with multi-stage cleaning:
+
+```javascript
+const cleanContentPart = (part) => {
+  if (!part) return '';
+  
+  // First, remove all separator patterns before any other processing
+  let cleaned = part
+    .replace(/Content generation completed\./g, '')
+    .replace(/\|\|\|---\|\|\|/g, '') // Remove |||---||| patterns
+    .replace(/\|\|\|/g, '') // Remove all remaining ||| patterns
+    .trim();
+  
+  // Then apply markdown processing
+  cleaned = fixMalformedMarkdown(cleaned);
+  
+  // Final cleanup of any separators that might have been reintroduced
+  cleaned = cleaned
+    .replace(/\|\|\|---\|\|\|/g, '')
+    .replace(/\|\|\|/g, '');
+  
+  return cleaned;
+};
+```
+
+#### 2. MarkdownService Enhancement
+Added separator removal to both preprocessing and postprocessing stages:
+
+```javascript
+// Pre-process content to fix malformed patterns
+preprocessContent(content) {
+  return content
+    // Remove any separator patterns first
+    .replace(/\|\|\|---\|\|\|/g, '') // Remove |||---||| patterns
+    .replace(/\|\|\|/g, '') // Remove all remaining ||| patterns
+    
+    // ... other processing ...
+    
+    // Final separator cleanup
+    .replace(/\|\|\|---\|\|\|/g, '')
+    .replace(/\|\|\|/g, '');
+}
+
+// Post-process HTML to clean up any remaining issues
+postprocessHTML(html) {
+  return html
+    // ... other cleanup ...
+    
+    // Remove any separator patterns that might have been converted to HTML
+    .replace(/\|\|\|---\|\|\|/g, '')        // Remove |||---||| patterns
+    .replace(/\|\|\|/g, '')                 // Remove all remaining ||| patterns
+    
+    // ... other processing ...
+}
+```
+
+#### 3. Multi-Stage Cleanup
+Implemented cleanup at multiple stages:
+- **Initial cleanup**: Before markdown processing
+- **Post-processing cleanup**: After markdown processing
+- **Final cleanup**: After all content combination
+- **HTML cleanup**: In the final HTML output
+
+### Benefits
+- ✅ **Complete Separator Removal**: All `|||` patterns are removed at multiple stages
+- ✅ **No Visual Artifacts**: Separators are completely hidden from view
+- ✅ **Robust Processing**: Multiple cleanup stages ensure no separators slip through
+- ✅ **Maintains Content Structure**: Content structure is preserved while removing separators
+- ✅ **Cross-Component Consistency**: Both LessonView and PublicLessonView use the same enhanced logic
+
+### Testing
+The enhanced separator removal ensures that:
+1. All `|||---|||` patterns are removed
+2. All remaining `|||` patterns are removed
+3. Separators don't appear in the final rendered content
+4. Content structure and formatting are preserved
+5. Both string and object content types are handled properly
+
 ## Benefits
 
 ### 1. **Fresh Start on Resume**
