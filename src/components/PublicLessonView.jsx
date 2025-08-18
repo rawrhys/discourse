@@ -575,6 +575,31 @@ const PublicLessonView = ({
       .trim();
   };
 
+  // Function to clean JSON structure and extract content
+  const cleanJsonStructure = (text) => {
+    if (!text) return text;
+    
+    // If it's a JSON string, extract the content
+    if (text.trim().startsWith('{') && text.trim().endsWith('}')) {
+      try {
+        const parsed = JSON.parse(text);
+        const { introduction, main_content, conclusion } = parsed;
+        
+        // Combine all content parts
+        const combined = [introduction, main_content, conclusion]
+          .filter(Boolean)
+          .join('\n\n');
+        
+        return combined;
+      } catch (error) {
+        console.warn('[PublicLessonView] Failed to parse JSON structure:', error);
+        return text;
+      }
+    }
+    
+    return text;
+  };
+
   // Function to ensure proper paragraph formatting and line breaks
   const fixParagraphFormatting = (text) => {
     if (!text) return text;
@@ -605,8 +630,11 @@ const PublicLessonView = ({
       // Ensure part is a string before processing
       const partString = typeof part === 'string' ? part : String(part);
       
-      // First, remove all separator patterns and JSON structure words
-      let cleaned = partString
+      // First, clean JSON structure if present
+      let cleaned = cleanJsonStructure(partString);
+      
+      // Remove all separator patterns and JSON structure words
+      cleaned = cleaned
         .replace(/Content generation completed\./g, '')
         .replace(/\|\|\|---\|\|\|/g, '') // Remove |||---||| patterns
         .replace(/\|\|\|/g, '') // Remove all remaining ||| patterns
@@ -668,8 +696,17 @@ const PublicLessonView = ({
       try {
         // Check if it's a JSON string
         if (content.trim().startsWith('{') && content.trim().endsWith('}')) {
-          parsedContent = JSON.parse(content);
-          console.log('[PublicLessonView] Parsed JSON content:', parsedContent);
+          // Use the new JSON structure cleaning function
+          const cleaned = cleanJsonStructure(content);
+          const processed = cleanContentPart(cleaned);
+          const result = cleanupRemainingAsterisks(processed);
+          
+          console.log('[PublicLessonView] JSON string processed:', {
+            originalLength: content.length,
+            cleanedLength: result.length,
+            hasContent: result.trim().length > 0
+          });
+          return result;
         } else {
           // Regular string content
           const cleaned = cleanContentPart(content);
