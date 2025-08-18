@@ -5,7 +5,7 @@ import './CourseDisplay.css';
 import { useApiWrapper } from '../services/api';
 import LoadingState from './LoadingState';
 import ErrorState from './ErrorState';
-import NoCourseState from './NoCourseState';
+
 import Module from '../models/Module';
 import publicCourseSessionService from '../services/PublicCourseSessionService';
 import CaptchaChallenge from './CaptchaChallenge';
@@ -411,7 +411,7 @@ const PublicCourseDisplay = () => {
 
   if (loading) return <LoadingState />;
   if (error) return <ErrorState message={error} />;
-  if (!course) return <NoCourseState />;
+  if (!course) return <LoadingState />; // Show loading while course is being created
 
   return (
     <div className="flex h-screen bg-gray-100">

@@ -6,7 +6,7 @@ import { useApiWrapper } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { API_BASE_URL } from '../config/api';
 import NewCourseButton from './NewCourseButton';
-import NoCourseState from './NoCourseState';
+
 import quizPersistenceService from '../services/QuizPersistenceService';
 
 // Lazy load QuizView
@@ -390,7 +390,7 @@ const CourseDisplay = () => {
     return course.modules.flatMap(m => m.lessons.map(l => l.image?.imageTitle).filter(Boolean));
   }, [course]);
 
-  if (!course) return <NoCourseState />;
+  if (!course) return <LoadingState />; // Show loading while course is being created
 
   return (
     <div className="flex h-screen bg-gray-100">

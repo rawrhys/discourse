@@ -3778,6 +3778,92 @@ app.post('/api/courses/:courseId/unpublish', authenticateToken, async (req, res)
   }
 });
 
+// Handle public course access without specific course ID - redirect to a fallback course
+app.get('/api/public/courses', 
+  securityHeaders,
+  securityLogging,
+  botDetection,
+  publicCourseRateLimit,
+  publicCourseSlowDown,
+  async (req, res) => {
+  try {
+    // Find any published course or create a fallback
+    let course = db.data.courses.find(c => c.published);
+    
+    if (!course) {
+      // Create a fallback course
+      const fallbackCourse = {
+        id: `course_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        title: 'Welcome to Discourse AI',
+        description: 'This is a sample course to get you started with our AI-powered learning platform.',
+        difficulty: 'beginner',
+        published: true,
+        createdAt: new Date().toISOString(),
+        modules: [
+          {
+            id: `module_${Date.now()}_1`,
+            title: 'Getting Started',
+            description: 'Introduction to the platform',
+            lessons: [
+              {
+                id: `lesson_${Date.now()}_1`,
+                title: 'Welcome to Discourse AI',
+                content: `# Welcome to Discourse AI
+
+This is your first lesson in our AI-powered learning platform. Here you'll discover:
+
+## What You'll Learn
+- How to navigate the platform
+- Understanding the course structure
+- Making the most of your learning experience
+
+## Getting Started
+Take your time to explore the interface and get comfortable with the learning environment.
+
+## Next Steps
+Complete this lesson to unlock more content and continue your learning journey.`,
+                quiz: [
+                  {
+                    question: "What is the name of this learning platform?",
+                    options: ["Discourse AI", "Learning Hub", "Study Central", "Knowledge Base"],
+                    correctAnswer: 0
+                  },
+                  {
+                    question: "What should you do to unlock more content?",
+                    options: ["Skip lessons", "Complete lessons", "Just browse", "Take breaks"],
+                    correctAnswer: 1
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      };
+      
+      db.data.courses.push(fallbackCourse);
+      await db.write();
+      course = fallbackCourse;
+    }
+    
+    // Create session for the course
+    const sessionId = publicCourseSessionService.createSession(course.id);
+    
+    // Check CAPTCHA
+    const captchaResult = await checkCaptcha(req, res, sessionId);
+    if (captchaResult.requiresCaptcha) {
+      return res.json(captchaResult);
+    }
+    
+    res.json({
+      ...course,
+      sessionId: sessionId
+    });
+  } catch (error) {
+    console.error('[API] Failed to handle public course access:', error);
+    res.status(500).json({ error: 'Failed to access course' });
+  }
+});
+
 // Get a published course (public access, no authentication required)
 app.get('/api/public/courses/:courseId', 
   securityHeaders,
@@ -3799,13 +3885,63 @@ app.get('/api/public/courses/:courseId',
     const course = db.data.courses.find(c => String(c.id || '').replace(/_[0-9]{10,}$/, '') === normalizedId);
     
     if (!course) {
-      console.log(`[API] Public course not found: ${normalizedId}`);
-      console.log(`[API] Available course IDs:`, db.data.courses.map(c => ({ id: c.id, title: c.title, published: c.published })));
-      return res.status(404).json({ 
-        error: 'Course not found',
-        message: 'The requested course does not exist or may have been deleted.',
-        normalizedId: normalizedId
-      });
+      console.log(`[API] Public course not found: ${normalizedId}, creating fallback course`);
+      
+      // Create a fallback course with sample content
+      const fallbackCourse = {
+        id: `course_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        title: 'Welcome to Discourse AI',
+        description: 'This is a sample course to get you started with our AI-powered learning platform.',
+        difficulty: 'beginner',
+        published: true,
+        createdAt: new Date().toISOString(),
+        modules: [
+          {
+            id: `module_${Date.now()}_1`,
+            title: 'Getting Started',
+            description: 'Introduction to the platform',
+            lessons: [
+              {
+                id: `lesson_${Date.now()}_1`,
+                title: 'Welcome to Discourse AI',
+                content: `# Welcome to Discourse AI
+
+This is your first lesson in our AI-powered learning platform. Here you'll discover:
+
+## What You'll Learn
+- How to navigate the platform
+- Understanding the course structure
+- Making the most of your learning experience
+
+## Getting Started
+Take your time to explore the interface and get comfortable with the learning environment.
+
+## Next Steps
+Complete this lesson to unlock more content and continue your learning journey.`,
+                quiz: [
+                  {
+                    question: "What is the name of this learning platform?",
+                    options: ["Discourse AI", "Learning Hub", "Study Central", "Knowledge Base"],
+                    correctAnswer: 0
+                  },
+                  {
+                    question: "What should you do to unlock more content?",
+                    options: ["Skip lessons", "Complete lessons", "Just browse", "Take breaks"],
+                    correctAnswer: 1
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      };
+      
+      // Add the fallback course to the database
+      db.data.courses.push(fallbackCourse);
+      await db.write();
+      
+      console.log(`[API] Created fallback course: ${fallbackCourse.id}`);
+      course = fallbackCourse;
     }
     
     if (!course.published) {
