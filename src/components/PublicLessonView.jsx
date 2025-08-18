@@ -564,7 +564,9 @@ const PublicLessonView = ({
   const removeCitations = (text) => {
     if (!text) return text;
     
-    return text
+    const originalLength = text.length;
+    
+    let cleaned = text
       // Remove all citation patterns [1], [2], etc.
       .replace(/\[\d+\]/g, '')  // Remove [1], [2], [3], etc.
       // Remove any remaining citation artifacts
@@ -573,6 +575,17 @@ const PublicLessonView = ({
       // Clean up any double spaces that might result
       .replace(/\s+/g, ' ')  // Normalize spaces
       .trim();
+    
+    const cleanedLength = cleaned.length;
+    if (originalLength !== cleanedLength) {
+      console.log('[PublicLessonView] Citations removed:', {
+        originalLength,
+        cleanedLength,
+        removed: originalLength - cleanedLength
+      });
+    }
+    
+    return cleaned;
   };
 
   // Function to clean JSON structure and extract content
@@ -582,7 +595,14 @@ const PublicLessonView = ({
     // If it's a JSON string, extract the content
     if (text.trim().startsWith('{') && text.trim().endsWith('}')) {
       try {
-        const parsed = JSON.parse(text);
+        // Replace smart quotes with standard quotes for JSON parsing
+        let cleanText = text
+          .replace(/"/g, '"')  // Replace smart left quotes
+          .replace(/"/g, '"')  // Replace smart right quotes
+          .replace(/"/g, '"')  // Replace smart left double quotes
+          .replace(/"/g, '"'); // Replace smart right double quotes
+        
+        const parsed = JSON.parse(cleanText);
         const { introduction, main_content, conclusion } = parsed;
         
         // Combine all content parts
@@ -590,9 +610,17 @@ const PublicLessonView = ({
           .filter(Boolean)
           .join('\n\n');
         
+        console.log('[PublicLessonView] Successfully parsed JSON structure:', {
+          hasIntro: !!introduction,
+          hasMain: !!main_content,
+          hasConclusion: !!conclusion,
+          combinedLength: combined.length
+        });
+        
         return combined;
       } catch (error) {
         console.warn('[PublicLessonView] Failed to parse JSON structure:', error);
+        console.log('[PublicLessonView] Raw text that failed to parse:', text.substring(0, 200) + '...');
         return text;
       }
     }
@@ -629,6 +657,12 @@ const PublicLessonView = ({
       
       // Ensure part is a string before processing
       const partString = typeof part === 'string' ? part : String(part);
+      
+      console.log('[PublicLessonView] Cleaning content part:', {
+        originalLength: partString.length,
+        startsWithBrace: partString.trim().startsWith('{'),
+        endsWithBrace: partString.trim().endsWith('}')
+      });
       
       // First, clean JSON structure if present
       let cleaned = cleanJsonStructure(partString);
@@ -686,6 +720,11 @@ const PublicLessonView = ({
         .replace(/\[\d+\]/g, '')
         .replace(/\s+/g, ' ')  // Normalize spaces
         .trim();
+      
+      console.log('[PublicLessonView] Content part cleaned:', {
+        finalLength: cleaned.length,
+        hasContent: cleaned.trim().length > 0
+      });
       
       return cleaned;
     };
