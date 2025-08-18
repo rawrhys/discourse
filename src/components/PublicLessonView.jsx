@@ -249,9 +249,14 @@ const PublicLessonView = ({
     try {
       console.log('[PublicLessonView] Generating academic references for:', lesson.title);
       
+      // Ensure lesson.content is a string
+      const lessonContentString = typeof lesson.content === 'string' 
+        ? lesson.content 
+        : JSON.stringify(lesson.content);
+      
       // Generate academic references
       const references = academicReferencesService.generateReferences(
-        lesson.content,
+        lessonContentString,
         subject,
         lesson.title
       );
@@ -260,7 +265,7 @@ const PublicLessonView = ({
       
       // Generate content with inline citations
       const { content: contentWithInlineCitations } = academicReferencesService.generateInlineCitations(
-        lesson.content,
+        lessonContentString,
         references
       );
       
@@ -273,7 +278,7 @@ const PublicLessonView = ({
     } catch (error) {
       console.error('[PublicLessonView] Error generating academic references:', error);
       setAcademicReferences([]);
-      setContentWithCitations(lesson.content);
+      setContentWithCitations('');
     }
   }, [lesson?.id, lesson?.title, lesson?.content, subject]);
 
@@ -568,8 +573,11 @@ const PublicLessonView = ({
     const cleanContentPart = (part) => {
       if (!part) return '';
       
+      // Ensure part is a string before processing
+      const partString = typeof part === 'string' ? part : String(part);
+      
       // First, remove all separator patterns before any other processing
-      let cleaned = part
+      let cleaned = partString
         .replace(/Content generation completed\./g, '')
         .replace(/\|\|\|---\|\|\|/g, '') // Remove |||---||| patterns
         .replace(/\|\|\|/g, '') // Remove all remaining ||| patterns
@@ -642,13 +650,25 @@ const PublicLessonView = ({
   }
 
   // Get lesson content and process with academic references
-  const lessonContent = cleanAndCombineContent(lesson.content);
+  let lessonContent = '';
+  try {
+    lessonContent = cleanAndCombineContent(lesson.content);
+  } catch (error) {
+    console.error('[PublicLessonView] Error processing lesson content:', error);
+    lessonContent = typeof lesson.content === 'string' ? lesson.content : '';
+  }
   
   // Use content with citations if available, otherwise use original content
   const displayContent = contentWithCitations || lessonContent;
   
   // Apply markdown parsing to the content
-  const parsedContent = fixMalformedMarkdown(displayContent);
+  let parsedContent = '';
+  try {
+    parsedContent = fixMalformedMarkdown(displayContent);
+  } catch (error) {
+    console.error('[PublicLessonView] Error parsing markdown:', error);
+    parsedContent = displayContent || '';
+  }
   
   // Create academic references footer
   const referencesFooter = academicReferences.length > 0 
