@@ -987,76 +987,90 @@ class TTSService {
       }
       
       this.currentChunkIndex = i;
-      console.log(`[${this.serviceType} TTS] Speaking chunk ${i + 1}/${this.currentChunks.length} (${chunk.length} chars)`);
-      
-      try {
-        // Use speak-tts library with better debugging and error handling
-        const chunkPromise = new Promise((resolve) => {
-          const speakConfig = {
-            text: chunk,
-            splitSentences: false
-          };
+                console.log(`[${this.serviceType} TTS] Speaking chunk ${i + 1}/${this.currentChunks.length} (${chunk.length} chars)`);
           
-          console.log(`[${this.serviceType} TTS] Calling speech.speak for chunk ${i + 1} with config:`, {
-            textLength: chunk.length,
-            textPreview: chunk.substring(0, 50) + '...',
-            splitSentences: speakConfig.splitSentences,
-            speechInitialized: this.isInitialized,
-            speechObject: !!this.speech
-          });
-          
-          // Check if speech is properly initialized
-          if (!this.speech || !this.isInitialized) {
-            console.warn(`[${this.serviceType} TTS] Speech not initialized for chunk ${i + 1}, skipping`);
-            resolve();
-            return;
-          }
-          
-          // Use speak-tts library with better error handling
           try {
-            this.speech.speak(speakConfig).then((result) => {
-              console.log(`[${this.serviceType} TTS] Chunk ${i + 1} speak-tts completed successfully:`, result);
-              resolve();
-            }).catch((error) => {
-              console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} speak-tts failed:`, error);
-              // Try to reinitialize if there's a voice error
-              if (error && (error.includes('voice') || error.includes('not-allowed'))) {
-                console.log(`[${this.serviceType} TTS] Voice error detected, attempting reinitialization`);
-                this.isInitialized = false;
-                this.initSpeech();
+            // Use speak-tts library with better debugging and error handling
+            const chunkPromise = new Promise((resolve) => {
+              const speakConfig = {
+                text: chunk,
+                splitSentences: false
+              };
+              
+              console.log(`[${this.serviceType} TTS] Calling speech.speak for chunk ${i + 1} with config:`, {
+                textLength: chunk.length,
+                textPreview: chunk.substring(0, 50) + '...',
+                splitSentences: speakConfig.splitSentences,
+                speechInitialized: this.isInitialized,
+                speechObject: !!this.speech
+              });
+              
+              // Check if speech is properly initialized
+              if (!this.speech || !this.isInitialized) {
+                console.warn(`[${this.serviceType} TTS] Speech not initialized for chunk ${i + 1}, skipping`);
+                resolve();
+                return;
               }
-              resolve(); // Continue with next chunk
+              
+              // Use speak-tts library with better error handling
+              try {
+                // Set speaking start time when we actually call speak
+                this.speakingStartTime = Date.now();
+                console.log(`[${this.serviceType} TTS] Chunk ${i + 1} speech started at:`, this.speakingStartTime);
+                
+                this.speech.speak(speakConfig).then((result) => {
+                  console.log(`[${this.serviceType} TTS] Chunk ${i + 1} speak-tts completed successfully:`, result);
+                  resolve();
+                }).catch((error) => {
+                  console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} speak-tts failed:`, error);
+                  // Try to reinitialize if there's a voice error
+                  if (error && (error.includes('voice') || error.includes('not-allowed'))) {
+                    console.log(`[${this.serviceType} TTS] Voice error detected, attempting reinitialization`);
+                    this.isInitialized = false;
+                    this.initSpeech();
+                  }
+                  resolve(); // Continue with next chunk
+                });
+              } catch (error) {
+                console.warn(`[${this.serviceType} TTS] Error calling speech.speak for chunk ${i + 1}:`, error);
+                resolve(); // Continue with next chunk
+              }
             });
-          } catch (error) {
-            console.warn(`[${this.serviceType} TTS] Error calling speech.speak for chunk ${i + 1}:`, error);
-            resolve(); // Continue with next chunk
-          }
-        });
         
-        // Use a more reasonable timeout that doesn't interfere with normal speech
+        // Use a more intelligent timeout that waits for speech to actually start
         const timeoutPromise = new Promise((resolve) => {
-          setTimeout(() => {
-            // Only timeout if we're not actually speaking or if speech has been stuck for too long
-            if (!this.isPlaying || !this.speakingStartTime) {
-              console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} timeout - no speech detected, continuing to next chunk`);
-              resolve();
-            } else {
+          let timeoutId;
+          
+          const checkSpeechStatus = () => {
+            // Check if speech has actually started
+            if (this.isPlaying && this.speakingStartTime > 0) {
               const timeSinceStart = Date.now() - this.speakingStartTime;
-              // Only timeout if we've been "speaking" for more than 15 seconds (much more reasonable)
-              if (timeSinceStart > 15000) {
-                console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} appears to be stuck, continuing to next chunk`);
+              // Only timeout if we've been "speaking" for more than 20 seconds
+              if (timeSinceStart > 20000) {
+                console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} appears to be stuck after ${timeSinceStart}ms, continuing to next chunk`);
                 resolve();
               } else {
-                // Extend timeout if we're actually speaking
-                setTimeout(() => {
-                  if (this.isPlaying) {
-                    console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} final timeout - continuing to next chunk`);
-                    resolve();
-                  }
-                }, 20000); // Additional 20 seconds for very long chunks
+                // Speech is active, extend the timeout
+                timeoutId = setTimeout(checkSpeechStatus, 5000); // Check every 5 seconds
               }
+            } else {
+              // Speech hasn't started yet, give it more time
+              console.log(`[${this.serviceType} TTS] Chunk ${i + 1} waiting for speech to start...`);
+              timeoutId = setTimeout(checkSpeechStatus, 2000); // Check every 2 seconds
             }
-          }, 12000); // Increased initial timeout to 12 seconds
+          };
+          
+          // Start checking after a reasonable delay
+          timeoutId = setTimeout(checkSpeechStatus, 8000); // Initial 8 second delay
+          
+          // Also set a maximum timeout to prevent infinite waiting
+          setTimeout(() => {
+            if (timeoutId) {
+              clearTimeout(timeoutId);
+              console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} maximum timeout reached, continuing to next chunk`);
+              resolve();
+            }
+          }, 30000); // Maximum 30 seconds total
         });
         
         await Promise.race([chunkPromise, timeoutPromise]);

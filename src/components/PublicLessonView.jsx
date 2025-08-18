@@ -354,11 +354,21 @@ const PublicLessonView = ({
     // Add a small delay to prevent rapid button clicks
     await new Promise(resolve => setTimeout(resolve, 100));
     
+    console.log('[PublicLessonView] handlePauseResumeAudio called with state:', {
+      isPlaying: ttsStatus.isPlaying,
+      isPaused: ttsStatus.isPaused
+    });
+    
     try {
       if (ttsStatus.isPaused) {
-        publicTTSService.resume();
+        console.log('[PublicLessonView] Attempting to resume TTS');
+        const resumed = await publicTTSService.resume();
+        console.log('[PublicLessonView] Resume result:', resumed);
+        if (resumed) {
         setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
+        }
       } else if (ttsStatus.isPlaying) {
+        console.log('[PublicLessonView] Attempting to pause TTS');
         await publicTTSService.pause();
         setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: true }));
       }
