@@ -267,8 +267,32 @@ export const getContentAsArray = (content) => {
  * @returns {string} - Concatenated content string
  */
 export const getContentAsString = (content, separator = '\n\n') => {
+  // If content is already a string and doesn't contain JSON keys, return it as is
+  if (typeof content === 'string' && 
+      !content.includes('"introduction":') && 
+      !content.includes('"main_content":') && 
+      !content.includes('"conclusion":')) {
+    return content;
+  }
+  
   const sections = getContentAsArray(content);
-  return sections.join(separator);
+  const result = sections.join(separator);
+  
+  // Debug logging
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[contentFormatter] getContentAsString debug:', {
+      inputType: typeof content,
+      inputLength: typeof content === 'string' ? content.length : 'object',
+      sectionsCount: sections.length,
+      resultLength: result.length,
+      resultPreview: result.substring(0, 100) + '...',
+      hasJsonKeys: typeof content === 'string' ? 
+        (content.includes('"introduction":') || content.includes('"main_content":') || content.includes('"conclusion":')) : 
+        false
+    });
+  }
+  
+  return result;
 };
 
 export default {

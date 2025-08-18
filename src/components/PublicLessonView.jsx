@@ -262,6 +262,17 @@ const PublicLessonView = ({
         ? getContentAsString(lesson.content)
         : getContentAsString(lesson.content);
       
+      // Debug logging
+      console.log('[PublicLessonView] Content processing debug:', {
+        originalContentType: typeof lesson.content,
+        originalContentLength: typeof lesson.content === 'string' ? lesson.content.length : 'object',
+        lessonContentStringLength: lessonContentString.length,
+        lessonContentStringPreview: lessonContentString.substring(0, 200) + '...',
+        hasIntroductionKey: lessonContentString.includes('"introduction":'),
+        hasMainContentKey: lessonContentString.includes('"main_content":'),
+        hasConclusionKey: lessonContentString.includes('"conclusion":')
+      });
+      
       // Generate academic references
       const references = academicReferencesService.generateReferences(
         lessonContentString,
@@ -623,16 +634,38 @@ const PublicLessonView = ({
   try {
     // Use the new content formatter to handle malformed JSON and strip section keys
     lessonContent = getContentAsString(lesson.content);
+    
+    // Debug logging for main content processing
+    console.log('[PublicLessonView] Main content processing:', {
+      originalContentType: typeof lesson.content,
+      lessonContentLength: lessonContent.length,
+      lessonContentPreview: lessonContent.substring(0, 200) + '...',
+      hasContent: !!lessonContent,
+      isEmpty: lessonContent.trim() === ''
+    });
   } catch (error) {
     console.error('[PublicLessonView] Error processing lesson content:', error);
     lessonContent = typeof lesson.content === 'string' ? lesson.content : '';
   }
   
   // Use content with citations if available, otherwise use original content
-  // Ensure we strip any remaining JSON keys from contentWithCitations
+  // Only apply content formatter if contentWithCitations contains JSON keys
   const displayContent = contentWithCitations 
-    ? getContentAsString(contentWithCitations) 
+    ? (contentWithCitations.includes('"introduction":') || contentWithCitations.includes('"main_content":') || contentWithCitations.includes('"conclusion":'))
+      ? getContentAsString(contentWithCitations)
+      : contentWithCitations
     : lessonContent;
+  
+  // Debug logging for display content
+  console.log('[PublicLessonView] Display content processing:', {
+    hasContentWithCitations: !!contentWithCitations,
+    contentWithCitationsLength: contentWithCitations ? contentWithCitations.length : 0,
+    lessonContentLength: lessonContent.length,
+    displayContentLength: displayContent.length,
+    displayContentPreview: displayContent.substring(0, 200) + '...',
+    hasContent: !!displayContent,
+    isEmpty: displayContent.trim() === ''
+  });
   
   // Apply markdown parsing to the content
   let parsedContent = '';
@@ -834,9 +867,7 @@ const PublicLessonView = ({
              <div 
                className="markdown-body prose max-w-none"
               dangerouslySetInnerHTML={{ 
-                __html: parsedContent.includes('"introduction":') || parsedContent.includes('"main_content":') || parsedContent.includes('"conclusion":')
-                  ? getContentAsString(parsedContent) // Final safety check
-                  : parsedContent 
+                __html: parsedContent 
               }}
              />
            </div>
