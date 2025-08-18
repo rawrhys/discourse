@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import SimpleImageService from '../services/SimpleImageService';
 import { publicTTSService } from '../services/TTSService';
 import PerformanceMonitorService from '../services/PerformanceMonitorService';
@@ -457,6 +457,123 @@ const PublicLessonView = ({
       .replace(/\*\*\*\*\*\*/g, '**');
   };
 
+  // Function to extract references from content
+  const extractReferences = (content) => {
+    if (!content || typeof content !== 'string') return { contentWithoutRefs: content, references: [] };
+    
+    // Look for References section with various patterns
+    const refPatterns = [
+      /## References\s*([\s\S]*?)(?=\n## |\n# |$)/i,
+      /## References\s*\[(\d+)\]\s*([\s\S]*?)(?=\n## |\n# |$)/i,
+      /References\s*\[(\d+)\]\s*([\s\S]*?)(?=\n## |\n# |$)/i
+    ];
+    
+    let refMatch = null;
+    let referencesText = '';
+    
+    // Try each pattern
+    for (const pattern of refPatterns) {
+      refMatch = content.match(pattern);
+      if (refMatch) {
+        referencesText = refMatch[1] || refMatch[2] || '';
+        break;
+      }
+    }
+    
+    if (!refMatch) return { contentWithoutRefs: content, references: [] };
+    
+    const references = [];
+    
+    // Parse individual references - handle multiple formats
+    const refLines = referencesText.split(/\n+/).filter(line => line.trim());
+    
+    refLines.forEach(line => {
+      const trimmedLine = line.trim();
+      if (trimmedLine) {
+        // Look for numbered references like [1], [2], etc.
+        const numberedMatch = trimmedLine.match(/^\[(\d+)\]\s*(.+)$/);
+        if (numberedMatch) {
+          references.push({
+            number: numberedMatch[1],
+            citation: numberedMatch[2].trim()
+          });
+        } else {
+          // Look for patterns like "## References [1] Encyclopaedia Britannica..."
+          const inlineMatch = trimmedLine.match(/\[(\d+)\]\s*(.+)$/);
+          if (inlineMatch) {
+            references.push({
+              number: inlineMatch[1],
+              citation: inlineMatch[2].trim()
+            });
+          } else {
+            // If no number found, just add the line as a reference
+            references.push({
+              number: (references.length + 1).toString(),
+              citation: trimmedLine
+            });
+          }
+        }
+      }
+    });
+    
+    // Remove the References section from the content
+    const contentWithoutRefs = content.replace(/## References\s*[\s\S]*?(?=\n## |\n# |$)/i, '').trim();
+    
+    return { contentWithoutRefs, references };
+  };
+
+  // Frontend-level fix for malformed References sections
+  const fixMalformedReferencesAtFrontend = (text) => {
+    if (!text || typeof text !== 'string') {
+      return text;
+    }
+
+    let fixedText = text
+      // Fix the specific problematic pattern: "## References [1] ... [2] ..."
+      .replace(/## References\s*\[(\d+)\]/g, '\n## References\n\n[$1]')
+      // Ensure each citation is on its own line
+      .replace(/\]\s*\[(\d+)\]/g, '.\n\n[$1]')
+      // Add proper line breaks between citations
+      .replace(/\.\s*\[(\d+)\]/g, '.\n\n[$1]')
+      // Clean up any remaining issues
+      .replace(/\n{3,}/g, '\n\n'); // Normalize multiple line breaks
+
+    return fixedText;
+  };
+
+  // ReferencesFooter component
+  const ReferencesFooter = memo(({ references }) => {
+    if (!references || references.length === 0) return null;
+
+    // Debug logging for references footer
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[ReferencesFooter] Rendering references:', references);
+    }
+
+    return (
+      <footer className="references-footer mt-8 pt-6 border-t border-gray-200">
+        <h2 className="references-header text-xl font-semibold text-gray-900 mb-4">
+          References
+        </h2>
+        <div className="references-list space-y-3">
+          {references.map((ref, index) => {
+            // Parse the citation to handle markdown formatting
+            const parsedCitation = fixMalformedMarkdown(ref.citation);
+            
+            return (
+              <div key={index} className="citation-item p-3 bg-gray-50 border-l-4 border-blue-500 rounded">
+                <span className="font-medium text-blue-600">[{ref.number}]</span>
+                <span className="ml-2" dangerouslySetInnerHTML={{ 
+                  __html: parsedCitation 
+                }} />
+              </div>
+            );
+          })}
+        </div>
+      </footer>
+    );
+  });
+
   // Helper function to clean and combine lesson content
   const cleanAndCombineContent = (content) => {
     if (!content) {
@@ -546,11 +663,46 @@ const PublicLessonView = ({
   // Process the content for rendering
   let fixedContent = lessonContent;
   
-  // Add bibliography if available
-  if (lesson.bibliography && lesson.bibliography.length > 0) {
+  // Apply markdown fix before rendering - use bibliography-aware parsing
+  fixedContent = lessonContent.includes('## References') 
+    ? markdownService.parseWithBibliography(lessonContent)
+    : fixMalformedMarkdown(lessonContent);
+
+  // Frontend-level fix for malformed References sections
+  fixedContent = fixMalformedReferencesAtFrontend(fixedContent);
+
+  // Extract references from the content
+  const { contentWithoutRefs, references } = extractReferences(fixedContent);
+
+  // Apply markdown parsing to content without references
+  const parsedContent = fixMalformedMarkdown(contentWithoutRefs);
+
+  // Debug logging for references processing
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[PublicLessonView] References processing:', {
+      hasReferences: lessonContent?.includes('## References'),
+      referencesCount: references?.length || 0,
+      references: references,
+      contentWithoutRefsLength: contentWithoutRefs?.length || 0,
+      parsedContentLength: parsedContent?.length || 0
+    });
+  }
+
+  // Add bibliography if available and not already in content
+  let finalReferences = references;
+  if (lesson.bibliography && lesson.bibliography.length > 0 && !lessonContent.includes('## References')) {
     const bibliographyMarkdown = '\n\n## References\n\n' + 
       lesson.bibliography.map((ref, index) => `[${index + 1}] ${ref}`).join('\n\n');
-    fixedContent += bibliographyMarkdown;
+    const { contentWithoutRefs: contentWithoutBib, references: bibRefs } = extractReferences(bibliographyMarkdown);
+    finalReferences = bibRefs;
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[PublicLessonView] Bibliography processing:', {
+        bibliographyCount: lesson.bibliography?.length || 0,
+        bibRefsCount: bibRefs?.length || 0,
+        bibRefs: bibRefs
+      });
+    }
   }
 
   return (
@@ -593,144 +745,147 @@ const PublicLessonView = ({
           </div>
         </div>
         
-                 <h1 className="text-3xl font-bold mb-2">{lesson.title}</h1>
-         {moduleTitle && (
-           <p className="text-blue-100 text-lg">{moduleTitle}</p>
-         )}
-         <div className="flex items-center space-x-4 mt-4 text-sm text-blue-100">
-           <span>Lesson {currentLessonIndex + 1} of {totalLessonsInModule}</span>
-           {lesson.quiz && lesson.quiz.length > 0 && (
-             <span className="flex items-center">
-               <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                 <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
-               </svg>
-               Quiz Available
-             </span>
-           )}
-         </div>
-       </div>
-
-               {/* Tab Navigation */}
-        <div className="flex space-x-2 mb-4 p-6 pb-0">
-          <button
-            onClick={() => handleTabChange('content')}
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-              view === 'content' 
-                ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-          >
-            <i className="fas fa-book mr-2"></i>Content
-          </button>
-          <button
-            onClick={() => handleTabChange('flashcards')}
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-              view === 'flashcards'
-                ? 'bg-blue-600 text-white hover:bg-blue-700'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-          >
-            <i className="fas fa-clone mr-2"></i>Flashcards {flashcardData?.length ? `(${flashcardData.length})` : ''}
-          </button>
-          <button
-            onClick={ttsStatus.isPlaying ? handlePauseResumeAudio : ttsStatus.isPaused ? handlePauseResumeAudio : handleStartAudio}
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-              ttsStatus.isPlaying || ttsStatus.isPaused
-                ? 'bg-green-600 text-white hover:bg-green-700'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
-            }`}
-            title={ttsStatus.isPlaying ? 'Pause reading' : ttsStatus.isPaused ? 'Resume reading' : 'Start reading aloud'}
-          >
-            <i className={`mr-2 ${ttsStatus.isPlaying ? 'fas fa-pause' : ttsStatus.isPaused ? 'fas fa-play' : 'fas fa-volume-up'}`}></i>
-            {ttsStatus.isPlaying ? 'Pause' : ttsStatus.isPaused ? 'Resume' : 'Read Aloud'}
-          </button>
-          {(ttsStatus.isPlaying || ttsStatus.isPaused) && (
-            <button
-              onClick={handleStopAudio}
-              className="px-3 py-2 text-sm font-medium rounded-md transition-colors bg-red-600 text-white hover:bg-red-700"
-              title="Stop reading"
-            >
-              <i className="fas fa-stop mr-2"></i>
-              Stop
-            </button>
+        <h1 className="text-3xl font-bold mb-2">{lesson.title}</h1>
+        {moduleTitle && (
+          <p className="text-blue-100 text-lg">{moduleTitle}</p>
+        )}
+        <div className="flex items-center space-x-4 mt-4 text-sm text-blue-100">
+          <span>Lesson {currentLessonIndex + 1} of {totalLessonsInModule}</span>
+          {lesson.quiz && lesson.quiz.length > 0 && (
+            <span className="flex items-center">
+              <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+              </svg>
+              Quiz Available
+            </span>
           )}
         </div>
+      </div>
 
-       {/* Content View */}
-       {view === 'content' && (
-         <div className="p-6">
-           {/* Image Section - Above content like private LessonView */}
-           {imageLoading && (
-             <div className="lesson-image-container loading mb-6">
-               <div className="image-loading">Loading image...</div>
-             </div>
-           )}
-           
-           {imageData && imageData.url && !imageLoading && (
-             <figure className="lesson-image-container mb-6" style={{ maxWidth: 700, margin: '0 auto' }}>
-               <img
-                 src={imageData.url}
-                 alt={lesson?.title || 'Lesson illustration'}
-                 className="lesson-image"
-                 style={{ width: '100%', height: 'auto' }}
-                 onError={(e) => {
-                   e.target.style.display = 'none';
-                 }}
-               />
-               <figcaption className="image-description" style={{ 
-                 textAlign: 'center', 
-                 marginTop: '8px', 
-                 fontSize: '14px', 
-                 color: '#000',
-                 fontStyle: 'italic'
-               }}>
-                 {(() => {
-                   const { uploader, attribution } = imageData || {};
-                   // Prefer explicit uploader if present; strip leading 'User:'
-                   if (typeof uploader === 'string' && uploader.trim()) {
-                     return uploader.replace(/^user:\s*/i, '').trim();
-                   }
-                   // Fallback: derive from attribution string
-                   if (typeof attribution === 'string') {
-                     const withoutHtml = attribution.replace(/<[^>]*>/g, '');
-                     const byIdx = withoutHtml.toLowerCase().indexOf('image by ');
-                     if (byIdx !== -1) {
-                       const after = withoutHtml.substring(byIdx + 'image by '.length);
-                       const viaIdx = after.toLowerCase().indexOf(' via');
-                       const extracted = (viaIdx !== -1 ? after.substring(0, viaIdx) : after).trim();
-                       return extracted.replace(/^user:\s*/i, '').trim();
-                     }
-                   }
-                   return '';
-                 })()}
-                 {imageData?.pageURL ? (
-                   <>
-                     <span style={{ margin: '0 6px' }}>·</span>
-                     <a href={imageData.pageURL} target="_blank" rel="noopener noreferrer" style={{ color: '#2563eb', fontStyle: 'normal' }}>
-                       Source
-                     </a>
-                   </>
-                 ) : null}
-               </figcaption>
-             </figure>
-           )}
+      {/* Tab Navigation */}
+      <div className="flex space-x-2 mb-4 p-6 pb-0">
+        <button
+          onClick={() => handleTabChange('content')}
+          className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+            view === 'content' 
+              ? 'bg-blue-600 text-white hover:bg-blue-700' 
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          }`}
+        >
+          <i className="fas fa-book mr-2"></i>Content
+        </button>
+        <button
+          onClick={() => handleTabChange('flashcards')}
+          className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+            view === 'flashcards'
+              ? 'bg-blue-600 text-white hover:bg-blue-700'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          }`}
+        >
+          <i className="fas fa-clone mr-2"></i>Flashcards {flashcardData?.length ? `(${flashcardData.length})` : ''}
+        </button>
+        <button
+          onClick={ttsStatus.isPlaying ? handlePauseResumeAudio : ttsStatus.isPaused ? handlePauseResumeAudio : handleStartAudio}
+          className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+            ttsStatus.isPlaying || ttsStatus.isPaused
+              ? 'bg-green-600 text-white hover:bg-green-700'
+              : 'bg-blue-600 text-white hover:bg-blue-700'
+          }`}
+          title={ttsStatus.isPlaying ? 'Pause reading' : ttsStatus.isPaused ? 'Resume reading' : 'Start reading aloud'}
+        >
+          <i className={`mr-2 ${ttsStatus.isPlaying ? 'fas fa-pause' : ttsStatus.isPaused ? 'fas fa-play' : 'fas fa-volume-up'}`}></i>
+          {ttsStatus.isPlaying ? 'Pause' : ttsStatus.isPaused ? 'Resume' : 'Read Aloud'}
+        </button>
+        {(ttsStatus.isPlaying || ttsStatus.isPaused) && (
+          <button
+            onClick={handleStopAudio}
+            className="px-3 py-2 text-sm font-medium rounded-md transition-colors bg-red-600 text-white hover:bg-red-700"
+            title="Stop reading"
+          >
+            <i className="fas fa-stop mr-2"></i>
+            Stop
+          </button>
+        )}
+      </div>
 
-           {/* Lesson Content */}
-           <div className="lesson-content max-w-none">
-             <div 
-               className="markdown-body prose max-w-none"
-               dangerouslySetInnerHTML={{ __html: fixedContent }}
-             />
-           </div>
-         </div>
-       )}
+      {/* Content View */}
+      {view === 'content' && (
+        <div className="p-6">
+          {/* Image Section - Above content like private LessonView */}
+          {imageLoading && (
+            <div className="lesson-image-container loading mb-6">
+              <div className="image-loading">Loading image...</div>
+            </div>
+          )}
+          
+          {imageData && imageData.url && !imageLoading && (
+            <figure className="lesson-image-container mb-6" style={{ maxWidth: 700, margin: '0 auto' }}>
+              <img
+                src={imageData.url}
+                alt={lesson?.title || 'Lesson illustration'}
+                className="lesson-image"
+                style={{ width: '100%', height: 'auto' }}
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                }}
+              />
+              <figcaption className="image-description" style={{ 
+                textAlign: 'center', 
+                marginTop: '8px', 
+                fontSize: '14px', 
+                color: '#000',
+                fontStyle: 'italic'
+              }}>
+                {(() => {
+                  const { uploader, attribution } = imageData || {};
+                  // Prefer explicit uploader if present; strip leading 'User:'
+                  if (typeof uploader === 'string' && uploader.trim()) {
+                    return uploader.replace(/^user:\s*/i, '').trim();
+                  }
+                  // Fallback: derive from attribution string
+                  if (typeof attribution === 'string') {
+                    const withoutHtml = attribution.replace(/<[^>]*>/g, '');
+                    const byIdx = withoutHtml.toLowerCase().indexOf('image by ');
+                    if (byIdx !== -1) {
+                      const after = withoutHtml.substring(byIdx + 'image by '.length);
+                      const viaIdx = after.toLowerCase().indexOf(' via');
+                      const extracted = (viaIdx !== -1 ? after.substring(0, viaIdx) : after).trim();
+                      return extracted.replace(/^user:\s*/i, '').trim();
+                    }
+                  }
+                  return '';
+                })()}
+                {imageData?.pageURL ? (
+                  <>
+                    <span style={{ margin: '0 6px' }}>·</span>
+                    <a href={imageData.pageURL} target="_blank" rel="noopener noreferrer" style={{ color: '#2563eb', fontStyle: 'normal' }}>
+                      Source
+                    </a>
+                  </>
+                ) : null}
+              </figcaption>
+            </figure>
+          )}
 
-       {/* Flashcards View */}
-       {view === 'flashcards' && (
-         <div className="p-6">
-           {renderFlashcards()}
-         </div>
-       )}
+          {/* Lesson Content */}
+          <div className="lesson-content max-w-none">
+            <div 
+              className="markdown-body prose max-w-none"
+              dangerouslySetInnerHTML={{ __html: parsedContent }}
+            />
+            {finalReferences && finalReferences.length > 0 && (
+              <ReferencesFooter references={finalReferences} />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Flashcards View */}
+      {view === 'flashcards' && (
+        <div className="p-6">
+          {renderFlashcards()}
+        </div>
+      )}
 
       {/* Success/Fail Messages */}
       {showSuccessMessage && (
