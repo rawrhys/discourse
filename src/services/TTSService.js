@@ -1338,23 +1338,24 @@ class TTSService {
         if (this.isChunkedSpeech && this.currentChunks && Array.isArray(this.currentChunks)) {
           console.log(`[${this.serviceType} TTS] Resuming chunked speech with ${this.currentChunks.length} chunks`);
           
-          // Calculate the correct chunk index from pause position
-          if (pauseData && pauseData.chunkIndex !== undefined && pauseData.chunkIndex !== null) {
-            this.currentChunkIndex = Math.max(0, Math.min(pauseData.chunkIndex, this.currentChunks.length - 1));
-            console.log(`[${this.serviceType} TTS] Setting chunk index from pause data: ${this.currentChunkIndex}`);
-          } else if (this.pausePosition > 0 && this.fullText) {
+          // Always calculate chunk index from pause position for accuracy
+          if (this.pausePosition > 0 && this.fullText && this.currentChunks) {
             // Calculate chunk index from pause position
             let accumulatedLength = 0;
             let calculatedIndex = 0;
+            
             for (let i = 0; i < this.currentChunks.length; i++) {
-              accumulatedLength += this.currentChunks[i].length + 1; // +1 for space
-              if (accumulatedLength >= this.pausePosition) {
+              const chunkLength = this.currentChunks[i].length;
+              // Check if this chunk contains the pause position
+              if (accumulatedLength <= this.pausePosition && this.pausePosition <= accumulatedLength + chunkLength) {
                 calculatedIndex = i;
                 break;
               }
+              accumulatedLength += chunkLength + 1; // +1 for space between chunks
             }
-            this.currentChunkIndex = calculatedIndex;
-            console.log(`[${this.serviceType} TTS] Calculated chunk index from pause position: ${this.currentChunkIndex}`);
+            
+            this.currentChunkIndex = Math.max(0, Math.min(calculatedIndex, this.currentChunks.length - 1));
+            console.log(`[${this.serviceType} TTS] Calculated chunk index from pause position ${this.pausePosition}: ${this.currentChunkIndex} (chunk ${this.currentChunkIndex + 1}/${this.currentChunks.length})`);
           } else {
             // Fallback: start from the beginning if no pause position available
             this.currentChunkIndex = 0;

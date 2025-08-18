@@ -270,14 +270,22 @@ const PublicLessonView = ({
         let contentToRead = '';
         
         if (view === 'content') {
-          // Only read the main content that's currently displayed
+          // Read the full lesson content including introduction and conclusion
           if (lesson.content && typeof lesson.content === 'object') {
-            // For object content, only read the main_content section
-            if (lesson.content.main_content) {
-              contentToRead = lesson.content.main_content;
-            } else if (lesson.content.content) {
-              contentToRead = lesson.content.content;
+            // For object content, combine introduction, main_content, and conclusion
+            const parts = [];
+            if (lesson.content.introduction) {
+              parts.push(lesson.content.introduction);
             }
+            if (lesson.content.main_content) {
+              parts.push(lesson.content.main_content);
+            } else if (lesson.content.content) {
+              parts.push(lesson.content.content);
+            }
+            if (lesson.content.conclusion) {
+              parts.push(lesson.content.conclusion);
+            }
+            contentToRead = parts.join('\n\n');
           } else if (typeof lesson.content === 'string') {
             // For string content, use it as is
             contentToRead = lesson.content;
