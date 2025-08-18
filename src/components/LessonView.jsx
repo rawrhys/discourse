@@ -10,7 +10,7 @@ import logger from '../utils/logger';
 import SimpleImageService from '../services/SimpleImageService.js';
 import Image from './Image.jsx';
 
-import { publicTTSService } from '../services/TTSService.js';
+import { privateTTSService } from '../services/TTSService.js';
 import Flashcard from './Flashcard';
 import { useThrottledLogger, useDebounce, useStableValue } from '../hooks/usePerformanceOptimization';
 import performanceMonitor from '../services/PerformanceMonitorService';
@@ -616,7 +616,7 @@ const LessonView = ({
   const [ttsStatus, setTtsStatus] = useState({
     isPlaying: false,
     isPaused: false,
-    isSupported: publicTTSService.isSupported()
+    isSupported: privateTTSService.isSupported()
   });
 
   // TTS state management (matching PublicLessonView)
@@ -627,7 +627,7 @@ const LessonView = ({
   useEffect(() => {
     return () => {
       try {
-        publicTTSService.stop();
+        privateTTSService.stop();
       } catch (error) {
         console.warn('[LessonView] TTS cleanup error:', error);
       }
@@ -646,7 +646,7 @@ const LessonView = ({
 
     try {
       // Only stop TTS if it's actually playing or paused
-      const currentStatus = publicTTSService.getStatus();
+      const currentStatus = privateTTSService.getStatus();
       if (!currentStatus.isPlaying && !currentStatus.isPaused) {
         console.log('[LessonView] TTS not playing, no need to stop on lesson change');
         return;
@@ -658,12 +658,12 @@ const LessonView = ({
 
       // Stop TTS if it's currently playing or paused
       try {
-        publicTTSService.stop(); // This will reset pause data via resetPauseData()
+        privateTTSService.stop(); // This will reset pause data via resetPauseData()
         console.log('[LessonView] Stopped TTS and reset pause data on lesson change');
       } catch (error) {
         console.warn('[LessonView] TTS auto-pause error:', error);
         try {
-          publicTTSService.reset();
+          privateTTSService.reset();
           console.log('[LessonView] Reset TTS service after stop error');
         } catch (resetError) {
           console.warn('[LessonView] Error resetting TTS service:', resetError);
@@ -688,7 +688,7 @@ const LessonView = ({
   useEffect(() => {
     const syncTTSState = () => {
       try {
-        const serviceStatus = publicTTSService.getStableStatus();
+        const serviceStatus = privateTTSService.getStableStatus();
         
         // Only update if there's an actual change
         if (
@@ -708,12 +708,19 @@ const LessonView = ({
               newPaused: serviceStatus.isPaused
             });
 
-      setTtsStatus(prev => ({
-        ...prev,
-        isPlaying: serviceStatus.isPlaying,
-        isPaused: serviceStatus.isPaused,
-        isSupported: serviceStatus.isSupported
-      }));
+            // Only update if the service is actually in a different state
+            // This prevents unnecessary re-renders that might trigger other effects
+            setTtsStatus(prev => {
+              if (prev.isPlaying === serviceStatus.isPlaying && prev.isPaused === serviceStatus.isPaused) {
+                return prev; // No change needed
+              }
+              return {
+                ...prev,
+                isPlaying: serviceStatus.isPlaying,
+                isPaused: serviceStatus.isPaused,
+                isSupported: serviceStatus.isSupported
+              };
+            });
           }, 100);
         }
       } catch (error) {
@@ -739,7 +746,7 @@ const LessonView = ({
   useEffect(() => {
     return () => {
       try {
-        publicTTSService.stop();
+        privateTTSService.stop();
         console.log('[LessonView] Cleaned up TTS service on unmount');
       } catch (error) {
         console.warn('[LessonView] Error cleaning up TTS service:', error);
@@ -755,11 +762,21 @@ const LessonView = ({
     // Add a small delay to prevent rapid button clicks
     await new Promise(resolve => setTimeout(resolve, 100));
     
+    // Guard against automatic calls - only allow manual button clicks
+    console.log('[LessonView] handleStartAudio called - manual start only');
+    
+    // Check if TTS service has been stopped - if so, don't start
+    const serviceStatus = privateTTSService.getStatus();
+    if (serviceStatus.isStopped) {
+      console.log('[LessonView] TTS service was stopped, not starting new speech');
+      return;
+    }
+    
     try {
       // Check if TTS is already playing
       if (ttsStatus.isPlaying) {
         console.log('[LessonView] TTS already playing, stopping first');
-        publicTTSService.stop();
+        privateTTSService.stop();
         setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
         return;
       }
@@ -767,7 +784,7 @@ const LessonView = ({
       // Check if TTS is paused and can resume
       if (ttsStatus.isPaused) {
         console.log('[LessonView] Resuming paused TTS');
-        publicTTSService.resume();
+        privateTTSService.resume();
         setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
         return;
       } else {
@@ -835,7 +852,7 @@ const LessonView = ({
           contentPreview: contentToRead.substring(0, 100) + '...'
         });
         
-        const started = await publicTTSService.readLesson({ ...propLesson, content: contentToRead }, propLesson.id);
+        const started = await privateTTSService.readLesson({ ...propLesson, content: contentToRead }, propLesson.id);
         
         if (started) {
           setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
@@ -848,14 +865,14 @@ const LessonView = ({
       console.error('[LessonView] TTS error:', error);
       setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
     }
-  }, [ttsStatus.isPlaying, ttsStatus.isPaused, view, propLesson]); // Added view and propLesson dependencies
+  }, [view, propLesson]); // Removed ttsStatus dependencies to prevent auto-restart
 
   const handleStopAudio = useCallback(async () => {
     // Add a small delay to prevent rapid button clicks
     await new Promise(resolve => setTimeout(resolve, 100));
     
     try {
-      publicTTSService.stop();
+      privateTTSService.stop();
     } catch (error) {
       console.warn('[LessonView] TTS stop error:', error);
     }
@@ -875,14 +892,14 @@ const LessonView = ({
     try {
       if (ttsStatus.isPaused) {
         console.log('[LessonView] Attempting to resume TTS');
-        const resumed = await publicTTSService.resume();
+        const resumed = await privateTTSService.resume();
         console.log('[LessonView] Resume result:', resumed);
         if (resumed) {
           setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
         }
       } else if (ttsStatus.isPlaying) {
         console.log('[LessonView] Attempting to pause TTS');
-        await publicTTSService.pause();
+        await privateTTSService.pause();
         setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: true }));
       }
     } catch (error) {
@@ -951,9 +968,9 @@ const LessonView = ({
     setIsLoading(false);
     
     // Reset TTS if lesson changes
-    if (propLesson?.id && publicTTSService.getStatus().currentLessonId !== propLesson.id) {
+    if (propLesson?.id && privateTTSService.getStatus().currentLessonId !== propLesson.id) {
       console.log('[LessonView] Lesson changed, stopping TTS and resetting pause data');
-      publicTTSService.stop(); // This will also reset pause data via resetPauseData()
+      privateTTSService.stop(); // This will also reset pause data via resetPauseData()
       setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
     }
   }, [propLesson]);
