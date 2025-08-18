@@ -668,9 +668,18 @@ const PublicLessonView = ({
         .replace(/"/g, '"')  // Replace any remaining smart quotes
         .replace(/\[object Object\]/g, '')  // Remove [object Object] artifacts
         .replace(/\[object\s+Object\]/g, '')  // Remove [object Object] with spaces
-        // Fix line breaks
-        .replace(/\\n/g, '\n')
-        // Fix paragraph breaks and formatting
+        // Remove JSON key patterns with empty quotes
+        .replace(/""\s*:\s*/g, '')  // Remove "" : patterns
+        .replace(/""\s*:/g, '')  // Remove "" : patterns
+        .replace(/""\s*:\s*"/g, '')  // Remove "" : " patterns
+        // Remove standalone colons and commas that are not part of grammar
+        .replace(/:\s*"/g, '')  // Remove : " patterns
+        .replace(/,\s*"/g, '')  // Remove , " patterns
+        .replace(/:\s*$/gm, '')  // Remove trailing colons at end of lines
+        .replace(/,\s*$/gm, '')  // Remove trailing commas at end of lines
+        // Fix line breaks and paragraph formatting
+        .replace(/\\n/g, '\n')  // Convert \n to actual line breaks
+        .replace(/\\n\\n/g, '\n\n')  // Convert \n\n to actual paragraph breaks
         .replace(/\n\s*\n\s*\n/g, '\n\n')  // Normalize multiple line breaks to double
         .replace(/\n\s*\n/g, '\n\n')  // Normalize double line breaks
         .replace(/\n{3,}/g, '\n\n')  // Limit to max 2 consecutive line breaks
@@ -718,7 +727,18 @@ const PublicLessonView = ({
         .replace(/"/g, '"')  // Replace any remaining smart quotes
         .replace(/\[object Object\]/g, '')  // Remove [object Object] artifacts
         .replace(/\[object\s+Object\]/g, '')  // Remove [object Object] with spaces
+        // Remove JSON key patterns with empty quotes
+        .replace(/""\s*:\s*/g, '')  // Remove "" : patterns
+        .replace(/""\s*:/g, '')  // Remove "" : patterns
+        .replace(/""\s*:\s*"/g, '')  // Remove "" : " patterns
+        // Remove standalone colons and commas that are not part of grammar
+        .replace(/:\s*"/g, '')  // Remove : " patterns
+        .replace(/,\s*"/g, '')  // Remove , " patterns
+        .replace(/:\s*$/gm, '')  // Remove trailing colons at end of lines
+        .replace(/,\s*$/gm, '')  // Remove trailing commas at end of lines
         // Final paragraph break normalization
+        .replace(/\\n\\n/g, '\n\n')  // Convert \n\n to actual paragraph breaks
+        .replace(/\\n/g, '\n')  // Convert \n to actual line breaks
         .replace(/\n\s*\n\s*\n/g, '\n\n')  // Normalize multiple line breaks to double
         .replace(/\n\s*\n/g, '\n\n')  // Normalize double line breaks
         .replace(/\n{3,}/g, '\n\n')  // Limit to max 2 consecutive line breaks
