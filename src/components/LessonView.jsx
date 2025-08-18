@@ -787,54 +787,48 @@ const LessonView = ({
     let abortController = new AbortController();
     
     async function fetchImage() {
-      if (propLesson?.title) {
-        try {
-          // Exclude all used titles/urls; if current image exists, it will also be excluded and force a new one
-          const result = await SimpleImageService.searchWithContext(
-            propLesson.title,
-            subject, // Pass the course subject here
-            cleanAndCombineContent(propLesson.content),
-            localUsedImageTitles,
-            localUsedImageUrls,
-            courseId,
-            propLesson?.id || lessonId,
-            courseDescription
-          );
+      try {
+        // Use the same simplified approach as PublicLessonView
+        const result = await SimpleImageService.searchWithContext(
+          propLesson.title,
+          subject,
+          cleanAndCombineContent(propLesson.content),
+          localUsedImageTitles,
+          localUsedImageUrls,
+          courseId,
+          propLesson?.id || lessonId,
+          courseDescription
+        );
+        
+        if (!ignore && !abortController.signal.aborted) {
+          console.log('[LessonView] Setting image data:', result);
+          setImageData(result ? { ...result, url: normalizeImageUrl(result.url) } : null);
           
-          // Check if request was aborted before setting state
-          if (!ignore && !abortController.signal.aborted) {
-            console.log('[LessonView] Setting image data:', result);
-            setImageData(result ? { ...result, url: normalizeImageUrl(result.url) } : null);
-            
-            // Update local used image tracking when a new image is found
-            if (result) {
-              setLocalUsedImageTitles(prev => new Set([...prev, result.title]));
-              setLocalUsedImageUrls(prev => new Set([...prev, result.url]));
-            }
-            
-            // Persist replacement image into lesson if we fetched a new one
-            if (result && onUpdateLesson && propLesson?.id) {
-              onUpdateLesson(propLesson.id, { image: {
-                imageTitle: result.title,
-                imageUrl: result.url,
-                pageURL: result.pageURL,
-                attribution: result.attribution,
-              }});
-            }
+          // Update local used image tracking when a new image is found
+          if (result) {
+            setLocalUsedImageTitles(prev => new Set([...prev, result.title]));
+            setLocalUsedImageUrls(prev => new Set([...prev, result.url]));
           }
-        } catch (e) {
-          // Only handle errors if not aborted
-          if (!ignore && !abortController.signal.aborted) {
-            console.warn('[LessonView] Image fetch error:', e);
-            setImageData(null);
-          }
-        } finally {
-          if (!ignore && !abortController.signal.aborted) {
-            setImageLoading(false);
+          
+          // Persist replacement image into lesson if we fetched a new one
+          if (result && onUpdateLesson && propLesson?.id) {
+            onUpdateLesson(propLesson.id, { image: {
+              imageTitle: result.title,
+              imageUrl: result.url,
+              pageURL: result.pageURL,
+              attribution: result.attribution,
+            }});
           }
         }
-      } else {
-        if (!ignore) setImageLoading(false);
+      } catch (e) {
+        if (!ignore && !abortController.signal.aborted) {
+          console.warn('[LessonView] Image fetch error:', e);
+          setImageData(null);
+        }
+      } finally {
+        if (!ignore && !abortController.signal.aborted) {
+          setImageLoading(false);
+        }
       }
     }
     
@@ -846,7 +840,7 @@ const LessonView = ({
       // Abort any pending request
       abortController.abort();
     };
-  }, [propLesson, activeModule?.id, localUsedImageTitles, localUsedImageUrls, imageTitleCounts, imageUrlCounts, courseId, lessonId, normalizeImageUrl, onUpdateLesson, subject, courseDescription]);
+  }, [propLesson, subject, courseId, courseDescription]);
 
   // Cleanup TTS on unmount
   useEffect(() => {
