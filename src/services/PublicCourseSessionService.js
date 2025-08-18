@@ -42,6 +42,28 @@ class PublicCourseSessionService {
   }
 
   /**
+   * Restore or create session for a course
+   * If sessionId is provided and valid, restore it; otherwise create new
+   */
+  restoreOrCreateSession(courseId, sessionId = null) {
+    // If sessionId is provided, try to restore it
+    if (sessionId) {
+      const existingSession = this.sessions.get(sessionId);
+      if (existingSession && existingSession.courseId === courseId) {
+        // Update last activity and return existing session
+        existingSession.lastActivity = Date.now();
+        console.log(`[PublicCourseSession] Restored existing session ${sessionId} for course ${courseId}`);
+        return sessionId;
+      } else {
+        console.log(`[PublicCourseSession] Session ${sessionId} not found or invalid, creating new session`);
+      }
+    }
+    
+    // Create new session
+    return this.createSession(courseId);
+  }
+
+  /**
    * Get session data
    */
   getSession(sessionId) {

@@ -3842,9 +3842,27 @@ app.post('/api/public/courses/:courseId/quiz-score', async (req, res) => {
     });
     
     // Use the PublicCourseSessionService to save the quiz score
-    const saved = publicCourseSessionService.saveQuizScore(sessionId, lessonId, score);
+    let saved = publicCourseSessionService.saveQuizScore(sessionId, lessonId, score);
     
-    if (saved) {
+    // If session doesn't exist, create a new one and save the score
+    if (!saved) {
+      console.log(`[API] Session ${sessionId} not found, creating new session and saving score`);
+      const newSessionId = publicCourseSessionService.createSession(courseId);
+      saved = publicCourseSessionService.saveQuizScore(newSessionId, lessonId, score);
+      
+      if (saved) {
+        console.log(`[API] Successfully saved quiz score in new session ${newSessionId}, lesson ${lessonId}: ${score}`);
+        res.json({ 
+          success: true, 
+          message: 'Quiz score saved in new session',
+          sessionId: newSessionId,
+          lessonId,
+          score,
+          newSession: true
+        });
+        return;
+      }
+    } else {
       console.log(`[API] Successfully saved quiz score for session ${sessionId}, lesson ${lessonId}: ${score}`);
       res.json({ 
         success: true, 
@@ -3853,10 +3871,13 @@ app.post('/api/public/courses/:courseId/quiz-score', async (req, res) => {
         lessonId,
         score
       });
-    } else {
-      console.log(`[API] Failed to save quiz score - session ${sessionId} not found`);
-      res.status(404).json({ error: 'Session not found' });
+      return;
     }
+    
+    // If we get here, saving failed
+    console.log(`[API] Failed to save quiz score - could not create new session`);
+    res.status(500).json({ error: 'Failed to save quiz score' });
+    
   } catch (error) {
     console.error('[API] Failed to save quiz score:', error);
     res.status(500).json({ error: 'Failed to save quiz score' });
@@ -3899,19 +3920,22 @@ app.get('/api/public/courses/:courseId/quiz-score/:lessonId', async (req, res) =
 app.post('/api/public/courses/:courseId/session', async (req, res) => {
   try {
     const { courseId } = req.params;
+    const { oldSessionId } = req.body; // Ignore old session ID
     
-    console.log(`[API] Creating session for public course:`, {
-      courseId
+    console.log(`[API] Creating new session for public course (ignoring old session ${oldSessionId}):`, {
+      courseId,
+      oldSessionId
     });
     
-    // Create session using PublicCourseSessionService
+    // Always create a new session, never restore old ones
     const sessionId = publicCourseSessionService.createSession(courseId);
     
-    console.log(`[API] Created session: ${sessionId}`);
+    console.log(`[API] Created new session: ${sessionId}`);
     
     res.json({ 
       sessionId,
-      courseId
+      courseId,
+      message: 'New session created'
     });
   } catch (error) {
     console.error('[API] Failed to create session:', error);

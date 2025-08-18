@@ -104,7 +104,18 @@ const PublicCourseDisplay = () => {
       });
       
       if (response.ok) {
-        console.log(`[PublicCourseDisplay] Quiz score saved for session ${sessionId}, lesson ${lessonId}: ${score}`);
+        const result = await response.json();
+        console.log(`[PublicCourseDisplay] Quiz score saved:`, result);
+        
+        // If server created a new session, update our session ID
+        if (result.newSession && result.sessionId) {
+          console.log(`[PublicCourseDisplay] Server created new session: ${result.sessionId}`);
+          setSessionId(result.sessionId);
+          
+          // Update URL with new session ID
+          const newUrl = `${window.location.pathname}?sessionId=${result.sessionId}`;
+          window.history.replaceState({}, '', newUrl);
+        }
         
         // Update the lesson with the quiz score
         const updatedCourse = {
@@ -175,38 +186,42 @@ const PublicCourseDisplay = () => {
       try {
         setLoading(true);
         
-        // Get or create session ID from URL or localStorage
-        let currentSessionId = sessionId;
-        if (!currentSessionId) {
-          const urlParams = new URLSearchParams(window.location.search);
-          currentSessionId = urlParams.get('sessionId');
-          
-          if (!currentSessionId) {
-            // Create session through backend API
-            try {
-              const response = await fetch(`/api/public/courses/${courseId}/session`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                }
-              });
-              
-              if (response.ok) {
-                const data = await response.json();
-                currentSessionId = data.sessionId;
-                // Update URL with session ID
-                const newUrl = `${window.location.pathname}?sessionId=${currentSessionId}`;
-                window.history.replaceState({}, '', newUrl);
-              } else {
-                console.error('[PublicCourseDisplay] Failed to create session');
-              }
-            } catch (error) {
-              console.error('[PublicCourseDisplay] Error creating session:', error);
-            }
-          }
-          
-          setSessionId(currentSessionId);
+        // Clean up any old session data from localStorage
+        const oldSessionKeys = Object.keys(localStorage).filter(key => 
+          key.startsWith('session_') || key.includes('quizScore') || key.includes('courseProgress')
+        );
+        if (oldSessionKeys.length > 0) {
+          console.log('[PublicCourseDisplay] Cleaning up old session data:', oldSessionKeys);
+          oldSessionKeys.forEach(key => localStorage.removeItem(key));
         }
+        
+        // Always create a new session, never restore old ones
+        let currentSessionId = null;
+        
+        // Create new session through backend API
+        try {
+          const response = await fetch(`/api/public/courses/${courseId}/session`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            }
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            currentSessionId = data.sessionId;
+            // Update URL with new session ID and remove any old session ID
+            const newUrl = `${window.location.pathname}?sessionId=${currentSessionId}`;
+            window.history.replaceState({}, '', newUrl);
+            console.log('[PublicCourseDisplay] Created new session:', currentSessionId);
+          } else {
+            console.error('[PublicCourseDisplay] Failed to create session');
+          }
+        } catch (error) {
+          console.error('[PublicCourseDisplay] Error creating session:', error);
+        }
+        
+        setSessionId(currentSessionId);
         
         const courseData = await api.getPublicCourse(courseId, currentSessionId);
         
@@ -231,7 +246,7 @@ const PublicCourseDisplay = () => {
       }
     };
     fetchCourse();
-  }, [courseId, api, sessionId]);
+  }, [courseId, api]);
 
   useEffect(() => {
     const checkMobile = () => window.innerWidth < 768;
