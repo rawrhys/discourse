@@ -661,10 +661,19 @@ const PublicLessonView = ({
         .replace(/"intro":/gi, '')
         // Remove citations
         .replace(/\[\d+\]/g, '')
-        // Remove JSON artifacts
-        .replace(/[{}"]/g, '')
+        // Remove JSON artifacts and formatting issues
+        .replace(/[{}]/g, '')  // Remove curly brackets
+        .replace(/[""]/g, '"')  // Replace smart quotes with standard quotes
+        .replace(/[""]/g, '"')  // Replace smart quotes with standard quotes
+        .replace(/"/g, '"')  // Replace any remaining smart quotes
+        .replace(/\[object Object\]/g, '')  // Remove [object Object] artifacts
+        .replace(/\[object\s+Object\]/g, '')  // Remove [object Object] with spaces
         // Fix line breaks
         .replace(/\\n/g, '\n')
+        // Fix paragraph breaks and formatting
+        .replace(/\n\s*\n\s*\n/g, '\n\n')  // Normalize multiple line breaks to double
+        .replace(/\n\s*\n/g, '\n\n')  // Normalize double line breaks
+        .replace(/\n{3,}/g, '\n\n')  // Limit to max 2 consecutive line breaks
         // Normalize spaces
         .replace(/\s+/g, ' ')
         .trim();
@@ -702,6 +711,17 @@ const PublicLessonView = ({
         .replace(/"conclusion":/gi, '')
         .replace(/"main":/gi, '')
         .replace(/"intro":/gi, '')
+        // Remove all remaining JSON artifacts and formatting issues
+        .replace(/[{}]/g, '')  // Remove curly brackets
+        .replace(/[""]/g, '"')  // Replace smart quotes with standard quotes
+        .replace(/[""]/g, '"')  // Replace smart quotes with standard quotes
+        .replace(/"/g, '"')  // Replace any remaining smart quotes
+        .replace(/\[object Object\]/g, '')  // Remove [object Object] artifacts
+        .replace(/\[object\s+Object\]/g, '')  // Remove [object Object] with spaces
+        // Final paragraph break normalization
+        .replace(/\n\s*\n\s*\n/g, '\n\n')  // Normalize multiple line breaks to double
+        .replace(/\n\s*\n/g, '\n\n')  // Normalize double line breaks
+        .replace(/\n{3,}/g, '\n\n')  // Limit to max 2 consecutive line breaks
         // Final space normalization
         .replace(/\s+/g, ' ')
         .trim();
@@ -774,6 +794,18 @@ const PublicLessonView = ({
     .replace(/"conclusion":/gi, '')
     .replace(/"main":/gi, '')
     .replace(/"intro":/gi, '')
+    // Remove all curly brackets and quotes
+    .replace(/[{}]/g, '')  // Remove curly brackets
+    .replace(/[""]/g, '"')  // Replace smart quotes with standard quotes
+    .replace(/[""]/g, '"')  // Replace smart quotes with standard quotes
+    .replace(/"/g, '"')  // Replace any remaining smart quotes
+    // Fix paragraph breaks and formatting
+    .replace(/\n\s*\n\s*\n/g, '\n\n')  // Normalize multiple line breaks to double
+    .replace(/\n\s*\n/g, '\n\n')  // Normalize double line breaks
+    .replace(/\n{3,}/g, '\n\n')  // Limit to max 2 consecutive line breaks
+    // Remove any remaining JSON artifacts
+    .replace(/\[object Object\]/g, '')  // Remove [object Object] artifacts
+    .replace(/\[object\s+Object\]/g, '')  // Remove [object Object] with spaces
     // Final space normalization
     .replace(/\s+/g, ' ')
     .trim();
