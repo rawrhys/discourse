@@ -8,6 +8,29 @@ import slowDown from 'express-slow-down';
 import helmet from 'helmet';
 import UserAgent from 'user-agents';
 
+// In-memory storage for CAPTCHA challenges (since we don't have express-session)
+const captchaChallenges = new Map();
+const botDetectionData = new Map();
+
+// Cleanup function to prevent memory leaks
+setInterval(() => {
+  const now = Date.now();
+  
+  // Clean up old CAPTCHA challenges (older than 5 minutes)
+  for (const [key, challenge] of captchaChallenges.entries()) {
+    if (now - challenge.timestamp > 5 * 60 * 1000) {
+      captchaChallenges.delete(key);
+    }
+  }
+  
+  // Clean up old bot detection data (older than 1 hour)
+  for (const [key, data] of botDetectionData.entries()) {
+    if (now - data.lastRequest > 60 * 60 * 1000) {
+      botDetectionData.delete(key);
+    }
+  }
+}, 5 * 60 * 1000); // Run cleanup every 5 minutes
+
 // Bot detection patterns
 const BOT_PATTERNS = [
   /bot/i, /crawler/i, /spider/i, /scraper/i, /scraping/i,
@@ -78,15 +101,15 @@ export const botDetection = (req, res, next) => {
   const requestTime = Date.now();
   const clientKey = `${ip}-${userAgent}`;
   
-  if (!req.session.botDetection) {
-    req.session.botDetection = {
+  if (!botDetectionData.has(clientKey)) {
+    botDetectionData.set(clientKey, {
       requestCount: 0,
       firstRequest: requestTime,
       lastRequest: requestTime
-    };
+    });
   }
   
-  const botData = req.session.botDetection;
+  const botData = botDetectionData.get(clientKey);
   botData.requestCount++;
   botData.lastRequest = requestTime;
   
@@ -149,17 +172,14 @@ export const captchaChallenge = (req, res, next) => {
     const challengeData = `${num1}+${num2}`;
     const expectedResponse = num1 + num2;
     
-    // Store challenge in session with unique key for each request
-    if (!req.session.captchaChallenges) {
-      req.session.captchaChallenges = {};
-    }
+    // Store challenge in memory with unique key for each request
     const challengeKey = `${sessionId}_${Date.now()}`;
-    req.session.captchaChallenges[challengeKey] = {
+    captchaChallenges.set(challengeKey, {
       challenge: challengeData,
       expectedResponse: expectedResponse,
       timestamp: Date.now(),
       sessionId: sessionId
-    };
+    });
     
     return res.status(200).json({
       requiresCaptcha: true,
@@ -171,7 +191,7 @@ export const captchaChallenge = (req, res, next) => {
   
   // Verify response using challenge key
   const challengeKey = req.query.challengeKey;
-  const storedChallenge = req.session.captchaChallenges?.[challengeKey];
+  const storedChallenge = captchaChallenges.get(challengeKey);
   if (!storedChallenge) {
     return res.status(400).json({
       error: 'Invalid challenge session'
@@ -180,11 +200,11 @@ export const captchaChallenge = (req, res, next) => {
   
   // Clean up old challenges (older than 5 minutes)
   const now = Date.now();
-  Object.keys(req.session.captchaChallenges || {}).forEach(key => {
-    if (now - req.session.captchaChallenges[key].timestamp > 5 * 60 * 1000) {
-      delete req.session.captchaChallenges[key];
+  for (const [key, challenge] of captchaChallenges.entries()) {
+    if (now - challenge.timestamp > 5 * 60 * 1000) {
+      captchaChallenges.delete(key);
     }
-  });
+  }
   
   if (parseInt(response) !== storedChallenge.expectedResponse) {
     return res.status(400).json({
@@ -194,7 +214,7 @@ export const captchaChallenge = (req, res, next) => {
   }
   
   // Mark this specific challenge as completed and allow access
-  delete req.session.captchaChallenges[challengeKey];
+  captchaChallenges.delete(challengeKey);
   
   next();
 };
