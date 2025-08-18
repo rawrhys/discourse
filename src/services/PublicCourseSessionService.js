@@ -8,6 +8,7 @@ class PublicCourseSessionService {
     this.sessions = new Map();
     this.sessionTimeout = 30 * 60 * 1000; // 30 minutes
     this.cleanupInterval = 5 * 60 * 1000; // 5 minutes
+    this.activeSessions = new Set(); // Track which sessions are currently active
     
     // Start cleanup interval
     setInterval(() => this.cleanupExpiredSessions(), this.cleanupInterval);
@@ -25,6 +26,7 @@ class PublicCourseSessionService {
    */
   createSession(courseId) {
     const sessionId = this.generateSessionId();
+    
     const session = {
       id: sessionId,
       courseId: courseId,
@@ -32,30 +34,64 @@ class PublicCourseSessionService {
       lastActivity: Date.now(),
       quizScores: {},
       lessonProgress: {},
-      data: null // Will store course data
+      data: null, // Will store course data
+      isActive: true
     };
 
     this.sessions.set(sessionId, session);
+    this.activeSessions.add(sessionId);
+    
     console.log(`[PublicCourseSession] Created session ${sessionId} for course ${courseId}`);
     
     return sessionId;
   }
 
   /**
-   * Restore or create session for a course
-   * If sessionId is provided and valid, restore it; otherwise create new
+   * Check if a session is available for use
+   */
+  isSessionAvailable(sessionId) {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      console.log(`[PublicCourseSession] Session ${sessionId} not found`);
+      return false;
+    }
+    
+    // Check if the session is inactive (expired)
+    const isInactive = Date.now() - session.lastActivity > this.sessionTimeout;
+    if (isInactive) {
+      // Clean up inactive session
+      this.sessions.delete(sessionId);
+      this.activeSessions.delete(sessionId);
+      console.log(`[PublicCourseSession] Session ${sessionId} expired and cleaned up`);
+      return false;
+    }
+    
+    // Session is active and available
+    console.log(`[PublicCourseSession] Session ${sessionId} is available`);
+    return true;
+  }
+
+  /**
+   * Restore or create session for a course with session isolation
    */
   restoreOrCreateSession(courseId, sessionId = null) {
-    // If sessionId is provided, try to restore it
+    // If sessionId is provided, check if it's available
     if (sessionId) {
-      const existingSession = this.sessions.get(sessionId);
-      if (existingSession && existingSession.courseId === courseId) {
-        // Update last activity and return existing session
-        existingSession.lastActivity = Date.now();
-        console.log(`[PublicCourseSession] Restored existing session ${sessionId} for course ${courseId}`);
-        return sessionId;
+      if (this.isSessionAvailable(sessionId)) {
+        const existingSession = this.sessions.get(sessionId);
+        if (existingSession && existingSession.courseId === courseId) {
+          // Update last activity and return existing session
+          existingSession.lastActivity = Date.now();
+          existingSession.isActive = true;
+          this.activeSessions.add(sessionId);
+          
+          console.log(`[PublicCourseSession] Restored existing session ${sessionId} for course ${courseId}`);
+          return sessionId;
+        } else {
+          console.log(`[PublicCourseSession] Session ${sessionId} not found or invalid course, creating new session`);
+        }
       } else {
-        console.log(`[PublicCourseSession] Session ${sessionId} not found or invalid, creating new session`);
+        console.log(`[PublicCourseSession] Session ${sessionId} is not available, creating new session`);
       }
     }
     
@@ -105,7 +141,7 @@ class PublicCourseSessionService {
    * Get quiz score for a session
    */
   getQuizScore(sessionId, lessonId) {
-    const session = this.sessions.get(sessionId);
+    const session = this.getSession(sessionId);
     return session ? session.quizScores[lessonId] : null;
   }
 
@@ -126,8 +162,22 @@ class PublicCourseSessionService {
    * Get lesson progress for a session
    */
   getLessonProgress(sessionId, lessonId) {
-    const session = this.sessions.get(sessionId);
+    const session = this.getSession(sessionId);
     return session ? session.lessonProgress[lessonId] : null;
+  }
+
+  /**
+   * Release a session (mark as inactive)
+   */
+  releaseSession(sessionId) {
+    const session = this.sessions.get(sessionId);
+    if (session) {
+      session.isActive = false;
+      this.activeSessions.delete(sessionId);
+      console.log(`[PublicCourseSession] Released session ${sessionId}`);
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -145,6 +195,7 @@ class PublicCourseSessionService {
 
     expiredSessions.forEach(sessionId => {
       this.sessions.delete(sessionId);
+      this.activeSessions.delete(sessionId);
       console.log(`[PublicCourseSession] Cleaned up expired session ${sessionId}`);
     });
 
@@ -157,11 +208,14 @@ class PublicCourseSessionService {
    * Get session statistics
    */
   getStats() {
+    const activeSessions = Array.from(this.sessions.values()).filter(s => 
+      Date.now() - s.lastActivity < this.sessionTimeout
+    );
+    
     return {
       totalSessions: this.sessions.size,
-      activeSessions: Array.from(this.sessions.values()).filter(s => 
-        Date.now() - s.lastActivity < this.sessionTimeout
-      ).length
+      activeSessions: activeSessions.length,
+      activeSessionIds: Array.from(this.activeSessions)
     };
   }
 
@@ -171,6 +225,7 @@ class PublicCourseSessionService {
   cleanupAllSessions() {
     const count = this.sessions.size;
     this.sessions.clear();
+    this.activeSessions.clear();
     console.log(`[PublicCourseSession] Force cleaned up all ${count} sessions`);
     return count;
   }

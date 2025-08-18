@@ -107,14 +107,19 @@ const PublicCourseDisplay = () => {
         const result = await response.json();
         console.log(`[PublicCourseDisplay] Quiz score saved:`, result);
         
-        // If server created a new session, update our session ID
+        // If server created a new session (due to conflict), update our session ID
         if (result.newSession && result.sessionId) {
-          console.log(`[PublicCourseDisplay] Server created new session: ${result.sessionId}`);
+          console.log(`[PublicCourseDisplay] Server created new session due to conflict: ${result.sessionId}`);
           setSessionId(result.sessionId);
           
           // Update URL with new session ID
           const newUrl = `${window.location.pathname}?sessionId=${result.sessionId}`;
           window.history.replaceState({}, '', newUrl);
+          
+          // Show a brief notification to the user about the session change
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[PublicCourseDisplay] Session changed due to conflict, user now has their own session');
+          }
         }
         
         // Update the lesson with the quiz score
@@ -195,50 +200,51 @@ const PublicCourseDisplay = () => {
           oldSessionKeys.forEach(key => localStorage.removeItem(key));
         }
         
-        // Always create a new session, never restore old ones
+        // Check if there's a sessionId in the URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const existingSessionId = urlParams.get('sessionId');
+        
         let currentSessionId = null;
         
-        // Create new session through backend API
+        // Try to use existing session or create new one through backend API
         try {
-          const response = await fetch(`/api/public/courses/${courseId}/session`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            }
-          });
+          const courseData = await api.getPublicCourse(courseId, existingSessionId);
           
-          if (response.ok) {
-            const data = await response.json();
-            currentSessionId = data.sessionId;
-            // Update URL with new session ID and remove any old session ID
-            const newUrl = `${window.location.pathname}?sessionId=${currentSessionId}`;
-            window.history.replaceState({}, '', newUrl);
-            console.log('[PublicCourseDisplay] Created new session:', currentSessionId);
+          // The backend will handle session management and return the appropriate sessionId
+          currentSessionId = courseData.sessionId;
+          
+          // Update URL with the session ID (new or existing)
+          const newUrl = `${window.location.pathname}?sessionId=${currentSessionId}`;
+          window.history.replaceState({}, '', newUrl);
+          
+          if (existingSessionId && existingSessionId !== currentSessionId) {
+            console.log('[PublicCourseDisplay] Session conflict detected, using new session:', currentSessionId);
+          } else if (existingSessionId) {
+            console.log('[PublicCourseDisplay] Using existing session:', currentSessionId);
           } else {
-            console.error('[PublicCourseDisplay] Failed to create session');
+            console.log('[PublicCourseDisplay] Created new session:', currentSessionId);
+          }
+          
+          if (courseData && courseData.modules) {
+            courseData.modules = courseData.modules.map(m => Module.fromJSON(m));
+          }
+
+          // Load and apply session quiz scores
+          const courseDataWithScores = await loadSessionQuizScores(courseData, currentSessionId);
+          setCourse(courseDataWithScores);
+          if (courseData.modules && courseData.modules.length > 0) {
+            const firstModule = courseData.modules[0];
+            setActiveModuleId(firstModule.id);
+            if (firstModule.lessons && firstModule.lessons.length > 0) {
+              setActiveLessonId(firstModule.lessons[0].id);
+            }
           }
         } catch (error) {
-          console.error('[PublicCourseDisplay] Error creating session:', error);
+          console.error('[PublicCourseDisplay] Error fetching course:', error);
+          setError('Failed to load course.');
         }
         
         setSessionId(currentSessionId);
-        
-        const courseData = await api.getPublicCourse(courseId, currentSessionId);
-        
-        if (courseData && courseData.modules) {
-          courseData.modules = courseData.modules.map(m => Module.fromJSON(m));
-        }
-
-        // Load and apply session quiz scores
-        const courseDataWithScores = await loadSessionQuizScores(courseData, currentSessionId);
-        setCourse(courseDataWithScores);
-        if (courseData.modules && courseData.modules.length > 0) {
-          const firstModule = courseData.modules[0];
-          setActiveModuleId(firstModule.id);
-          if (firstModule.lessons && firstModule.lessons.length > 0) {
-            setActiveLessonId(firstModule.lessons[0].id);
-          }
-        }
       } catch (err) {
         setError('Failed to load course.');
       } finally {

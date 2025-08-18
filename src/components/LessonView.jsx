@@ -89,28 +89,37 @@ const cleanupRemainingAsterisks = (text) => {
 // Helper function to clean and combine lesson content
 const cleanAndCombineContent = (content) => {
   if (!content) return '';
-  if (typeof content === 'string') {
-    const cleaned = fixMalformedMarkdown(
-      content.replace(/Content generation completed\./g, '')
-             .replace(/\|\|\|---\|\|\|/g, '')
-             .trim()
+  
+  // Helper function to clean individual content parts
+  const cleanContentPart = (part) => {
+    if (!part) return '';
+    return fixMalformedMarkdown(
+      part.replace(/Content generation completed\./g, '')
+          .replace(/\|\|\|---\|\|\|/g, '') // Remove |||---||| patterns
+          .replace(/\|\|\|/g, '') // Remove all remaining ||| patterns
+          .trim()
     );
+  };
+  
+  if (typeof content === 'string') {
+    const cleaned = cleanContentPart(content);
     return cleanupRemainingAsterisks(cleaned);
   }
   
   const { introduction, main_content, conclusion } = content;
   
   const cleanedIntro = introduction 
-    ? cleanupRemainingAsterisks(fixMalformedMarkdown(introduction.replace(/Content generation completed\./g, '').trim()))
+    ? cleanupRemainingAsterisks(cleanContentPart(introduction))
     : '';
 
-  const cleanedMain = main_content ? cleanupRemainingAsterisks(fixMalformedMarkdown(main_content.trim())) : '';
-  const cleanedConclusion = conclusion ? cleanupRemainingAsterisks(fixMalformedMarkdown(conclusion.trim())) : '';
+  const cleanedMain = main_content ? cleanupRemainingAsterisks(cleanContentPart(main_content)) : '';
+  const cleanedConclusion = conclusion ? cleanupRemainingAsterisks(cleanContentPart(conclusion)) : '';
   
   return [cleanedIntro, cleanedMain, cleanedConclusion]
     .filter(Boolean)
     .join('\n\n')
-    .replace(/\|\|\|---\|\|\|/g, '');
+    .replace(/\|\|\|---\|\|\|/g, '') // Final cleanup of any remaining patterns
+    .replace(/\|\|\|/g, ''); // Final cleanup of any remaining ||| patterns
 };
 
 // Lazy load components
@@ -534,7 +543,8 @@ const LessonView = ({
     
     // Reset TTS if lesson changes
     if (propLesson?.id && privateTTSService.getStatus().currentLessonId !== propLesson.id) {
-      privateTTSService.stop();
+      console.log('[LessonView] Lesson changed, stopping TTS and resetting pause data');
+      privateTTSService.stop(); // This will also reset pause data via resetPauseData()
       setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
     }
   }, [propLesson]);

@@ -111,8 +111,8 @@ const PublicLessonView = ({
     
     // Stop TTS if it's currently playing or paused
     try {
-      publicTTSService.stopAndClear();
-      console.log('[PublicLessonView] Stopped and cleared TTS on lesson change');
+      publicTTSService.stop(); // This will reset pause data via resetPauseData()
+      console.log('[PublicLessonView] Stopped TTS and reset pause data on lesson change');
     } catch (error) {
       console.warn('[PublicLessonView] TTS auto-pause error:', error);
       // If stop fails, try to reset the service
@@ -464,12 +464,19 @@ const PublicLessonView = ({
       return '';
     }
     
-    if (typeof content === 'string') {
-      const cleaned = fixMalformedMarkdown(
-        content.replace(/Content generation completed\./g, '')
-               .replace(/\|\|\|---\|\|\|/g, '')
-               .trim()
+    // Helper function to clean individual content parts
+    const cleanContentPart = (part) => {
+      if (!part) return '';
+      return fixMalformedMarkdown(
+        part.replace(/Content generation completed\./g, '')
+            .replace(/\|\|\|---\|\|\|/g, '') // Remove |||---||| patterns
+            .replace(/\|\|\|/g, '') // Remove all remaining ||| patterns
+            .trim()
       );
+    };
+    
+    if (typeof content === 'string') {
+      const cleaned = cleanContentPart(content);
       const result = cleanupRemainingAsterisks(cleaned);
       console.log('[PublicLessonView] String content processed:', {
         originalLength: content.length,
@@ -482,16 +489,17 @@ const PublicLessonView = ({
     const { introduction, main_content, conclusion } = content;
     
     const cleanedIntro = introduction 
-      ? cleanupRemainingAsterisks(fixMalformedMarkdown(introduction.replace(/Content generation completed\./g, '').trim()))
+      ? cleanupRemainingAsterisks(cleanContentPart(introduction))
       : '';
 
-    const cleanedMain = main_content ? cleanupRemainingAsterisks(fixMalformedMarkdown(main_content.trim())) : '';
-    const cleanedConclusion = conclusion ? cleanupRemainingAsterisks(fixMalformedMarkdown(conclusion.trim())) : '';
+    const cleanedMain = main_content ? cleanupRemainingAsterisks(cleanContentPart(main_content)) : '';
+    const cleanedConclusion = conclusion ? cleanupRemainingAsterisks(cleanContentPart(conclusion)) : '';
     
     const result = [cleanedIntro, cleanedMain, cleanedConclusion]
       .filter(Boolean)
       .join('\n\n')
-      .replace(/\|\|\|---\|\|\|/g, '');
+      .replace(/\|\|\|---\|\|\|/g, '') // Final cleanup of any remaining patterns
+      .replace(/\|\|\|/g, ''); // Final cleanup of any remaining ||| patterns
       
     console.log('[PublicLessonView] Object content processed:', {
       hasIntro: !!introduction,

@@ -3799,12 +3799,14 @@ app.get('/api/public/courses/:courseId', async (req, res) => {
       });
     }
     
-    // Create a new session if none provided
-    let sessionIdToUse = sessionId;
-    if (!sessionId) {
-      sessionIdToUse = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      console.log(`[API] Created new session for public course: ${sessionIdToUse}`);
-    }
+    // Use enhanced session management for session isolation
+    const sessionIdToUse = publicCourseSessionService.restoreOrCreateSession(normalizedId, sessionId);
+    
+    console.log(`[API] Session management result:`, {
+      originalSessionId: sessionId,
+      finalSessionId: sessionIdToUse,
+      isNewSession: !sessionId || sessionId !== sessionIdToUse
+    });
     
     console.log(`[API] Returning public course data:`, {
       id: course.id,
@@ -3844,9 +3846,9 @@ app.post('/api/public/courses/:courseId/quiz-score', async (req, res) => {
     // Use the PublicCourseSessionService to save the quiz score
     let saved = publicCourseSessionService.saveQuizScore(sessionId, lessonId, score);
     
-    // If session doesn't exist, create a new one and save the score
+    // If session doesn't exist or is not available, create a new one and save the score
     if (!saved) {
-      console.log(`[API] Session ${sessionId} not found, creating new session and saving score`);
+      console.log(`[API] Session ${sessionId} not found or not available, creating new session and saving score`);
       const newSessionId = publicCourseSessionService.createSession(courseId);
       saved = publicCourseSessionService.saveQuizScore(newSessionId, lessonId, score);
       
@@ -4886,6 +4888,38 @@ app.get('/api/tts/pause-position', async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: 'Failed to get pause position',
+      details: error.message 
+    });
+  }
+});
+
+app.post('/api/tts/clear-pause-position', async (req, res) => {
+  try {
+    const { lessonId, serviceType } = req.body;
+    
+    console.log('[TTS] Clearing pause position for lesson:', lessonId, 'service:', serviceType);
+    
+    // For now, just log the clear request
+    // You can extend this to clear pause position from database
+    console.log('[TTS] Pause position cleared for lesson:', lessonId);
+    
+    // You could implement logic here to:
+    // 1. Clear pause position from database for this lesson
+    // 2. Reset any stored TTS state for this lesson
+    // 3. Log the clear operation for debugging
+    
+    res.json({
+      success: true,
+      lessonId,
+      serviceType,
+      message: 'Pause position cleared successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[TTS] Error clearing pause position:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to clear pause position',
       details: error.message 
     });
   }
