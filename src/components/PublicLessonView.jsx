@@ -580,9 +580,14 @@ const PublicLessonView = ({
       // Ensure double line breaks create proper paragraphs
       .replace(/\n\n+/g, '\n\n')  // Normalize multiple line breaks to double
       .replace(/\n\s*\n/g, '\n\n')  // Remove extra spaces between paragraphs
-      // Ensure single line breaks are preserved for readability
+      // Ensure proper paragraph breaks after sentences
       .replace(/([.!?])\s*\n\s*([A-Z])/g, '$1\n\n$2')  // Add paragraph break after sentences
+      .replace(/([.!?])\s*([A-Z][a-z])/g, '$1\n\n$2')  // Add paragraph break when no line break exists
+      // Ensure proper spacing around paragraph breaks
+      .replace(/\n\s*([A-Z][a-z])/g, '\n\n$1')  // Add extra line break before capitalized words
+      .replace(/([.!?])\s*\n/g, '$1\n\n')  // Add extra line break after sentences
       // Clean up any remaining formatting issues
+      .replace(/\n{3,}/g, '\n\n')  // Limit to max 2 consecutive line breaks
       .trim();
   };
 
@@ -880,6 +885,20 @@ const PublicLessonView = ({
     // Remove any remaining JSON artifacts
     .replace(/\[object Object\]/g, '')  // Remove [object Object] artifacts
     .replace(/\[object\s+Object\]/g, '')  // Remove [object Object] with spaces
+    // Remove specific JSON patterns that are still appearing
+    .replace(/""\s*:\s*""/g, '')  // Remove "" : "" patterns
+    .replace(/""\s*:/g, '')  // Remove "" : patterns
+    .replace(/:\s*""/g, '')  // Remove : "" patterns
+    .replace(/,\s*""\s*:\s*""/g, '')  // Remove ,"" : "" patterns
+    .replace(/,\s*""\s*:/g, '')  // Remove ,"" : patterns
+    // Remove any remaining quotes that are artifacts
+    .replace(/^"/g, '')  // Remove leading quotes
+    .replace(/"$/g, '')  // Remove trailing quotes
+    .replace(/^,\s*/g, '')  // Remove leading commas
+    .replace(/,\s*$/g, '')  // Remove trailing commas
+    // Improve paragraph break handling
+    .replace(/([.!?])\s*([A-Z])/g, '$1\n\n$2')  // Add paragraph breaks after sentences
+    .replace(/\n\s*([A-Z][a-z])/g, '\n\n$1')  // Ensure proper spacing before capitalized words
     // Final space normalization
     .replace(/\s+/g, ' ')
     .trim();
