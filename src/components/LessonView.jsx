@@ -329,6 +329,10 @@ const LessonView = ({
   const [retryCount, setRetryCount] = useState(0);
   const [imageFallbackTried, setImageFallbackTried] = useState(false);
   
+  // Manage used images as local state like PublicLessonView
+  const [usedImageTitles, setUsedImageTitles] = useState(new Set(usedImageTitles));
+  const [usedImageUrls, setUsedImageUrls] = useState(new Set(usedImageUrls));
+  
   // Use the lesson prop as the main lesson data
   const propLesson = lesson;
   
@@ -401,6 +405,13 @@ const LessonView = ({
       // Check if request was aborted before setting state
       if (!fallbackController.signal.aborted && result && result.url) {
         setImageData({ ...result, url: normalizeImageUrl(result.url) });
+        
+        // Update local used image tracking when a new image is found
+        if (result) {
+          setUsedImageTitles(prev => new Set([...prev, result.title]));
+          setUsedImageUrls(prev => new Set([...prev, result.url]));
+        }
+        
         if (onUpdateLesson && propLesson?.id) {
           onUpdateLesson(propLesson.id, { image: {
             imageTitle: result.title,
@@ -792,6 +803,13 @@ const LessonView = ({
           // Check if request was aborted before setting state
           if (!ignore && !abortController.signal.aborted) {
             setImageData(result ? { ...result, url: normalizeImageUrl(result.url) } : null);
+            
+            // Update local used image tracking when a new image is found
+            if (result) {
+              setUsedImageTitles(prev => new Set([...prev, result.title]));
+              setUsedImageUrls(prev => new Set([...prev, result.url]));
+            }
+            
             // Persist replacement image into lesson if we fetched a new one
             if (result && onUpdateLesson && propLesson?.id) {
               onUpdateLesson(propLesson.id, { image: {
