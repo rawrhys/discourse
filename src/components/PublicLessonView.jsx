@@ -684,7 +684,9 @@ const PublicLessonView = ({
       referencesCount: references?.length || 0,
       references: references,
       contentWithoutRefsLength: contentWithoutRefs?.length || 0,
-      parsedContentLength: parsedContent?.length || 0
+      parsedContentLength: parsedContent?.length || 0,
+      lessonContentPreview: lessonContent?.substring(0, 200) + '...',
+      fixedContentPreview: fixedContent?.substring(0, 200) + '...'
     });
   }
 
@@ -703,6 +705,30 @@ const PublicLessonView = ({
         bibRefs: bibRefs
       });
     }
+  }
+
+  // Fallback: if no references were extracted but lesson has bibliography, create references from it
+  if ((!finalReferences || finalReferences.length === 0) && lesson.bibliography && lesson.bibliography.length > 0) {
+    finalReferences = lesson.bibliography.map((ref, index) => ({
+      number: (index + 1).toString(),
+      citation: ref
+    }));
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[PublicLessonView] Using fallback bibliography:', {
+        bibliographyCount: lesson.bibliography?.length || 0,
+        finalReferences: finalReferences
+      });
+    }
+  }
+
+  // Final debug logging
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[PublicLessonView] Final references state:', {
+      finalReferencesCount: finalReferences?.length || 0,
+      finalReferences: finalReferences,
+      willShowFooter: finalReferences && finalReferences.length > 0
+    });
   }
 
   return (
@@ -873,10 +899,12 @@ const PublicLessonView = ({
               className="markdown-body prose max-w-none"
               dangerouslySetInnerHTML={{ __html: parsedContent }}
             />
-            {finalReferences && finalReferences.length > 0 && (
-              <ReferencesFooter references={finalReferences} />
-            )}
           </div>
+          
+          {/* References Footer */}
+          {finalReferences && finalReferences.length > 0 && (
+            <ReferencesFooter references={finalReferences} />
+          )}
         </div>
       )}
 
