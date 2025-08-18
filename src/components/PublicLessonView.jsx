@@ -246,54 +246,83 @@ const PublicLessonView = ({
     };
   }, []);
 
-  const handlePlayAudio = useCallback(async () => {
-    if (!lesson?.content) return;
-    
-    // Prevent TTS during lesson changes
-    if (isLessonChanging.current) {
-      console.log('[PublicLessonView] Skipping TTS request during lesson change');
-      return;
-    }
-    
-    // Prevent starting TTS if it's already playing
-    if (ttsStatus.isPlaying) {
-      console.log('[PublicLessonView] TTS already playing, ignoring request');
-      return;
-    }
-    
+  const handleStartAudio = useCallback(async () => {
     // Add a small delay to prevent rapid button clicks
     await new Promise(resolve => setTimeout(resolve, 100));
-
-    // Check if TTS service is ready for requests
-    if (!publicTTSService.isReadyForRequests()) {
-      console.log('[PublicLessonView] TTS service not ready, attempting to reset...');
-      publicTTSService.forceResetStoppingFlag();
-      // Wait a moment for the reset to take effect
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
     
     try {
+      // Check if TTS is already playing
+      if (ttsStatus.isPlaying) {
+        console.log('[PublicLessonView] TTS already playing, stopping first');
+        publicTTSService.stop();
+        setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
+        return;
+      }
+
+      // Check if TTS is paused and can resume
       if (ttsStatus.isPaused) {
-        // Resume if paused
+        console.log('[PublicLessonView] Resuming paused TTS');
         publicTTSService.resume();
         setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
+        return;
       } else {
-        // Start new reading
-        const contentStr = cleanAndCombineContent(lesson.content);
+        // Start new reading - only read the currently displayed content
+        let contentToRead = '';
+        
+        if (view === 'content') {
+          // Only read the main content that's currently displayed
+          if (lesson.content && typeof lesson.content === 'object') {
+            // For object content, only read the main_content section
+            if (lesson.content.main_content) {
+              contentToRead = lesson.content.main_content;
+            } else if (lesson.content.content) {
+              contentToRead = lesson.content.content;
+            }
+          } else if (typeof lesson.content === 'string') {
+            // For string content, use it as is
+            contentToRead = lesson.content;
+          }
+        } else if (view === 'flashcards') {
+          // For flashcards view, read the flashcard terms and definitions
+          const flashcardData = lesson?.flashcards || lesson?.content?.flashcards || [];
+          if (flashcardData.length > 0) {
+            contentToRead = flashcardData.map((fc, index) => 
+              `Flashcard ${index + 1}: ${fc.term || 'Unknown Term'}. Definition: ${fc.definition || 'Definition not provided.'}`
+            ).join('. ');
+          }
+        }
+        
+        // Clean the content for TTS
+        if (contentToRead) {
+          contentToRead = contentToRead
+            .replace(/Content generation completed\./g, '')
+            .replace(/\|\|\|---\|\|\|/g, '')
+            .replace(/\*\*\*\*/g, '**')
+            .replace(/\*\*\*\*\*/g, '**')
+            .replace(/\*\*\*\*\*\*/g, '**')
+            .trim();
+        }
         
         // Validate content before attempting TTS
-        if (!contentStr || typeof contentStr !== 'string' || contentStr.trim().length < 10) {
+        if (!contentToRead || typeof contentToRead !== 'string' || contentToRead.trim().length < 10) {
           console.warn('[PublicLessonView] Content too short or invalid for TTS:', {
-            hasContent: !!contentStr,
-            type: typeof contentStr,
-            length: contentStr ? contentStr.length : 0,
-            trimmedLength: contentStr ? contentStr.trim().length : 0
+            view: view,
+            hasContent: !!contentToRead,
+            type: typeof contentToRead,
+            length: contentToRead ? contentToRead.length : 0,
+            trimmedLength: contentToRead ? contentToRead.trim().length : 0
           });
           setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
           return;
         }
         
-        const started = await publicTTSService.readLesson({ ...lesson, content: contentStr }, lesson.id);
+        console.log('[PublicLessonView] Starting TTS with content:', {
+          view: view,
+          contentLength: contentToRead.length,
+          contentPreview: contentToRead.substring(0, 100) + '...'
+        });
+        
+        const started = await publicTTSService.readLesson({ ...lesson, content: contentToRead }, lesson.id);
         
         if (started) {
           setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
@@ -306,7 +335,7 @@ const PublicLessonView = ({
       console.error('[PublicLessonView] TTS error:', error);
       setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
     }
-  }, []); // Removed dependencies to prevent false lesson change detection
+  }, [ttsStatus.isPlaying, ttsStatus.isPaused, view, lesson]); // Added view and lesson dependencies
 
   const handleStopAudio = useCallback(async () => {
     // Add a small delay to prevent rapid button clicks
@@ -561,7 +590,7 @@ const PublicLessonView = ({
             <i className="fas fa-clone mr-2"></i>Flashcards {flashcardData?.length ? `(${flashcardData.length})` : ''}
           </button>
           <button
-            onClick={ttsStatus.isPlaying ? handlePauseResumeAudio : ttsStatus.isPaused ? handlePauseResumeAudio : handlePlayAudio}
+            onClick={ttsStatus.isPlaying ? handlePauseResumeAudio : ttsStatus.isPaused ? handlePauseResumeAudio : handleStartAudio}
             className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
               ttsStatus.isPlaying || ttsStatus.isPaused
                 ? 'bg-green-600 text-white hover:bg-green-700'

@@ -692,6 +692,14 @@ class TTSService {
         await new Promise(resolve => setTimeout(resolve, 50));
       }
 
+      // Check if text is too long and needs chunking
+      const maxChunkLength = 1000; // Process in chunks of 1000 characters
+      if (textToSpeak.length > maxChunkLength) {
+        console.log(`[${this.serviceType} TTS] Text is long (${textToSpeak.length} chars), processing in chunks`);
+        await this.speakInChunks(textToSpeak, maxChunkLength);
+        return;
+      }
+
       // Create a promise that wraps the speak-tts library call
       const speakPromise = new Promise((resolve) => {
         try {
@@ -758,6 +766,120 @@ class TTSService {
       this.isPlaying = false;
       this.isPaused = false;
     }
+  }
+
+  // Speak text in chunks to prevent long task errors
+  async speakInChunks(text, chunkSize = 1000) {
+    console.log(`[${this.serviceType} TTS] Starting chunked speech (${text.length} chars in chunks of ${chunkSize})`);
+    
+    const chunks = this.splitTextIntoChunks(text, chunkSize);
+    console.log(`[${this.serviceType} TTS] Split into ${chunks.length} chunks`);
+    
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+      console.log(`[${this.serviceType} TTS] Speaking chunk ${i + 1}/${chunks.length} (${chunk.length} chars)`);
+      
+      // Check if we should stop
+      if (!this.isInitialized || this.errorCount >= this.maxRetries) {
+        console.log(`[${this.serviceType} TTS] Stopping chunked speech due to errors or initialization issues`);
+        break;
+      }
+      
+      try {
+        // Use a shorter timeout for each chunk
+        const chunkPromise = new Promise((resolve) => {
+          const speakConfig = {
+            text: chunk,
+            splitSentences: false
+          };
+          
+          this.speech.speak(speakConfig).then(() => {
+            console.log(`[${this.serviceType} TTS] Chunk ${i + 1} completed successfully`);
+            resolve();
+          }).catch((error) => {
+            console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} failed, trying fallback:`, error);
+            this.fallbackToNativeSpeechSynthesis(chunk).then(() => {
+              console.log(`[${this.serviceType} TTS] Chunk ${i + 1} fallback completed`);
+              resolve();
+            }).catch((fallbackError) => {
+              console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} fallback also failed:`, fallbackError);
+              resolve(); // Continue with next chunk
+            });
+          });
+        });
+        
+        const timeoutPromise = new Promise((resolve) => {
+          setTimeout(() => {
+            console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} timeout`);
+            resolve();
+          }, 5000); // 5 second timeout per chunk
+        });
+        
+        await Promise.race([chunkPromise, timeoutPromise]);
+        
+        // Small delay between chunks to prevent overwhelming the system
+        if (i < chunks.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        
+      } catch (error) {
+        console.warn(`[${this.serviceType} TTS] Error in chunk ${i + 1}:`, error);
+        this.errorCount++;
+      }
+    }
+    
+    console.log(`[${this.serviceType} TTS] Chunked speech completed`);
+  }
+
+  // Split text into chunks at sentence boundaries
+  splitTextIntoChunks(text, maxChunkSize) {
+    const chunks = [];
+    let currentChunk = '';
+    
+    // Split by sentences first
+    const sentences = text.split(/(?<=[.!?])\s+/);
+    
+    for (const sentence of sentences) {
+      // If adding this sentence would exceed the chunk size
+      if (currentChunk.length + sentence.length > maxChunkSize && currentChunk.length > 0) {
+        chunks.push(currentChunk.trim());
+        currentChunk = sentence;
+      } else {
+        currentChunk += (currentChunk ? ' ' : '') + sentence;
+      }
+    }
+    
+    // Add the last chunk if it has content
+    if (currentChunk.trim()) {
+      chunks.push(currentChunk.trim());
+    }
+    
+    // If we still have chunks that are too long, split them further
+    const finalChunks = [];
+    for (const chunk of chunks) {
+      if (chunk.length <= maxChunkSize) {
+        finalChunks.push(chunk);
+      } else {
+        // Split long chunks by words
+        const words = chunk.split(' ');
+        let wordChunk = '';
+        
+        for (const word of words) {
+          if (wordChunk.length + word.length + 1 > maxChunkSize && wordChunk.length > 0) {
+            finalChunks.push(wordChunk.trim());
+            wordChunk = word;
+          } else {
+            wordChunk += (wordChunk ? ' ' : '') + word;
+          }
+        }
+        
+        if (wordChunk.trim()) {
+          finalChunks.push(wordChunk.trim());
+        }
+      }
+    }
+    
+    return finalChunks;
   }
 
   // Fallback to native SpeechSynthesis API
