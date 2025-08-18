@@ -403,4 +403,81 @@ window.debugCourseGeneration = {
 console.log('🔧 [DEBUG] Course generation debug utilities loaded. Use window.debugCourseGeneration to access debug functions.');
 console.log('🔧 [DEBUG] Available functions:', Object.keys(window.debugCourseGeneration));
 
+// Add TTS debugging functions
+window.debugTTS = {
+  // Test pause/resume functionality
+  testPauseResume: async () => {
+    try {
+      console.log('🔧 [DEBUG TTS] Testing pause/resume functionality...');
+      
+      // Try to find TTS services
+      const publicTTSService = window.publicTTSService;
+      const privateTTSService = window.privateTTSService;
+      
+      if (publicTTSService) {
+        console.log('🔧 [DEBUG TTS] Found public TTS service, testing...');
+        await publicTTSService.testPauseResume();
+      } else if (privateTTSService) {
+        console.log('🔧 [DEBUG TTS] Found private TTS service, testing...');
+        await privateTTSService.testPauseResume();
+      } else {
+        console.log('🔧 [DEBUG TTS] No TTS service found in window object');
+      }
+    } catch (error) {
+      console.error('🔧 [DEBUG TTS] Test failed:', error);
+    }
+  },
+  
+  // Get TTS service state
+  getTTSState: () => {
+    try {
+      const publicTTSService = window.publicTTSService;
+      const privateTTSService = window.privateTTSService;
+      
+      if (publicTTSService) {
+        console.log('🔧 [DEBUG TTS] Public TTS Service State:', publicTTSService.getStatus());
+        console.log('🔧 [DEBUG TTS] Public TTS Speak-TTS State:', publicTTSService.getSpeakTTSState());
+      }
+      
+      if (privateTTSService) {
+        console.log('🔧 [DEBUG TTS] Private TTS Service State:', privateTTSService.getStatus());
+        console.log('🔧 [DEBUG TTS] Private TTS Speak-TTS State:', privateTTSService.getSpeakTTSState());
+      }
+      
+      if (!publicTTSService && !privateTTSService) {
+        console.log('🔧 [DEBUG TTS] No TTS services found');
+      }
+    } catch (error) {
+      console.error('🔧 [DEBUG TTS] Error getting state:', error);
+    }
+  },
+  
+  // Force reset TTS services
+  resetTTS: () => {
+    try {
+      const publicTTSService = window.publicTTSService;
+      const privateTTSService = window.privateTTSService;
+      
+      if (publicTTSService) {
+        console.log('🔧 [DEBUG TTS] Resetting public TTS service...');
+        publicTTSService.forceResetStoppingFlag();
+      }
+      
+      if (privateTTSService) {
+        console.log('🔧 [DEBUG TTS] Resetting private TTS service...');
+        privateTTSService.forceResetStoppingFlag();
+      }
+      
+      if (!publicTTSService && !privateTTSService) {
+        console.log('🔧 [DEBUG TTS] No TTS services found to reset');
+      }
+    } catch (error) {
+      console.error('🔧 [DEBUG TTS] Error resetting TTS:', error);
+    }
+  }
+};
+
+console.log('🔧 [DEBUG TTS] TTS debug utilities loaded. Use window.debugTTS to access TTS debug functions.');
+console.log('🔧 [DEBUG TTS] Available functions:', Object.keys(window.debugTTS));
+
 export default window.debugCourseGeneration; 

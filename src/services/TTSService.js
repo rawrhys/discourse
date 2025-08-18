@@ -933,6 +933,9 @@ class TTSService {
   pause() {
     if (this.isPlaying && !this.isPaused && this.isInitialized) {
       try {
+        // Debug: Check speak-tts library state before pausing
+        this.getSpeakTTSState();
+        
         // Calculate current position based on time spent speaking
         const currentTime = Date.now();
         const timeSpentSpeaking = currentTime - this.speakingStartTime;
@@ -964,16 +967,29 @@ class TTSService {
         
         // Reset error count to allow pause to work
         this.errorCount = 0;
-        this.speech.pause();
         
-                 // Ensure state is properly set
-         this.isPlaying = false;
-         this.isPaused = true;
-         this.wasManuallyPaused = true; // Mark that user manually paused
+        // Try to pause using the speak-tts library
+        try {
+          this.speech.pause();
+          console.log(`[${this.serviceType} TTS] Successfully called speech.pause()`);
+        } catch (pauseError) {
+          console.warn(`[${this.serviceType} TTS] speech.pause() failed, using fallback:`, pauseError);
+          // Fallback: cancel and restart from position later
+          this.speech.cancel();
+        }
+        
+        // Ensure state is properly set
+        this.isPlaying = false;
+        this.isPaused = true;
+        this.wasManuallyPaused = true; // Mark that user manually paused
         
         console.log(`[${this.serviceType} TTS] Paused at position ${this.pausePosition}/${this.fullText.length} (${Math.round((this.pausePosition / this.fullText.length) * 100)}%)`);
       } catch (error) {
         console.warn(`[${this.serviceType} TTS] Pause failed:`, error);
+        // If pause fails completely, reset state
+        this.isPlaying = false;
+        this.isPaused = false;
+        this.wasManuallyPaused = false;
       }
     }
   }
@@ -985,11 +1001,29 @@ class TTSService {
     
     if ((this.isPaused || actuallyPaused) && !this.isPlaying && this.isInitialized) {
       try {
+        // Debug: Check speak-tts library state before resuming
+        this.getSpeakTTSState();
+        
         // Reset error count to allow resume to work
         this.errorCount = 0;
-                 this.speech.resume();
-         this.speakingStartTime = Date.now(); // Reset speaking start time
-         this.wasManuallyPaused = false; // Clear manual pause flag
+        
+        // Try to resume using the speak-tts library
+        try {
+          this.speech.resume();
+          console.log(`[${this.serviceType} TTS] Successfully called speech.resume()`);
+          this.speakingStartTime = Date.now(); // Reset speaking start time
+          this.wasManuallyPaused = false; // Clear manual pause flag
+          this.isPlaying = true;
+          this.isPaused = false;
+        } catch (resumeError) {
+          console.warn(`[${this.serviceType} TTS] speech.resume() failed, using fallback:`, resumeError);
+          // Fallback: restart from pause position
+          setTimeout(() => {
+            this.restartFromPausePosition();
+          }, 100); // Small delay to ensure state is stable
+          return; // Exit early since we're using fallback
+        }
+        
         console.log(`[${this.serviceType} TTS] Resumed from position ${this.pausePosition}/${this.fullText.length} (${Math.round((this.pausePosition / this.fullText.length) * 100)}%)`);
       } catch (error) {
         console.warn(`[${this.serviceType} TTS] Resume failed:`, error);
@@ -1003,7 +1037,8 @@ class TTSService {
       console.log(`[${this.serviceType} TTS] Cannot resume - not paused or not initialized. State:`, {
         isPaused: this.isPaused,
         isPlaying: this.isPlaying,
-        isInitialized: this.isInitialized
+        isInitialized: this.isInitialized,
+        actuallyPaused: actuallyPaused
       });
     }
   }
@@ -1174,6 +1209,62 @@ class TTSService {
     return this.getStatus();
   }
 
+  // Check speak-tts library state
+  getSpeakTTSState() {
+    try {
+      // Try to access internal state of speak-tts library
+      const state = {
+        hasSpeech: !!this.speech,
+        speechType: typeof this.speech,
+        hasPause: typeof this.speech?.pause === 'function',
+        hasResume: typeof this.speech?.resume === 'function',
+        hasCancel: typeof this.speech?.cancel === 'function',
+        browserPaused: window.speechSynthesis?.paused || false,
+        browserSpeaking: window.speechSynthesis?.speaking || false,
+        browserPending: window.speechSynthesis?.pending || false
+      };
+      
+      console.log(`[${this.serviceType} TTS] Speak-TTS library state:`, state);
+      return state;
+    } catch (error) {
+      console.warn(`[${this.serviceType} TTS] Error getting speak-tts state:`, error);
+      return { error: error.message };
+    }
+  }
+
+  // Test pause/resume functionality
+  async testPauseResume() {
+    console.log(`[${this.serviceType} TTS] Testing pause/resume functionality...`);
+    
+    try {
+      // Check library state
+      this.getSpeakTTSState();
+      
+      // Test with a short text
+      const testText = "This is a test of the pause and resume functionality. It should work correctly.";
+      
+      console.log(`[${this.serviceType} TTS] Starting test speech...`);
+      await this.speak(testText);
+      
+      // Wait a moment then try to pause
+      setTimeout(async () => {
+        console.log(`[${this.serviceType} TTS] Attempting to pause test speech...`);
+        this.pause();
+        
+        // Wait a moment then try to resume
+        setTimeout(async () => {
+          console.log(`[${this.serviceType} TTS] Attempting to resume test speech...`);
+          this.resume();
+        }, 1000);
+      }, 2000);
+      
+      return true;
+    } catch (error) {
+      console.warn(`[${this.serviceType} TTS] Test pause/resume failed:`, error);
+      return false;
+    }
+  }
+
   // Check if resume is possible
   canResume() {
     return this.isPaused && this.fullText && this.currentLessonId;
@@ -1187,18 +1278,22 @@ class TTSService {
       // Check if speech synthesis is paused
       const isPaused = window.speechSynthesis.paused;
       const isSpeaking = window.speechSynthesis.speaking;
+      const hasPendingUtterances = window.speechSynthesis.pending;
       
       console.log(`[${this.serviceType} TTS] Browser TTS state:`, {
         paused: isPaused,
         speaking: isSpeaking,
+        pending: hasPendingUtterances,
         ourPaused: this.isPaused,
-        ourPlaying: this.isPlaying
+        ourPlaying: this.isPlaying,
+        wasManuallyPaused: this.wasManuallyPaused
       });
       
-      return isPaused && !isSpeaking;
+      // Consider paused if browser says it's paused OR if we manually paused it
+      return (isPaused && !isSpeaking) || this.wasManuallyPaused;
     } catch (error) {
       console.warn(`[${this.serviceType} TTS] Error checking browser TTS state:`, error);
-      return this.isPaused; // Fallback to our state
+      return this.isPaused || this.wasManuallyPaused; // Fallback to our state
     }
   }
 
@@ -1226,12 +1321,22 @@ class TTSService {
       this.isPaused = false;
       this.errorCount = 0;
       this.isStoppingIntentionally = false;
+      this.wasManuallyPaused = false;
       
       // Wait a moment for state to stabilize
       await new Promise(resolve => setTimeout(resolve, 200));
       
-      // Speak from the pause position
-      await this.speak(this.fullText, this.pausePosition);
+      // Extract text from pause position
+      const remainingText = this.fullText.substring(this.pausePosition);
+      if (!remainingText || remainingText.trim().length === 0) {
+        console.log(`[${this.serviceType} TTS] No remaining text to speak from pause position`);
+        return true;
+      }
+      
+      console.log(`[${this.serviceType} TTS] Speaking remaining text (${remainingText.length} characters) from position ${this.pausePosition}`);
+      
+      // Speak the remaining text
+      await this.speak(remainingText);
       return true;
     } catch (error) {
       console.warn(`[${this.serviceType} TTS] Failed to restart from pause position:`, error);
@@ -1255,15 +1360,15 @@ class TTSService {
     this.isPaused = false;
     this.errorCount = 0;
     
-         // Reset position tracking
-     this.pausePosition = 0;
-     this.pauseTime = 0;
-     this.totalSpokenTime = 0;
-     this.speakingStartTime = 0;
-     this.finishedNormally = false;
-     this.wasManuallyPaused = false;
-     
-     console.log(`[${this.serviceType} TTS] Force reset complete, service should be ready`);
+    // Reset position tracking
+    this.pausePosition = 0;
+    this.pauseTime = 0;
+    this.totalSpokenTime = 0;
+    this.speakingStartTime = 0;
+    this.finishedNormally = false;
+    this.wasManuallyPaused = false;
+    
+    console.log(`[${this.serviceType} TTS] Force reset complete, service should be ready`);
   }
 
   // Check if service is ready for new requests
@@ -1302,6 +1407,13 @@ class TTSService {
 // These are completely isolated from each other
 const privateTTSService = new TTSService('private');
 const publicTTSService = new TTSService('public');
+
+// Expose to window for debugging (only in development)
+if (typeof window !== 'undefined' && (process.env.NODE_ENV === 'development' || window.location.hostname === 'localhost')) {
+  window.privateTTSService = privateTTSService;
+  window.publicTTSService = publicTTSService;
+  console.log('🔧 [TTS] TTS services exposed to window for debugging');
+}
 
 // Export the isolated service instances
 export { privateTTSService, publicTTSService };
