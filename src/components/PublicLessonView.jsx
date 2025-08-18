@@ -4,8 +4,15 @@ import { publicTTSService } from '../services/TTSService';
 import PerformanceMonitorService from '../services/PerformanceMonitorService';
 import markdownService from '../services/MarkdownService';
 import academicReferencesService from '../services/AcademicReferencesService';
-import { fixMalformedContent, formatContentForDisplay, cleanContentFormatting, validateContent } from '../utils/contentFormatter';
+import { fixMalformedContent, formatContentForDisplay, cleanContentFormatting, validateContent, stripSectionKeys, getContentAsString } from '../utils/contentFormatter';
 import AcademicReferencesFooter from './AcademicReferencesFooter';
+
+// Import test utilities for development
+if (process.env.NODE_ENV === 'development') {
+  import('../utils/testContentFormatter.js').then(module => {
+    module.runContentFormatterTests();
+  });
+}
 import Flashcard from './Flashcard';
 import './LessonView.css';
 
@@ -345,9 +352,8 @@ const PublicLessonView = ({
         
         if (view === 'content') {
           // Read the full lesson content including introduction and conclusion
-          // Use the new content formatter to handle malformed JSON
-          const formattedContent = fixMalformedContent(lesson.content);
-          contentToRead = formatContentForDisplay(formattedContent);
+          // Use the new content formatter to handle malformed JSON and strip section keys
+          contentToRead = getContentAsString(lesson.content);
         } else if (view === 'flashcards') {
           // For flashcards view, read the flashcard terms and definitions
           const flashcardData = lesson?.flashcards || lesson?.content?.flashcards || [];
@@ -599,25 +605,8 @@ const PublicLessonView = ({
       return finalResult;
     }
     
-    // Use the new content formatter to handle malformed JSON
-    const formattedContent = fixMalformedContent(content);
-    
-    const cleanedIntro = formattedContent.introduction 
-      ? cleanContentFormatting(formattedContent.introduction)
-      : '';
-
-    const cleanedMain = formattedContent.main_content 
-      ? cleanContentFormatting(formattedContent.main_content) 
-      : '';
-    const cleanedConclusion = formattedContent.conclusion 
-      ? cleanContentFormatting(formattedContent.conclusion) 
-      : '';
-    
-    const result = [cleanedIntro, cleanedMain, cleanedConclusion]
-      .filter(Boolean)
-      .join('\n\n');
-    
-    return result;
+    // Use the new content formatter to handle malformed JSON and strip section keys
+    return getContentAsString(content);
   };
 
   // Early return if no lesson
@@ -632,9 +621,8 @@ const PublicLessonView = ({
   // Get lesson content and process with academic references
   let lessonContent = '';
   try {
-    // Use the new content formatter to handle malformed JSON
-    const formattedContent = fixMalformedContent(lesson.content);
-    lessonContent = formatContentForDisplay(formattedContent);
+    // Use the new content formatter to handle malformed JSON and strip section keys
+    lessonContent = getContentAsString(lesson.content);
   } catch (error) {
     console.error('[PublicLessonView] Error processing lesson content:', error);
     lessonContent = typeof lesson.content === 'string' ? lesson.content : '';

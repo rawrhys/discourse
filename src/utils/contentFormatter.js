@@ -138,9 +138,13 @@ export const cleanContentFormatting = (content) => {
   if (!content || typeof content !== 'string') return content;
 
   return content
-    // Fix escaped newlines
-    .replace(/\\n\\n/g, '\n\n')
-    .replace(/\\n/g, '\n')
+    // Fix escaped newlines - handle cases where \n\n is close to words
+    .replace(/\\n\\n(?=\w)/g, '\n\n') // \n\n followed by word character
+    .replace(/\\n\\n(?=\s)/g, '\n\n') // \n\n followed by whitespace
+    .replace(/\\n\\n/g, '\n\n') // remaining \n\n
+    .replace(/\\n(?=\w)/g, '\n') // \n followed by word character
+    .replace(/\\n(?=\s)/g, '\n') // \n followed by whitespace
+    .replace(/\\n/g, '\n') // remaining \n
     // Fix escaped quotes
     .replace(/\\"/g, '"')
     // Fix double asterisks
@@ -215,10 +219,65 @@ export const autoFixContent = (content) => {
   };
 };
 
+/**
+ * Strips section keys and returns only the content values
+ * Useful for rendering where you only want the text content
+ * @param {object|string} content - The content to strip keys from
+ * @returns {object} - Content object with only text values
+ */
+export const stripSectionKeys = (content) => {
+  const formatted = fixMalformedContent(content);
+  
+  return {
+    text: cleanContentFormatting(formatted.introduction),
+    mainText: cleanContentFormatting(formatted.main_content),
+    endText: cleanContentFormatting(formatted.conclusion)
+  };
+};
+
+/**
+ * Returns content as a simple array of text sections
+ * @param {object|string} content - The content to convert
+ * @returns {array} - Array of text sections
+ */
+export const getContentAsArray = (content) => {
+  const formatted = fixMalformedContent(content);
+  
+  const sections = [];
+  
+  if (formatted.introduction) {
+    sections.push(cleanContentFormatting(formatted.introduction));
+  }
+  
+  if (formatted.main_content) {
+    sections.push(cleanContentFormatting(formatted.main_content));
+  }
+  
+  if (formatted.conclusion) {
+    sections.push(cleanContentFormatting(formatted.conclusion));
+  }
+  
+  return sections;
+};
+
+/**
+ * Returns content as a single concatenated string
+ * @param {object|string} content - The content to concatenate
+ * @param {string} separator - Separator between sections (default: '\n\n')
+ * @returns {string} - Concatenated content string
+ */
+export const getContentAsString = (content, separator = '\n\n') => {
+  const sections = getContentAsArray(content);
+  return sections.join(separator);
+};
+
 export default {
   fixMalformedContent,
   formatContentForDisplay,
   cleanContentFormatting,
   validateContent,
-  autoFixContent
+  autoFixContent,
+  stripSectionKeys,
+  getContentAsArray,
+  getContentAsString
 };
