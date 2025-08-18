@@ -3794,6 +3794,7 @@ app.get('/api/public/courses/:courseId',
     const normalizedId = String(courseId || '').replace(/_[0-9]{10,}$/,'');
     
     console.log(`[API] Fetching public course ${courseId} (normalized: ${normalizedId}) with sessionId: ${sessionId || 'none'}`);
+    console.log(`[API] Available courses:`, db.data.courses.map(c => ({ id: c.id, title: c.title, published: c.published })));
     
     const course = db.data.courses.find(c => String(c.id || '').replace(/_[0-9]{10,}$/, '') === normalizedId);
     

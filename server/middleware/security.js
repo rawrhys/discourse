@@ -175,6 +175,7 @@ export const captchaChallenge = (req, res, next) => {
   
   // Generate simple math challenge for every public access
   if (!challenge) {
+    console.log('[CAPTCHA] Generating new challenge for public course access');
     const num1 = Math.floor(Math.random() * 10) + 1;
     const num2 = Math.floor(Math.random() * 10) + 1;
     const challengeData = `${num1}+${num2}`;
@@ -189,6 +190,7 @@ export const captchaChallenge = (req, res, next) => {
       sessionId: sessionId
     });
     
+    console.log('[CAPTCHA] Returning CAPTCHA challenge:', { challengeData, challengeKey });
     return res.status(200).json({
       requiresCaptcha: true,
       challenge: challengeData,
