@@ -677,9 +677,6 @@ const PublicLessonView = ({
     // Process content once
     return cleanContentOnce(content);
   };
-    
-
-  };
 
   // Early return if no lesson
   if (!lesson) {
