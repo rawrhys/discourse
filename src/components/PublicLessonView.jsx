@@ -614,143 +614,56 @@ const PublicLessonView = ({
       
       let cleaned = textString;
       
-      // Step 1: Handle JSON structure if present
-      // Check for JSON-like structure (starts with { and ends with })
+      // Step 1: Simple JSON structure detection and content extraction
       if (cleaned.trim().startsWith('{') && cleaned.trim().endsWith('}')) {
-        console.log('[PublicLessonView] Detected JSON-like structure, attempting to parse...');
-        try {
-          // Replace smart quotes with standard quotes
-          cleaned = cleaned
-            .replace(/"/g, '"')
-            .replace(/"/g, '"')
-            .replace(/"/g, '"')
-            .replace(/"/g, '"');
-          
-          // Try to fix common JSON issues before parsing
-          cleaned = cleaned
-            // Fix empty keys by making them transparent
-            .replace(/""\s*:\s*"/g, '"content":"')  // Fix "" : " patterns
-            .replace(/""\s*:/g, '"content":')  // Fix "" : patterns
-            .replace(/,\s*""\s*:\s*"/g, ',"content":"')  // Fix ,"" : " patterns
-            .replace(/,\s*""\s*:/g, ',"content":')  // Fix ,"" : patterns
-            // Remove malformed JSON patterns that are close to words (make them transparent)
-            .replace(/(\w)\s*""\s*:\s*""/g, '$1')  // Remove "" : "" after words
-            .replace(/(\w)\s*""\s*:/g, '$1')  // Remove "" : after words
-            .replace(/""\s*:\s*""\s*(\w)/g, '$1')  // Remove "" : "" before words
-            .replace(/""\s*:\s*(\w)/g, '$1')  // Remove "" : before words
-            // Fix unescaped quotes in content
-            .replace(/"([^"]*)"([^"]*)"([^"]*)"/g, '"$1\\"$2\\"$3"')
-            // Fix newlines in strings
-            .replace(/\n/g, '\\n')
-            .replace(/\\n\\n/g, '\\n\\n');
-          
-          const parsed = JSON.parse(cleaned);
-          const { introduction, main_content, conclusion } = parsed;
-          
-          // Combine content parts
-          cleaned = [introduction, main_content, conclusion]
-            .filter(Boolean)
+        console.log('[PublicLessonView] Detected JSON-like structure, extracting content...');
+        
+        // Simple approach: Extract content between quotes, ignoring JSON structure
+        const contentMatches = cleaned.match(/"([^"]+)"/g);
+        if (contentMatches && contentMatches.length > 0) {
+          // Extract all quoted content and join with paragraph breaks
+          cleaned = contentMatches
+            .map(match => match.slice(1, -1)) // Remove quotes
+            .filter(content => content.length > 10) // Filter out short keys
             .join('\n\n');
           
-          console.log('[PublicLessonView] JSON parsed successfully:', {
-            hasIntro: !!introduction,
-            hasMain: !!main_content,
-            hasConclusion: !!conclusion,
-            combinedLength: cleaned.length
-          });
-        } catch (error) {
-          console.warn('[PublicLessonView] JSON parsing failed, treating as regular text:', error);
-          // If JSON parsing fails, treat the content as regular text and clean it up
-          cleaned = cleaned
-            // Remove JSON structure indicators
-            .replace(/^\{/, '')
-            .replace(/\}$/, '')
-            // Remove JSON key patterns (more comprehensive)
-            .replace(/"introduction"\s*:\s*"/g, '')
-            .replace(/"main_content"\s*:\s*"/g, '')
-            .replace(/"conclusion"\s*:\s*"/g, '')
-            .replace(/"content"\s*:\s*"/g, '')
-            .replace(/""\s*:\s*"/g, '')  // Remove "" : " patterns
-            .replace(/""\s*:/g, '')  // Remove "" : patterns
-            // Remove malformed JSON patterns that are close to words
-            .replace(/(\w)\s*""\s*:\s*""/g, '$1')  // Remove "" : "" after words
-            .replace(/(\w)\s*""\s*:/g, '$1')  // Remove "" : after words
-            .replace(/""\s*:\s*""\s*(\w)/g, '$1')  // Remove "" : "" before words
-            .replace(/""\s*:\s*(\w)/g, '$1')  // Remove "" : before words
-            // Remove trailing quotes and commas
-            .replace(/",?\s*$/g, '')
-            .replace(/",\s*"/g, '\n\n')
-            .replace(/"/g, '')
-            // Clean up any remaining JSON artifacts
-            .replace(/\[object Object\]/g, '')
-            .replace(/\[object\s+Object\]/g, '')
-            // Normalize line breaks
-            .replace(/\\n/g, '\n')
-            .replace(/\n{3,}/g, '\n\n')
-            .trim();
-          
-          console.log('[PublicLessonView] Converted malformed JSON to text:', {
-            cleanedLength: cleaned.length,
+          console.log('[PublicLessonView] Content extracted from JSON:', {
+            matchesFound: contentMatches.length,
+            contentLength: cleaned.length,
             sampleContent: cleaned.substring(0, 200) + '...'
           });
+        } else {
+          // Fallback: Remove JSON structure and clean up
+          cleaned = cleaned
+            .replace(/^\{/, '')
+            .replace(/\}$/, '')
+            .replace(/""\s*:\s*"/g, '')  // Remove empty key patterns
+            .replace(/""\s*:/g, '')  // Remove empty keys
+            .replace(/",\s*"/g, '\n\n')  // Convert JSON separators to paragraph breaks
+            .replace(/"/g, '')  // Remove remaining quotes
+            .replace(/,\s*$/g, '')  // Remove trailing commas
+            .trim();
+          
+          console.log('[PublicLessonView] Fallback JSON cleanup applied');
         }
       }
       
-      // Step 2: Remove all unwanted patterns in one pass
+      // Step 2: Simple cleanup (much less aggressive)
       cleaned = cleaned
-        // Remove separator patterns
+        // Remove basic separator patterns
         .replace(/Content generation completed\./g, '')
         .replace(/\|\|\|---\|\|\|/g, '')
         .replace(/\|\|\|/g, '')
-        // Remove JSON structure words - more comprehensive
+        // Remove basic JSON artifacts
+        .replace(/\[object Object\]/g, '')
+        .replace(/\[object\s+Object\]/g, '')
+        // Remove basic JSON structure words (only if they appear alone)
         .replace(/\bintroduction\b/gi, '')
         .replace(/\bmain_content\b/gi, '')
         .replace(/\bconclusion\b/gi, '')
-        .replace(/\bmain\b/gi, '')
-        .replace(/\bintro\b/gi, '')
-        .replace(/\bIntroduction\b/g, '')
-        .replace(/\bMain Content\b/g, '')
-        .replace(/\bConclusion\b/g, '')
-        .replace(/\bMain\b/g, '')
-        .replace(/\bIntro\b/g, '')
-        // Remove additional JSON structure variations
-        .replace(/\bINTRODUCTION\b/g, '')
-        .replace(/\bMAIN_CONTENT\b/g, '')
-        .replace(/\bCONCLUSION\b/g, '')
-        .replace(/\bMAIN\b/g, '')
-        .replace(/\bINTRO\b/g, '')
-        // Remove JSON key patterns
-        .replace(/"introduction":/gi, '')
-        .replace(/"main_content":/gi, '')
-        .replace(/"conclusion":/gi, '')
-        .replace(/"main":/gi, '')
-        .replace(/"intro":/gi, '')
-        // Remove JSON artifacts and formatting issues
-        .replace(/[{}]/g, '')  // Remove curly brackets
-        .replace(/[""]/g, '"')  // Replace smart quotes with standard quotes
-        .replace(/[""]/g, '"')  // Replace smart quotes with standard quotes
-        .replace(/"/g, '"')  // Replace any remaining smart quotes
-        .replace(/\[object Object\]/g, '')  // Remove [object Object] artifacts
-        .replace(/\[object\s+Object\]/g, '')  // Remove [object Object] with spaces
-        // Remove JSON key patterns with empty quotes - more comprehensive
-        .replace(/""\s*:\s*/g, '')  // Remove "" : patterns
-        .replace(/""\s*:/g, '')  // Remove "" : patterns
-        .replace(/""\s*:\s*"/g, '')  // Remove "" : " patterns
-        .replace(/""\s*:\s*""/g, '')  // Remove "" : "" patterns
-        .replace(/,\s*""\s*:\s*"/g, '')  // Remove ,"" : " patterns
-        .replace(/,\s*""\s*:\s*""/g, '')  // Remove ,"" : "" patterns
-        .replace(/,\s*""\s*:/g, '')  // Remove ,"" : patterns
-        // Remove standalone colons and commas that are not part of grammar
-        .replace(/:\s*"/g, '')  // Remove : " patterns
-        .replace(/,\s*"/g, '')  // Remove , " patterns
-        .replace(/:\s*$/gm, '')  // Remove trailing colons at end of lines
-        .replace(/,\s*$/gm, '')  // Remove trailing commas at end of lines
-        // Fix line breaks and paragraph formatting
-        .replace(/\\n/g, '\n')  // Convert \n to actual line breaks
-        .replace(/\\n\\n/g, '\n\n')  // Convert \n\n to actual paragraph breaks
-        .replace(/\n\s*\n\s*\n/g, '\n\n')  // Normalize multiple line breaks to double
-        .replace(/\n\s*\n/g, '\n\n')  // Normalize double line breaks
-        .replace(/\n{3,}/g, '\n\n')  // Limit to max 2 consecutive line breaks
+        // Fix line breaks
+        .replace(/\\n/g, '\n')
+        .replace(/\n{3,}/g, '\n\n')
         // Normalize spaces
         .replace(/\s+/g, ' ')
         .trim();
@@ -764,56 +677,11 @@ const PublicLessonView = ({
       // Step 5: Final cleanup
       cleaned = cleanupRemainingAsterisks(cleaned);
       
-      // Step 6: Final JSON artifact cleanup
+      // Step 6: Minimal final cleanup
       cleaned = cleaned
-        // Final pass to remove any remaining JSON structure words
-        .replace(/\bintroduction\b/gi, '')
-        .replace(/\bmain_content\b/gi, '')
-        .replace(/\bconclusion\b/gi, '')
-        .replace(/\bmain\b/gi, '')
-        .replace(/\bintro\b/gi, '')
-        .replace(/\bIntroduction\b/g, '')
-        .replace(/\bMain Content\b/g, '')
-        .replace(/\bConclusion\b/g, '')
-        .replace(/\bMain\b/g, '')
-        .replace(/\bIntro\b/g, '')
-        .replace(/\bINTRODUCTION\b/g, '')
-        .replace(/\bMAIN_CONTENT\b/g, '')
-        .replace(/\bCONCLUSION\b/g, '')
-        .replace(/\bMAIN\b/g, '')
-        .replace(/\bINTRO\b/g, '')
-        // Remove any remaining JSON patterns
-        .replace(/"introduction":/gi, '')
-        .replace(/"main_content":/gi, '')
-        .replace(/"conclusion":/gi, '')
-        .replace(/"main":/gi, '')
-        .replace(/"intro":/gi, '')
-        // Remove all remaining JSON artifacts and formatting issues
-        .replace(/[{}]/g, '')  // Remove curly brackets
-        .replace(/[""]/g, '"')  // Replace smart quotes with standard quotes
-        .replace(/[""]/g, '"')  // Replace smart quotes with standard quotes
-        .replace(/"/g, '"')  // Replace any remaining smart quotes
-        .replace(/\[object Object\]/g, '')  // Remove [object Object] artifacts
-        .replace(/\[object\s+Object\]/g, '')  // Remove [object Object] with spaces
-        // Remove JSON key patterns with empty quotes - more comprehensive
-        .replace(/""\s*:\s*/g, '')  // Remove "" : patterns
-        .replace(/""\s*:/g, '')  // Remove "" : patterns
-        .replace(/""\s*:\s*"/g, '')  // Remove "" : " patterns
-        .replace(/""\s*:\s*""/g, '')  // Remove "" : "" patterns
-        .replace(/,\s*""\s*:\s*"/g, '')  // Remove ,"" : " patterns
-        .replace(/,\s*""\s*:\s*""/g, '')  // Remove ,"" : "" patterns
-        .replace(/,\s*""\s*:/g, '')  // Remove ,"" : patterns
-        // Remove standalone colons and commas that are not part of grammar
-        .replace(/:\s*"/g, '')  // Remove : " patterns
-        .replace(/,\s*"/g, '')  // Remove , " patterns
-        .replace(/:\s*$/gm, '')  // Remove trailing colons at end of lines
-        .replace(/,\s*$/gm, '')  // Remove trailing commas at end of lines
-        // Final paragraph break normalization
-        .replace(/\\n\\n/g, '\n\n')  // Convert \n\n to actual paragraph breaks
-        .replace(/\\n/g, '\n')  // Convert \n to actual line breaks
-        .replace(/\n\s*\n\s*\n/g, '\n\n')  // Normalize multiple line breaks to double
-        .replace(/\n\s*\n/g, '\n\n')  // Normalize double line breaks
-        .replace(/\n{3,}/g, '\n\n')  // Limit to max 2 consecutive line breaks
+        // Only remove obvious artifacts
+        .replace(/\[object Object\]/g, '')
+        .replace(/\[object\s+Object\]/g, '')
         // Final space normalization
         .replace(/\s+/g, ' ')
         .trim();
