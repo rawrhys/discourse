@@ -404,6 +404,7 @@ const LessonView = ({
       
       // Check if request was aborted before setting state
       if (!fallbackController.signal.aborted && result && result.url) {
+        console.log('[LessonView] Setting fallback image data:', result);
         setImageData({ ...result, url: normalizeImageUrl(result.url) });
         
         // Update local used image tracking when a new image is found
@@ -802,6 +803,7 @@ const LessonView = ({
           
           // Check if request was aborted before setting state
           if (!ignore && !abortController.signal.aborted) {
+            console.log('[LessonView] Setting image data:', result);
             setImageData(result ? { ...result, url: normalizeImageUrl(result.url) } : null);
             
             // Update local used image tracking when a new image is found
@@ -918,6 +920,10 @@ const LessonView = ({
     );
   }
 
+  // Debug logging for image data
+  console.log('[LessonView] Current imageData state:', imageData);
+  console.log('[LessonView] imageLoading state:', imageLoading);
+  
   return (
     <div className="flex-1 flex flex-col p-6 bg-white overflow-y-auto">
       <header className="mb-6">
