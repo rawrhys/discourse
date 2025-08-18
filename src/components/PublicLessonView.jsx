@@ -92,6 +92,12 @@ const PublicLessonView = ({
     // Only trigger on actual lesson ID changes, not TTS status changes
     if (!lesson?.id) return;
     
+    // Prevent multiple rapid triggers
+    if (isLessonChanging.current) {
+      console.log('[PublicLessonView] Lesson change already in progress, skipping');
+      return;
+    }
+    
     // Set flag to prevent TTS conflicts during lesson change
     isLessonChanging.current = true;
     console.log('[PublicLessonView] Lesson change detected, pausing TTS');
@@ -114,11 +120,11 @@ const PublicLessonView = ({
     // Update TTS status to reflect stopped state
     setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
     
-    // Clear the flag after a shorter delay since we're resetting flags immediately
+    // Clear the flag after a delay to prevent rapid re-triggers
     setTimeout(() => {
       isLessonChanging.current = false;
       console.log('[PublicLessonView] Lesson change flag cleared, TTS can resume');
-    }, 500); // Reduced to 500ms since we reset flags immediately
+    }, 1000); // Increased to 1 second to prevent rapid re-triggers
   }, [lesson?.id]); // Only depend on lesson ID, not TTS status
 
   // Sync TTS state with service state periodically
@@ -153,12 +159,12 @@ const PublicLessonView = ({
                 isPlaying: serviceStatus.isPlaying,
                 isPaused: serviceStatus.isPaused
               }));
-            }, 500); // Increased debounce to 500ms
+            }, 1000); // Increased debounce to 1 second
         }
       } catch (error) {
         console.warn('[PublicLessonView] TTS state sync error:', error);
       }
-    }, 2000); // Increased to 2 seconds to reduce rapid changes
+    }, 3000); // Increased to 3 seconds to reduce rapid changes
 
     return () => {
       clearInterval(interval);
@@ -166,7 +172,7 @@ const PublicLessonView = ({
         clearTimeout(ttsStateUpdateTimeoutRef.current);
       }
     };
-  }, [ttsStatus.isPlaying, ttsStatus.isPaused]);
+  }, []); // Removed dependencies to prevent effect recreation
 
   // Handle image loading for public courses (simplified)
   useEffect(() => {
@@ -225,6 +231,11 @@ const PublicLessonView = ({
       } catch (error) {
         console.warn('[PublicLessonView] Error cleaning up TTS service:', error);
       }
+      
+      // Clear any pending timeouts
+      if (ttsStateUpdateTimeoutRef.current) {
+        clearTimeout(ttsStateUpdateTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -242,6 +253,9 @@ const PublicLessonView = ({
       console.log('[PublicLessonView] TTS already playing, ignoring request');
       return;
     }
+    
+    // Add a small delay to prevent rapid button clicks
+    await new Promise(resolve => setTimeout(resolve, 100));
 
     // Check if TTS service is ready for requests
     if (!publicTTSService.isReadyForRequests()) {
@@ -285,9 +299,12 @@ const PublicLessonView = ({
       console.error('[PublicLessonView] TTS error:', error);
       setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
     }
-  }, [lesson?.id, lesson?.content, ttsStatus.isPaused, ttsStatus.isPlaying]); // More specific dependencies
+  }, [lesson?.id, lesson?.content]); // Removed TTS status dependencies to prevent rapid recreation
 
-  const handleStopAudio = useCallback(() => {
+  const handleStopAudio = useCallback(async () => {
+    // Add a small delay to prevent rapid button clicks
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     try {
       publicTTSService.stop();
     } catch (error) {
@@ -297,7 +314,10 @@ const PublicLessonView = ({
     setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
   }, []);
 
-  const handlePauseResumeAudio = useCallback(() => {
+  const handlePauseResumeAudio = useCallback(async () => {
+    // Add a small delay to prevent rapid button clicks
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     try {
       if (ttsStatus.isPaused) {
         publicTTSService.resume();

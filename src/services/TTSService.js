@@ -71,6 +71,7 @@ class TTSService {
     this.isStoppingIntentionally = false; // Track if we're stopping intentionally
     this.isRetrying = false; // Track if we're in a retry cycle
     this.lastStartTime = 0; // Track when TTS last started
+    this.speakTimeout = null; // Track speak debounce timeout
     
     // Browser compatibility check
     this.browserSupport = this.checkBrowserSupport();
@@ -595,6 +596,17 @@ class TTSService {
       return;
     }
     
+    // Debounce rapid speak calls
+    if (this.speakTimeout) {
+      clearTimeout(this.speakTimeout);
+      console.log(`[${this.serviceType} TTS] Debouncing rapid speak call`);
+    }
+    
+    // Set a debounce timeout to prevent rapid calls
+    this.speakTimeout = setTimeout(() => {
+      this.speakTimeout = null;
+    }, 500);
+    
     // Prevent starting if we're stopping intentionally, but allow override after a reasonable delay
     if (this.isStoppingIntentionally) {
       console.warn(`[${this.serviceType} TTS] Service is stopping intentionally, ignoring speak request`);
@@ -933,6 +945,12 @@ class TTSService {
       } catch (error) {
         console.warn(`[${this.serviceType} TTS] Stop failed:`, error);
       } finally {
+        // Clear any pending timeouts
+        if (this.speakTimeout) {
+          clearTimeout(this.speakTimeout);
+          this.speakTimeout = null;
+        }
+        
         // Reset the flag immediately after a short delay
         setTimeout(() => {
           this.isStoppingIntentionally = false;
@@ -969,6 +987,12 @@ class TTSService {
       } catch (error) {
         console.warn(`[${this.serviceType} TTS] Stop and clear failed:`, error);
       } finally {
+        // Clear any pending timeouts
+        if (this.speakTimeout) {
+          clearTimeout(this.speakTimeout);
+          this.speakTimeout = null;
+        }
+        
         // Reset the flag immediately for lesson changes
         console.log(`[${this.serviceType} TTS] Resetting stopping flag immediately for lesson change`);
         this.isStoppingIntentionally = false;
@@ -1001,6 +1025,12 @@ class TTSService {
     this.currentText = '';
     this.currentLessonId = null;
     this.fullText = '';
+    
+    // Clear any pending timeouts
+    if (this.speakTimeout) {
+      clearTimeout(this.speakTimeout);
+      this.speakTimeout = null;
+    }
     
     console.log(`[${this.serviceType} TTS] Reset complete, ready for new requests`);
   }
