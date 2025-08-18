@@ -73,6 +73,7 @@ class TTSService {
      this.lastStartTime = 0; // Track when TTS last started
      this.speakTimeout = null; // Track speak debounce timeout
      this.finishedNormally = false; // Track if TTS finished normally (not interrupted)
+     this.wasManuallyPaused = false; // Track if user manually paused TTS
     
     // Position tracking for pause/resume functionality
     this.pausePosition = 0; // Track where we paused in the text
@@ -251,7 +252,7 @@ class TTSService {
   getInitConfig() {
     const baseConfig = {
       'volume': 1,
-      'splitSentences': true,
+      'splitSentences': false, // Disable sentence splitting to preserve pause state
       'listeners': {
         'onvoiceschanged': (voices) => {
           console.log(`[${this.serviceType} TTS] Voices loaded:`, voices.length);
@@ -309,7 +310,6 @@ class TTSService {
           'rate': 1.0,
           'pitch': 1,
           'voice': null,
-          'splitSentences': false,
           'volume': 0.8 // Slightly lower volume for fallback
         };
     }
@@ -580,9 +580,10 @@ class TTSService {
         this.pauseTime = 0;
         this.totalSpokenTime = 0;
         this.speakingStartTime = 0;
-        this.finishedNormally = false;
-      
-      console.log(`[${this.serviceType} TTS] Starting to read lesson:`, lesson.title);
+                 this.finishedNormally = false;
+         this.wasManuallyPaused = false;
+        
+        console.log(`[${this.serviceType} TTS] Starting to read lesson:`, lesson.title);
       console.log(`[${this.serviceType} TTS] Full text length before speak: ${this.fullText.length}`);
       
       // Ensure we have the text before speaking
@@ -719,13 +720,21 @@ class TTSService {
            const speakConfig = {
              text: textToSpeak,
              queue: false, // Don't queue, replace current speech
+             splitSentences: false, // Ensure no sentence splitting to preserve pause state
             listeners: {
                              'onstart': () => {
-                 this.isPlaying = true;
-                 this.isPaused = false;
+                 // Only set playing state if not manually paused
+                 if (!this.wasManuallyPaused) {
+                   this.isPlaying = true;
+                   this.isPaused = false;
+                 } else {
+                   // If manually paused, keep the pause state
+                   this.isPlaying = false;
+                   this.isPaused = true;
+                 }
                  this.speakingStartTime = Date.now();
                  this.finishedNormally = false; // Reset flag when starting new speech
-                 console.log(`[${this.serviceType} TTS] Started speaking`);
+                 console.log(`[${this.serviceType} TTS] Started speaking (manually paused: ${this.wasManuallyPaused})`);
                },
                       'onend': () => {
           this.isPlaying = false;
@@ -957,9 +966,10 @@ class TTSService {
         this.errorCount = 0;
         this.speech.pause();
         
-        // Ensure state is properly set
-        this.isPlaying = false;
-        this.isPaused = true;
+                 // Ensure state is properly set
+         this.isPlaying = false;
+         this.isPaused = true;
+         this.wasManuallyPaused = true; // Mark that user manually paused
         
         console.log(`[${this.serviceType} TTS] Paused at position ${this.pausePosition}/${this.fullText.length} (${Math.round((this.pausePosition / this.fullText.length) * 100)}%)`);
       } catch (error) {
@@ -977,8 +987,9 @@ class TTSService {
       try {
         // Reset error count to allow resume to work
         this.errorCount = 0;
-        this.speech.resume();
-        this.speakingStartTime = Date.now(); // Reset speaking start time
+                 this.speech.resume();
+         this.speakingStartTime = Date.now(); // Reset speaking start time
+         this.wasManuallyPaused = false; // Clear manual pause flag
         console.log(`[${this.serviceType} TTS] Resumed from position ${this.pausePosition}/${this.fullText.length} (${Math.round((this.pausePosition / this.fullText.length) * 100)}%)`);
       } catch (error) {
         console.warn(`[${this.serviceType} TTS] Resume failed:`, error);
@@ -1026,6 +1037,7 @@ class TTSService {
          this.totalSpokenTime = 0;
          this.speakingStartTime = 0;
          this.finishedNormally = false;
+         this.wasManuallyPaused = false;
          
          console.log(`[${this.serviceType} TTS] Stopped`);
       } catch (error) {
@@ -1075,6 +1087,7 @@ class TTSService {
          this.totalSpokenTime = 0;
          this.speakingStartTime = 0;
          this.finishedNormally = false;
+         this.wasManuallyPaused = false;
          
          console.log(`[${this.serviceType} TTS] Stopped and cleared`);
       } catch (error) {
@@ -1124,9 +1137,10 @@ class TTSService {
     this.pauseTime = 0;
     this.totalSpokenTime = 0;
     this.speakingStartTime = 0;
-    this.finishedNormally = false;
-    
-    // Clear any pending timeouts
+         this.finishedNormally = false;
+     this.wasManuallyPaused = false;
+     
+     // Clear any pending timeouts
     if (this.speakTimeout) {
       clearTimeout(this.speakTimeout);
       this.speakTimeout = null;
@@ -1247,6 +1261,7 @@ class TTSService {
      this.totalSpokenTime = 0;
      this.speakingStartTime = 0;
      this.finishedNormally = false;
+     this.wasManuallyPaused = false;
      
      console.log(`[${this.serviceType} TTS] Force reset complete, service should be ready`);
   }
@@ -1272,6 +1287,7 @@ class TTSService {
       isPaused: this.isPaused,
       isStoppingIntentionally: this.isStoppingIntentionally,
       finishedNormally: this.finishedNormally,
+      wasManuallyPaused: this.wasManuallyPaused,
       browserPaused: browserState,
       pausePosition: this.pausePosition,
       totalSpokenTime: this.totalSpokenTime,
