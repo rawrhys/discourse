@@ -575,6 +575,20 @@ const PublicLessonView = ({
       .replace(/\[(\d+)\](\w)/g, '<sup>$1</sup> $2');  // Add space after citation
   };
 
+  // Function to ensure proper paragraph formatting and line breaks
+  const fixParagraphFormatting = (text) => {
+    if (!text) return text;
+    
+    return text
+      // Ensure double line breaks create proper paragraphs
+      .replace(/\n\n+/g, '\n\n')  // Normalize multiple line breaks to double
+      .replace(/\n\s*\n/g, '\n\n')  // Remove extra spaces between paragraphs
+      // Ensure single line breaks are preserved for readability
+      .replace(/([.!?])\s*\n\s*([A-Z])/g, '$1\n\n$2')  // Add paragraph break after sentences
+      // Clean up any remaining formatting issues
+      .trim();
+  };
+
 
 
   // Helper function to clean and combine lesson content
@@ -591,15 +605,29 @@ const PublicLessonView = ({
       // Ensure part is a string before processing
       const partString = typeof part === 'string' ? part : String(part);
       
-      // First, remove all separator patterns before any other processing
+      // First, remove all separator patterns and JSON structure words
       let cleaned = partString
         .replace(/Content generation completed\./g, '')
         .replace(/\|\|\|---\|\|\|/g, '') // Remove |||---||| patterns
         .replace(/\|\|\|/g, '') // Remove all remaining ||| patterns
+        // Remove JSON structure words that might appear in content
+        .replace(/\bintroduction\b/gi, '')
+        .replace(/\bmain_content\b/gi, '')
+        .replace(/\bconclusion\b/gi, '')
+        .replace(/\bmain\b/gi, '')
+        .replace(/\bintro\b/gi, '')
+        // Remove curly brackets and quotes that might be left over
+        .replace(/[{}"]/g, '')
         .trim();
+      
+      // Fix line breaks - convert \n to actual line breaks
+      cleaned = cleaned.replace(/\\n/g, '\n');
       
       // Fix citation syntax before markdown processing
       cleaned = fixCitationSyntax(cleaned);
+      
+      // Fix paragraph formatting and line breaks
+      cleaned = fixParagraphFormatting(cleaned);
       
       // Then apply markdown processing
       cleaned = fixMalformedMarkdown(cleaned);
@@ -607,7 +635,14 @@ const PublicLessonView = ({
       // Final cleanup of any separators that might have been reintroduced
       cleaned = cleaned
         .replace(/\|\|\|---\|\|\|/g, '')
-        .replace(/\|\|\|/g, '');
+        .replace(/\|\|\|/g, '')
+        // Final cleanup of any remaining JSON artifacts
+        .replace(/\bintroduction\b/gi, '')
+        .replace(/\bmain_content\b/gi, '')
+        .replace(/\bconclusion\b/gi, '')
+        .replace(/\bmain\b/gi, '')
+        .replace(/\bintro\b/gi, '')
+        .replace(/[{}"]/g, '');
       
       return cleaned;
     };
