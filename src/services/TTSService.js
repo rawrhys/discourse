@@ -965,6 +965,12 @@ class TTSService {
         break;
       }
       
+      // Additional stop check at the beginning of each chunk iteration
+      if (this.isStopped) {
+        console.log(`[${this.serviceType} TTS] Stop detected at start of chunk ${i + 1}, ending chunked speech`);
+        break;
+      }
+      
       // Check if we're paused
       if (this.isPaused) {
         console.log(`[${this.serviceType} TTS] Chunked speech paused at chunk ${i + 1}/${chunks.length}`);
@@ -1027,22 +1033,30 @@ class TTSService {
               if (!hasResolved) {
                 hasResolved = true;
                 console.log(`[${this.serviceType} TTS] Chunk ${i + 1} speak-tts completed successfully:`, result);
+                // Check if we've been stopped after chunk completion
+                if (this.isStopped) {
+                  console.log(`[${this.serviceType} TTS] Stop detected after chunk ${i + 1} completion, ending chunked speech`);
+                }
                 resolve();
               }
             };
             
-            // Add an error handler
+                        // Add an error handler
             const errorHandler = (error) => {
               if (!hasResolved) {
                 hasResolved = true;
-                console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} speak-tts failed:`, error);
-                // Try to reinitialize if there's a voice error
-                if (error && (error.includes('voice') || error.includes('not-allowed'))) {
-                  console.log(`[${this.serviceType} TTS] Voice error detected, attempting reinitialization`);
-                  this.isInitialized = false;
-                  this.initSpeech();
-                }
-                resolve(); // Continue with next chunk
+                  console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} speak-tts failed:`, error);
+                  // Check if we've been stopped after chunk error
+                  if (this.isStopped) {
+                    console.log(`[${this.serviceType} TTS] Stop detected after chunk ${i + 1} error in speakChunksFrom, ending chunked speech`);
+                  }
+                  // Try to reinitialize if there's a voice error
+                  if (error && (error.includes('voice') || error.includes('not-allowed'))) {
+                    console.log(`[${this.serviceType} TTS] Voice error detected, attempting reinitialization`);
+                    this.isInitialized = false;
+                    this.initSpeech();
+                  }
+                  resolve(); // Continue with next chunk
               }
             };
             
@@ -1069,6 +1083,10 @@ class TTSService {
               if (!hasResolved) {
                 hasResolved = true;
                 console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} speak-tts promise timeout, forcing resolve`);
+                // Check if we've been stopped during timeout
+                if (this.isStopped) {
+                  console.log(`[${this.serviceType} TTS] Stop detected during chunk ${i + 1} fallback timeout, ending chunked speech`);
+                }
                 resolve();
               }
             }, 15000); // 15 second fallback timeout
@@ -1081,6 +1099,13 @@ class TTSService {
         // Use a shorter timeout and add better detection of actual speech
         const timeoutPromise = new Promise((resolve) => {
           setTimeout(() => {
+            // Check if we've been stopped before processing timeout
+            if (this.isStopped) {
+              console.log(`[${this.serviceType} TTS] Stop detected during chunk ${i + 1} timeout, ending chunked speech`);
+              resolve();
+              return;
+            }
+            
             // Check if we actually started speaking
             if (this.isPlaying && this.speakingStartTime > 0) {
               const timeSinceStart = Date.now() - this.speakingStartTime;
@@ -1091,6 +1116,12 @@ class TTSService {
                 console.log(`[${this.serviceType} TTS] Chunk ${i + 1} still speaking, extending timeout`);
                 // Extend timeout if we're actually speaking
                 setTimeout(() => {
+                  // Check again if we've been stopped during extended timeout
+                  if (this.isStopped) {
+                    console.log(`[${this.serviceType} TTS] Stop detected during chunk ${i + 1} extended timeout, ending chunked speech`);
+                    resolve();
+                    return;
+                  }
                   console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} final timeout - continuing to next chunk`);
                   resolve();
                 }, 10000); // Additional 10 seconds
@@ -1110,9 +1141,15 @@ class TTSService {
           return;
         }
         
-        // Check if we've been stopped manually
+        // Check if we've been stopped manually - this is the critical check
         if (this.isStopped) {
           console.log(`[${this.serviceType} TTS] Manually stopped after chunk ${i + 1}, ending chunked speech`);
+          break;
+        }
+        
+        // Additional stop check before starting next chunk
+        if (this.isStopped) {
+          console.log(`[${this.serviceType} TTS] Stop detected before starting next chunk, ending chunked speech`);
           break;
         }
         
@@ -1141,6 +1178,12 @@ class TTSService {
   // Speak chunks from a specific index with proper async handling
   async speakChunksFrom(startIndex) {
     console.log(`[${this.serviceType} TTS] Speaking chunks from index ${startIndex}/${this.currentChunks.length}`);
+    
+    // Check if TTS has been stopped before starting
+    if (this.isStopped) {
+      console.log(`[${this.serviceType} TTS] TTS was stopped, not starting chunked speech from index ${startIndex}`);
+      return;
+    }
     
     // Enhanced null checks to prevent errors
     if (!this.isChunkedSpeech) {
@@ -1182,6 +1225,7 @@ class TTSService {
     this.isPlaying = true;
     this.isPaused = false;
     this.wasManuallyPaused = false;
+    this.isStopped = false; // Reset stop flag when starting chunked speech
     this.speakingStartTime = Date.now();
     
     // Wait a moment for state to stabilize
@@ -1207,6 +1251,12 @@ class TTSService {
         } catch (error) {
           console.warn(`[${this.serviceType} TTS] Error canceling speech during stop:`, error);
         }
+        break;
+      }
+      
+      // Additional stop check at the beginning of each chunk iteration
+      if (this.isStopped) {
+        console.log(`[${this.serviceType} TTS] Stop detected at start of chunk ${i + 1} in speakChunksFrom, ending chunked speech`);
         break;
       }
       
@@ -1272,6 +1322,10 @@ class TTSService {
               if (!hasResolved) {
                 hasResolved = true;
                   console.log(`[${this.serviceType} TTS] Chunk ${i + 1} speak-tts completed successfully:`, result);
+                  // Check if we've been stopped after chunk completion
+                  if (this.isStopped) {
+                    console.log(`[${this.serviceType} TTS] Stop detected after chunk ${i + 1} completion in speakChunksFrom, ending chunked speech`);
+                  }
                   resolve();
               }
             };
@@ -1299,6 +1353,10 @@ class TTSService {
               if (!hasResolved) {
                 hasResolved = true;
                 console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} speak-tts promise timeout, forcing resolve`);
+                // Check if we've been stopped during fallback timeout
+                if (this.isStopped) {
+                  console.log(`[${this.serviceType} TTS] Stop detected during chunk ${i + 1} fallback timeout in speakChunksFrom, ending chunked speech`);
+                }
                 resolve();
               }
             }, 15000); // 15 second fallback timeout
@@ -1313,6 +1371,14 @@ class TTSService {
           let timeoutId;
           
           const checkSpeechStatus = () => {
+            // Check if we've been stopped - don't continue if stopped
+            if (this.isStopped) {
+              console.log(`[${this.serviceType} TTS] Stop detected during chunk ${i + 1} timeout check, ending chunked speech`);
+              if (timeoutId) clearTimeout(timeoutId);
+              resolve();
+              return;
+            }
+            
             // Check if we're paused - don't timeout if user paused
             if (this.isPaused) {
               console.log(`[${this.serviceType} TTS] Chunk ${i + 1} paused by user, stopping timeout check`);
@@ -1345,6 +1411,12 @@ class TTSService {
           setTimeout(() => {
             if (timeoutId) {
               clearTimeout(timeoutId);
+              // Check if we've been stopped before processing maximum timeout
+              if (this.isStopped) {
+                console.log(`[${this.serviceType} TTS] Stop detected during chunk ${i + 1} maximum timeout, ending chunked speech`);
+                resolve();
+                return;
+              }
               // Only timeout if not paused by user
               if (!this.isPaused) {
               console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} maximum timeout reached, continuing to next chunk`);
@@ -1540,6 +1612,12 @@ class TTSService {
       currentChunkIndex: this.currentChunkIndex,
       pausePosition: this.pausePosition
     });
+    
+    // Check if TTS has been stopped - if so, don't resume
+    if (this.isStopped) {
+      console.log(`[${this.serviceType} TTS] TTS was stopped, not resuming`);
+      return false;
+    }
     
     // Check if we're actually paused
     const actuallyPaused = this.isActuallyPaused();
