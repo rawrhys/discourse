@@ -96,10 +96,25 @@ const SimpleImageService = {
             content = content.text;
           } else if (content.content) {
             content = content.content;
-          } else if (content.toString) {
+          } else if (content.main_content) {
+            content = content.main_content;
+          } else if (content.introduction) {
+            // Combine introduction and main_content if available
+            const intro = content.introduction || '';
+            const main = content.main_content || '';
+            const conclusion = content.conclusion || '';
+            content = [intro, main, conclusion].filter(Boolean).join(' ');
+          } else if (content.toString && content.toString() !== '[object Object]') {
             content = content.toString();
           } else {
-            content = JSON.stringify(content);
+            // Fallback: try to extract meaningful text from object
+            const textParts = [];
+            for (const key in content) {
+              if (typeof content[key] === 'string' && content[key].length > 10) {
+                textParts.push(content[key]);
+              }
+            }
+            content = textParts.join(' ') || '';
           }
         } else if (typeof content !== 'string') {
           content = String(content);
@@ -112,6 +127,11 @@ const SimpleImageService = {
       lessonTitle = lessonTitle ? String(lessonTitle) : '';
       courseSubject = courseSubject ? String(courseSubject) : '';
       coursePrompt = coursePrompt ? String(coursePrompt) : '';
+      
+      // Debug logging for content processing
+      if (process.env.NODE_ENV === 'development' && content && content.includes('[object Object]')) {
+        console.warn('[SimpleImageService] Detected [object Object] in content, this indicates improper content handling');
+      }
       
       var contextualQuery = this.createEnhancedContextAwareQuery(lessonTitle, courseSubject, content, coursePrompt);
       return this.search(contextualQuery, content, usedImageTitles, usedImageUrls, courseId, lessonId, true);

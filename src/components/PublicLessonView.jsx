@@ -198,7 +198,7 @@ const PublicLessonView = ({
         const result = await SimpleImageService.searchWithContext(
           lesson.title,
           subject,
-          lesson.content,
+          cleanAndCombineContent(lesson.content),
           usedImageTitles,
           usedImageUrls,
           courseId,

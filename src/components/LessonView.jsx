@@ -390,7 +390,7 @@ const LessonView = ({
       const result = await SimpleImageService.searchWithContext(
         propLesson?.title,
         subject, // Pass the course subject here
-        propLesson?.content,
+        cleanAndCombineContent(propLesson?.content),
         usedImageTitles,
         usedImageUrls,
         courseId,
@@ -781,7 +781,7 @@ const LessonView = ({
           const result = await SimpleImageService.searchWithContext(
             propLesson.title,
             subject, // Pass the course subject here
-            propLesson.content,
+            cleanAndCombineContent(propLesson.content),
             usedImageTitles,
             usedImageUrls,
             courseId,
