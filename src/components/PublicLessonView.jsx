@@ -242,6 +242,14 @@ const PublicLessonView = ({
       console.log('[PublicLessonView] TTS already playing, ignoring request');
       return;
     }
+
+    // Check if TTS service is ready for requests
+    if (!publicTTSService.isReadyForRequests()) {
+      console.log('[PublicLessonView] TTS service not ready, attempting to reset...');
+      publicTTSService.forceResetStoppingFlag();
+      // Wait a moment for the reset to take effect
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
     
     try {
       if (ttsStatus.isPaused) {

@@ -632,10 +632,18 @@ const LessonView = ({
   }, [quizData, propLesson, activeModule, handleQuizComplete]);
 
   // Handle TTS toggle
-  const handleTTSToggle = useCallback(() => {
+  const handleTTSToggle = useCallback(async () => {
     if (!propLesson) return;
     
     const contentStr = cleanAndCombineContent(propLesson.content);
+    
+    // Check if TTS service is ready for requests
+    if (!privateTTSService.isReadyForRequests()) {
+      console.log('[LessonView] TTS service not ready, attempting to reset...');
+      privateTTSService.forceResetStoppingFlag();
+      // Wait a moment for the reset to take effect
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
     
     if (ttsStatus.isPlaying) {
       privateTTSService.pause();

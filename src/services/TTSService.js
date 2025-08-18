@@ -595,9 +595,16 @@ class TTSService {
       return;
     }
     
-    // Prevent starting if we're stopping intentionally
+    // Prevent starting if we're stopping intentionally, but allow override after a reasonable delay
     if (this.isStoppingIntentionally) {
       console.warn(`[${this.serviceType} TTS] Service is stopping intentionally, ignoring speak request`);
+      // Force reset the flag if it's been stuck for too long (safety mechanism)
+      setTimeout(() => {
+        if (this.isStoppingIntentionally) {
+          console.log(`[${this.serviceType} TTS] Force resetting stuck stopping flag`);
+          this.isStoppingIntentionally = false;
+        }
+      }, 2000); // Force reset after 2 seconds
       return;
     }
     
@@ -929,10 +936,11 @@ class TTSService {
       } catch (error) {
         console.warn(`[${this.serviceType} TTS] Stop failed:`, error);
       } finally {
-        // Reset the flag after a longer delay to match lesson change timing
+        // Reset the flag immediately after a short delay
         setTimeout(() => {
           this.isStoppingIntentionally = false;
-        }, 1500); // Increased to 1.5 seconds to match lesson change timing
+          console.log(`[${this.serviceType} TTS] Stop flag reset, ready for new requests`);
+        }, 500); // Reduced to 500ms for faster recovery
       }
     }
   }
@@ -963,10 +971,11 @@ class TTSService {
       } catch (error) {
         console.warn(`[${this.serviceType} TTS] Stop and clear failed:`, error);
       } finally {
-        // Reset the flag after a longer delay to match lesson change timing
+        // Reset the flag immediately after a short delay
         setTimeout(() => {
           this.isStoppingIntentionally = false;
-        }, 1500); // Increased to 1.5 seconds to match lesson change timing
+          console.log(`[${this.serviceType} TTS] StopAndClear flag reset, ready for new requests`);
+        }, 500); // Reduced to 500ms for faster recovery
       }
     }
   }
@@ -974,7 +983,9 @@ class TTSService {
   // Reset TTS state - useful for recovery from inconsistent states
   reset() {
     console.log(`[${this.serviceType} TTS] Resetting TTS state`);
-    this.stop();
+    
+    // Force reset the stopping flag immediately
+    this.isStoppingIntentionally = false;
     
     // Cancel any ongoing speech synthesis
     if (window.speechSynthesis && window.speechSynthesis.speaking) {
@@ -985,6 +996,16 @@ class TTSService {
         console.warn(`[${this.serviceType} TTS] Failed to cancel speech synthesis during reset:`, error);
       }
     }
+    
+    // Reset all state
+    this.isPlaying = false;
+    this.isPaused = false;
+    this.errorCount = 0;
+    this.currentText = '';
+    this.currentLessonId = null;
+    this.fullText = '';
+    
+    console.log(`[${this.serviceType} TTS] Reset complete, ready for new requests`);
   }
 
   // Check if TTS is supported
@@ -1023,6 +1044,19 @@ class TTSService {
     this.isInitialized = false;
     this.initializationAttempts = 0;
     await this.initSpeech();
+  }
+
+  // Force reset the stopping flag (for manual recovery)
+  forceResetStoppingFlag() {
+    console.log(`[${this.serviceType} TTS] Force resetting stopping flag`);
+    this.isStoppingIntentionally = false;
+    this.isPlaying = false;
+    this.isPaused = false;
+  }
+
+  // Check if service is ready for new requests
+  isReadyForRequests() {
+    return this.isInitialized && !this.isStoppingIntentionally && !this.isPlaying;
   }
 }
 
