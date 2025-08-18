@@ -560,73 +560,9 @@ const PublicLessonView = ({
       .replace(/\*\*\*\*\*\*/g, '**');
   };
 
-  // Function to remove citations from text content
-  const removeCitations = (text) => {
-    if (!text) return text;
-    
-    const originalLength = text.length;
-    
-    let cleaned = text
-      // Remove all citation patterns [1], [2], etc.
-      .replace(/\[\d+\]/g, '')  // Remove [1], [2], [3], etc.
-      // Remove any remaining citation artifacts
-      .replace(/\s+\[\s*\d+\s*\]/g, '')  // Remove citations with spaces
-      .replace(/\[\s*\d+\s*\]\s+/g, '')  // Remove citations with spaces
-      // Clean up any double spaces that might result
-      .replace(/\s+/g, ' ')  // Normalize spaces
-      .trim();
-    
-    const cleanedLength = cleaned.length;
-    if (originalLength !== cleanedLength) {
-      console.log('[PublicLessonView] Citations removed:', {
-        originalLength,
-        cleanedLength,
-        removed: originalLength - cleanedLength
-      });
-    }
-    
-    return cleaned;
-  };
 
-  // Function to clean JSON structure and extract content
-  const cleanJsonStructure = (text) => {
-    if (!text) return text;
-    
-    // If it's a JSON string, extract the content
-    if (text.trim().startsWith('{') && text.trim().endsWith('}')) {
-      try {
-        // Replace smart quotes with standard quotes for JSON parsing
-        let cleanText = text
-          .replace(/"/g, '"')  // Replace smart left quotes
-          .replace(/"/g, '"')  // Replace smart right quotes
-          .replace(/"/g, '"')  // Replace smart left double quotes
-          .replace(/"/g, '"'); // Replace smart right double quotes
-        
-        const parsed = JSON.parse(cleanText);
-        const { introduction, main_content, conclusion } = parsed;
-        
-        // Combine all content parts
-        const combined = [introduction, main_content, conclusion]
-          .filter(Boolean)
-          .join('\n\n');
-        
-        console.log('[PublicLessonView] Successfully parsed JSON structure:', {
-          hasIntro: !!introduction,
-          hasMain: !!main_content,
-          hasConclusion: !!conclusion,
-          combinedLength: combined.length
-        });
-        
-        return combined;
-      } catch (error) {
-        console.warn('[PublicLessonView] Failed to parse JSON structure:', error);
-        console.log('[PublicLessonView] Raw text that failed to parse:', text.substring(0, 200) + '...');
-        return text;
-      }
-    }
-    
-    return text;
-  };
+
+
 
   // Function to ensure proper paragraph formatting and line breaks
   const fixParagraphFormatting = (text) => {
@@ -651,60 +587,56 @@ const PublicLessonView = ({
       return '';
     }
     
-    // Helper function to clean individual content parts
-    const cleanContentPart = (part) => {
-      if (!part) return '';
+    // Single-pass content cleaning function
+    const cleanContentOnce = (text) => {
+      if (!text) return '';
       
-      // Ensure part is a string before processing
-      const partString = typeof part === 'string' ? part : String(part);
+      // Ensure text is a string
+      const textString = typeof text === 'string' ? text : String(text);
       
-      console.log('[PublicLessonView] Cleaning content part:', {
-        originalLength: partString.length,
-        startsWithBrace: partString.trim().startsWith('{'),
-        endsWithBrace: partString.trim().endsWith('}')
+      console.log('[PublicLessonView] Processing content:', {
+        originalLength: textString.length,
+        isJson: textString.trim().startsWith('{') && textString.trim().endsWith('}')
       });
       
-      // First, clean JSON structure if present
-      let cleaned = cleanJsonStructure(partString);
+      let cleaned = textString;
       
-      // Remove all separator patterns and JSON structure words
+      // Step 1: Handle JSON structure if present
+      if (cleaned.trim().startsWith('{') && cleaned.trim().endsWith('}')) {
+        try {
+          // Replace smart quotes with standard quotes
+          cleaned = cleaned
+            .replace(/"/g, '"')
+            .replace(/"/g, '"')
+            .replace(/"/g, '"')
+            .replace(/"/g, '"');
+          
+          const parsed = JSON.parse(cleaned);
+          const { introduction, main_content, conclusion } = parsed;
+          
+          // Combine content parts
+          cleaned = [introduction, main_content, conclusion]
+            .filter(Boolean)
+            .join('\n\n');
+          
+          console.log('[PublicLessonView] JSON parsed successfully:', {
+            hasIntro: !!introduction,
+            hasMain: !!main_content,
+            hasConclusion: !!conclusion,
+            combinedLength: cleaned.length
+          });
+        } catch (error) {
+          console.warn('[PublicLessonView] JSON parsing failed, treating as regular text:', error);
+        }
+      }
+      
+      // Step 2: Remove all unwanted patterns in one pass
       cleaned = cleaned
+        // Remove separator patterns
         .replace(/Content generation completed\./g, '')
-        .replace(/\|\|\|---\|\|\|/g, '') // Remove |||---||| patterns
-        .replace(/\|\|\|/g, '') // Remove all remaining ||| patterns
-        // Remove JSON structure words that might appear in content
-        .replace(/\bintroduction\b/gi, '')
-        .replace(/\bmain_content\b/gi, '')
-        .replace(/\bconclusion\b/gi, '')
-        .replace(/\bmain\b/gi, '')
-        .replace(/\bintro\b/gi, '')
-        // Remove curly brackets and quotes that might be left over
-        .replace(/[{}"]/g, '')
-        // Remove any remaining JSON artifacts
-        .replace(/\bIntroduction\b/g, '')
-        .replace(/\bMain Content\b/g, '')
-        .replace(/\bConclusion\b/g, '')
-        .replace(/\bMain\b/g, '')
-        .replace(/\bIntro\b/g, '')
-        .trim();
-      
-      // Fix line breaks - convert \n to actual line breaks
-      cleaned = cleaned.replace(/\\n/g, '\n');
-      
-      // Remove citations from text content
-      cleaned = removeCitations(cleaned);
-      
-      // Fix paragraph formatting and line breaks
-      cleaned = fixParagraphFormatting(cleaned);
-      
-      // Then apply markdown processing
-      cleaned = fixMalformedMarkdown(cleaned);
-      
-      // Final cleanup of any separators that might have been reintroduced
-      cleaned = cleaned
         .replace(/\|\|\|---\|\|\|/g, '')
         .replace(/\|\|\|/g, '')
-        // Final cleanup of any remaining JSON artifacts
+        // Remove JSON structure words
         .replace(/\bintroduction\b/gi, '')
         .replace(/\bmain_content\b/gi, '')
         .replace(/\bconclusion\b/gi, '')
@@ -715,13 +647,26 @@ const PublicLessonView = ({
         .replace(/\bConclusion\b/g, '')
         .replace(/\bMain\b/g, '')
         .replace(/\bIntro\b/g, '')
-        .replace(/[{}"]/g, '')
-        // Final citation cleanup
+        // Remove citations
         .replace(/\[\d+\]/g, '')
-        .replace(/\s+/g, ' ')  // Normalize spaces
+        // Remove JSON artifacts
+        .replace(/[{}"]/g, '')
+        // Fix line breaks
+        .replace(/\\n/g, '\n')
+        // Normalize spaces
+        .replace(/\s+/g, ' ')
         .trim();
       
-      console.log('[PublicLessonView] Content part cleaned:', {
+      // Step 3: Apply paragraph formatting
+      cleaned = fixParagraphFormatting(cleaned);
+      
+      // Step 4: Apply markdown processing
+      cleaned = fixMalformedMarkdown(cleaned);
+      
+      // Step 5: Final cleanup
+      cleaned = cleanupRemainingAsterisks(cleaned);
+      
+      console.log('[PublicLessonView] Content processing complete:', {
         finalLength: cleaned.length,
         hasContent: cleaned.trim().length > 0
       });
@@ -729,88 +674,11 @@ const PublicLessonView = ({
       return cleaned;
     };
     
-    // Handle JSON string content
-    let parsedContent = content;
-    if (typeof content === 'string') {
-      try {
-        // Check if it's a JSON string
-        if (content.trim().startsWith('{') && content.trim().endsWith('}')) {
-          // Use the new JSON structure cleaning function
-          const cleaned = cleanJsonStructure(content);
-          const processed = cleanContentPart(cleaned);
-          const result = cleanupRemainingAsterisks(processed);
-          
-          console.log('[PublicLessonView] JSON string processed:', {
-            originalLength: content.length,
-            cleanedLength: result.length,
-            hasContent: result.trim().length > 0
-          });
-          return result;
-        } else {
-          // Regular string content
-          const cleaned = cleanContentPart(content);
-          const result = cleanupRemainingAsterisks(cleaned);
-          
-          // Final separator cleanup after all processing
-          const finalResult = result
-            .replace(/\|\|\|---\|\|\|/g, '')
-            .replace(/\|\|\|/g, '');
-          
-          console.log('[PublicLessonView] String content processed:', {
-            originalLength: content.length,
-            cleanedLength: finalResult.length,
-            hasContent: finalResult.trim().length > 0
-          });
-          return finalResult;
-        }
-      } catch (error) {
-        console.warn('[PublicLessonView] Failed to parse JSON, treating as regular string:', error);
-        // Fall back to treating as regular string
-        const cleaned = cleanContentPart(content);
-        const result = cleanupRemainingAsterisks(cleaned);
-        
-        const finalResult = result
-          .replace(/\|\|\|---\|\|\|/g, '')
-          .replace(/\|\|\|/g, '');
-        
-        return finalResult;
-      }
-    }
+    // Process content once
+    return cleanContentOnce(content);
+  };
     
-    // Handle object content (either parsed JSON or direct object)
-    if (typeof parsedContent === 'object' && parsedContent !== null) {
-      const { introduction, main_content, conclusion } = parsedContent;
-      
-      const cleanedIntro = introduction 
-        ? cleanupRemainingAsterisks(cleanContentPart(introduction))
-        : '';
 
-      const cleanedMain = main_content ? cleanupRemainingAsterisks(cleanContentPart(main_content)) : '';
-      const cleanedConclusion = conclusion ? cleanupRemainingAsterisks(cleanContentPart(conclusion)) : '';
-      
-      const result = [cleanedIntro, cleanedMain, cleanedConclusion]
-        .filter(Boolean)
-        .join('\n\n')
-        .replace(/\|\|\|---\|\|\|/g, '') // Final cleanup of any remaining patterns
-        .replace(/\|\|\|/g, ''); // Final cleanup of any remaining ||| patterns
-        
-      console.log('[PublicLessonView] Object content processed:', {
-        hasIntro: !!introduction,
-        hasMain: !!main_content,
-        hasConclusion: !!conclusion,
-        introLength: cleanedIntro.length,
-        mainLength: cleanedMain.length,
-        conclusionLength: cleanedConclusion.length,
-        resultLength: result.length,
-        hasContent: result.trim().length > 0
-      });
-      
-      return result;
-    }
-    
-    // Fallback for any other content type
-    console.warn('[PublicLessonView] Unknown content type:', typeof content);
-    return String(content);
   };
 
   // Early return if no lesson
