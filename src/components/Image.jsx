@@ -111,19 +111,27 @@ const Image = ({
     setIsLoaded(true);
     setIsError(false);
     
-    // Track performance
-    const loadTime = Date.now() - (imgRef.current?.dataset?.startTime || Date.now());
-    const wasPreloaded = imagePreloadService.isPreloaded(src);
-    
-    imagePerformanceMonitor.trackImageLoad(
-      src, 
-      loadTime, 
-      wasPreloaded,
-      0, // File size not available in browser
-      src.includes('webp') ? 'webp' : 'jpeg'
-    );
-    
-    imagePerformanceMonitor.trackPreloadPerformance(src, wasPreloaded, loadTime);
+    // Track performance (with error handling)
+    try {
+      const loadTime = Date.now() - (imgRef.current?.dataset?.startTime || Date.now());
+      const wasPreloaded = imagePreloadService?.isPreloaded?.(src) || false;
+      
+      if (imagePerformanceMonitor?.trackImageLoad) {
+        imagePerformanceMonitor.trackImageLoad(
+          src, 
+          loadTime, 
+          wasPreloaded,
+          0, // File size not available in browser
+          src.includes('webp') ? 'webp' : 'jpeg'
+        );
+      }
+      
+      if (imagePerformanceMonitor?.trackPreloadPerformance) {
+        imagePerformanceMonitor.trackPreloadPerformance(src, wasPreloaded, loadTime);
+      }
+    } catch (error) {
+      console.warn('[Image] Performance tracking error:', error);
+    }
   }, [src]);
 
   const handleError = useCallback((e) => {
@@ -131,8 +139,14 @@ const Image = ({
     setIsError(true);
     setIsLoaded(false);
     
-    // Track error
-    imagePerformanceMonitor.trackImageError(src, e.message || 'Unknown error');
+    // Track error (with error handling)
+    try {
+      if (imagePerformanceMonitor?.trackImageError) {
+        imagePerformanceMonitor.trackImageError(src, e.message || 'Unknown error');
+      }
+    } catch (error) {
+      console.warn('[Image] Error tracking failed:', error);
+    }
     
     // Create fallback placeholder
     const placeholderDiv = document.createElement('div');
