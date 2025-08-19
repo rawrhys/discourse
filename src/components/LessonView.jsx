@@ -8,6 +8,7 @@ import { API_BASE_URL, debugApiConfig, testBackendConnection } from '../config/a
 import LoadingIndicator from './LoadingIndicator';
 import logger from '../utils/logger';
 import SimpleImageService from '../services/SimpleImageService.js';
+import imagePreloadService from '../services/ImagePreloadService';
 import Image from './Image.jsx';
 
 import { privateTTSService } from '../services/TTSService.js';
@@ -1196,6 +1197,49 @@ const LessonView = ({
       abortController.abort();
     };
   }, [propLesson, subject, courseId, courseDescription]);
+
+  // Preload next lesson images for better performance
+  useEffect(() => {
+    if (!propLesson || !course) return;
+
+    const preloadNextImages = async () => {
+      try {
+        // Find current module and lesson index
+        const currentModuleIndex = course.modules.findIndex(module => 
+          module.lessons.some(lesson => lesson.id === propLesson.id)
+        );
+
+        if (currentModuleIndex === -1) return;
+
+        const currentModule = course.modules[currentModuleIndex];
+        const currentLessonIndex = currentModule.lessons.findIndex(lesson => lesson.id === propLesson.id);
+
+        if (currentLessonIndex === -1) return;
+
+        // Preload next 3 lessons in the current module
+        await imagePreloadService.preloadModuleImages(
+          currentModule, 
+          currentLessonIndex, 
+          3
+        );
+
+        // Also preload first lesson of next module if available
+        if (currentModuleIndex + 1 < course.modules.length) {
+          const nextModule = course.modules[currentModuleIndex + 1];
+          if (nextModule && nextModule.lessons && nextModule.lessons.length > 0) {
+            await imagePreloadService.preloadLessonImages(nextModule.lessons[0], 7);
+          }
+        }
+
+        console.log('[LessonView] Preloaded next lesson images');
+      } catch (error) {
+        console.warn('[LessonView] Image preloading error:', error);
+      }
+    };
+
+    // Run preloading in background
+    preloadNextImages();
+  }, [propLesson?.id, course]);
 
   // Clean up any remaining malformed asterisks after content is rendered
   useEffect(() => {

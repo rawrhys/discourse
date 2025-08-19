@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import SimpleImageService from '../services/SimpleImageService';
+import imagePreloadService from '../services/ImagePreloadService';
 import { publicTTSService } from '../services/TTSService';
 import PerformanceMonitorService from '../services/PerformanceMonitorService';
 import markdownService from '../services/MarkdownService';
@@ -437,6 +438,41 @@ const PublicLessonView = ({
       abortController.abort();
     };
   }, [lesson, subject, courseId, courseDescription]);
+
+  // Preload next lesson images for better performance (public courses)
+  useEffect(() => {
+    if (!lesson || !course) return;
+
+    const preloadNextImages = async () => {
+      try {
+        // Find current module and lesson index
+        const currentModuleIndex = course.modules.findIndex(module => 
+          module.lessons.some(lessonItem => lessonItem.id === lesson.id)
+        );
+
+        if (currentModuleIndex === -1) return;
+
+        const currentModule = course.modules[currentModuleIndex];
+        const currentLessonIndex = currentModule.lessons.findIndex(lessonItem => lessonItem.id === lesson.id);
+
+        if (currentLessonIndex === -1) return;
+
+        // Preload next 2 lessons in the current module (fewer for public courses)
+        await imagePreloadService.preloadModuleImages(
+          currentModule, 
+          currentLessonIndex, 
+          2
+        );
+
+        console.log('[PublicLessonView] Preloaded next lesson images');
+      } catch (error) {
+        console.warn('[PublicLessonView] Image preloading error:', error);
+      }
+    };
+
+    // Run preloading in background
+    preloadNextImages();
+  }, [lesson?.id, course]);
 
   // Academic references state
   const [academicReferences, setAcademicReferences] = useState([]);
