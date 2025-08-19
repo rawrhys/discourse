@@ -90,6 +90,43 @@ const publicLessonStyles = `
     margin: 1rem 0 !important;
   }
   
+  /* Force paragraph spacing even if CSS is overridden */
+  .lesson-content-text p {
+    margin-top: 1.5rem !important;
+    margin-bottom: 1.5rem !important;
+    line-height: 1.8 !important;
+    color: #374151 !important;
+    text-align: justify !important;
+    display: block !important;
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+  }
+  
+  /* Ensure proper spacing between paragraphs */
+  .lesson-content-text p + p {
+    margin-top: 2rem !important;
+  }
+  
+  /* Ensure proper spacing after headers */
+  .lesson-content-text h1 + p,
+  .lesson-content-text h2 + p,
+  .lesson-content-text h3 + p,
+  .lesson-content-text h4 + p,
+  .lesson-content-text h5 + p,
+  .lesson-content-text h6 + p {
+    margin-top: 1.5rem !important;
+  }
+  
+  /* Ensure proper spacing before headers */
+  .lesson-content-text p + h1,
+  .lesson-content-text p + h2,
+  .lesson-content-text p + h3,
+  .lesson-content-text p + h4,
+  .lesson-content-text p + h5,
+  .lesson-content-text p + h6 {
+    margin-top: 2.5rem !important;
+  }
+  
   /* Override any conflicting styles */
   .lesson-content-text .markdown-body p {
     margin-top: 1.5rem !important;
@@ -955,6 +992,17 @@ const PublicLessonView = ({
     
     // Enhanced paragraph structure and line break formatting
     if (parsedContent) {
+      // Force paragraph breaks for better readability
+      parsedContent = parsedContent
+        // Ensure proper spacing between paragraphs
+        .replace(/<\/p>\s*<p>/g, '</p>\n\n<p>')
+        .replace(/<\/p>\s*<h/g, '</p>\n\n<h')
+        .replace(/<\/h[1-6]>\s*<p>/g, '</h$1>\n\n<p>')
+        // Ensure proper spacing around horizontal rules
+        .replace(/<\/p>\s*<hr[^>]*>\s*<p>/g, '</p>\n\n<hr>\n\n<p>')
+        // Clean up excessive whitespace
+        .replace(/\n{3,}/g, '\n\n');
+      
       // If the content doesn't have paragraph tags, add them
       if (!parsedContent.includes('<p>')) {
         // Split by double newlines and wrap each section in <p> tags
@@ -970,10 +1018,6 @@ const PublicLessonView = ({
       } else {
         // If it already has paragraph tags, enhance the formatting
         parsedContent = parsedContent
-          // Ensure proper spacing between paragraphs
-          .replace(/<\/p>\s*<p>/g, '</p>\n\n<p>')
-          .replace(/<\/p>\s*<h/g, '</p>\n\n<h')
-          .replace(/<\/h[1-6]>\s*<p>/g, '</h$1>\n\n<p>')
           // Add line breaks within existing paragraphs for better readability
           .replace(/(<p[^>]*>)([^<]+)(<\/p>)/g, (match, openTag, content, closeTag) => {
             const formattedContent = content

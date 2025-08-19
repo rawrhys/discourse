@@ -291,6 +291,44 @@ class MarkdownService {
     return processedContent;
   }
 
+  // Post-process HTML to ensure proper paragraph structure
+  postprocessHTML(html) {
+    if (!html) return html;
+    
+    return html
+      // Ensure proper spacing between paragraphs
+      .replace(/<\/p>\s*<p>/g, '</p>\n\n<p>')
+      // Ensure proper spacing after headers
+      .replace(/<\/h([1-6])>\s*<p>/g, '</h$1>\n\n<p>')
+      // Ensure proper spacing before headers
+      .replace(/<\/p>\s*<h([1-6])>/g, '</p>\n\n<h$1>')
+      // Ensure proper spacing around horizontal rules
+      .replace(/<\/p>\s*<hr[^>]*>\s*<p>/g, '</p>\n\n<hr>\n\n<p>')
+      // Clean up excessive whitespace
+      .replace(/\n{3,}/g, '\n\n')
+      // Ensure proper line breaks within paragraphs
+      .replace(/(<p[^>]*>)([^<]+)(<\/p>)/g, (match, openTag, content, closeTag) => {
+        // Add line breaks after sentences for better readability
+        const formattedContent = content
+          .replace(/([.!?])\s+/g, '$1<br><br>') // Add double line breaks after sentences
+          .replace(/<br><br><br>/g, '<br><br>'); // Clean up excessive breaks
+        return `${openTag}${formattedContent}${closeTag}`;
+      })
+      .trim();
+  }
+
+  // Sanitize fallback content when parsing fails
+  sanitizeFallback(content) {
+    if (!content) return '';
+    
+    return content
+      .replace(/[<>]/g, '') // Remove any HTML tags
+      .replace(/\n\n+/g, '\n\n') // Normalize line breaks
+      .split('\n\n')
+      .map(paragraph => `<p>${paragraph.trim()}</p>`)
+      .join('\n\n');
+  }
+
   // Get performance metrics
   getPerformanceMetrics() {
     return {
