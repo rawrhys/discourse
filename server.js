@@ -1425,8 +1425,8 @@ Context: "${context.substring(0, 1000)}..."`;
           console.log(`[AIService] Selected Wikipedia image for "${subject}" (score ${best.score}): ${best.imageUrl}`);
           console.log(`[AIService] Wikipedia candidates found: ${candidates.length}, best score: ${best.score}`);
           const originalUrl = best.imageUrl;
-          // Return enhanced proxied URL with processing and caching
-          return { ...best, imageUrl: `/api/image/enhanced?url=${encodeURIComponent(originalUrl)}&size=medium&format=auto`, sourceUrlForCaching: originalUrl };
+                  // Return fast proxied URL for maximum speed
+        return { ...best, imageUrl: `/api/image/fast?url=${encodeURIComponent(originalUrl)}`, sourceUrlForCaching: originalUrl };
         }
 
         console.warn(`[AIService] No Wikipedia image found for "${subject}" after simplified search.`);
@@ -1527,8 +1527,8 @@ Context: "${context.substring(0, 1000)}..."`;
         console.log(`[AIService] Selected Pixabay image for "${subject}" (score ${best.score}): ${best.imageUrl}`);
         console.log(`[AIService] Pixabay candidates found: ${candidates.length}, best score: ${best.score}`);
         const originalUrl = best.imageUrl;
-        // Return enhanced proxied URL with processing and caching
-        return { ...best, imageUrl: `/api/image/enhanced?url=${encodeURIComponent(originalUrl)}&size=medium&format=auto`, sourceUrlForCaching: originalUrl };
+        // Return fast proxied URL for maximum speed
+        return { ...best, imageUrl: `/api/image/fast?url=${encodeURIComponent(originalUrl)}`, sourceUrlForCaching: originalUrl };
       }
       return null;
     } catch (e) {
@@ -3714,6 +3714,45 @@ app.get('/api/test', (req, res) => {
 // --- IMAGE PROXY ---
 app.get('/api/image/proxy', (req, res) => {
   enhancedImageProxy.serveImage(req, res);
+});
+
+// Fast image proxy - direct serving without processing
+app.get('/api/image/fast', async (req, res) => {
+  try {
+    const { url } = req.query;
+    if (!url) {
+      return res.status(400).json({ error: 'Missing URL parameter' });
+    }
+
+    // Security validation
+    const hostname = new URL(url).hostname;
+    const allowedDomains = ['upload.wikimedia.org', 'pixabay.com', 'images.unsplash.com'];
+    if (!allowedDomains.some(domain => hostname.endsWith(domain))) {
+      return res.status(403).json({ error: 'Forbidden domain' });
+    }
+
+    // Quick fetch without any processing
+    const response = await fetch(url, {
+      headers: { 'User-Agent': 'Fast-Image-Proxy/1.0' },
+      timeout: 3000
+    });
+
+    if (!response.ok) {
+      return res.status(response.status).json({ error: 'Failed to fetch image' });
+    }
+
+    const imageBuffer = Buffer.from(await response.arrayBuffer());
+    const contentType = response.headers.get('content-type') || 'image/jpeg';
+    
+    res.set('Content-Type', contentType);
+    res.set('Cache-Control', 'public, max-age=31536000, immutable');
+    res.set('X-Fast-Path', 'true');
+    res.send(imageBuffer);
+
+  } catch (error) {
+    console.error('[FastImageProxy] Error:', error);
+    res.status(500).json({ error: 'Image service unavailable' });
+  }
 });
 
 // Enhanced image proxy with additional features

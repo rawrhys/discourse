@@ -32,10 +32,10 @@ const Image = ({
   const createSrcSet = useCallback((baseUrl, format) => {
     if (!baseUrl || !isInView) return '';
     
-    // Use enhanced image proxy for better performance
-    const proxyUrl = baseUrl.replace('/images/', '/api/images/');
+    // Use fast image proxy for maximum speed
+    const proxyUrl = baseUrl.replace('/api/image/enhanced', '/api/image/fast');
     return imageSizes
-      .map(size => `${proxyUrl}?w=${size}&format=${format}&quality=85 ${size}w`)
+      .map(size => `${proxyUrl} ${size}w`) // No parameters for maximum speed
       .join(', ');
   }, [isInView, imageSizes]);
 
@@ -44,8 +44,8 @@ const Image = ({
     if (!imageUrl || lowQualitySrc || isLoaded) return;
     
     try {
-      // Create a very small version for blur-up effect with better quality settings
-      const placeholderUrl = `${imageUrl.replace('/images/', '/api/images/')}?w=40&format=jpeg&quality=30&blur=2`;
+      // Use fast path for placeholder - no processing needed
+      const placeholderUrl = imageUrl.replace('/api/image/enhanced', '/api/image/fast');
       setLowQualitySrc(placeholderUrl);
     } catch (error) {
       console.warn('[Image] Failed to generate low-quality placeholder:', error);

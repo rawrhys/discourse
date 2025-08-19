@@ -64,7 +64,7 @@ class EnhancedImageProxy {
   }
 
   /**
-   * Enhanced image proxy with processing and caching
+   * Enhanced image proxy with processing and caching - optimized for speed
    */
   async serveImage(req, res) {
     const startTime = Date.now();
@@ -109,7 +109,7 @@ class EnhancedImageProxy {
       // Generate cache key
       const cacheKey = this.generateCacheKey(url, finalSize, format, finalQuality);
       
-      // Check cache first
+      // Check cache first - serve immediately if found
       const cached = this.getFromCache(cacheKey);
       if (cached) {
         cacheStats.hits++;
@@ -119,6 +119,39 @@ class EnhancedImageProxy {
       }
 
       cacheStats.misses++;
+
+      // For medium size and auto format, try to serve original image directly for speed
+      if (finalSize === 'medium' && format === 'auto' && !w && !h && !quality) {
+        try {
+          // Quick fetch without processing for better performance
+          const response = await fetch(url, {
+            headers: { 'User-Agent': 'Enhanced-Image-Proxy/1.0' },
+            timeout: 3000 // Very fast timeout for speed
+          });
+
+          if (response.ok) {
+            const imageBuffer = Buffer.from(await response.arrayBuffer());
+            const contentType = response.headers.get('content-type') || 'image/jpeg';
+            
+            // Cache the original image
+            const originalImage = {
+              buffer: imageBuffer,
+              contentType: contentType,
+              size: imageBuffer.length,
+              originalSize: imageBuffer.length,
+              compressionRatio: '100.0'
+            };
+            
+            this.setCache(cacheKey, originalImage);
+            
+            const responseTime = Date.now() - startTime;
+            console.log(`[EnhancedImageProxy] FAST PATH: Served original ${url} in ${responseTime}ms`);
+            return this.serveProcessedImage(res, originalImage);
+          }
+        } catch (error) {
+          console.warn(`[EnhancedImageProxy] Fast path failed, falling back to processing: ${error.message}`);
+        }
+      }
 
       // Fetch and process image
       const processedImage = await this.processImage(url, finalSize, format, finalQuality);
@@ -140,14 +173,14 @@ class EnhancedImageProxy {
   }
 
   /**
-   * Process image with enhanced features
+   * Process image with enhanced features - optimized for speed
    */
   async processImage(url, size = 'medium', format = 'auto', quality = null) {
     try {
       // Fetch original image with timeout
       const response = await fetch(url, {
         headers: { 'User-Agent': 'Enhanced-Image-Proxy/1.0' },
-        timeout: 8000 // Reduced timeout for better performance
+        timeout: 5000 // Reduced timeout for speed
       });
 
       if (!response.ok) {
@@ -157,7 +190,18 @@ class EnhancedImageProxy {
       const imageBuffer = Buffer.from(await response.arrayBuffer());
       const contentType = response.headers.get('content-type') || 'image/jpeg';
 
-      // Process with Sharp
+      // For medium size and auto format, return original image for speed
+      if (size === 'medium' && format === 'auto' && !quality) {
+        return {
+          buffer: imageBuffer,
+          contentType: contentType,
+          size: imageBuffer.length,
+          originalSize: imageBuffer.length,
+          compressionRatio: '100.0'
+        };
+      }
+
+      // Process with Sharp only when necessary
       return await this.processWithSharp(imageBuffer, size, format, contentType, quality);
 
     } catch (error) {
