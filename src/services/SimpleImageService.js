@@ -93,7 +93,7 @@ const SimpleImageService = {
       console.log('[SimpleImageService] Searching for:', finalQuery);
 
       // Truncate content more aggressively for faster requests
-      const truncatedContent = content.length > 500 ? content.substring(0, 500) + '...' : content;
+      const truncatedContent = content.length > 300 ? content.substring(0, 300) + '...' : content;
       
       const requestBody = { 
         lessonTitle: finalQuery, 
@@ -105,9 +105,9 @@ const SimpleImageService = {
         disableModeration: true
       };
 
-      // Add timeout to prevent hanging requests - increased to 10 seconds for better reliability
+      // Add timeout to prevent hanging requests - reduced to 5 seconds for faster response
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
       
       const response = await fetch(searchUrl, {
         method: 'POST',
@@ -182,9 +182,9 @@ const SimpleImageService = {
         // Ensure content is a string
           content = String(content);
 
-        // Limit content length to prevent overly large requests - reduced to 500 chars
-        if (content.length > 500) {
-          content = content.substring(0, 500) + '...';
+        // Limit content length to prevent overly large requests - reduced to 300 chars
+        if (content.length > 300) {
+          content = content.substring(0, 300) + '...';
         }
       } else {
         content = '';
@@ -263,6 +263,18 @@ const SimpleImageService = {
   generateOptimizedUrl(baseUrl, options = {}) {
     if (!baseUrl) return baseUrl;
 
+    // Validate URL format
+    if (typeof baseUrl !== 'string' || baseUrl.trim() === '') {
+      console.warn('[SimpleImageService] Invalid baseUrl provided:', baseUrl);
+      return baseUrl;
+    }
+
+    // Check if URL is already a data URL or relative path
+    if (baseUrl.startsWith('data:') || baseUrl.startsWith('blob:') || baseUrl.startsWith('/')) {
+      console.log('[SimpleImageService] Skipping optimization for data/blob/relative URL:', baseUrl);
+      return baseUrl;
+    }
+
     const {
       width,
       height,
@@ -272,7 +284,13 @@ const SimpleImageService = {
     } = options;
 
     try {
-      const url = new URL(baseUrl);
+      // Ensure URL has protocol
+      let urlToProcess = baseUrl;
+      if (!urlToProcess.startsWith('http://') && !urlToProcess.startsWith('https://')) {
+        urlToProcess = 'https://' + urlToProcess;
+      }
+      
+      const url = new URL(urlToProcess);
       
       // Add size parameters if provided
       if (width) {
@@ -299,7 +317,7 @@ const SimpleImageService = {
 
       return url.toString();
     } catch (error) {
-      console.warn('[SimpleImageService] Failed to generate optimized URL:', error);
+      console.warn('[SimpleImageService] Failed to generate optimized URL for:', baseUrl, error);
       return baseUrl; // Fallback to original URL
     }
   },

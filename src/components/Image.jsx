@@ -38,7 +38,7 @@ const Image = ({
 
   // Generate responsive image URLs with WebP support
   const responsiveUrls = useMemo(() => {
-    if (!src || !responsive) return null;
+    if (!src || !responsive || typeof src !== 'string') return null;
     
     try {
       return SimpleImageService.generateResponsiveUrls(src, {
@@ -47,7 +47,7 @@ const Image = ({
         quality: 80
       });
     } catch (error) {
-      console.warn('[Image] Failed to generate responsive URLs:', error);
+      console.warn('[Image] Failed to generate responsive URLs for:', src, error);
       return null;
     }
   }, [src, responsive]);
@@ -70,7 +70,7 @@ const Image = ({
 
   // Generate low-quality placeholder with better error handling - only if not already loaded
   const generateLowQualityPlaceholder = useCallback(async (imageUrl) => {
-    if (!imageUrl || lowQualitySrc || isLoaded) return;
+    if (!imageUrl || lowQualitySrc || isLoaded || typeof imageUrl !== 'string') return;
     
     try {
       // Use optimized thumbnail for placeholder
@@ -81,7 +81,7 @@ const Image = ({
       });
       setLowQualitySrc(placeholderUrl);
     } catch (error) {
-      console.warn('[Image] Failed to generate low-quality placeholder:', error);
+      console.warn('[Image] Failed to generate low-quality placeholder for:', imageUrl, error);
       // Fallback to original URL
       setLowQualitySrc(imageUrl);
     }
