@@ -4839,8 +4839,8 @@ app.get(['/assets/images/discourse logo.png', '/assets/images/discourse%20logo.p
   }
 });
 
-// Serve static assets from the public_html directory in home directory
-const buildPath = process.env.FRONTEND_PATH || path.join(process.env.HOME || process.env.USERPROFILE || '/root', 'public_html');
+// Serve static assets from the dist directory (local build) or public_html directory
+const buildPath = process.env.FRONTEND_PATH || path.join(__dirname, 'dist') || path.join(process.env.HOME || process.env.USERPROFILE || '/root', 'public_html');
 app.use(express.static(buildPath, {
   // Set cache control for assets. Index is handled separately.
   setHeaders: (res, filePath) => {
