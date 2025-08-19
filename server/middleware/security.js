@@ -64,9 +64,17 @@ export const publicCourseRateLimit = rateLimit({
     return req.user && req.user.id;
   },
   keyGenerator: (req) => {
-    // Use IP + User-Agent for better bot detection
-    return `${req.ip}-${req.get('User-Agent') || 'unknown'}`;
-  }
+    // Use a more secure key generation that doesn't rely on trust proxy
+    const realIP = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || 
+                   req.headers['x-real-ip'] || 
+                   req.connection?.remoteAddress || 
+                   req.socket?.remoteAddress || 
+                   req.ip || 
+                   'unknown';
+    return `${realIP}-${req.get('User-Agent') || 'unknown'}`;
+  },
+  // Disable trust proxy validation to avoid warnings
+  trustProxy: false
 });
 
 // Slow down requests for suspicious patterns

@@ -56,7 +56,18 @@ import publicCourseSessionService from './src/services/PublicCourseSessionServic
 // app.use(compression());
 
 // Set reverse proxy trust for correct protocol/IP detection
-app.set('trust proxy', Number(process.env.TRUST_PROXY || 1));
+// Use a more secure trust proxy setting to avoid rate limiter warnings
+const trustProxySetting = process.env.TRUST_PROXY;
+if (trustProxySetting === 'true' || trustProxySetting === '1') {
+  // Only trust the first proxy (most secure)
+  app.set('trust proxy', 1);
+} else if (trustProxySetting === 'false' || trustProxySetting === '0') {
+  // Don't trust any proxies
+  app.set('trust proxy', false);
+} else {
+  // Default: trust only the first proxy
+  app.set('trust proxy', 1);
+}
 
 // CORS: explicit allowed origins with credentials
 const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || 'https://thediscourse.ai,https://api.thediscourse.ai')
@@ -4823,8 +4834,8 @@ app.get(['/assets/images/discourse logo.png', '/assets/images/discourse%20logo.p
   }
 });
 
-// Serve static assets from the 'dist' directory
-const buildPath = path.join(__dirname, 'dist');
+// Serve static assets from the public_html directory in home directory
+const buildPath = process.env.FRONTEND_PATH || path.join(process.env.HOME || process.env.USERPROFILE || '/root', 'public_html');
 app.use(express.static(buildPath, {
   // Set cache control for assets. Index is handled separately.
   setHeaders: (res, filePath) => {
@@ -4906,7 +4917,7 @@ app.use('/images', express.static(imageLibraryDir, {
 
 
 
-app.set('trust proxy', true);
+// Trust proxy setting already configured above
 
 // --- IMAGE CACHE HELPERS ---
 const imageCacheDir = path.resolve(__dirname, 'data', 'image_cache');
@@ -5571,13 +5582,30 @@ app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api/') || req.path.startsWith('/images/') || req.path.startsWith('/cached-images/')) {
     return next();
   }
+  
+  // Check if the public_html directory and index.html exist
+  const indexPath = path.join(buildPath, 'index.html');
+  if (!fs.existsSync(buildPath) || !fs.existsSync(indexPath)) {
+    console.warn(`[SERVER] Frontend not found - ${buildPath}/index.html not found`);
+    return res.status(503).json({
+      error: 'Frontend not available',
+      message: `The application frontend has not been found at ${buildPath}. Please ensure the frontend is built and deployed to the correct location.`,
+      timestamp: new Date().toISOString()
+    });
+  }
+  
   try {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
-    return res.sendFile(path.join(buildPath, 'index.html'));
+    return res.sendFile(indexPath);
   } catch (e) {
     console.error('[SERVER] Failed to serve SPA index.html:', e.message);
+    return res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to serve frontend application',
+      timestamp: new Date().toISOString()
+    });
   }
 });
 
