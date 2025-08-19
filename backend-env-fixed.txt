@@ -1,0 +1,25 @@
+# Backend Server Configuration
+PORT=4003
+HOST=0.0.0.0
+NODE_ENV=production
+
+# Frontend API Configuration (use your backend server IP)
+VITE_API_BASE_URL=https://thediscourse.ai/
+
+# Backend Supabase Configuration (required for auth)
+SUPABASE_URL=https://gaapqvkjblqvpokmhlmh.supabase.co
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdhYXBxdmtqYmxxdnBva21obG1oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQzMDg5NzksImV4cCI6MjA2OTg4NDk3OX0.aAtqS5H0JhNHgatPEjJ8iJRFnZumyaRYxlSA9dkkfQE
+
+# Frontend Supabase Configuration
+VITE_SUPABASE_URL=https://gaapqvkjblqvpokmhlmh.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdhYXBxdmtqYmxxdnBva21obG1oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQzMDg5NzksImV4cCI6MjA2OTg4NDk3OX0.aAtqS5H0JhNHgatPEjJ8iJRFnZumyaRYxlSA9dkkfQE
+
+# JWT Configuration
+JWT_SECRET=a5c8f7e6b4d2a1f3c9e8b7d6a5c4f3e2d1a0b9c8d7f6e5a4b3c2d1e0f9a8b7c6
+
+# AI Service Configuration
+MISTRAL_API_KEY=U6H9sL8iT1oGHb0UGrcP2LCtS1LArxcD
+
+# Stripe Configuration
+STRIPE_SECRET_KEY=sk_live_51RdxSMFNQj18MEDK7VYVU09KMVQrIKn3PsBU4GWX4VnHzaauUk1FP11XCmzsuVUdID8EqyTTRzKPdSvz
+STRIPE_WEBHOOK_SECRET=pk_live_51RdxSMFNQj18MEDKrhjj7o2yqul1fICsuE1LfWyio6Unf2C1G00tGDilwXaJVh6jQ0FT1nFD4nfQ6
