@@ -5,41 +5,34 @@ const SimpleImageService = {
   // Cache for image search results
   imageCache: new Map(),
   cacheTimeout: 5 * 60 * 1000, // 5 minutes
-  
+
   // Test server connectivity
   async testServerConnection() {
     try {
-      const testUrl = `${API_BASE_URL}/api/test`;
-      console.log('[SimpleImageService] Testing server connection at:', testUrl);
-      
-      const response = await fetch(testUrl, {
-        method: 'GET',
+      const response = await fetch(`${API_BASE_URL}/api/image-search/search`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lessonTitle: 'test', content: '', usedImageTitles: [], usedImageUrls: [] })
       });
-      
-      if (response.ok) {
-        const data = await response.json();
-        console.log('[SimpleImageService] Server test successful:', data);
-        return true;
-      }
-      console.warn('[SimpleImageService] Server test failed:', response.status);
-      return false;
-      
+      return response.ok;
     } catch (error) {
       console.error('[SimpleImageService] Server test error:', error);
       return false;
     }
   },
 
-  // Get cache key for search
+  // Get cache key for search - optimized for better performance
   getCacheKey(lessonTitle, content, usedImageTitles, usedImageUrls, courseId, lessonId) {
     // Ensure arrays are actually arrays before calling slice
-    const safeUsedImageTitles = Array.isArray(usedImageTitles) ? usedImageTitles.slice(0, 5) : [];
-    const safeUsedImageUrls = Array.isArray(usedImageUrls) ? usedImageUrls.slice(0, 5) : [];
-    
+    const safeUsedImageTitles = Array.isArray(usedImageTitles) ? usedImageTitles.slice(0, 3) : [];
+    const safeUsedImageUrls = Array.isArray(usedImageUrls) ? usedImageUrls.slice(0, 3) : [];
+
+    // Truncate content more aggressively for faster cache key generation
+    const truncatedContent = content ? content.substring(0, 50) : '';
+
     const key = JSON.stringify({
-      lessonTitle,
-      content: content ? content.substring(0, 100) : '', // Truncate content for cache key
+      lessonTitle: lessonTitle ? lessonTitle.substring(0, 100) : '',
+      content: truncatedContent,
       usedImageTitles: safeUsedImageTitles,
       usedImageUrls: safeUsedImageUrls,
       courseId,
@@ -89,76 +82,80 @@ const SimpleImageService = {
       }
 
       const searchUrl = `${API_BASE_URL}/api/image-search/search`;
-      
+
+      // Optimize query - use shorter, more focused query
       let finalQuery = lessonTitle;
       if (forceUnique) {
-        const uniqueStr = Math.random().toString(36).substring(2, 10);
+        const uniqueStr = Math.random().toString(36).substring(2, 8); // Shorter unique string
         finalQuery = `${lessonTitle} ${uniqueStr}`;
       }
-      
+
       console.log('[SimpleImageService] Searching for:', finalQuery);
-      
-      const requestBody = { 
-        lessonTitle: finalQuery, 
-        content, 
-        usedImageTitles, 
-        usedImageUrls, 
-        courseId, 
+
+      // Truncate content more aggressively for faster requests
+      const truncatedContent = content.length > 500 ? content.substring(0, 500) + '...' : content;
+
+      const requestBody = {
+        lessonTitle: finalQuery,
+        content: truncatedContent,
+        usedImageTitles,
+        usedImageUrls,
+        courseId,
         lessonId,
         disableModeration: true
       };
-      
-      // Add timeout to prevent hanging requests
+
+      // Add timeout to prevent hanging requests - reduced to 8 seconds
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-      
+      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+
       const response = await fetch(searchUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody),
         signal: controller.signal
       });
-      
+
       clearTimeout(timeoutId);
-      
+
       if (!response.ok) {
         if (response.status === 404) {
           const errorText = await response.text();
           console.log(`[SimpleImageService] No suitable image found. Server response: ${errorText}`);
           return null;
         }
-        
+
         console.warn(`[SimpleImageService] Server returned ${response.status}`);
         const errorText = await response.text();
         console.error('[SimpleImageService] Error response body:', errorText);
         throw new Error(`Image search failed: ${response.status} - ${errorText}`);
       }
-      
+
       const data = await response.json();
       console.log('[SimpleImageService] Found image:', data.title);
-      
+
       // Cache the result if not forceUnique
       if (!forceUnique) {
         const cacheKey = this.getCacheKey(lessonTitle, content, usedImageTitles, usedImageUrls, courseId, lessonId);
         this.setCache(cacheKey, data);
       }
-      
+
       return data;
-      
+
     } catch (error) {
       if (error.name === 'AbortError') {
-        console.error('[SimpleImageService] Search timeout after 10 seconds');
+        console.error('[SimpleImageService] Search timeout after 8 seconds');
       } else {
         console.error('[SimpleImageService] Search failed:', error.message);
       }
-      
+
       // Return null to let the calling code handle the error appropriately
       return null;
     }
   },
 
-  // Enhanced search with course context
-  searchWithContext: function(lessonTitle, courseSubject, content, usedImageTitles, usedImageUrls, courseId, lessonId, coursePrompt = null) {
+  // Enhanced search with course context - optimized
+  searchWithContext: function(lessonTitle, courseSubject, content, usedImageTitles, usedImageUrls, courseId = undefined, lessonId = undefined, coursePrompt = null) {
     try {
       // Ensure all parameters are properly typed
       lessonTitle = lessonTitle || '';
@@ -181,41 +178,44 @@ const SimpleImageService = {
             content = JSON.stringify(content);
           }
         }
-        
+
         // Ensure content is a string
         content = String(content);
-        
-        // Limit content length to prevent overly large requests
-        if (content.length > 1000) {
-          content = content.substring(0, 1000) + '...';
+
+        // Limit content length to prevent overly large requests - reduced to 500 chars
+        if (content.length > 500) {
+          content = content.substring(0, 500) + '...';
         }
       } else {
         content = '';
       }
 
-      // Create enhanced query with course context
+      // Create enhanced query with course context - simplified for better performance
       let enhancedQuery = lessonTitle;
       if (courseSubject && courseSubject !== lessonTitle) {
+        // Use shorter, more focused query
         enhancedQuery = `${courseSubject} ${lessonTitle}`;
       }
-      
+
       if (coursePrompt) {
-        enhancedQuery = `${coursePrompt} ${enhancedQuery}`;
+        // Truncate course prompt to prevent overly long queries
+        const truncatedPrompt = coursePrompt.length > 100 ? coursePrompt.substring(0, 100) + '...' : coursePrompt;
+        enhancedQuery = `${truncatedPrompt} ${enhancedQuery}`;
       }
 
       console.log('[SimpleImageService] Enhanced query created:', enhancedQuery);
-      
+
       return this.search(enhancedQuery, content, usedImageTitles, usedImageUrls, courseId, lessonId);
-      
+
     } catch (error) {
       console.error('[SimpleImageService] Enhanced search failed:', error);
       // Fallback to basic search with safe parameters
       return this.search(
-        lessonTitle || '', 
-        typeof content === 'string' ? content : '', 
-        Array.isArray(usedImageTitles) ? usedImageTitles : [], 
-        Array.isArray(usedImageUrls) ? usedImageUrls : [], 
-        courseId, 
+        lessonTitle || '',
+        typeof content === 'string' ? content : '',
+        Array.isArray(usedImageTitles) ? usedImageTitles : [],
+        Array.isArray(usedImageUrls) ? usedImageUrls : [],
+        courseId,
         lessonId
       );
     }
@@ -232,7 +232,7 @@ const SimpleImageService = {
     const now = Date.now();
     let validEntries = 0;
     let expiredEntries = 0;
-    
+
     for (const [key, value] of this.imageCache.entries()) {
       if (now - value.timestamp < this.cacheTimeout) {
         validEntries++;
@@ -240,7 +240,7 @@ const SimpleImageService = {
         expiredEntries++;
       }
     }
-    
+
     return {
       totalEntries: this.imageCache.size,
       validEntries,

@@ -3,8 +3,9 @@ class ImagePreloadService {
     this.preloadedImages = new Set();
     this.preloadQueue = [];
     this.isProcessing = false;
-    this.maxConcurrent = 3; // Limit concurrent preloads
+    this.maxConcurrent = 2; // Reduced from 3 to 2 for better performance
     this.activePreloads = 0;
+    this.preloadCache = new Map(); // Add cache to prevent duplicate preloads
   }
 
   /**
@@ -16,6 +17,12 @@ class ImagePreloadService {
   async preloadImage(imageUrl, priority = 5) {
     if (!imageUrl || this.preloadedImages.has(imageUrl)) {
       return true; // Already preloaded or invalid URL
+    }
+
+    // Check if already in cache
+    if (this.preloadCache.has(imageUrl)) {
+      console.log(`[ImagePreloadService] Image already in cache: ${imageUrl}`);
+      return this.preloadCache.get(imageUrl);
     }
 
     // Add to queue with priority
@@ -49,11 +56,15 @@ class ImagePreloadService {
 
       this.preloadSingleImage(item.url)
         .then(success => {
+          // Cache the result
+          this.preloadCache.set(item.url, success);
           if (item.resolve) {
             item.resolve(success);
           }
         })
         .catch(() => {
+          // Cache failed result to prevent retries
+          this.preloadCache.set(item.url, false);
           if (item.resolve) {
             item.resolve(false);
           }
@@ -80,14 +91,14 @@ class ImagePreloadService {
       link.as = 'image';
       link.href = imageUrl;
       link.fetchPriority = 'high';
-      
+
       // Add to head
       document.head.appendChild(link);
 
       // Wait for load or error
       return new Promise((resolve) => {
         const img = new Image();
-        
+
         img.onload = () => {
           this.preloadedImages.add(imageUrl);
           document.head.removeChild(link);
@@ -117,7 +128,9 @@ class ImagePreloadService {
    * @returns {Promise<Array>} - Array of success statuses
    */
   async preloadImages(imageUrls, priority = 5) {
-    const promises = imageUrls.map(url => this.preloadImage(url, priority));
+    // Deduplicate URLs first
+    const uniqueUrls = [...new Set(imageUrls)];
+    const promises = uniqueUrls.map(url => this.preloadImage(url, priority));
     return Promise.all(promises);
   }
 
@@ -127,14 +140,15 @@ class ImagePreloadService {
    * @returns {boolean} - Whether image is preloaded
    */
   isPreloaded(imageUrl) {
-    return this.preloadedImages.has(imageUrl);
+    return this.preloadedImages.has(imageUrl) || this.preloadCache.has(imageUrl);
   }
 
   /**
-   * Clear preloaded images cache
+   * Clear cache
    */
   clearCache() {
     this.preloadedImages.clear();
+    this.preloadCache.clear();
     this.preloadQueue = [];
     console.log('[ImagePreloadService] Cache cleared');
   }
@@ -146,6 +160,7 @@ class ImagePreloadService {
   getStats() {
     return {
       preloadedCount: this.preloadedImages.size,
+      cachedCount: this.preloadCache.size,
       queueLength: this.preloadQueue.length,
       activePreloads: this.activePreloads,
       isProcessing: this.isProcessing
@@ -163,11 +178,14 @@ class ImagePreloadService {
       return [];
     }
 
-    const promises = imageUrls.map((url, index) => {
+    // Deduplicate URLs first
+    const uniqueUrls = [...new Set(imageUrls)];
+
+    const promises = uniqueUrls.map((url, index) => {
       // Calculate priority based on distance from visible image
       const distance = Math.abs(index - visibleIndex);
       let priority;
-      
+
       if (distance === 0) {
         priority = 10; // Currently visible
       } else if (distance === 1) {
@@ -185,7 +203,6 @@ class ImagePreloadService {
   }
 }
 
-// Create singleton instance
+// Export singleton instance
 const imagePreloadService = new ImagePreloadService();
-
 export default imagePreloadService;

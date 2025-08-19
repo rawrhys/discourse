@@ -3,21 +3,21 @@ import PropTypes from 'prop-types';
 
 const Image = ({ 
   src, 
-  alt, 
+  alt = '', 
   className = '', 
   style = {}, 
   lazy = true, 
-  placeholder, 
-  preload = false,
-  sizes = '(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw',
+  preload = false, 
   priority = false,
+  placeholder = null,
   ...props 
 }) => {
   const [isLoaded, setIsLoaded] = useState(false);
-  const [isInView, setIsInView] = useState(!lazy || preload);
   const [isError, setIsError] = useState(false);
+  const [isInView, setIsInView] = useState(!lazy || preload);
   const [lowQualitySrc, setLowQualitySrc] = useState(null);
   const [aspectRatio, setAspectRatio] = useState(null);
+  
   const pictureRef = useRef(null);
   const imgRef = useRef(null);
   const preloadLinkRef = useRef(null);
@@ -25,9 +25,9 @@ const Image = ({
   // Determine if we should show the image
   const shouldShowImage = isInView || preload;
 
-  // Optimized responsive image sizes - reduced for better performance
-  const imageSizes = useMemo(() => [480, 800, 1200], []);
-  
+  // Reduced image sizes for better performance - only 2 sizes instead of 3
+  const imageSizes = useMemo(() => [800, 1200], []);
+
   // Create optimized srcSet for different formats with caching
   const createSrcSet = useCallback((baseUrl, format) => {
     if (!baseUrl || !isInView) return '';
@@ -39,9 +39,9 @@ const Image = ({
       .join(', ');
   }, [isInView, imageSizes]);
 
-  // Generate low-quality placeholder with better error handling
+  // Generate low-quality placeholder with better error handling - only if not already loaded
   const generateLowQualityPlaceholder = useCallback(async (imageUrl) => {
-    if (!imageUrl || lowQualitySrc) return;
+    if (!imageUrl || lowQualitySrc || isLoaded) return;
     
     try {
       // Create a very small version for blur-up effect with better quality settings
@@ -50,7 +50,7 @@ const Image = ({
     } catch (error) {
       console.warn('[Image] Failed to generate low-quality placeholder:', error);
     }
-  }, [lowQualitySrc]);
+  }, [lowQualitySrc, isLoaded]);
 
   // Optimized intersection observer with better settings
   useEffect(() => {
@@ -83,12 +83,12 @@ const Image = ({
     };
   }, [lazy, preload]);
 
-  // Generate low-quality placeholder when image comes into view
+  // Generate low-quality placeholder when image comes into view - only once
   useEffect(() => {
-    if (isInView && src && !lowQualitySrc) {
+    if (isInView && src && !lowQualitySrc && !isLoaded) {
       generateLowQualityPlaceholder(src);
     }
-  }, [isInView, src, lowQualitySrc, generateLowQualityPlaceholder]);
+  }, [isInView, src, lowQualitySrc, isLoaded, generateLowQualityPlaceholder]);
 
   // Track start time when image begins loading
   useEffect(() => {
@@ -97,9 +97,9 @@ const Image = ({
     }
   }, [shouldShowImage]);
 
-  // Improved preload strategy with cleanup
+  // Improved preload strategy with cleanup - only preload if not already loaded
   useEffect(() => {
-    if (priority && src && shouldShowImage) {
+    if (priority && src && shouldShowImage && !isLoaded) {
       // Remove existing preload link if any
       if (preloadLinkRef.current) {
         document.head.removeChild(preloadLinkRef.current);
@@ -120,7 +120,7 @@ const Image = ({
         }
       };
     }
-  }, [priority, src, shouldShowImage]);
+  }, [priority, src, shouldShowImage, isLoaded]);
 
   const handleLoad = useCallback(() => {
     setIsLoaded(true);
@@ -156,9 +156,16 @@ const Image = ({
     }
   }, [src]);
 
-  // Memoized srcSet creation for better performance
-  const webpSrcSet = useMemo(() => createSrcSet(src, 'webp'), [createSrcSet, src]);
-  const jpegSrcSet = useMemo(() => createSrcSet(src, 'jpeg'), [createSrcSet, src]);
+  // Memoized srcSet creation for better performance - only create if needed
+  const webpSrcSet = useMemo(() => {
+    if (!shouldShowImage || isLoaded) return '';
+    return createSrcSet(src, 'webp');
+  }, [createSrcSet, src, shouldShowImage, isLoaded]);
+  
+  const jpegSrcSet = useMemo(() => {
+    if (!shouldShowImage || isLoaded) return '';
+    return createSrcSet(src, 'jpeg');
+  }, [createSrcSet, src, shouldShowImage, isLoaded]);
 
   const actualSrc = shouldShowImage ? src : 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
 
@@ -178,59 +185,23 @@ const Image = ({
       className={`image-container ${className}`} 
       style={containerStyle}
     >
-      {/* Low-quality placeholder for blur-up effect */}
-      {lowQualitySrc && !isLoaded && (
-        <img 
+      {/* Low-quality placeholder for blur-up effect - only show if not loaded */}
+      {!isLoaded && lowQualitySrc && !placeholder && (
+        <img
           src={lowQualitySrc}
           alt=""
-          className="absolute inset-0 w-full h-full object-cover filter blur-lg scale-110"
-          style={{ 
-            zIndex: 1,
-            opacity: 0.8,
-            transition: 'opacity 0.3s ease-out'
-          }}
-          onLoad={() => {
-            // Fade out placeholder when main image loads
-            const placeholder = document.querySelector('.blur-lg');
-            if (placeholder) {
-              placeholder.style.opacity = '0';
-            }
-          }}
+          className="absolute inset-0 w-full h-full object-cover blur-sm scale-110"
+          style={{ zIndex: 1 }}
+          aria-hidden="true"
         />
       )}
 
-      {/* Custom placeholder if provided */}
-      {placeholder && !isLoaded && !lowQualitySrc && (
-        <img 
-          src={placeholder} 
-          alt="placeholder" 
-          className="absolute inset-0 w-full h-full object-cover filter blur-md" 
-          style={{ zIndex: 1 }} 
-        />
-      )}
-
-      {/* Progressive loading skeleton with better styling */}
+      {/* Progressive loading skeleton - only show if not loaded and no placeholder */}
       {!isLoaded && !lowQualitySrc && !placeholder && (
-        <div 
+        <div
           className="absolute inset-0 bg-gradient-to-br from-gray-200 to-gray-300 animate-pulse"
           style={{ zIndex: 1 }}
         />
-      )}
-
-      {/* Main image with responsive sources */}
-      {shouldShowImage && (
-        <>
-          <source 
-            type="image/webp" 
-            srcSet={webpSrcSet} 
-            sizes={sizes}
-          />
-          <source 
-            type="image/jpeg" 
-            srcSet={jpegSrcSet} 
-            sizes={sizes}
-          />
-        </>
       )}
 
       {/* Main image element with better loading attributes */}
@@ -244,23 +215,21 @@ const Image = ({
           transition-all duration-300 ease-out
           ${isLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-105'}
           ${isError ? 'hidden' : ''}
+          w-full h-full object-cover
         `}
-        onLoad={handleLoad}
-        onError={handleError}
-        style={{ 
-          width: '100%', 
-          height: 'auto', 
-          borderRadius: '8px', 
-          position: 'relative', 
+        style={{
+          position: 'relative',
           zIndex: 2,
           ...(isLoaded ? {} : { filter: 'blur(1px)' })
         }}
+        onLoad={handleLoad}
+        onError={handleError}
         {...props}
       />
 
       {/* Error state with better styling */}
       {isError && (
-        <div 
+        <div
           className="absolute inset-0 bg-gradient-to-br from-red-50 to-red-100 border-2 border-red-200 rounded-lg flex items-center justify-center"
           style={{ zIndex: 3 }}
         >
@@ -280,10 +249,9 @@ Image.propTypes = {
   className: PropTypes.string,
   style: PropTypes.object,
   lazy: PropTypes.bool,
-  placeholder: PropTypes.string,
   preload: PropTypes.bool,
-  sizes: PropTypes.string,
-  priority: PropTypes.bool
+  priority: PropTypes.bool,
+  placeholder: PropTypes.string
 };
 
 export default Image; 
