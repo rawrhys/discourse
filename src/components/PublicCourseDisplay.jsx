@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, memo, useRef, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useCallback, memo, useRef, Suspense, lazy } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import PublicLessonView from './PublicLessonView';
 import './CourseDisplay.css';
@@ -347,7 +347,7 @@ const PublicCourseDisplay = () => {
       const nextLesson = currentModule.lessons[currentLessonIndex + 1];
       handleLessonClick(nextLesson.id);
     }
-  }, [course, activeModuleId, activeLessonId]);
+  }, [course, activeModuleId, activeLessonId, handleLessonClick]);
 
   const handlePreviousLesson = useCallback(() => {
     const currentModule = course.modules.find(m => m.id === activeModuleId);
@@ -357,7 +357,7 @@ const PublicCourseDisplay = () => {
       const previousLesson = currentModule.lessons[currentLessonIndex - 1];
       handleLessonClick(previousLesson.id);
     }
-  }, [course, activeModuleId, activeLessonId]);
+  }, [course, activeModuleId, activeLessonId, handleLessonClick]);
 
 
 
