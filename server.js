@@ -26,6 +26,7 @@ import { compressImage, getOptimalFormat, getFileExtension, formatFileSize } fro
 import sharp from 'sharp';
 import imageProxyHandler from './server/utils/proxy.js';
 import enhancedImageProxy from './server/utils/enhancedImageProxy.js';
+import { getOrFetchImage, getCachedImageUrl, getCacheStats, clearCache, cleanupOldCache, imageCacheDir } from './server/utils/diskImageCache.js';
 import {
   publicCourseRateLimit,
   publicCourseSlowDown,
@@ -60,6 +61,18 @@ setInterval(() => {
     }
   }
 }, 600000); // 10 minutes
+
+// Clean up old disk cache files every 6 hours
+setInterval(() => {
+  try {
+    const result = cleanupOldCache(24 * 60 * 60 * 1000); // 24 hours
+    if (result.cleanedFiles > 0) {
+      console.log(`[DiskCache] Cleaned ${result.cleanedFiles} old files (${result.cleanedSizeMB}MB)`);
+    }
+  } catch (error) {
+    console.error('[DiskCache] Error during cleanup:', error);
+  }
+}, 6 * 60 * 60 * 1000); // 6 hours
 
 const app = express();
 
@@ -3669,6 +3682,14 @@ async function imageSearchHandler(req, res) {
               attribution: imageData.attribution
             });
           }
+          // Pre-cache the image for faster subsequent access
+          try {
+            await getOrFetchImage(imageData.imageUrl);
+            console.log('[ImageSearch] Image pre-cached successfully');
+          } catch (cacheError) {
+            console.warn('[ImageSearch] Failed to pre-cache image:', cacheError.message);
+          }
+
           return res.json({
             url: imageData.imageUrl,
             title: imageData.imageTitle || imageData.title,
@@ -3681,8 +3702,17 @@ async function imageSearchHandler(req, res) {
       console.log('[ImageSearch] No image found, returning placeholder');
       // Fallback: return a neutral placeholder to avoid breaking the UI
       const placeholder = 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png';
+      
+      // Pre-cache the placeholder image
+      try {
+        await getOrFetchImage(placeholder);
+        console.log('[ImageSearch] Placeholder image pre-cached successfully');
+      } catch (cacheError) {
+        console.warn('[ImageSearch] Failed to pre-cache placeholder:', cacheError.message);
+      }
+      
       return res.json({
-        url: `/api/image/proxy?url=${encodeURIComponent(placeholder)}`,
+        url: `/api/image/fast?url=${encodeURIComponent(placeholder)}`,
         title: 'Placeholder image',
         pageURL: 'https://commons.wikimedia.org',
         attribution: 'Placeholder via Wikimedia Commons',
@@ -3716,7 +3746,7 @@ app.get('/api/image/proxy', (req, res) => {
   enhancedImageProxy.serveImage(req, res);
 });
 
-// Fast image proxy - direct serving without processing
+// Fast image proxy - using disk cache for maximum performance
 app.get('/api/image/fast', async (req, res) => {
   try {
     const { url } = req.query;
@@ -3731,23 +3761,21 @@ app.get('/api/image/fast', async (req, res) => {
       return res.status(403).json({ error: 'Forbidden domain' });
     }
 
-    // Quick fetch without any processing
-    const response = await fetch(url, {
-      headers: { 'User-Agent': 'Fast-Image-Proxy/1.0' },
-      timeout: 3000
-    });
-
-    if (!response.ok) {
-      return res.status(response.status).json({ error: 'Failed to fetch image' });
-    }
-
-    const imageBuffer = Buffer.from(await response.arrayBuffer());
-    const contentType = response.headers.get('content-type') || 'image/jpeg';
+    // Use disk cache for maximum performance
+    const { localPath, wasCached } = await getOrFetchImage(url);
     
-    res.set('Content-Type', contentType);
+    // Set optimal headers for cached images
     res.set('Cache-Control', 'public, max-age=31536000, immutable');
+    res.set('X-Cache-Status', wasCached ? 'HIT' : 'MISS');
     res.set('X-Fast-Path', 'true');
-    res.send(imageBuffer);
+    
+    // Send the cached file
+    res.sendFile(localPath, (err) => {
+      if (err) {
+        console.error('[FastImageProxy] Error sending cached file:', err);
+        res.status(500).json({ error: 'Image service unavailable' });
+      }
+    });
 
   } catch (error) {
     console.error('[FastImageProxy] Error:', error);
@@ -3773,8 +3801,48 @@ app.post('/api/image/clear-cache', (req, res) => {
     return res.status(403).json({ error: 'Admin access required' });
   }
   
+  // Clear both enhanced proxy cache and disk cache
   enhancedImageProxy.clearCache();
-  res.json({ message: 'Image cache cleared successfully' });
+  const diskCacheResult = clearCache();
+  
+  res.json({ 
+    message: 'Image cache cleared successfully',
+    enhancedProxy: 'cleared',
+    diskCache: diskCacheResult
+  });
+});
+
+// Get cache statistics (admin only)
+app.get('/api/image/cache-stats', (req, res) => {
+  const userEmail = req.user?.email?.toLowerCase();
+  if (!ADMIN_EMAILS.has(userEmail)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  
+  const enhancedStats = enhancedImageProxy.getHealth();
+  const diskStats = getCacheStats();
+  
+  res.json({
+    enhancedProxy: enhancedStats,
+    diskCache: diskStats,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Cleanup old cache files (admin only)
+app.post('/api/image/cleanup-cache', (req, res) => {
+  const userEmail = req.user?.email?.toLowerCase();
+  if (!ADMIN_EMAILS.has(userEmail)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  
+  const { maxAge } = req.body; // in milliseconds, default 24 hours
+  const cleanupResult = cleanupOldCache(maxAge || 24 * 60 * 60 * 1000);
+  
+  res.json({
+    message: 'Cache cleanup completed',
+    result: cleanupResult
+  });
 });
 
 // Clean up orphaned course files (admin only)
@@ -5702,6 +5770,11 @@ async function startServer() {
     httpServer.listen(availablePort, host, () => {
       console.log(`[SERVER] HTTP running on http://${host}:${availablePort}`);
       console.log(`[SERVER] Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`[DISK CACHE] Image cache directory: ${imageCacheDir}`);
+      
+      // Show initial cache stats
+      const stats = getCacheStats();
+      console.log(`[DISK CACHE] Initial stats: ${stats.diskFiles} files, ${stats.totalSizeMB}MB`);
       console.log('[SERVER] Press Ctrl+C to stop');
     });
 
