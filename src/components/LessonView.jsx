@@ -9,6 +9,7 @@ import LoadingIndicator from './LoadingIndicator';
 import logger from '../utils/logger';
 import SimpleImageService from '../services/SimpleImageService.js';
 import imagePreloadService from '../services/ImagePreloadService';
+import lessonImagePreloader from '../services/LessonImagePreloader';
 import Image from './Image.jsx';
 
 import { privateTTSService } from '../services/TTSService.js';
@@ -1159,11 +1160,20 @@ const LessonView = ({
       // Create a cache key for this lesson
       const cacheKey = `${propLesson.id}-${propLesson.title}-${subject}`;
       
-      // Check if we already have a cached result for this lesson
-      if (imageData && imageData.url && imageData.title) {
-        console.log('[LessonView] Using existing image data, skipping fetch');
-        return;
-      }
+          // Check if we already have a cached result for this lesson
+    if (imageData && imageData.url && imageData.title) {
+      console.log('[LessonView] Using existing image data, skipping fetch');
+      return;
+    }
+
+    // Check if we have a preloaded image
+    const preloadedImage = lessonImagePreloader.getPreloadedImage(propLesson.id, propLesson.title, subject);
+    if (preloadedImage) {
+      console.log('[LessonView] Using preloaded image data:', preloadedImage.title);
+      setImageData(preloadedImage);
+      setImageLoading(false);
+      return;
+    }
       
       try {
         // Use the same simplified approach as PublicLessonView
@@ -1243,6 +1253,30 @@ const LessonView = ({
       abortController.abort();
     };
   }, [propLesson, subject, courseId, courseDescription]);
+
+  // Start preloading lesson image as soon as lesson data is available
+  useEffect(() => {
+    if (!propLesson || !subject || !courseId) return;
+
+    // Start preloading in background immediately
+    const startPreload = async () => {
+      try {
+        console.log('[LessonView] Starting background image preload for:', propLesson.title);
+        await lessonImagePreloader.preloadLessonImage(
+          propLesson,
+          subject,
+          courseId,
+          Array.from(localUsedImageTitles),
+          Array.from(localUsedImageUrls),
+          courseDescription
+        );
+      } catch (error) {
+        console.warn('[LessonView] Background preload error:', error);
+      }
+    };
+
+    startPreload();
+  }, [propLesson?.id, propLesson?.title, subject, courseId]);
 
   // Preload current lesson image for better performance (only if not already loaded)
   useEffect(() => {

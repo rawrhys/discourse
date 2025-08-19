@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import SimpleImageService from '../services/SimpleImageService';
 import imagePreloadService from '../services/ImagePreloadService';
+import lessonImagePreloader from '../services/LessonImagePreloader';
 import imagePerformanceMonitor from '../services/ImagePerformanceMonitor';
 import { publicTTSService } from '../services/TTSService';
 import PerformanceMonitorService from '../services/PerformanceMonitorService';
@@ -432,6 +433,15 @@ const PublicLessonView = ({
         setImageLoading(false);
         return;
       }
+
+      // Check if we have a preloaded image
+      const preloadedImage = lessonImagePreloader.getPreloadedImage(lesson.id, lesson.title, subject);
+      if (preloadedImage) {
+        console.log('[PublicLessonView] Using preloaded image data:', preloadedImage.title);
+        setImageData(preloadedImage);
+        setImageLoading(false);
+        return;
+      }
       
       try {
         // For public courses, use a simplified image search
@@ -478,6 +488,30 @@ const PublicLessonView = ({
       clearTimeout(timeoutId);
     };
   }, [lesson?.id, lesson?.title, subject, courseId]); // Only depend on stable values
+
+  // Start preloading lesson image as soon as lesson data is available
+  useEffect(() => {
+    if (!lesson || !subject || !courseId) return;
+
+    // Start preloading in background immediately
+    const startPreload = async () => {
+      try {
+        console.log('[PublicLessonView] Starting background image preload for:', lesson.title);
+        await lessonImagePreloader.preloadLessonImage(
+          lesson,
+          subject,
+          courseId,
+          Array.from(usedImageTitles),
+          Array.from(usedImageUrls),
+          courseDescription
+        );
+      } catch (error) {
+        console.warn('[PublicLessonView] Background preload error:', error);
+      }
+    };
+
+    startPreload();
+  }, [lesson?.id, lesson?.title, subject, courseId]);
 
   // Preload current lesson image for better performance (public courses) - optimized
   useEffect(() => {

@@ -8,6 +8,7 @@ import { API_BASE_URL } from '../config/api';
 import NewCourseButton from './NewCourseButton';
 
 import quizPersistenceService from '../services/QuizPersistenceService';
+import lessonImagePreloader from '../services/LessonImagePreloader';
 
 // Lazy load QuizView
 const QuizView = lazy(() => import('./QuizView'));
@@ -281,6 +282,30 @@ const CourseDisplay = () => {
       }
     }
   }, [course, user?.id]);
+
+  // Start preloading images for all lessons when course is loaded
+  useEffect(() => {
+    if (!course || !course.modules) return;
+
+    console.log('[CourseDisplay] Starting background preload for all lessons');
+    
+    // Preload images for all lessons in the course
+    course.modules.forEach(module => {
+      module.lessons.forEach(lesson => {
+        // Start preloading in background
+        lessonImagePreloader.preloadLessonImage(
+          lesson,
+          course.subject || 'general',
+          course.id,
+          [], // usedImageTitles - will be populated as lessons are viewed
+          [], // usedImageUrls - will be populated as lessons are viewed
+          course.description || ''
+        ).catch(error => {
+          console.warn('[CourseDisplay] Background preload failed for lesson:', lesson.title, error);
+        });
+      });
+    });
+  }, [course?.id, course?.modules]);
   
   const handleModuleSelect = useCallback((moduleId) => {
     if (!course?.modules) return;
