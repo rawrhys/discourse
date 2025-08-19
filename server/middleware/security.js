@@ -17,8 +17,8 @@ setInterval(() => {
   const now = Date.now();
   
   // Clean up old CAPTCHA challenges (older than 5 minutes)
-  for (const [key, challenge] of captchaChallenges.entries()) {
-    if (now - challenge.timestamp > 5 * 60 * 1000) {
+  for (const [key, challengeData] of captchaChallenges.entries()) {
+    if (now - challengeData.timestamp > 5 * 60 * 1000) {
       captchaChallenges.delete(key);
     }
   }
@@ -217,8 +217,8 @@ export const captchaChallenge = (req, res, next) => {
   
   // Clean up old challenges (older than 5 minutes)
   const now = Date.now();
-  for (const [key, challenge] of captchaChallenges.entries()) {
-    if (now - challenge.timestamp > 5 * 60 * 1000) {
+  for (const [key, challengeData] of captchaChallenges.entries()) {
+    if (now - challengeData.timestamp > 5 * 60 * 1000) {
       captchaChallenges.delete(key);
     }
   }
@@ -294,8 +294,8 @@ export const checkCaptcha = async (req, res, sessionId) => {
     
     // Clean up old challenges (older than 5 minutes)
     const now = Date.now();
-    for (const [key, challenge] of captchaChallenges.entries()) {
-      if (now - challenge.timestamp > 5 * 60 * 1000) {
+    for (const [key, challengeData] of captchaChallenges.entries()) {
+      if (now - challengeData.timestamp > 5 * 60 * 1000) {
         captchaChallenges.delete(key);
       }
     }

@@ -3835,21 +3835,21 @@ app.get('/api/captcha/verify/:courseId',
     const captchaChallenges = global.captchaChallenges || new Map();
     const num1 = Math.floor(Math.random() * 10) + 1;
     const num2 = Math.floor(Math.random() * 10) + 1;
-    const challenge = `${num1} + ${num2}`;
-    const challengeKey = `captcha_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const challengeData = `${num1} + ${num2}`;
+    const newChallengeKey = `captcha_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
-    captchaChallenges.set(challengeKey, {
-      challenge: challenge,
+    captchaChallenges.set(newChallengeKey, {
+      challenge: challengeData,
       sessionId: null,
       timestamp: Date.now()
     });
     
-    console.log(`[API] Generated CAPTCHA for course ${courseId}:`, { challenge, challengeKey });
+    console.log(`[API] Generated CAPTCHA for course ${courseId}:`, { challenge: challengeData, challengeKey: newChallengeKey });
     
     res.json({
       requiresCaptcha: true,
-      challenge: challenge,
-      challengeKey: challengeKey,
+      challenge: challengeData,
+      challengeKey: newChallengeKey,
       message: 'Please solve this simple math problem to access the course.'
     });
   } catch (error) {
