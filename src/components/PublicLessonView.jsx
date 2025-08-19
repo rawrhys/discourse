@@ -575,6 +575,25 @@ const PublicLessonView = ({
     return markdownService.parse(processedText);
   };
 
+  // Frontend-level fix for malformed References sections
+  const fixMalformedReferencesAtFrontend = (text) => {
+    if (!text || typeof text !== 'string') {
+      return text;
+    }
+
+    let fixedText = text
+      // Fix the specific problematic pattern: "## References [1] ... [2] ..."
+      .replace(/## References\s*\[(\d+)\]/g, '\n## References\n\n[$1]')
+      // Ensure each citation is on its own line
+      .replace(/\]\s*\[(\d+)\]/g, '.\n\n[$1]')
+      // Add proper line breaks between citations
+      .replace(/\.\s*\[(\d+)\]/g, '.\n\n[$1]')
+      // Clean up any remaining issues
+      .replace(/\n{3,}/g, '\n\n'); // Normalize multiple line breaks
+
+    return fixedText;
+  };
+
   // Additional cleanup function for any remaining malformed asterisks and citations
   const cleanupRemainingAsterisks = (text) => {
     if (!text) return text;
@@ -639,8 +658,25 @@ const PublicLessonView = ({
       return finalResult;
     }
     
-    // Use the new content formatter to handle malformed JSON and strip section keys
-    return getContentAsString(content);
+    const { introduction, main_content, conclusion } = content;
+    
+    const cleanedIntro = introduction 
+      ? cleanupRemainingAsterisks(cleanContentPart(introduction))
+      : '';
+
+    const cleanedMain = main_content ? cleanupRemainingAsterisks(cleanContentPart(main_content)) : '';
+    const cleanedConclusion = conclusion ? cleanupRemainingAsterisks(cleanContentPart(conclusion)) : '';
+    
+    const result = [cleanedIntro, cleanedMain, cleanedConclusion]
+      .filter(Boolean)
+      .join('\n\n')
+      .replace(/\|\|\|---\|\|\|/g, '') // Final cleanup of any remaining patterns
+      .replace(/\|\|\|/g, ''); // Final cleanup of any remaining ||| patterns
+    
+    // Final separator cleanup after all processing
+    return result
+      .replace(/\|\|\|---\|\|\|/g, '')
+      .replace(/\|\|\|/g, '');
   };
 
   // Early return if no lesson
@@ -655,8 +691,8 @@ const PublicLessonView = ({
   // Get lesson content and process with academic references
   let lessonContent = '';
   try {
-    // Use the new content formatter to handle malformed JSON and strip section keys
-    lessonContent = getContentAsString(lesson.content);
+    // Use the same content processing approach as private LessonView
+    lessonContent = cleanAndCombineContent(lesson.content);
     
     // Debug logging for main content processing
     console.log('[PublicLessonView] Main content processing:', {
@@ -672,10 +708,9 @@ const PublicLessonView = ({
   }
   
   // Use content with citations if available, otherwise use original content
-  // Only apply content formatter if contentWithCitations contains JSON keys
   const displayContent = contentWithCitations 
     ? (contentWithCitations.includes('"introduction":') || contentWithCitations.includes('"main_content":') || contentWithCitations.includes('"conclusion":'))
-      ? getContentAsString(contentWithCitations)
+      ? cleanAndCombineContent(contentWithCitations)
       : contentWithCitations
     : lessonContent;
   
@@ -690,10 +725,22 @@ const PublicLessonView = ({
     isEmpty: displayContent.trim() === ''
   });
   
-  // Apply markdown parsing to the content
+  // Apply markdown parsing to the content (same approach as private LessonView)
   let parsedContent = '';
   try {
-    parsedContent = fixMalformedMarkdown(displayContent);
+    // Remove in-text citations first, then apply markdown fix
+    let fixedContent = markdownService.removeInTextCitations(displayContent);
+    
+    // Apply markdown fix after citation removal - use bibliography-aware parsing
+    fixedContent = fixedContent.includes('## References') 
+      ? markdownService.parseWithBibliography(fixedContent)
+      : fixMalformedMarkdown(fixedContent);
+
+    // Frontend-level fix for malformed References sections
+    fixedContent = fixMalformedReferencesAtFrontend(fixedContent);
+    
+    // Apply markdown parsing to the fixed content
+    parsedContent = fixMalformedMarkdown(fixedContent);
     
     // Debug log to check if JSON keys are still present
     if (process.env.NODE_ENV === 'development') {
@@ -886,9 +933,9 @@ const PublicLessonView = ({
            )}
 
            {/* Lesson Content */}
-           <div className="lesson-content max-w-none mt-8">
+           <div className="prose max-w-none lesson-content">
              <div 
-               className="markdown-body prose max-w-none"
+               className="markdown-body"
               dangerouslySetInnerHTML={{ 
                 __html: parsedContent 
               }}
