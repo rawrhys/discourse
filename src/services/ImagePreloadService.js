@@ -2,240 +2,132 @@ class ImagePreloadService {
   constructor() {
     this.preloadedImages = new Set();
     this.preloadQueue = [];
-    this.isPreloading = false;
-    this.maxConcurrentPreloads = 3;
+    this.isProcessing = false;
+    this.maxConcurrent = 3; // Limit concurrent preloads
     this.activePreloads = 0;
-    this.preloadCache = new Map();
-    
-    // Performance monitoring
-    this.stats = {
-      preloaded: 0,
-      failed: 0,
-      cacheHits: 0,
-      totalRequests: 0
-    };
   }
 
   /**
-   * Preload images for a lesson
-   * @param {Object} lesson - Lesson object containing image data
-   * @param {number} priority - Preload priority (1-10, higher = more important)
-   */
-  async preloadLessonImages(lesson, priority = 5) {
-    if (!lesson || !lesson.image) return;
-
-    const imageUrl = lesson.image.imageUrl || lesson.image.url;
-    if (!imageUrl || this.preloadedImages.has(imageUrl)) {
-      this.stats.cacheHits++;
-      return;
-    }
-
-    this.addToPreloadQueue(imageUrl, priority, lesson.title);
-  }
-
-  /**
-   * Preload images for multiple lessons (e.g., next few lessons in module)
-   * @param {Array} lessons - Array of lesson objects
-   * @param {number} maxLessons - Maximum number of lessons to preload
-   */
-  async preloadMultipleLessons(lessons, maxLessons = 3) {
-    if (!Array.isArray(lessons) || lessons.length === 0) return;
-
-    const lessonsToPreload = lessons.slice(0, maxLessons);
-    
-    // Sort by priority (current lesson first, then next lessons)
-    const preloadPromises = lessonsToPreload.map((lesson, index) => {
-      const priority = 10 - index; // Higher priority for closer lessons
-      return this.preloadLessonImages(lesson, priority);
-    });
-
-    await Promise.allSettled(preloadPromises);
-  }
-
-  /**
-   * Add image to preload queue
+   * Preload an image with priority management
    * @param {string} imageUrl - Image URL to preload
-   * @param {number} priority - Priority level (1-10)
-   * @param {string} description - Description for logging
+   * @param {number} priority - Priority level (1-10, 10 being highest)
+   * @returns {Promise<boolean>} - Whether preload was successful
    */
-  addToPreloadQueue(imageUrl, priority = 5, description = '') {
+  async preloadImage(imageUrl, priority = 5) {
     if (!imageUrl || this.preloadedImages.has(imageUrl)) {
-      this.stats.cacheHits++;
-      return;
+      return true; // Already preloaded or invalid URL
     }
 
-    this.preloadQueue.push({
-      url: imageUrl,
-      priority,
-      description,
-      timestamp: Date.now()
-    });
-
-    // Sort queue by priority (highest first)
-    this.preloadQueue.sort((a, b) => b.priority - a.priority);
+    // Add to queue with priority
+    this.preloadQueue.push({ url: imageUrl, priority });
+    this.preloadQueue.sort((a, b) => b.priority - a.priority); // Sort by priority
 
     // Start processing if not already running
-    if (!this.isPreloading) {
-      this.processPreloadQueue();
+    if (!this.isProcessing) {
+      this.processQueue();
     }
+
+    return new Promise((resolve) => {
+      // Store resolve function to call when preload completes
+      this.preloadQueue.find(item => item.url === imageUrl).resolve = resolve;
+    });
   }
 
   /**
    * Process the preload queue
    */
-  async processPreloadQueue() {
-    if (this.isPreloading || this.preloadQueue.length === 0) return;
+  async processQueue() {
+    if (this.isProcessing || this.preloadQueue.length === 0) {
+      return;
+    }
 
-    this.isPreloading = true;
+    this.isProcessing = true;
 
-    while (this.preloadQueue.length > 0 && this.activePreloads < this.maxConcurrentPreloads) {
+    while (this.preloadQueue.length > 0 && this.activePreloads < this.maxConcurrent) {
       const item = this.preloadQueue.shift();
-      if (!item) continue;
-
       this.activePreloads++;
-      this.preloadImage(item.url, item.description)
+
+      this.preloadSingleImage(item.url)
+        .then(success => {
+          if (item.resolve) {
+            item.resolve(success);
+          }
+        })
+        .catch(() => {
+          if (item.resolve) {
+            item.resolve(false);
+          }
+        })
         .finally(() => {
           this.activePreloads--;
+          this.processQueue(); // Continue processing
         });
     }
 
-    this.isPreloading = false;
-
-    // Continue processing if there are more items
-    if (this.preloadQueue.length > 0) {
-      setTimeout(() => this.processPreloadQueue(), 100);
-    }
+    this.isProcessing = false;
   }
 
   /**
    * Preload a single image
-   * @param {string} imageUrl - Image URL to preload
-   * @param {string} description - Description for logging
+   * @param {string} imageUrl - Image URL
+   * @returns {Promise<boolean>} - Success status
    */
-  async preloadImage(imageUrl, description = '') {
+  async preloadSingleImage(imageUrl) {
     try {
-      this.stats.totalRequests++;
-
-      // Check if already cached
-      if (this.preloadCache.has(imageUrl)) {
-        this.stats.cacheHits++;
-        return this.preloadCache.get(imageUrl);
-      }
-
-      // Create image element for preloading
-      const img = new Image();
+      // Create link preload element
+      const link = document.createElement('link');
+      link.rel = 'preload';
+      link.as = 'image';
+      link.href = imageUrl;
+      link.fetchPriority = 'high';
       
-      const preloadPromise = new Promise((resolve, reject) => {
+      // Add to head
+      document.head.appendChild(link);
+
+      // Wait for load or error
+      return new Promise((resolve) => {
+        const img = new Image();
+        
         img.onload = () => {
           this.preloadedImages.add(imageUrl);
-          this.preloadCache.set(imageUrl, img);
-          this.stats.preloaded++;
-          
-          if (process.env.NODE_ENV === 'development') {
-            console.log(`[ImagePreload] Successfully preloaded: ${description || imageUrl}`);
-          }
-          
-          resolve(img);
+          document.head.removeChild(link);
+          console.log(`[ImagePreloadService] Successfully preloaded: ${imageUrl}`);
+          resolve(true);
         };
 
-        img.onerror = (error) => {
-          this.stats.failed++;
-          console.warn(`[ImagePreload] Failed to preload: ${description || imageUrl}`, error);
-          reject(error);
+        img.onerror = () => {
+          document.head.removeChild(link);
+          console.warn(`[ImagePreloadService] Failed to preload: ${imageUrl}`);
+          resolve(false);
         };
+
+        img.src = imageUrl;
       });
 
-      // Set crossOrigin for external images
-      if (imageUrl.includes('http') && !imageUrl.includes(window.location.origin)) {
-        img.crossOrigin = 'anonymous';
-      }
-
-      // Start loading
-      img.src = imageUrl;
-
-      return await preloadPromise;
-
     } catch (error) {
-      console.error(`[ImagePreload] Error preloading image: ${imageUrl}`, error);
-      throw error;
+      console.error(`[ImagePreloadService] Error preloading ${imageUrl}:`, error);
+      return false;
     }
   }
 
   /**
-   * Preload images for a course module
-   * @param {Object} module - Module object containing lessons
-   * @param {number} currentLessonIndex - Current lesson index
-   * @param {number} preloadCount - Number of lessons to preload ahead
+   * Preload multiple images with priority
+   * @param {Array} imageUrls - Array of image URLs
+   * @param {number} priority - Priority level for all images
+   * @returns {Promise<Array>} - Array of success statuses
    */
-  async preloadModuleImages(module, currentLessonIndex = 0, preloadCount = 3) {
-    if (!module || !module.lessons) return;
-
-    const lessons = module.lessons;
-    const nextLessons = lessons.slice(currentLessonIndex + 1, currentLessonIndex + 1 + preloadCount);
-    
-    await this.preloadMultipleLessons(nextLessons, preloadCount);
+  async preloadImages(imageUrls, priority = 5) {
+    const promises = imageUrls.map(url => this.preloadImage(url, priority));
+    return Promise.all(promises);
   }
 
   /**
-   * Preload images based on user navigation patterns
-   * @param {Array} navigationHistory - Array of recent lesson visits
-   * @param {Object} currentCourse - Current course object
+   * Check if an image is already preloaded
+   * @param {string} imageUrl - Image URL
+   * @returns {boolean} - Whether image is preloaded
    */
-  async preloadBasedOnNavigation(navigationHistory, currentCourse) {
-    if (!navigationHistory || navigationHistory.length < 2) return;
-
-    // Analyze navigation patterns
-    const recentVisits = navigationHistory.slice(-5);
-    const nextLessonPredictions = this.predictNextLessons(recentVisits, currentCourse);
-
-    // Preload predicted lessons
-    for (const prediction of nextLessonPredictions) {
-      if (prediction.lesson && prediction.lesson.image) {
-        await this.preloadLessonImages(prediction.lesson, prediction.confidence);
-      }
-    }
-  }
-
-  /**
-   * Predict next lessons based on navigation history
-   * @param {Array} recentVisits - Recent lesson visits
-   * @param {Object} currentCourse - Current course object
-   * @returns {Array} Array of predicted lessons with confidence scores
-   */
-  predictNextLessons(recentVisits, currentCourse) {
-    const predictions = [];
-
-    if (!currentCourse || !currentCourse.modules) return predictions;
-
-    // Simple prediction: next lesson in sequence
-    const lastVisit = recentVisits[recentVisits.length - 1];
-    if (lastVisit && lastVisit.moduleIndex !== undefined && lastVisit.lessonIndex !== undefined) {
-      const currentModule = currentCourse.modules[lastVisit.moduleIndex];
-      if (currentModule && currentModule.lessons) {
-        // Next lesson in same module
-        const nextLessonIndex = lastVisit.lessonIndex + 1;
-        if (nextLessonIndex < currentModule.lessons.length) {
-          predictions.push({
-            lesson: currentModule.lessons[nextLessonIndex],
-            confidence: 0.8
-          });
-        }
-
-        // First lesson of next module
-        const nextModuleIndex = lastVisit.moduleIndex + 1;
-        if (nextModuleIndex < currentCourse.modules.length) {
-          const nextModule = currentCourse.modules[nextModuleIndex];
-          if (nextModule && nextModule.lessons && nextModule.lessons.length > 0) {
-            predictions.push({
-              lesson: nextModule.lessons[0],
-              confidence: 0.6
-            });
-          }
-        }
-      }
-    }
-
-    return predictions;
+  isPreloaded(imageUrl) {
+    return this.preloadedImages.has(imageUrl);
   }
 
   /**
@@ -243,46 +135,53 @@ class ImagePreloadService {
    */
   clearCache() {
     this.preloadedImages.clear();
-    this.preloadCache.clear();
     this.preloadQueue = [];
-    this.isPreloading = false;
-    this.activePreloads = 0;
-    
-    console.log('[ImagePreload] Cache cleared');
+    console.log('[ImagePreloadService] Cache cleared');
   }
 
   /**
    * Get preload statistics
-   * @returns {Object} Statistics object
+   * @returns {Object} - Statistics about preloaded images
    */
   getStats() {
     return {
-      ...this.stats,
-      cacheHitRate: this.stats.totalRequests > 0 
-        ? (this.stats.cacheHits / this.stats.totalRequests * 100).toFixed(2) + '%'
-        : '0%',
+      preloadedCount: this.preloadedImages.size,
       queueLength: this.preloadQueue.length,
       activePreloads: this.activePreloads,
-      cachedImages: this.preloadCache.size
+      isProcessing: this.isProcessing
     };
   }
 
   /**
-   * Check if an image is preloaded
-   * @param {string} imageUrl - Image URL to check
-   * @returns {boolean} True if image is preloaded
+   * Preload images for a lesson with smart prioritization
+   * @param {Array} imageUrls - Array of image URLs
+   * @param {number} visibleIndex - Index of currently visible image
+   * @returns {Promise<Array>} - Array of success statuses
    */
-  isPreloaded(imageUrl) {
-    return this.preloadedImages.has(imageUrl) || this.preloadCache.has(imageUrl);
-  }
+  async preloadLessonImages(imageUrls, visibleIndex = 0) {
+    if (!imageUrls || imageUrls.length === 0) {
+      return [];
+    }
 
-  /**
-   * Get preloaded image element
-   * @param {string} imageUrl - Image URL
-   * @returns {HTMLImageElement|null} Preloaded image element or null
-   */
-  getPreloadedImage(imageUrl) {
-    return this.preloadCache.get(imageUrl) || null;
+    const promises = imageUrls.map((url, index) => {
+      // Calculate priority based on distance from visible image
+      const distance = Math.abs(index - visibleIndex);
+      let priority;
+      
+      if (distance === 0) {
+        priority = 10; // Currently visible
+      } else if (distance === 1) {
+        priority = 8; // Adjacent images
+      } else if (distance <= 3) {
+        priority = 6; // Nearby images
+      } else {
+        priority = 4; // Distant images
+      }
+
+      return this.preloadImage(url, priority);
+    });
+
+    return Promise.all(promises);
   }
 }
 

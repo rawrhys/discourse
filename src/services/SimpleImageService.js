@@ -2,6 +2,10 @@
 import { API_BASE_URL } from '../config/api.js';
 
 const SimpleImageService = {
+  // Cache for image search results
+  imageCache: new Map(),
+  cacheTimeout: 5 * 60 * 1000, // 5 minutes
+  
   // Test server connectivity
   async testServerConnection() {
     try {
@@ -27,9 +31,53 @@ const SimpleImageService = {
     }
   },
 
-  // Simple image search - just make the API call
+  // Get cache key for search
+  getCacheKey(lessonTitle, content, usedImageTitles, usedImageUrls, courseId, lessonId) {
+    const key = JSON.stringify({
+      lessonTitle,
+      content: content ? content.substring(0, 100) : '', // Truncate content for cache key
+      usedImageTitles: usedImageTitles.slice(0, 5), // Limit to first 5
+      usedImageUrls: usedImageUrls.slice(0, 5), // Limit to first 5
+      courseId,
+      lessonId
+    });
+    return key;
+  },
+
+  // Check cache for existing result
+  getFromCache(cacheKey) {
+    const cached = this.imageCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
+      console.log('[SimpleImageService] Cache HIT for:', cacheKey.substring(0, 50) + '...');
+      return cached.data;
+    }
+    if (cached) {
+      this.imageCache.delete(cacheKey); // Remove expired cache
+    }
+    return null;
+  },
+
+  // Store result in cache
+  setCache(cacheKey, data) {
+    this.imageCache.set(cacheKey, {
+      data,
+      timestamp: Date.now()
+    });
+    console.log('[SimpleImageService] Cached result for:', cacheKey.substring(0, 50) + '...');
+  },
+
+  // Simple image search - optimized with caching and timeout
   async search(lessonTitle, content = '', usedImageTitles = [], usedImageUrls = [], courseId = undefined, lessonId = undefined, forceUnique = false) {
     try {
+      // Skip cache if forceUnique is true
+      if (!forceUnique) {
+        const cacheKey = this.getCacheKey(lessonTitle, content, usedImageTitles, usedImageUrls, courseId, lessonId);
+        const cachedResult = this.getFromCache(cacheKey);
+        if (cachedResult) {
+          return cachedResult;
+        }
+      }
+
       const searchUrl = `${API_BASE_URL}/api/image-search/search`;
       
       let finalQuery = lessonTitle;
@@ -50,11 +98,18 @@ const SimpleImageService = {
         disableModeration: true
       };
       
+      // Add timeout to prevent hanging requests
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
       const response = await fetch(searchUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody),
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
       
       if (!response.ok) {
         if (response.status === 404) {
@@ -71,10 +126,23 @@ const SimpleImageService = {
       
       const data = await response.json();
       console.log('[SimpleImageService] Found image:', data.title);
+      
+      // Cache the result if not forceUnique
+      if (!forceUnique) {
+        const cacheKey = this.getCacheKey(lessonTitle, content, usedImageTitles, usedImageUrls, courseId, lessonId);
+        this.setCache(cacheKey, data);
+      }
+      
       return data;
       
     } catch (error) {
-      console.error('[SimpleImageService] Search failed:', error.message);
+      if (error.name === 'AbortError') {
+        console.error('[SimpleImageService] Search timeout after 10 seconds');
+      } else {
+        console.error('[SimpleImageService] Search failed:', error.message);
+      }
+      
+      // Return fallback image on error
       return {
         url: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2Y5ZjlmOSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l5ZT0iMTQiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5JbWFnZSBOdCBBdmFpbGFibGU8L3RleHQ+PC9zdmc+',
         title: lessonTitle || 'Lesson Image',
@@ -98,197 +166,64 @@ const SimpleImageService = {
             content = content.content;
           } else if (content.main_content) {
             content = content.main_content;
-          } else if (content.introduction) {
-            // Combine introduction and main_content if available
-            const intro = content.introduction || '';
-            const main = content.main_content || '';
-            const conclusion = content.conclusion || '';
-            content = [intro, main, conclusion].filter(Boolean).join(' ');
-          } else if (content.toString && content.toString() !== '[object Object]') {
-            content = content.toString();
           } else {
-            // Fallback: try to extract meaningful text from object
-            const textParts = [];
-            for (const key in content) {
-              if (typeof content[key] === 'string' && content[key].length > 10) {
-                textParts.push(content[key]);
-              }
-            }
-            content = textParts.join(' ') || '';
+            // Try to stringify the object and extract meaningful text
+            content = JSON.stringify(content);
           }
-        } else if (typeof content !== 'string') {
-          content = String(content);
         }
+        
+        // Limit content length to prevent overly large requests
+        if (content.length > 1000) {
+          content = content.substring(0, 1000) + '...';
+        }
+      }
+
+      // Create enhanced query with course context
+      let enhancedQuery = lessonTitle;
+      if (courseSubject && courseSubject !== lessonTitle) {
+        enhancedQuery = `${courseSubject} ${lessonTitle}`;
+      }
+      
+      if (coursePrompt) {
+        enhancedQuery = `${coursePrompt} ${enhancedQuery}`;
+      }
+
+      console.log('[SimpleImageService] Enhanced query created:', enhancedQuery);
+      
+      return this.search(enhancedQuery, content, usedImageTitles, usedImageUrls, courseId, lessonId);
+      
+    } catch (error) {
+      console.error('[SimpleImageService] Enhanced search failed:', error);
+      return this.search(lessonTitle, content, usedImageTitles, usedImageUrls, courseId, lessonId);
+    }
+  },
+
+  // Clear cache
+  clearCache() {
+    this.imageCache.clear();
+    console.log('[SimpleImageService] Cache cleared');
+  },
+
+  // Get cache statistics
+  getCacheStats() {
+    const now = Date.now();
+    let validEntries = 0;
+    let expiredEntries = 0;
+    
+    for (const [key, value] of this.imageCache.entries()) {
+      if (now - value.timestamp < this.cacheTimeout) {
+        validEntries++;
       } else {
-        content = '';
-      }
-      
-      // Ensure other parameters are strings
-      lessonTitle = lessonTitle ? String(lessonTitle) : '';
-      courseSubject = courseSubject ? String(courseSubject) : '';
-      coursePrompt = coursePrompt ? String(coursePrompt) : '';
-      
-      // Debug logging for content processing
-      if (process.env.NODE_ENV === 'development' && content && content.includes('[object Object]')) {
-        console.warn('[SimpleImageService] Detected [object Object] in content, this indicates improper content handling');
-      }
-      
-      var contextualQuery = this.createEnhancedContextAwareQuery(lessonTitle, courseSubject, content, coursePrompt);
-      return this.search(contextualQuery, content, usedImageTitles, usedImageUrls, courseId, lessonId, true);
-    } catch (error) {
-      console.error('[SimpleImageService] Error in searchWithContext:', error);
-      // Fallback to basic search
-      return this.search(lessonTitle || 'lesson', content || '', usedImageTitles, usedImageUrls, courseId, lessonId, false);
-    }
-  },
-
-  // Get image source for debugging
-  getImageSource: function(url) {
-    if (!url || typeof url !== 'string') return 'unknown';
-    var lowerUrl = url.toLowerCase();
-    if (lowerUrl.includes('wikipedia.org') || lowerUrl.includes('wikimedia.org')) {
-      return 'wikipedia';
-    } else if (lowerUrl.includes('pixabay.com')) {
-      return 'pixabay';
-    } else if (lowerUrl.includes('metmuseum.org')) {
-      return 'metmuseum';
-    } else if (lowerUrl.includes('thediscourse.ai') || lowerUrl.includes('localhost')) {
-      return 'local';
-    }
-    return 'unknown';
-  },
-
-  // Create context-aware search query
-  createContextAwareQuery: function(lessonTitle, courseSubject, content) {
-    courseSubject = courseSubject || '';
-    content = content || '';
-    if (!lessonTitle) return '';
-    var query = String(lessonTitle).trim();
-    if (courseSubject) {
-      query = courseSubject + ' ' + query;
-    }
-    if (query.toLowerCase().includes('rome') || query.toLowerCase().includes('ancient') || query.toLowerCase().includes('history')) {
-      query = query + ' history';
-    }
-    return query;
-  },
-
-  // Create enhanced context-aware search query using course prompt and lesson text
-  createEnhancedContextAwareQuery: function(lessonTitle, courseSubject, content, coursePrompt) {
-    try {
-      courseSubject = courseSubject || '';
-      content = content || '';
-      coursePrompt = coursePrompt || '';
-      
-      if (!lessonTitle) return '';
-      
-      // Start with the lesson title
-      var query = String(lessonTitle).trim();
-    
-    // Add course subject for broader context
-    if (courseSubject) {
-      query = courseSubject + ' ' + query;
-    }
-    
-    // Add course prompt/description for enhanced context
-    if (coursePrompt) {
-      // Extract key terms from course prompt (first 100 characters to avoid too long queries)
-      var promptTerms = coursePrompt.substring(0, 100).split(' ').filter(word => 
-        word.length > 3 && !['the', 'and', 'for', 'with', 'this', 'that', 'from', 'into', 'during', 'including', 'until', 'against', 'among', 'throughout', 'despite', 'towards', 'upon'].includes(word.toLowerCase())
-      ).slice(0, 3).join(' ');
-      
-      if (promptTerms) {
-        query = query + ' ' + promptTerms;
+        expiredEntries++;
       }
     }
     
-    // Extract key terms from lesson content for more specific context
-    if (content && typeof content === 'string') {
-      // Look for key terms in content (bold text, important concepts)
-      var contentTerms = '';
-      var contentWords = content.split(' ').filter(word => 
-        word.length > 4 && 
-        (word.startsWith('**') || word.endsWith('**') || 
-         word.charAt(0) === word.charAt(0).toUpperCase() && word.length > 5)
-      ).slice(0, 2);
-      
-      if (contentWords.length > 0) {
-        contentTerms = contentWords.join(' ');
-        query = query + ' ' + contentTerms;
-      }
-      
-      // Extract specific historical terms from content for better image relevance
-      var historicalTerms = this.extractHistoricalTerms(content);
-      if (historicalTerms) {
-        query = query + ' ' + historicalTerms;
-      }
-    }
-    
-    // Add historical context for history-related topics
-    if (query.toLowerCase().includes('rome') || query.toLowerCase().includes('ancient') || query.toLowerCase().includes('history') || 
-        query.toLowerCase().includes('greek') || query.toLowerCase().includes('greece') || query.toLowerCase().includes('egypt')) {
-      query = query + ' history';
-    }
-    
-    // Add educational context for better image relevance
-    if (query.toLowerCase().includes('science') || query.toLowerCase().includes('chemistry') || query.toLowerCase().includes('physics')) {
-      query = query + ' educational';
-    }
-    
-    // Add art context for art-related topics
-    if (query.toLowerCase().includes('art') || query.toLowerCase().includes('painting') || query.toLowerCase().includes('sculpture')) {
-      query = query + ' art';
-    }
-    
-    console.log('[SimpleImageService] Enhanced query created:', query);
-    return query;
-    } catch (error) {
-      console.error('[SimpleImageService] Error in createEnhancedContextAwareQuery:', error);
-      // Fallback to basic query
-      return lessonTitle || 'lesson';
-    }
-  },
-
-  // Extract historical terms from content for better image relevance
-  extractHistoricalTerms: function(content) {
-    if (!content || typeof content !== 'string') return '';
-    
-    var terms = [];
-    
-    // Look for specific historical periods and concepts
-    var historicalPatterns = [
-      /\bArchaic Period\b/gi,
-      /\bClassical Period\b/gi,
-      /\bAncient Greece\b/gi,
-      /\bAncient Rome\b/gi,
-      /\bGreek City-States\b/gi,
-      /\bPolis\b/gi,
-      /\bAcropolis\b/gi,
-      /\bAgora\b/gi,
-      /\bOracle of Delphi\b/gi,
-      /\bOlympic Games\b/gi,
-      /\bLyric Poetry\b/gi,
-      /\bSappho\b/gi,
-      /\bHomer\b/gi,
-      /\bMount Parnassus\b/gi,
-      /\bDelphi\b/gi,
-      /\bOlympia\b/gi,
-      /\bZeus\b/gi,
-      /\bApollo\b/gi,
-      /\bPythia\b/gi
-    ];
-    
-    historicalPatterns.forEach(pattern => {
-      var matches = content.match(pattern);
-      if (matches) {
-        terms.push(...matches);
-      }
-    });
-    
-    // Remove duplicates and limit to 3 most relevant terms
-    var uniqueTerms = [...new Set(terms)].slice(0, 3);
-    
-    return uniqueTerms.join(' ');
+    return {
+      totalEntries: this.imageCache.size,
+      validEntries,
+      expiredEntries,
+      cacheTimeout: this.cacheTimeout
+    };
   }
 };
 
