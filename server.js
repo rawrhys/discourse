@@ -43,6 +43,9 @@ import {
 // Load environment variables from .env file
 dotenv.config();
 
+// Initialize global CAPTCHA challenges map
+global.captchaChallenges = new Map();
+
 const app = express();
 
 // Import PublicCourseSessionService singleton instance
@@ -3794,17 +3797,34 @@ app.get('/api/captcha/verify/:courseId',
     
     // Verify CAPTCHA response
     if (challenge && response && challengeKey) {
-      const captchaChallenges = global.captchaChallenges || new Map();
-      const storedChallenge = captchaChallenges.get(challengeKey);
+      const storedChallenge = global.captchaChallenges.get(challengeKey);
       
-      if (storedChallenge && storedChallenge.challenge === challenge) {
-        const expectedAnswer = eval(challenge); // Safe for simple math expressions
+      console.log(`[API] CAPTCHA map size:`, global.captchaChallenges.size);
+      console.log(`[API] Available challenge keys:`, Array.from(global.captchaChallenges.keys()));
+      
+      console.log(`[API] CAPTCHA verification details:`, {
+        receivedChallenge: challenge,
+        storedChallenge: storedChallenge?.challenge,
+        challengeKey: challengeKey,
+        storedAnswer: storedChallenge?.answer,
+        userResponse: response
+      });
+      
+      // Normalize challenge strings for comparison (remove extra spaces)
+      const normalizeChallenge = (challengeStr) => challengeStr.replace(/\s+/g, ' ').trim();
+      const normalizedReceived = normalizeChallenge(challenge);
+      const normalizedStored = storedChallenge ? normalizeChallenge(storedChallenge.challenge) : null;
+      
+      if (storedChallenge && normalizedStored === normalizedReceived) {
+        const expectedAnswer = storedChallenge.answer || eval(challenge.replace(/[×÷]/g, (match) => {
+          return match === '×' ? '*' : '/';
+        })); // Use stored answer or fallback to eval
         const userAnswer = parseInt(response);
         
         if (userAnswer === expectedAnswer) {
           // CAPTCHA passed - create session and redirect to course
           const sessionId = publicCourseSessionService.createSession(courseId);
-          captchaChallenges.delete(challengeKey); // Clean up
+          global.captchaChallenges.delete(challengeKey); // Clean up
           
           console.log(`[API] CAPTCHA passed for course ${courseId}, created session: ${sessionId}`);
           
@@ -3815,7 +3835,7 @@ app.get('/api/captcha/verify/:courseId',
           });
         } else {
           // CAPTCHA failed
-          captchaChallenges.delete(challengeKey); // Clean up
+          global.captchaChallenges.delete(challengeKey); // Clean up
           return res.status(400).json({
             success: false,
             message: 'Incorrect answer. Please try again.',
@@ -3823,6 +3843,13 @@ app.get('/api/captcha/verify/:courseId',
           });
         }
       } else {
+        console.log(`[API] CAPTCHA verification failed:`, {
+          challengeExists: !!storedChallenge,
+          challengeMatch: storedChallenge ? normalizedStored === normalizedReceived : false,
+          normalizedReceived,
+          normalizedStored
+        });
+        
         return res.status(400).json({
           success: false,
           message: 'Invalid or expired challenge. Please refresh and try again.',
@@ -3832,29 +3859,133 @@ app.get('/api/captcha/verify/:courseId',
     }
     
     // No CAPTCHA parameters - generate new challenge
-    const captchaChallenges = global.captchaChallenges || new Map();
-    const num1 = Math.floor(Math.random() * 10) + 1;
-    const num2 = Math.floor(Math.random() * 10) + 1;
-    const challengeData = `${num1} + ${num2}`;
+    
+    // Generate more varied challenges
+    const challengeTypes = [
+      { type: 'addition', operator: '+', generate: () => {
+        const num1 = Math.floor(Math.random() * 15) + 1;
+        const num2 = Math.floor(Math.random() * 15) + 1;
+        return { num1, num2, operator: '+', answer: num1 + num2 };
+      }},
+      { type: 'subtraction', operator: '-', generate: () => {
+        const num1 = Math.floor(Math.random() * 20) + 10; // 10-29
+        const num2 = Math.floor(Math.random() * num1) + 1; // 1 to num1-1
+        return { num1, num2, operator: '-', answer: num1 - num2 };
+      }},
+      { type: 'multiplication', operator: '×', generate: () => {
+        const num1 = Math.floor(Math.random() * 12) + 1; // 1-12
+        const num2 = Math.floor(Math.random() * 12) + 1; // 1-12
+        return { num1, num2, operator: '×', answer: num1 * num2 };
+      }},
+      { type: 'simple_division', operator: '÷', generate: () => {
+        const num2 = Math.floor(Math.random() * 10) + 2; // 2-11
+        const answer = Math.floor(Math.random() * 10) + 1; // 1-10
+        const num1 = num2 * answer;
+        return { num1, num2, operator: '÷', answer: answer };
+      }}
+    ];
+    
+    // Randomly select a challenge type
+    const selectedType = challengeTypes[Math.floor(Math.random() * challengeTypes.length)];
+    const challengeInfo = selectedType.generate();
+    
+    const challengeData = `${challengeInfo.num1} ${challengeInfo.operator} ${challengeInfo.num2}`;
     const newChallengeKey = `captcha_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
-    captchaChallenges.set(newChallengeKey, {
+    global.captchaChallenges.set(newChallengeKey, {
       challenge: challengeData,
+      answer: challengeInfo.answer,
       sessionId: null,
       timestamp: Date.now()
     });
     
-    console.log(`[API] Generated CAPTCHA for course ${courseId}:`, { challenge: challengeData, challengeKey: newChallengeKey });
+    console.log(`[API] Generated CAPTCHA for course ${courseId}:`, { 
+      challenge: challengeData, 
+      challengeKey: newChallengeKey,
+      type: selectedType.type,
+      answer: challengeInfo.answer
+    });
     
     res.json({
       requiresCaptcha: true,
       challenge: challengeData,
       challengeKey: newChallengeKey,
-      message: 'Please solve this simple math problem to access the course.'
+      message: 'Please solve this math problem to access the course.'
     });
   } catch (error) {
     console.error('[API] CAPTCHA verification error:', error);
     res.status(500).json({ error: 'CAPTCHA verification failed' });
+  }
+});
+
+// Generate new CAPTCHA challenge endpoint
+app.get('/api/captcha/new/:courseId', 
+  securityHeaders,
+  securityLogging,
+  botDetection,
+  publicCourseRateLimit,
+  publicCourseSlowDown,
+  async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    
+    // Generate new challenge
+    
+    // Generate more varied challenges
+    const challengeTypes = [
+      { type: 'addition', operator: '+', generate: () => {
+        const num1 = Math.floor(Math.random() * 15) + 1;
+        const num2 = Math.floor(Math.random() * 15) + 1;
+        return { num1, num2, operator: '+', answer: num1 + num2 };
+      }},
+      { type: 'subtraction', operator: '-', generate: () => {
+        const num1 = Math.floor(Math.random() * 20) + 10; // 10-29
+        const num2 = Math.floor(Math.random() * num1) + 1; // 1 to num1-1
+        return { num1, num2, operator: '-', answer: num1 - num2 };
+      }},
+      { type: 'multiplication', operator: '×', generate: () => {
+        const num1 = Math.floor(Math.random() * 12) + 1; // 1-12
+        const num2 = Math.floor(Math.random() * 12) + 1; // 1-12
+        return { num1, num2, operator: '×', answer: num1 * num2 };
+      }},
+      { type: 'simple_division', operator: '÷', generate: () => {
+        const num2 = Math.floor(Math.random() * 10) + 2; // 2-11
+        const answer = Math.floor(Math.random() * 10) + 1; // 1-10
+        const num1 = num2 * answer;
+        return { num1, num2, operator: '÷', answer: answer };
+      }}
+    ];
+    
+    // Randomly select a challenge type
+    const selectedType = challengeTypes[Math.floor(Math.random() * challengeTypes.length)];
+    const challengeInfo = selectedType.generate();
+    
+    const challengeData = `${challengeInfo.num1} ${challengeInfo.operator} ${challengeInfo.num2}`;
+    const newChallengeKey = `captcha_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    global.captchaChallenges.set(newChallengeKey, {
+      challenge: challengeData,
+      answer: challengeInfo.answer,
+      sessionId: null,
+      timestamp: Date.now()
+    });
+    
+    console.log(`[API] Generated new CAPTCHA for course ${courseId}:`, { 
+      challenge: challengeData, 
+      challengeKey: newChallengeKey,
+      type: selectedType.type,
+      answer: challengeInfo.answer
+    });
+    
+    res.json({
+      success: true,
+      challenge: challengeData,
+      challengeKey: newChallengeKey,
+      message: 'New challenge generated.'
+    });
+  } catch (error) {
+    console.error('[API] CAPTCHA generation error:', error);
+    res.status(500).json({ error: 'Failed to generate new challenge' });
   }
 });
 

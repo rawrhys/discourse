@@ -87,11 +87,32 @@ const CaptchaPage = () => {
     }
   };
 
-  const handleRefresh = () => {
-    setAttempts(0);
-    setError(null);
-    setResponse('');
-    checkAccess();
+  const handleRefresh = async () => {
+    try {
+      setAttempts(0);
+      setError(null);
+      setResponse('');
+      setLoading(true);
+      
+      console.log('[CaptchaPage] Requesting new challenge for course:', courseId);
+      
+      // Request new challenge from server
+      const response = await fetch(`/api/captcha/new/${courseId}`);
+      const result = await response.json();
+      
+      if (response.ok && result.success) {
+        console.log('[CaptchaPage] New challenge received:', result);
+        setCaptchaData(result);
+      } else {
+        console.error('[CaptchaPage] Failed to get new challenge:', result);
+        setError('Failed to generate new challenge. Please try again.');
+      }
+    } catch (err) {
+      console.error('[CaptchaPage] Error requesting new challenge:', err);
+      setError('Failed to generate new challenge. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (loading) {
