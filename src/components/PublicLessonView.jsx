@@ -142,6 +142,27 @@ const publicLessonStyles = `
   .lesson-content-text h2:first-of-type {
     margin-top: 0 !important;
   }
+  
+  /* Custom section header styling */
+  .lesson-content-text .section-header {
+    color: #1f2937 !important;
+    font-size: 1.5rem !important;
+    font-weight: 700 !important;
+    margin-top: 3rem !important;
+    margin-bottom: 1.5rem !important;
+    text-align: center !important;
+    border-bottom: 2px solid #e5e7eb !important;
+    padding-bottom: 0.5rem !important;
+  }
+  
+  /* Custom section divider styling */
+  .lesson-content-text .section-divider {
+    border: none !important;
+    height: 2px !important;
+    background: linear-gradient(to right, transparent, #e5e7eb, transparent) !important;
+    margin: 3rem auto !important;
+    max-width: 80% !important;
+  }
 `;
 
 const PublicLessonView = ({ 
@@ -760,6 +781,116 @@ const PublicLessonView = ({
       .trim();
   };
 
+  // Custom markdown parsing that preserves section structure
+  const parseWithSectionPreservation = (content) => {
+    if (!content || typeof content !== 'string') return content;
+    
+    // First, let's preserve our section markers by temporarily replacing them
+    let processedContent = content
+      // Temporarily replace section headers to protect them
+      .replace(/## Introduction/g, '___SECTION_INTRO___')
+      .replace(/## Main Content/g, '___SECTION_MAIN___')
+      .replace(/## Conclusion/g, '___SECTION_CONCL___')
+      // Temporarily replace horizontal rules
+      .replace(/\n\n---\n\n/g, '___HORIZONTAL_RULE___');
+    
+    // Apply the standard markdown parsing
+    processedContent = fixMalformedMarkdown(processedContent);
+    
+    // Restore our section markers as proper HTML
+    processedContent = processedContent
+      .replace(/___SECTION_INTRO___/g, '<h2 class="section-header">Introduction</h2>')
+      .replace(/___SECTION_MAIN___/g, '<h2 class="section-header">Main Content</h2>')
+      .replace(/___SECTION_CONCL___/g, '<h2 class="section-header">Conclusion</h2>')
+      .replace(/___HORIZONTAL_RULE___/g, '<hr class="section-divider">');
+    
+    return processedContent;
+  };
+
+  // Enhanced markdown parsing with resilient error handling using Marked
+  const fixMalformedMarkdown = (text) => {
+    if (!text) return text;
+    
+    // Remove in-text citations first, then apply markdown fix
+    let processedText = markdownService.removeInTextCitations(text);
+    
+    // Use the efficient MarkdownService with content-specific parsing
+    if (processedText.includes('The Formation of the Greek City-States') || 
+        (processedText.includes('Polis') && (processedText.includes('Acropolis') || processedText.includes('Agora')))) {
+      return markdownService.parseGreekCityStates(processedText);
+    }
+    
+    // Try the Archaic Period parser
+    if (processedText.includes('Archaic Period') && processedText.includes('Lyric Poetry')) {
+      return markdownService.parseGreekContent(processedText);
+    }
+    
+    // Check if content has bibliography and use bibliography-aware parsing
+    if (processedText.includes('## References')) {
+      return markdownService.parseWithBibliography(processedText);
+    }
+    
+    // Fall back to general parsing
+    return markdownService.parse(processedText);
+  };
+
+  // Frontend-level fix for malformed References sections
+  const fixMalformedReferencesAtFrontend = (text) => {
+    if (!text || typeof text !== 'string') {
+      return text;
+    }
+
+    let fixedText = text
+      // Fix the specific problematic pattern: "## References [1] ... [2] ..."
+      .replace(/## References\s*\[(\d+)\]/g, '\n## References\n\n[$1]')
+      // Ensure each citation is on its own line
+      .replace(/\]\s*\[(\d+)\]/g, '.\n\n[$1]')
+      // Add proper line breaks between citations
+      .replace(/\.\s*\[(\d+)\]/g, '.\n\n[$1]')
+      // Clean up any remaining issues
+      .replace(/\n{3,}/g, '\n\n'); // Normalize multiple line breaks
+
+    return fixedText;
+  };
+
+  // Additional cleanup function for any remaining malformed asterisks and citations
+  const cleanupRemainingAsterisks = (text) => {
+    if (!text) return text;
+    
+    return text
+      // Remove standalone ** patterns that are clearly malformed
+      .replace(/\*\*([^*\n]+?)\*\*/g, '**$1**')  // Fix unclosed bold
+      .replace(/\*\*([^*\n]+?)$/gm, '**$1**')    // Fix unclosed bold at end
+      .replace(/^([^*\n]+?)\*\*/gm, '**$1**')    // Fix unclosed bold at start
+      // Remove any remaining standalone ** patterns
+      .replace(/\*\*(?!\w)/g, '')                // Remove ** not followed by word
+      .replace(/(?<!\w)\*\*/g, '')               // Remove ** not preceded by word
+      // Clean up multiple consecutive asterisks
+      .replace(/\*\*\*\*/g, '**')
+      .replace(/\*\*\*\*\*/g, '**')
+      .replace(/\*\*\*\*\*\*/g, '**');
+  };
+
+  // Enhanced content preprocessing for better line breaks and formatting
+  const preprocessContentForDisplay = (content) => {
+    if (!content || typeof content !== 'string') return content;
+    
+    return content
+      // Preserve section breaks and horizontal rules
+      .replace(/\n\n---\n\n/g, '\n\n<hr>\n\n') // Convert markdown horizontal rules to HTML
+      // Preserve intentional line breaks
+      .replace(/\n\n+/g, '\n\n') // Normalize multiple newlines to double newlines
+      .replace(/\n/g, '  \n') // Convert single newlines to markdown line breaks (two spaces + newline)
+      // Add spacing around headers for better readability
+      .replace(/(^|\n)(#{1,6}\s+)/g, '\n\n$2')
+      .replace(/(#{1,6}.*?)(\n|$)/g, '$1\n\n')
+      // Ensure proper spacing around horizontal rules
+      .replace(/(<hr>)/g, '\n\n$1\n\n')
+      // Clean up excessive spacing
+      .replace(/\n{4,}/g, '\n\n\n')
+      .trim();
+  };
+
   // Helper function to clean and combine lesson content (copied from working LessonView)
   const cleanAndCombineContent = (content) => {
     if (!content) return '';
@@ -896,7 +1027,7 @@ const PublicLessonView = ({
     fixedContent = fixMalformedReferencesAtFrontend(fixedContent);
     
     // Apply markdown parsing to the fixed content
-    parsedContent = fixMalformedMarkdown(fixedContent);
+    parsedContent = parseWithSectionPreservation(fixedContent);
     
     // Enhanced paragraph structure and line break formatting
     if (parsedContent) {
@@ -952,7 +1083,10 @@ const PublicLessonView = ({
         hasParagraphTags: parsedContent.includes('<p>'),
         hasSectionHeaders: parsedContent.includes('<h2>'),
         hasHorizontalRules: parsedContent.includes('<hr>'),
-        contentPreview: parsedContent.substring(0, 500) + '...'
+        hasCustomSectionHeaders: parsedContent.includes('section-header'),
+        hasCustomDividers: parsedContent.includes('section-divider'),
+        contentPreview: parsedContent.substring(0, 500) + '...',
+        rawContentPreview: displayContent.substring(0, 200) + '...'
       });
     }
   } catch (error) {
