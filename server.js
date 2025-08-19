@@ -3748,10 +3748,16 @@ app.get('/api/image/fast', async (req, res) => {
       return res.status(403).json({ error: 'Forbidden domain' });
     }
 
-    // Quick fetch without any processing
+    // Enhanced fetch with better timeout and connection settings
     const response = await fetch(url, {
-      headers: { 'User-Agent': 'Fast-Image-Proxy/1.0' },
-      timeout: 3000
+      headers: { 
+        'User-Agent': 'Fast-Image-Proxy/1.0',
+        'Accept': 'image/*',
+        'Accept-Encoding': 'gzip, deflate'
+      },
+      timeout: 8000, // Increased timeout to 8 seconds
+      keepalive: true, // Enable connection pooling
+      compress: true // Enable compression
     });
 
     if (!response.ok) {
@@ -3761,9 +3767,11 @@ app.get('/api/image/fast', async (req, res) => {
     const imageBuffer = Buffer.from(await response.arrayBuffer());
     const contentType = response.headers.get('content-type') || 'image/jpeg';
     
+    // Enhanced caching headers for better performance
     res.set('Content-Type', contentType);
-    res.set('Cache-Control', 'public, max-age=31536000, immutable');
+    res.set('Cache-Control', 'public, max-age=86400, s-maxage=86400, stale-while-revalidate=3600');
     res.set('X-Fast-Path', 'true');
+    res.set('X-Image-Size', imageBuffer.length.toString());
     res.send(imageBuffer);
 
   } catch (error) {

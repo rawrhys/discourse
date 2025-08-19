@@ -3,9 +3,11 @@ class ImagePreloadService {
     this.preloadedImages = new Set();
     this.preloadQueue = [];
     this.isProcessing = false;
-    this.maxConcurrent = 1; // Reduced to 1 for better performance and to prevent conflicts
+    this.maxConcurrent = 3; // Increased to 3 for better performance
     this.activePreloads = 0;
     this.preloadCache = new Map(); // Add cache to prevent duplicate preloads
+    this.batchSize = 5; // Process images in batches
+    this.retryAttempts = 2; // Allow retries for failed preloads
   }
 
   /**
@@ -76,7 +78,7 @@ class ImagePreloadService {
   }
 
   /**
-   * Preload a single image
+   * Preload a single image with enhanced performance
    * @param {string} imageUrl - Image URL
    * @returns {Promise<boolean>} - Success status
    */
@@ -89,35 +91,49 @@ class ImagePreloadService {
         return true;
       }
 
-      // Create link preload element
+      // Create link preload element with enhanced settings
       const link = document.createElement('link');
       link.rel = 'preload';
       link.as = 'image';
       link.href = imageUrl;
       link.fetchPriority = 'high';
+      
+      // Add cross-origin for external images
+      if (imageUrl.includes('api/image/')) {
+        link.crossOrigin = 'anonymous';
+      }
 
       // Add to head
       document.head.appendChild(link);
 
-      // Wait for load or error
+      // Wait for load or error with enhanced timeout
       return new Promise((resolve) => {
         const img = new Image();
+        let timeoutId;
+
+        const cleanup = () => {
+          if (timeoutId) clearTimeout(timeoutId);
+          if (document.head.contains(link)) {
+            document.head.removeChild(link);
+          }
+        };
+
+        // Set timeout for slow loads
+        timeoutId = setTimeout(() => {
+          cleanup();
+          console.warn(`[ImagePreloadService] Timeout preloading: ${imageUrl}`);
+          resolve(false);
+        }, 10000); // 10 second timeout
 
         img.onload = () => {
+          cleanup();
           this.preloadedImages.add(imageUrl);
-          // Only remove link if we created it
-          if (document.head.contains(link)) {
-          document.head.removeChild(link);
-          }
           console.log(`[ImagePreloadService] Successfully preloaded: ${imageUrl}`);
           resolve(true);
         };
 
         img.onerror = () => {
-          // Only remove link if we created it
-          if (document.head.contains(link)) {
-          document.head.removeChild(link);
-          }
+          cleanup();
           console.warn(`[ImagePreloadService] Failed to preload: ${imageUrl}`);
           resolve(false);
         };

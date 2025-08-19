@@ -53,7 +53,7 @@ const Image = ({
     }
   }, [lowQualitySrc, isLoaded]);
 
-  // Optimized intersection observer with better settings
+  // Optimized intersection observer with enhanced performance settings
   useEffect(() => {
     if (!lazy || preload) {
       setIsInView(true);
@@ -68,8 +68,8 @@ const Image = ({
         }
       },
       { 
-        rootMargin: '100px 0px 100px 0px', // Balanced margins for better performance
-        threshold: 0.1 // Higher threshold to reduce unnecessary loads
+        rootMargin: '200px 0px 200px 0px', // Increased margins for earlier loading
+        threshold: 0.05 // Lower threshold for faster triggering
       }
     );
 
@@ -97,6 +97,39 @@ const Image = ({
       imgRef.current.dataset.startTime = Date.now().toString();
     }
   }, [shouldShowImage]);
+
+  // Handle image load with timeout and performance monitoring
+  const handleImageLoad = useCallback((event) => {
+    const img = event.target;
+    const startTime = parseInt(img.dataset.startTime || '0');
+    const loadTime = Date.now() - startTime;
+    
+    setIsLoaded(true);
+    setIsError(false);
+    
+    // Log slow loads for monitoring
+    if (loadTime > 3000) {
+      console.warn(`[Image] Slow image load detected for ${src}: ${loadTime}ms`);
+    } else {
+      console.log(`[Image] Loaded ${src} in ${loadTime}ms`);
+    }
+  }, [src]);
+
+  // Handle image error with fallback
+  const handleImageError = useCallback((event) => {
+    console.error(`[Image] Failed to load: ${src}`);
+    setIsError(true);
+    
+    // Try fallback to original URL if using proxy
+    if (src && src.includes('/api/image/')) {
+      const originalUrl = src.replace(/.*url=/, '').replace(/&.*/, '');
+      if (originalUrl && originalUrl !== src) {
+        console.log(`[Image] Trying fallback: ${originalUrl}`);
+        event.target.src = decodeURIComponent(originalUrl);
+        return;
+      }
+    }
+  }, [src]);
 
   // Improved preload strategy with cleanup - only preload if not already loaded and not handled by ImagePreloadService
   useEffect(() => {
@@ -127,40 +160,6 @@ const Image = ({
       };
     }
   }, [priority, src, shouldShowImage, isLoaded]);
-
-  const handleLoad = useCallback(() => {
-    setIsLoaded(true);
-    setIsError(false);
-    
-    // Calculate aspect ratio for better layout stability
-    if (imgRef.current) {
-      const { naturalWidth, naturalHeight } = imgRef.current;
-      if (naturalWidth && naturalHeight) {
-        setAspectRatio(naturalHeight / naturalWidth);
-      }
-    }
-    
-    // Basic performance tracking
-    try {
-      const startTime = parseInt(imgRef.current?.dataset?.startTime || Date.now());
-      const loadTime = Date.now() - startTime;
-      console.log(`[Image] Loaded ${src} in ${loadTime}ms`);
-    } catch (error) {
-      console.warn('[Image] Performance tracking error:', error);
-    }
-  }, [src]);
-
-  const handleError = useCallback((e) => {
-    console.error('[Image] Failed to load image:', src);
-    setIsError(true);
-    setIsLoaded(false);
-    
-    // Clean up preload link on error
-    if (preloadLinkRef.current && document.head.contains(preloadLinkRef.current)) {
-      document.head.removeChild(preloadLinkRef.current);
-      preloadLinkRef.current = null;
-    }
-  }, [src]);
 
   // Memoized srcSet creation for better performance - only create if needed
   const webpSrcSet = useMemo(() => {
@@ -228,8 +227,8 @@ const Image = ({
           zIndex: 2,
           ...(isLoaded ? {} : { filter: 'blur(1px)' })
         }}
-        onLoad={handleLoad}
-        onError={handleError}
+        onLoad={handleImageLoad}
+        onError={handleImageError}
         {...props}
       />
 
