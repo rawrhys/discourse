@@ -20,6 +20,9 @@ const Image = ({
   const pictureRef = useRef(null);
   const imgRef = useRef(null);
 
+  // Determine if we should show the image
+  const shouldShowImage = isInView || preload;
+
   // Generate responsive image sizes
   const imageSizes = [320, 480, 800, 1200, 1600];
   
@@ -149,8 +152,6 @@ const Image = ({
   const webpSrcSet = createSrcSet(src, 'webp');
   const jpegSrcSet = createSrcSet(src, 'jpeg');
 
-  // Determine if we should show the image
-  const shouldShowImage = isInView || preload;
   const actualSrc = shouldShowImage ? src : 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
 
   return (
