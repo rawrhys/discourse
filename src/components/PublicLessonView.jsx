@@ -4,6 +4,7 @@ import imagePreloadService from '../services/ImagePreloadService';
 import imagePerformanceMonitor from '../services/ImagePerformanceMonitor';
 import { publicTTSService } from '../services/TTSService';
 import PerformanceMonitorService from '../services/PerformanceMonitorService';
+const performanceMonitor = PerformanceMonitorService;
 import markdownService from '../services/MarkdownService';
 import academicReferencesService from '../services/AcademicReferencesService';
 import { fixMalformedContent, formatContentForDisplay, cleanContentFormatting, validateContent, stripSectionKeys, getContentAsString } from '../utils/contentFormatter';
@@ -257,10 +258,11 @@ const PublicLessonView = ({
     };
   }, []);
 
-  // Clean up any remaining malformed asterisks after content is rendered
+  // Clean up any remaining malformed asterisks after content is rendered (optimized for performance)
   useEffect(() => {
     if (lesson?.content) {
-      const timer = setTimeout(() => {
+      // Use requestIdleCallback for better performance if available, otherwise use timeout
+      const cleanupFunction = () => {
         const markdownElements = document.querySelectorAll('.lesson-content .markdown-body');
         markdownElements.forEach(element => {
           element.innerHTML = element.innerHTML
@@ -268,9 +270,15 @@ const PublicLessonView = ({
             .replace(/\*\*\*\*\*/g, '**')
             .replace(/\*\*\*\*\*\*/g, '**');
         });
-      }, 100);
+      };
       
-      return () => clearTimeout(timer);
+      if (window.requestIdleCallback) {
+        const idleId = requestIdleCallback(cleanupFunction, { timeout: 1000 });
+        return () => window.cancelIdleCallback(idleId);
+      } else {
+        const timer = setTimeout(cleanupFunction, 100);
+        return () => clearTimeout(timer);
+      }
     }
   }, [lesson?.content]);
 
@@ -416,6 +424,15 @@ const PublicLessonView = ({
     
     // Add debounce to prevent rapid successive searches
     const timeoutId = setTimeout(async function fetchImage() {
+      const startTime = performance.now();
+      
+      // Check if we already have a cached result for this lesson
+      if (imageData && imageData.url && imageData.title) {
+        console.log('[PublicLessonView] Using existing image data, skipping fetch');
+        setImageLoading(false);
+        return;
+      }
+      
       try {
         // For public courses, use a simplified image search
         const result = await SimpleImageService.searchWithContext(
@@ -428,6 +445,17 @@ const PublicLessonView = ({
           lesson.id,
           courseDescription
         );
+        
+        // Track image fetch performance
+        const fetchTime = performance.now() - startTime;
+        if (result && result.url) {
+          performanceMonitor.trackImageLoad(result.url, fetchTime, false);
+        }
+        
+        // Log slow image fetches
+        if (fetchTime > 2000) {
+          console.warn('[PublicLessonView] Slow image fetch detected:', fetchTime + 'ms');
+        }
         
         if (!ignore && !abortController.signal.aborted) {
           setImageData(result ? { ...result, url: result.url } : null);
@@ -451,33 +479,44 @@ const PublicLessonView = ({
     };
   }, [lesson?.id, lesson?.title, subject, courseId]); // Only depend on stable values
 
-  // Preload current lesson image for better performance (public courses)
+  // Preload current lesson image for better performance (public courses) - optimized
   useEffect(() => {
     if (!lesson || !lesson.image) return;
 
-    const preloadCurrentImage = async () => {
-      try {
-        // Preload the current lesson's image
-        await imagePreloadService.preloadLessonImages(lesson, 10);
-        console.log('[PublicLessonView] Preloaded current lesson image');
-      } catch (error) {
-        console.warn('[PublicLessonView] Image preloading error:', error);
-      }
-    };
+    const imageUrl = lesson.image.imageUrl || lesson.image.url;
+    if (!imageUrl) return;
 
-    // Run preloading in background
-    preloadCurrentImage();
-  }, [lesson?.id, lesson?.image]);
+    // Only preload if not already preloaded and not already loaded
+    if (!imagePreloadService.isPreloaded(imageUrl) && !imageData?.url) {
+      const preloadCurrentImage = async () => {
+        const startTime = performance.now();
+        try {
+          // Preload the current lesson's image with high priority
+          await imagePreloadService.preloadLessonImages(lesson, 10);
+          console.log('[PublicLessonView] Preloaded current lesson image');
+          
+          // Track performance
+          const preloadTime = performance.now() - startTime;
+          performanceMonitor.trackImageLoad(imageUrl, preloadTime, true);
+        } catch (error) {
+          console.warn('[PublicLessonView] Image preloading error:', error);
+        }
+      };
 
-  // Academic references state
-  const [academicReferences, setAcademicReferences] = useState([]);
-  const [contentWithCitations, setContentWithCitations] = useState('');
+      // Run preloading in background
+      preloadCurrentImage();
+    } else {
+      console.log('[PublicLessonView] Image already preloaded or loaded, skipping preload');
+    }
+  }, [lesson?.id, lesson?.image, imageData?.url]);
+
+  // Academic references state (optimized with useMemo)
   const [highlightedCitation, setHighlightedCitation] = useState(null);
 
-  // Generate academic references when lesson changes
-  useEffect(() => {
-    if (!lesson?.content || !subject) return;
-
+  // Memoize academic references to prevent regeneration on every render
+  const academicReferences = useMemo(() => {
+    if (!lesson?.content || !subject || !lesson?.title) return [];
+    
     try {
       console.log('[PublicLessonView] Generating academic references for:', lesson.title);
       
@@ -486,8 +525,11 @@ const PublicLessonView = ({
         ? getContentAsString(lesson.content)
         : getContentAsString(lesson.content);
       
+      // Only generate if content is substantial
+      if (lessonContentString.length < 100) return [];
+      
       // Debug logging - reduced frequency
-      if (process.env.NODE_ENV === 'development' && Math.random() < 0.1) { // Only log 10% of the time
+      if (process.env.NODE_ENV === 'development' && Math.random() < 0.05) { // Reduced to 5% frequency
         console.log('[PublicLessonView] Content processing debug:', {
           originalContentType: typeof lesson.content,
           originalContentLength: typeof lesson.content === 'string' ? lesson.content.length : 'object',
@@ -505,26 +547,39 @@ const PublicLessonView = ({
         lesson.title
       );
       
-      setAcademicReferences(references);
+      console.log('[PublicLessonView] Academic references generated:', {
+        referencesCount: references.length,
+        hasCitations: !!references.length
+      });
+      
+      return references;
+    } catch (error) {
+      console.error('[PublicLessonView] Error generating academic references:', error);
+      return [];
+    }
+  }, [lesson?.content, subject, lesson?.title]);
+
+  // Memoize content with citations to prevent regeneration on every render
+  const contentWithCitations = useMemo(() => {
+    if (!lesson?.content || !academicReferences.length) return '';
+    
+    try {
+      const lessonContentString = typeof lesson.content === 'string' 
+        ? getContentAsString(lesson.content)
+        : getContentAsString(lesson.content);
       
       // Generate content with inline citations
       const { content: contentWithInlineCitations } = academicReferencesService.generateInlineCitations(
         lessonContentString,
-        references
+        academicReferences
       );
       
-      setContentWithCitations(contentWithInlineCitations);
-      
-      console.log('[PublicLessonView] Academic references generated:', {
-        referencesCount: references.length,
-        hasCitations: !!contentWithInlineCitations
-      });
+      return contentWithInlineCitations;
     } catch (error) {
-      console.error('[PublicLessonView] Error generating academic references:', error);
-      setAcademicReferences([]);
-      setContentWithCitations('');
+      console.error('[PublicLessonView] Error generating content with citations:', error);
+      return '';
     }
-  }, [lesson?.id, lesson?.title, lesson?.content, subject]);
+  }, [lesson?.content, academicReferences]);
 
   // Handle citation click
   const handleCitationClick = useCallback((referenceId) => {
@@ -1313,12 +1368,19 @@ const PublicLessonView = ({
            )}
            
            {imageData && imageData.url && !imageLoading && (
-             <figure className="lesson-image-container mb-6" style={{ maxWidth: 700, margin: '0 auto' }}>
+             <figure className="lesson-image-container mb-6" style={{ 
+               maxWidth: 700, 
+               margin: '0 auto',
+               minHeight: '300px',
+               position: 'relative'
+             }}>
                <Image
                  src={imageData.url}
                  alt={lesson?.title || 'Lesson illustration'}
                  className="lesson-image"
                  priority={true}
+                 preload={true}
+                 lazy={false}
                  sizes="(max-width: 768px) 100vw, 700px"
                  onError={(e) => {
                    e.target.style.display = 'none';
