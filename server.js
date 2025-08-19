@@ -3839,8 +3839,10 @@ app.get('/api/captcha/verify/:courseId',
       
       // Normalize challenge strings for comparison (handle URL encoding issues)
       const normalizeChallenge = (challengeStr) => {
+        if (!challengeStr || typeof challengeStr !== 'string') return '';
         // Decode URL-encoded characters and normalize spaces
         const decoded = decodeURIComponent(challengeStr);
+        // Remove all extra spaces and normalize to single spaces
         return decoded.replace(/\s+/g, ' ').trim();
       };
       const normalizedReceived = normalizeChallenge(challenge);
@@ -3953,6 +3955,7 @@ app.get('/api/captcha/verify/:courseId',
       { type: 'simple_division', operator: '÷', generate: () => {
         const num2 = Math.floor(Math.random() * 6) + 2; // 2-7
         const answer = Math.floor(Math.random() * 6) + 1; // 1-6
+        const num1 = answer * num2; // Calculate num1 based on answer and num2
         return { num1, num2, operator: '÷', answer: answer };
       }}
       // Removed sequence, word count, and letter count challenges - keeping only simple math
@@ -3992,6 +3995,14 @@ app.get('/api/captcha/verify/:courseId',
       if (!challengeData || typeof challengeData !== 'string') {
         throw new Error('Invalid challenge data generated');
       }
+      
+      // Log the generated challenge for debugging
+      console.log(`[API] Generated new CAPTCHA for course ${courseId}:`, {
+        challenge: challengeData,
+        challengeKey: newChallengeKey,
+        type: selectedType.type,
+        answer: challengeInfo.answer
+      });
     } catch (formatError) {
       console.error('[API] Error formatting challenge:', formatError);
       return res.status(500).json({
@@ -4093,7 +4104,7 @@ app.get('/api/captcha/new/:courseId',
       { type: 'simple_division', operator: '÷', generate: () => {
         const num2 = Math.floor(Math.random() * 6) + 2; // 2-7
         const answer = Math.floor(Math.random() * 6) + 1; // 1-6
-        const num1 = num2 * answer;
+        const num1 = answer * num2; // Calculate num1 based on answer and num2
         return { num1, num2, operator: '÷', answer: answer };
       }}
       // Removed sequence, word count, and letter count challenges - keeping only simple math
