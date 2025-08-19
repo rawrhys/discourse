@@ -115,7 +115,44 @@ const SimpleImageService = {
 
   // Simple cache key generation
   getCacheKey(lessonTitle, courseId, lessonId) {
-    return `${courseId}_${lessonId}_${lessonTitle?.substring(0, 50) || 'default'}`;
+    // Include lesson-specific context to ensure uniqueness
+    const lessonContext = this.extractLessonContext(lessonTitle);
+    return `${courseId}_${lessonId}_${lessonTitle?.substring(0, 50) || 'default'}_${lessonContext}`;
+  },
+
+  // Extract lesson-specific context for better uniqueness
+  extractLessonContext(lessonTitle) {
+    if (!lessonTitle) return 'default';
+    
+    const title = lessonTitle.toLowerCase();
+    let context = '';
+    
+    // Extract specific historical periods or events
+    if (title.includes('early') && title.includes('dynastic')) {
+      context = 'early_dynastic';
+    } else if (title.includes('unification')) {
+      context = 'unification';
+    } else if (title.includes('period')) {
+      context = 'period';
+    } else if (title.includes('empire')) {
+      context = 'empire';
+    } else if (title.includes('dynasty')) {
+      context = 'dynasty';
+    } else if (title.includes('kingdom')) {
+      context = 'kingdom';
+    } else if (title.includes('civilization')) {
+      context = 'civilization';
+    } else if (title.includes('ancient')) {
+      context = 'ancient';
+    } else if (title.includes('historical')) {
+      context = 'historical';
+    } else {
+      // Extract key words for uniqueness
+      const words = title.split(/\s+/).filter(word => word.length > 3);
+      context = words.slice(0, 2).join('_');
+    }
+    
+    return context || 'default';
   },
 
   // Get from cache
@@ -321,6 +358,14 @@ const SimpleImageService = {
       cleanQuery += ' ancient culture';
     } else if (cleanQuery.includes('art') || cleanQuery.includes('architecture')) {
       cleanQuery += ' ancient art';
+    } else if (cleanQuery.includes('unification')) {
+      cleanQuery += ' unified kingdom ancient';
+    } else if (cleanQuery.includes('dynasty')) {
+      cleanQuery += ' royal dynasty ancient';
+    } else if (cleanQuery.includes('empire')) {
+      cleanQuery += ' imperial power ancient';
+    } else if (cleanQuery.includes('kingdom')) {
+      cleanQuery += ' ancient kingdom civilization';
     }
     
     // Ensure we have at least some meaningful content

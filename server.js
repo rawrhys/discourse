@@ -225,9 +225,30 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
     // Create comprehensive context text for better relevance scoring
     const contextText = `${subj} ${text} ${courseTitle} ${courseSubject} ${allLessonTitles.join(' ')}`.toLowerCase();
 
-    // Heavy penalty for completely irrelevant objects
-    const irrelevantObjects = ['bench', 'chair', 'table', 'furniture', 'modern', 'contemporary', 'office', 'kitchen', 'bathroom', 'bedroom', 'living room', 'garden', 'flower', 'tree', 'plant', 'animal', 'pet', 'car', 'vehicle', 'building', 'house', 'apartment'];
-    
+    // Check if this is historical/educational content
+    const isHistoricalContent = /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(subj) || 
+                               /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(text) ||
+                               /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(courseTitle) ||
+                               /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(courseSubject);
+
+    // Heavy penalty for completely irrelevant objects in historical content
+    if (isHistoricalContent) {
+      const irrelevantObjects = [
+        'dinosaur', 'toy', 'bellflower', 'crocus', 'flower', 'bud', 'sprout', 'bloom', 'petal',
+        'bench', 'chair', 'table', 'furniture', 'modern', 'contemporary', 'office', 'kitchen', 
+        'bathroom', 'bedroom', 'living room', 'garden', 'tree', 'plant', 'animal', 'pet', 
+        'car', 'vehicle', 'building', 'house', 'apartment', 'dawn', 'ocean', 'nature', 'sky', 
+        'sunrise', 'sunset', 'landscape', 'early morning', 'boating', 'intercoastal', 'marsh'
+      ];
+      
+      for (const obj of irrelevantObjects) {
+        if (haystack.includes(obj)) {
+          score -= 300; // Much heavier penalty for irrelevant objects in historical content
+          console.log(`[ImageScoring] Heavy penalty for irrelevant object "${obj}" in historical content`);
+        }
+      }
+    }
+
     // Heavy penalty for colonization-related content (often irrelevant to historical lessons)
     const colonizationTerms = ['colonization', 'colonial', 'colony', 'colonist', 'settler', 'colonialism'];
     for (const term of colonizationTerms) {
@@ -236,19 +257,9 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
         console.log(`[ImageScoring] Heavy penalty for colonization term "${term}"`);
       }
     }
-    const isHistoricalContent = /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(subj) || /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(text);
-    
-    if (isHistoricalContent) {
-      for (const obj of irrelevantObjects) {
-        if (haystack.includes(obj)) {
-          score -= 200; // Much heavier penalty for irrelevant objects in historical content
-          console.log(`[ImageScoring] Heavy penalty for irrelevant object "${obj}" in historical content`);
-        }
-      }
-    }
 
     // Strong bonus for exact subject phrase appearing
-    if (subj && haystack.includes(subj)) score += 30;
+    if (subj && haystack.includes(subj)) score += 50;
 
     // Enhanced token-based matching using full course context
     const subjectTokens = extractSearchKeywords(subj, null, 6);
@@ -258,10 +269,10 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
     
     for (const tok of allTokens) {
       if (tok.length < 3) continue;
-      if (haystack.includes(tok)) score += 4;
+      if (haystack.includes(tok)) score += 8;
     }
 
-    // Course context relevance scoring - more lenient approach
+    // Course context relevance scoring - more intelligent approach
     if (courseTitle || courseSubject) {
       const courseContextTerms = extractSearchKeywords(courseTitle + ' ' + courseSubject, null, 10);
       const hasCourseContextMatch = courseContextTerms.some(term => 
@@ -269,13 +280,23 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
       );
       
       if (!hasCourseContextMatch) {
-        // Reduced penalty - only -10 instead of -50
-        score -= 10;
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`[ImageScoring] Minor penalty for image not matching course context: ${courseTitle}`);
+        // Only apply penalty if the image is clearly irrelevant to the course topic
+        const courseTopic = courseTitle + ' ' + courseSubject;
+        const isCompletelyIrrelevant = !isHistoricalContent && (
+          courseTopic.includes('egypt') && !haystack.includes('egypt') ||
+          courseTopic.includes('rome') && !haystack.includes('roman') ||
+          courseTopic.includes('greek') && !haystack.includes('greek') ||
+          courseTopic.includes('history') && !haystack.includes('historical')
+        );
+        
+        if (isCompletelyIrrelevant) {
+          score -= 50;
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`[ImageScoring] Heavy penalty for image not matching course context: ${courseTitle}`);
+          }
         }
       } else {
-        score += 20; // Bonus for images that match course context
+        score += 30; // Bonus for images that match course context
         if (process.env.NODE_ENV === 'development') {
           console.log(`[ImageScoring] Bonus for image matching course context: ${courseTitle}`);
         }
@@ -285,18 +306,20 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
     // Additional bonus for historical content relevance
     if (isHistoricalContent) {
       // Bonus for historical terms in the image metadata
-      const historicalTerms = ['ancient', 'historical', 'archaeological', 'classical', 'antiquity', 'rome', 'roman', 'greek', 'egypt', 'medieval', 'renaissance'];
+      const historicalTerms = ['ancient', 'historical', 'archaeological', 'classical', 'antiquity', 'rome', 'roman', 'greek', 'egypt', 'medieval', 'renaissance', 'dynasty', 'empire', 'kingdom', 'civilization'];
       for (const term of historicalTerms) {
         if (haystack.includes(term)) {
-          score += 8; // Bonus for historical relevance
+          score += 15; // Increased bonus for historical relevance
         }
       }
       
       // Bonus for specific historical subjects
-      if (subj.includes('rome') && haystack.includes('roman')) score += 15;
-      if (subj.includes('greek') && haystack.includes('greek')) score += 15;
-      if (subj.includes('egypt') && haystack.includes('egypt')) score += 15;
-      if (subj.includes('medieval') && haystack.includes('medieval')) score += 15;
+      if (subj.includes('rome') && haystack.includes('roman')) score += 25;
+      if (subj.includes('greek') && haystack.includes('greek')) score += 25;
+      if (subj.includes('egypt') && haystack.includes('egypt')) score += 25;
+      if (subj.includes('medieval') && haystack.includes('medieval')) score += 25;
+      if (subj.includes('dynasty') && haystack.includes('dynasty')) score += 25;
+      if (subj.includes('empire') && haystack.includes('empire')) score += 25;
     }
 
     // Check if this is historical/educational content that should be more permissive
@@ -330,10 +353,10 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
     if (w * h > 600 * 400) score += 5;
     if (w * h > 1000 * 700) score += 5;
 
-    // Reduced bonus for Wikipedia images in historical contexts
+    // Bonus for Wikipedia images in historical contexts
     if (isHistoricalContent && page.includes('wikimedia.org')) {
-      score += 15; // Reduced bonus for Wikipedia images in historical content (was 50)
-      console.log(`[ImageScoring] Reduced bonus for Wikipedia image in historical content`);
+      score += 25; // Bonus for Wikipedia images in historical content
+      console.log(`[ImageScoring] Bonus for Wikipedia image in historical content`);
     }
 
     return Math.max(0, score);
@@ -574,61 +597,50 @@ function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitl
       dedupePush(queries, `${phrase} ancient history`);
       dedupePush(queries, `${phrase} historical artifact`);
       dedupePush(queries, `${phrase} archaeological site`);
+      dedupePush(queries, `${phrase} ancient civilization`);
       if (queries.length >= maxQueries) break;
     }
     
-    // Add specific historical terms to avoid generic images
-    const historicalTerms = ['ancient', 'historical', 'archaeological', 'classical', 'antiquity'];
-    for (const term of historicalTerms) {
-      if (queries.length < maxQueries) {
-        dedupePush(queries, `${normalizedSubject} ${term}`);
-      }
+    // Add lesson-specific context to ensure uniqueness
+    const lessonSpecificTerms = [];
+    if (subjectPhrase.includes('early') || subjectPhrase.includes('dynastic')) {
+      lessonSpecificTerms.push('early period', 'dynastic era', 'ancient kingdom');
+    }
+    if (subjectPhrase.includes('unification')) {
+      lessonSpecificTerms.push('unified kingdom', 'united empire', 'consolidation');
+    }
+    if (subjectPhrase.includes('period')) {
+      lessonSpecificTerms.push('historical period', 'ancient era', 'civilization');
+    }
+    if (subjectPhrase.includes('empire')) {
+      lessonSpecificTerms.push('imperial power', 'ancient empire', 'ruling dynasty');
+    }
+    if (subjectPhrase.includes('dynasty')) {
+      lessonSpecificTerms.push('royal dynasty', 'ruling family', 'ancient rulers');
     }
     
-    // Add Egypt-specific terms for better relevance
-    if (/\b(egypt|egyptian|pharaoh|pyramid|dynastic|nile)\b/i.test(subjectPhrase) || 
-        /\b(egypt|egyptian|pharaoh|pyramid|dynastic|nile)\b/i.test(contentText) ||
-        /\b(egypt|egyptian|pharaoh|pyramid|dynastic|nile)\b/i.test(courseTitle || '')) {
-      
-      const egyptTerms = ['ancient egypt', 'egyptian civilization', 'pharaoh', 'pyramid', 'nile river', 'egyptian artifact'];
-      for (const term of egyptTerms) {
-        if (queries.length < maxQueries) {
-          dedupePush(queries, `${normalizedSubject} ${term}`);
-        }
-      }
-      
-      // Add specific Egypt-related queries
-      if (queries.length < maxQueries) {
-        dedupePush(queries, 'ancient egypt civilization');
-        dedupePush(queries, 'egyptian pharaoh dynasty');
-        dedupePush(queries, 'ancient egyptian artifact');
+    // Add lesson-specific queries to ensure unique images
+    for (const term of lessonSpecificTerms) {
+      for (const phrase of properPhrases.slice(0, 2)) {
+        dedupePush(queries, `${phrase} ${term}`);
+        if (queries.length >= maxQueries) break;
       }
     }
   }
 
-  // Filter out queries that might lead to irrelevant results
-  const filteredQueries = queries.filter(query => {
-    const lowerQuery = query.toLowerCase();
-    
-    // Avoid queries that might lead to colonization-related results
-    const colonizationTerms = ['colonization', 'colonial', 'colony', 'colonist', 'settler'];
-    if (colonizationTerms.some(term => lowerQuery.includes(term))) {
-      return false;
-    }
-    
-    // Avoid generic terms that might lead to irrelevant results for historical content
-    const isHistoricalContent = /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(subjectPhrase);
-    if (isHistoricalContent) {
-      const genericTerms = ['property', 'intellectual', 'business', 'modern', 'technology', 'computer', 'software', 'digital', 'online', 'web', 'internet'];
-      if (genericTerms.some(term => lowerQuery.includes(term))) {
-        return false;
+  // Ensure we have enough queries for variety
+  if (queries.length < 3) {
+    // Add more specific historical terms for better image variety
+    const historicalTerms = ['ancient', 'historical', 'archaeological', 'classical', 'antiquity'];
+    for (const term of historicalTerms) {
+      for (const phrase of properPhrases.slice(0, 2)) {
+        dedupePush(queries, `${phrase} ${term}`);
+        if (queries.length >= maxQueries) break;
       }
     }
-    
-    return true;
-  });
+  }
 
-  return filteredQueries.slice(0, maxQueries);
+  return queries.slice(0, maxQueries);
 }
 
 function getPixabayApiKey() {

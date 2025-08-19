@@ -98,28 +98,34 @@ class ImagePerformanceMonitor {
 
   trackLongTask(entry) {
     const duration = entry.duration;
-    const startTime = entry.startTime;
     
-    // Use requestIdleCallback to avoid blocking the main thread
-    if ('requestIdleCallback' in window) {
-      requestIdleCallback(() => {
-        console.warn(`[Performance] Long task detected: ${duration.toFixed(2)}ms at ${new Date(startTime).toISOString()}`);
-        
-        // Track render-blocking tasks
-        if (duration > 100) {
-          console.error(`[Performance] Render-blocking task: ${duration.toFixed(2)}ms - this may cause lag`);
-        }
-      }, { timeout: 1000 });
-    } else {
-      // Fallback for browsers without requestIdleCallback
-      setTimeout(() => {
-        console.warn(`[Performance] Long task detected: ${duration.toFixed(2)}ms at ${new Date(startTime).toISOString()}`);
-        
-        if (duration > 100) {
-          console.error(`[Performance] Render-blocking task: ${duration.toFixed(2)}ms - this may cause lag`);
-        }
-      }, 0);
+    // Only track tasks that are actually problematic (longer than 100ms)
+    if (duration > 100) {
+      // Use requestIdleCallback to avoid blocking the main thread
+      if ('requestIdleCallback' in window) {
+        requestIdleCallback(() => {
+          this.processLongTask(entry, duration);
+        }, { timeout: 2000 }); // Increased timeout to reduce frequency
+      } else {
+        // Fallback with longer delay to reduce blocking
+        setTimeout(() => {
+          this.processLongTask(entry, duration);
+        }, 100);
+      }
     }
+  }
+
+  processLongTask(entry, duration) {
+    // Only log if it's actually causing significant lag
+    if (duration > 200) {
+      console.error(`[Performance] Render-blocking task: ${duration.toFixed(2)}ms - this may cause lag`);
+    }
+    
+    // Track component render times more efficiently
+    this.renderTimes.set(entry.name || 'unknown', {
+      duration,
+      timestamp: Date.now()
+    });
   }
 
   // Track render times for components
