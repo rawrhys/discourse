@@ -765,11 +765,17 @@ const LessonView = ({
     // Guard against automatic calls - only allow manual button clicks
     console.log('[LessonView] handleStartAudio called - manual start only');
     
-    // Check if TTS service has been stopped - if so, don't start
+    // Check if TTS service has been stopped - if so, restart it
     const serviceStatus = privateTTSService.getStatus();
     if (serviceStatus.isStopped) {
-      console.log('[LessonView] TTS service was stopped, not starting new speech');
-      return;
+      console.log('[LessonView] TTS service was stopped, restarting service...');
+      try {
+        await privateTTSService.initSpeech();
+        console.log('[LessonView] TTS service restarted successfully');
+      } catch (error) {
+        console.error('[LessonView] Failed to restart TTS service:', error);
+        return;
+      }
     }
     
     try {

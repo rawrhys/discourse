@@ -139,6 +139,9 @@ class TTSService {
 
   // Enhanced initialization with multiple fallback strategies
   async initSpeech() {
+    // Clear the stopped flag when reinitializing
+    this.isStopped = false;
+    
     if (this.initializationAttempts >= this.maxInitAttempts) {
       console.warn(`[${this.serviceType} TTS] Max initialization attempts reached`);
       return;
