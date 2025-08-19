@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import PropTypes from 'prop-types';
 import imagePreloadService from '../services/ImagePreloadService';
+import SimpleImageService from '../services/SimpleImageService';
+import CacheService from '../services/CacheService';
+import imagePerformanceMonitor from '../services/ImagePerformanceMonitor';
 
 const Image = ({ 
   src, 
@@ -11,6 +14,8 @@ const Image = ({
   preload = false, 
   priority = false,
   placeholder = null,
+  responsive = true,
+  sizes = '(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw',
   ...props 
 }) => {
   const [isLoaded, setIsLoaded] = useState(false);
@@ -26,30 +31,59 @@ const Image = ({
   // Determine if we should show the image
   const shouldShowImage = isInView || preload;
 
-  // Optimized image sizes for better performance - single size to reduce complexity
-  const imageSizes = useMemo(() => [800], []);
+  // Check if image is already cached
+  const isCached = useMemo(() => {
+    return CacheService.isImageCached(src);
+  }, [src]);
+
+  // Generate responsive image URLs with WebP support
+  const responsiveUrls = useMemo(() => {
+    if (!src || !responsive) return null;
+    
+    try {
+      return SimpleImageService.generateResponsiveUrls(src, {
+        sizes: [400, 800, 1200],
+        format: 'webp',
+        quality: 80
+      });
+    } catch (error) {
+      console.warn('[Image] Failed to generate responsive URLs:', error);
+      return null;
+    }
+  }, [src, responsive]);
 
   // Create optimized srcSet for different formats with caching
   const createSrcSet = useCallback((baseUrl, format) => {
     if (!baseUrl || !isInView) return '';
     
-    // Use fast image proxy for maximum speed
+    if (responsiveUrls) {
+      // Use responsive URLs if available
+      return Object.entries(responsiveUrls)
+        .map(([size, url]) => `${url} ${size}`)
+        .join(', ');
+    }
+    
+    // Fallback to original logic
     const proxyUrl = baseUrl.replace('/api/image/enhanced', '/api/image/fast');
-    return imageSizes
-      .map(size => `${proxyUrl} ${size}w`) // No parameters for maximum speed
-      .join(', ');
-  }, [isInView, imageSizes]);
+    return `${proxyUrl} 800w`;
+  }, [isInView, responsiveUrls]);
 
   // Generate low-quality placeholder with better error handling - only if not already loaded
   const generateLowQualityPlaceholder = useCallback(async (imageUrl) => {
     if (!imageUrl || lowQualitySrc || isLoaded) return;
     
     try {
-      // Use fast path for placeholder - no processing needed
-      const placeholderUrl = imageUrl.replace('/api/image/enhanced', '/api/image/fast');
+      // Use optimized thumbnail for placeholder
+      const placeholderUrl = SimpleImageService.generateOptimizedUrl(imageUrl, {
+        width: 100,
+        format: 'webp',
+        quality: 30
+      });
       setLowQualitySrc(placeholderUrl);
     } catch (error) {
       console.warn('[Image] Failed to generate low-quality placeholder:', error);
+      // Fallback to original URL
+      setLowQualitySrc(imageUrl);
     }
   }, [lowQualitySrc, isLoaded]);
 
@@ -140,20 +174,44 @@ const Image = ({
       }
     }
     
-    // Basic performance tracking
+    // Performance tracking with enhanced monitoring
     try {
       const startTime = parseInt(imgRef.current?.dataset?.startTime || Date.now());
       const loadTime = Date.now() - startTime;
-      console.log(`[Image] Loaded ${src} in ${loadTime}ms`);
+      
+      // Track performance with enhanced metadata
+      const fileSize = imgRef.current?.naturalWidth * imgRef.current?.naturalHeight * 4; // Rough estimate
+      const format = SimpleImageService.detectFormatFromUrl ? SimpleImageService.detectFormatFromUrl(src) : 'unknown';
+      
+      imagePerformanceMonitor.trackImageLoad(
+        src, 
+        loadTime, 
+        isCached, 
+        fileSize, 
+        format
+      );
+      
+      // Cache the successfully loaded image
+      CacheService.cacheImage(src, {
+        width: imgRef.current?.naturalWidth,
+        height: imgRef.current?.naturalHeight,
+        loadTime,
+        format
+      });
+      
+      console.log(`[Image] Loaded ${src} in ${loadTime}ms (cached: ${isCached})`);
     } catch (error) {
       console.warn('[Image] Performance tracking error:', error);
     }
-  }, [src]);
+  }, [src, isCached]);
 
   const handleError = useCallback((e) => {
     console.error('[Image] Failed to load image:', src);
     setIsError(true);
     setIsLoaded(false);
+    
+    // Track error with performance monitor
+    imagePerformanceMonitor.trackImageError(src, e.message || 'Image load failed');
     
     // Clean up preload link on error
     if (preloadLinkRef.current && document.head.contains(preloadLinkRef.current)) {
@@ -210,6 +268,24 @@ const Image = ({
         />
       )}
 
+      {/* WebP source for modern browsers */}
+      {shouldShowImage && webpSrcSet && SimpleImageService.supportsWebP() && (
+        <source
+          srcSet={webpSrcSet}
+          sizes={sizes}
+          type="image/webp"
+        />
+      )}
+
+      {/* JPEG fallback source */}
+      {shouldShowImage && jpegSrcSet && (
+        <source
+          srcSet={jpegSrcSet}
+          sizes={sizes}
+          type="image/jpeg"
+        />
+      )}
+
       {/* Main image element with better loading attributes */}
       <img
         ref={imgRef}
@@ -217,6 +293,9 @@ const Image = ({
         alt={alt}
         loading={lazy ? 'lazy' : 'eager'}
         decoding="async"
+        fetchPriority={isInView ? "high" : "auto"}
+        srcSet={shouldShowImage && !webpSrcSet ? createSrcSet(src, 'jpeg') : undefined}
+        sizes={shouldShowImage ? sizes : undefined}
         className={`
           transition-all duration-300 ease-out
           ${isLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-105'}
@@ -257,7 +336,9 @@ Image.propTypes = {
   lazy: PropTypes.bool,
   preload: PropTypes.bool,
   priority: PropTypes.bool,
-  placeholder: PropTypes.string
+  placeholder: PropTypes.string,
+  responsive: PropTypes.bool,
+  sizes: PropTypes.string
 };
 
 export default Image; 

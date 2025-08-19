@@ -247,6 +247,99 @@ const SimpleImageService = {
       expiredEntries,
       cacheTimeout: this.cacheTimeout
     };
+  },
+
+  /**
+   * Generate optimized image URL with size and format parameters
+   * @param {string} baseUrl - Base image URL
+   * @param {Object} options - Optimization options
+   * @param {number} options.width - Target width in pixels
+   * @param {number} options.height - Target height in pixels (optional)
+   * @param {string} options.format - Image format (webp, jpeg, png)
+   * @param {number} options.quality - Quality percentage (1-100)
+   * @param {boolean} options.webp - Force WebP format if supported
+   * @returns {string} Optimized image URL
+   */
+  generateOptimizedUrl(baseUrl, options = {}) {
+    if (!baseUrl) return baseUrl;
+
+    const {
+      width,
+      height,
+      format = 'webp',
+      quality = 80,
+      webp = true
+    } = options;
+
+    try {
+      const url = new URL(baseUrl);
+      
+      // Add size parameters if provided
+      if (width) {
+        url.searchParams.set('width', width.toString());
+      }
+      if (height) {
+        url.searchParams.set('height', height.toString());
+      }
+      
+      // Add format parameter
+      if (format && format !== 'unknown') {
+        url.searchParams.set('format', format);
+      }
+      
+      // Add quality parameter
+      if (quality && quality !== 80) {
+        url.searchParams.set('quality', quality.toString());
+      }
+      
+      // Add WebP preference
+      if (webp && this.supportsWebP()) {
+        url.searchParams.set('webp', 'true');
+      }
+
+      return url.toString();
+    } catch (error) {
+      console.warn('[SimpleImageService] Failed to generate optimized URL:', error);
+      return baseUrl; // Fallback to original URL
+    }
+  },
+
+  /**
+   * Check if browser supports WebP format
+   * @returns {boolean} WebP support status
+   */
+  supportsWebP() {
+    // Check if WebP is supported by the browser
+    const canvas = document.createElement('canvas');
+    canvas.width = 1;
+    canvas.height = 1;
+    return canvas.toDataURL('image/webp').indexOf('data:image/webp') === 0;
+  },
+
+  /**
+   * Generate responsive image URLs for different screen sizes
+   * @param {string} baseUrl - Base image URL
+   * @param {Object} options - Responsive options
+   * @returns {Object} Object with different size URLs
+   */
+  generateResponsiveUrls(baseUrl, options = {}) {
+    const {
+      sizes = [400, 800, 1200],
+      format = 'webp',
+      quality = 80
+    } = options;
+
+    const urls = {};
+    
+    sizes.forEach(size => {
+      urls[`${size}w`] = this.generateOptimizedUrl(baseUrl, {
+        width: size,
+        format,
+        quality
+      });
+    });
+
+    return urls;
   }
 };
 

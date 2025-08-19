@@ -3,7 +3,7 @@ class ImagePreloadService {
     this.preloadedImages = new Set();
     this.preloadQueue = [];
     this.isProcessing = false;
-    this.maxConcurrent = 1; // Reduced to 1 for better performance and to prevent conflicts
+    this.maxConcurrent = 3; // Increased from 1 to 3 for faster bulk loading
     this.activePreloads = 0;
     this.preloadCache = new Map(); // Add cache to prevent duplicate preloads
   }
@@ -28,12 +28,12 @@ class ImagePreloadService {
     return new Promise((resolve) => {
       // Add to queue with priority and resolve function
       this.preloadQueue.push({ url: imageUrl, priority, resolve });
-      this.preloadQueue.sort((a, b) => b.priority - a.priority); // Sort by priority
+    this.preloadQueue.sort((a, b) => b.priority - a.priority); // Sort by priority
 
-      // Start processing if not already running
-      if (!this.isProcessing) {
-        this.processQueue();
-      }
+    // Start processing if not already running
+    if (!this.isProcessing) {
+      this.processQueue();
+    }
     });
   }
 
@@ -107,7 +107,7 @@ class ImagePreloadService {
           this.preloadedImages.add(imageUrl);
           // Only remove link if we created it
           if (document.head.contains(link)) {
-            document.head.removeChild(link);
+          document.head.removeChild(link);
           }
           console.log(`[ImagePreloadService] Successfully preloaded: ${imageUrl}`);
           resolve(true);
@@ -116,7 +116,7 @@ class ImagePreloadService {
         img.onerror = () => {
           // Only remove link if we created it
           if (document.head.contains(link)) {
-            document.head.removeChild(link);
+          document.head.removeChild(link);
           }
           console.warn(`[ImagePreloadService] Failed to preload: ${imageUrl}`);
           resolve(false);
@@ -150,7 +150,20 @@ class ImagePreloadService {
    * @returns {boolean} - Whether image is preloaded
    */
   isPreloaded(imageUrl) {
-    return this.preloadedImages.has(imageUrl) || this.preloadCache.has(imageUrl);
+    // Check our internal cache first
+    if (this.preloadedImages.has(imageUrl) || this.preloadCache.has(imageUrl)) {
+      return true;
+    }
+
+    // Check browser cache if possible (not 100% reliable, but helps)
+    try {
+      const img = document.createElement('img');
+      img.src = imageUrl;
+      return img.complete && img.naturalWidth !== 0;
+    } catch (error) {
+      // Fallback to internal cache only
+      return false;
+    }
   }
 
   /**

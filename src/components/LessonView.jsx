@@ -275,7 +275,7 @@ const Content = memo(({ content, bibliography, lessonTitle, courseSubject }) => 
         courseSubject,
         contentLength: lessonContentString?.length || 0
       });
-    
+      
       // Generate academic references using the same method as PublicLessonView
       const references = academicReferencesService.generateReferences(
         lessonContentString,
@@ -1132,13 +1132,13 @@ const LessonView = ({
       const appearsMoreThanOnce = (imageTitle && imageTitleCounts[imageTitle] > 1) || (imageUrl && imageUrlCounts[imageUrl] > 1);
       
       if (!appearsMoreThanOnce) {
-        const existing = {
+      const existing = {
           url: normalizeImageUrl(imageUrl),
           title: imageTitle,
-          pageURL: propLesson.image.pageURL,
-          attribution: propLesson.image.attribution,
-          uploader: undefined,
-        };
+        pageURL: propLesson.image.pageURL,
+        attribution: propLesson.image.attribution,
+        uploader: undefined,
+      };
         
         setImageData(existing);
         setImageLoading(false);
@@ -1287,22 +1287,22 @@ const LessonView = ({
 
     // Only preload if not already preloaded and not already loaded
     if (!imagePreloadService.isPreloaded(imageUrl) && !imageData?.url) {
-      const preloadCurrentImage = async () => {
-        try {
+    const preloadCurrentImage = async () => {
+      try {
           // Preload the current lesson's image with high priority
-          await imagePreloadService.preloadLessonImages(propLesson, 10);
-          console.log('[LessonView] Preloaded current lesson image');
+        await imagePreloadService.preloadLessonImages(propLesson, 10);
+        console.log('[LessonView] Preloaded current lesson image');
           
           // Track performance
           const preloadTime = performance.now() - renderStartTime.current;
           performanceMonitor.trackImageLoad(imageUrl, preloadTime, true);
-        } catch (error) {
-          console.warn('[LessonView] Image preloading error:', error);
-        }
-      };
+      } catch (error) {
+        console.warn('[LessonView] Image preloading error:', error);
+      }
+    };
 
       // Run preloading in background with higher priority
-      preloadCurrentImage();
+    preloadCurrentImage();
     } else {
       console.log('[LessonView] Image already preloaded or loaded, skipping preload');
     }
@@ -1330,7 +1330,7 @@ const LessonView = ({
         return () => window.cancelIdleCallback(idleId);
       } else {
         const timer = setTimeout(cleanupFunction, 100);
-        return () => clearTimeout(timer);
+      return () => clearTimeout(timer);
       }
     }
   }, [propLesson?.content]);
@@ -1389,8 +1389,8 @@ const LessonView = ({
 
   // Debug logging for image data (reduced frequency to prevent spam)
   if (process.env.NODE_ENV === 'development' && Math.random() < 0.05) {
-    console.log('[LessonView] Current imageData state:', imageData);
-    console.log('[LessonView] imageLoading state:', imageLoading);
+  console.log('[LessonView] Current imageData state:', imageData);
+  console.log('[LessonView] imageLoading state:', imageLoading);
   }
   
   return (

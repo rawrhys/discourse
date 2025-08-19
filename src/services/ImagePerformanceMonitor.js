@@ -30,8 +30,9 @@ class ImagePerformanceMonitor {
    * @param {boolean} cacheHit - Whether it was a cache hit
    * @param {number} fileSize - File size in bytes
    * @param {string} format - Image format
+   * @param {Object} headers - Response headers (optional)
    */
-  trackImageLoad(imageUrl, loadTime, cacheHit = false, fileSize = 0, format = 'unknown') {
+  trackImageLoad(imageUrl, loadTime, cacheHit = false, fileSize = 0, format = 'unknown', headers = {}) {
     if (!this.isEnabled) return;
 
     this.metrics.totalRequests++;
@@ -42,7 +43,7 @@ class ImagePerformanceMonitor {
       this.metrics.cacheMisses++;
     }
 
-    // Track load time
+    // Track load time with enhanced metadata
     if (!this.metrics.loadTimes.has(imageUrl)) {
       this.metrics.loadTimes.set(imageUrl, []);
     }
@@ -51,7 +52,9 @@ class ImagePerformanceMonitor {
       timestamp: Date.now(),
       cacheHit,
       fileSize,
-      format
+      format,
+      headers,
+      url: imageUrl // Store URL for easier access in reports
     });
 
     // Track file size
@@ -61,9 +64,9 @@ class ImagePerformanceMonitor {
 
     // Performance warnings - reduced frequency to prevent spam
     if (loadTime > this.thresholds.verySlowLoad) {
-      console.warn(`[ImagePerformance] Very slow image load: ${imageUrl} (${loadTime}ms)`);
+      console.warn(`[ImagePerformance] Very slow image load: ${imageUrl} (${loadTime}ms, ${this.formatFileSize(fileSize)}, ${format})`);
     } else if (loadTime > this.thresholds.slowLoad && Math.random() < 0.1) { // Only log 10% of slow loads
-      console.warn(`[ImagePerformance] Slow image load: ${imageUrl} (${loadTime}ms)`);
+      console.warn(`[ImagePerformance] Slow image load: ${imageUrl} (${loadTime}ms, ${this.formatFileSize(fileSize)}, ${format})`);
     }
 
     // File size warnings
@@ -228,45 +231,70 @@ class ImagePerformanceMonitor {
     const stats = this.getStats();
     const allLoadTimes = Array.from(this.metrics.loadTimes.values()).flat();
     
-    // Sort by load time to find slowest images
+    // Sort by load time to find slowest images with enhanced metadata
     const sortedLoadTimes = allLoadTimes
       .sort((a, b) => b.loadTime - a.loadTime)
-      .slice(0, 10); // Top 10 slowest
-
-    // Group by format
-    const formatStats = {};
-    allLoadTimes.forEach(item => {
-      if (!formatStats[item.format]) {
-        formatStats[item.format] = { count: 0, totalTime: 0, avgTime: 0 };
-      }
-      formatStats[item.format].count++;
-      formatStats[item.format].totalTime += item.loadTime;
-    });
-
-    // Calculate averages
-    Object.keys(formatStats).forEach(format => {
-      formatStats[format].avgTime = formatStats[format].totalTime / formatStats[format].count;
-    });
-
-    return {
-      ...stats,
-      slowestImages: sortedLoadTimes.map(item => ({
+      .slice(0, 10) // Top 10 slowest
+      .map(item => ({
         url: item.url,
         loadTime: item.loadTime + 'ms',
         fileSize: this.formatFileSize(item.fileSize),
         format: item.format,
-        cacheHit: item.cacheHit
-      })),
+        cacheHit: item.cacheHit,
+        timestamp: new Date(item.timestamp).toISOString(),
+        headers: item.headers || {}
+      }));
+
+    // Group by format with enhanced analysis
+    const formatStats = {};
+    allLoadTimes.forEach(item => {
+      if (!formatStats[item.format]) {
+        formatStats[item.format] = { 
+          count: 0, 
+          totalTime: 0, 
+          avgTime: 0,
+          totalSize: 0,
+          avgSize: 0,
+          slowCount: 0
+        };
+      }
+      formatStats[item.format].count++;
+      formatStats[item.format].totalTime += item.loadTime;
+      formatStats[item.format].totalSize += item.fileSize;
+      
+      if (item.loadTime > this.thresholds.slowLoad) {
+        formatStats[item.format].slowCount++;
+      }
+    });
+
+    // Calculate averages and percentages
+    Object.keys(formatStats).forEach(format => {
+      const stats = formatStats[format];
+      stats.avgTime = stats.totalTime / stats.count;
+      stats.avgSize = stats.totalSize / stats.count;
+      stats.slowPercentage = (stats.slowCount / stats.count * 100).toFixed(1) + '%';
+    });
+
+    // Enhanced recommendations based on detailed analysis
+    const recommendations = this.generateEnhancedRecommendations(formatStats, sortedLoadTimes);
+
+    return {
+      ...stats,
+      slowestImages: sortedLoadTimes,
       formatStats,
-      recommendations: this.generateRecommendations()
+      recommendations,
+      cdnAnalysis: this.analyzeCDNPerformance(allLoadTimes),
+      optimizationOpportunities: this.identifyOptimizationOpportunities(allLoadTimes)
     };
   }
 
   /**
-   * Generate performance recommendations
+   * Generate enhanced performance recommendations
+   * @param {Object} formatStats - Format statistics
+   * @param {Array} slowestImages - Slowest images list
    * @returns {Array} Array of recommendations
    */
-  generateRecommendations() {
+  generateEnhancedRecommendations(formatStats, slowestImages) {
     const recommendations = [];
     const stats = this.getStats();
     const allLoadTimes = Array.from(this.metrics.loadTimes.values()).flat();
@@ -274,33 +302,121 @@ class ImagePerformanceMonitor {
     // Check cache hit rate
     const cacheHitRateNum = parseFloat(stats.cacheHitRate);
     if (cacheHitRateNum < 50) {
-      recommendations.push('Consider implementing better image caching strategies');
+      recommendations.push('Consider implementing better image caching strategies with longer cache headers');
     }
 
     // Check preload hit rate
     const preloadHitRateNum = parseFloat(stats.preloadHitRate);
     if (preloadHitRateNum < 30) {
-      recommendations.push('Optimize image preloading strategy for better hit rates');
+      recommendations.push('Optimize image preloading strategy - consider increasing maxConcurrent to 3-4');
     }
 
     // Check for slow loads
     if (stats.slowLoads > allLoadTimes.length * 0.1) {
-      recommendations.push('More than 10% of images are loading slowly - consider image optimization');
+      recommendations.push('More than 10% of images are loading slowly - consider CDN optimization and WebP format');
     }
 
     // Check file sizes
     const avgFileSizeNum = parseFloat(stats.avgFileSize);
     if (avgFileSizeNum > 500) { // 500KB
-      recommendations.push('Average image file size is large - consider better compression');
+      recommendations.push('Average image file size is large - implement responsive images with size parameters');
     }
 
     // Check compression ratio
     const compressionRatioNum = parseFloat(stats.avgCompressionRatio);
     if (compressionRatioNum > 80) {
-      recommendations.push('Image compression could be improved - consider WebP format');
+      recommendations.push('Image compression could be improved - prioritize WebP format and quality optimization');
+    }
+
+    // Format-specific recommendations
+    Object.entries(formatStats).forEach(([format, stats]) => {
+      if (format === 'jpeg' && stats.avgSize > 300) { // 300KB
+        recommendations.push(`JPEG images average ${this.formatFileSize(stats.avgSize)} - consider WebP conversion`);
+      }
+      if (stats.slowPercentage > 20) {
+        recommendations.push(`${format.toUpperCase()} format has ${stats.slowPercentage} slow loads - optimize delivery`);
+      }
+    });
+
+    // CDN recommendations based on slowest images
+    if (slowestImages.length > 0) {
+      const cdnIssues = slowestImages.filter(img => 
+        img.loadTime > this.thresholds.verySlowLoad || 
+        parseFloat(img.fileSize) > 1024 * 1024 // 1MB
+      );
+      if (cdnIssues.length > 0) {
+        recommendations.push(`${cdnIssues.length} images have severe performance issues - prioritize CDN optimization`);
+      }
     }
 
     return recommendations;
+  }
+
+  /**
+   * Analyze CDN performance from load data
+   * @param {Array} allLoadTimes - All load time data
+   * @returns {Object} CDN analysis
+   */
+  analyzeCDNPerformance(allLoadTimes) {
+    const cdnAnalysis = {
+      totalImages: allLoadTimes.length,
+      slowImages: allLoadTimes.filter(item => item.loadTime > this.thresholds.slowLoad).length,
+      verySlowImages: allLoadTimes.filter(item => item.loadTime > this.thresholds.verySlowLoad).length,
+      largeImages: allLoadTimes.filter(item => item.fileSize > 1024 * 1024).length, // 1MB
+      averageLoadTime: 0,
+      cacheEfficiency: 0
+    };
+
+    if (allLoadTimes.length > 0) {
+      cdnAnalysis.averageLoadTime = allLoadTimes.reduce((sum, item) => sum + item.loadTime, 0) / allLoadTimes.length;
+      cdnAnalysis.cacheEfficiency = (this.metrics.cacheHits / this.metrics.totalRequests * 100);
+    }
+
+    return cdnAnalysis;
+  }
+
+  /**
+   * Identify specific optimization opportunities
+   * @param {Array} allLoadTimes - All load time data
+   * @returns {Array} Optimization opportunities
+   */
+  identifyOptimizationOpportunities(allLoadTimes) {
+    const opportunities = [];
+
+    // Find images that could benefit from format conversion
+    const jpegImages = allLoadTimes.filter(item => item.format === 'jpeg' && item.fileSize > 500 * 1024);
+    if (jpegImages.length > 0) {
+      opportunities.push({
+        type: 'format_conversion',
+        description: `${jpegImages.length} large JPEG images could be converted to WebP`,
+        potentialSavings: jpegImages.reduce((sum, item) => sum + item.fileSize * 0.3, 0), // 30% savings estimate
+        priority: 'high'
+      });
+    }
+
+    // Find images that could benefit from responsive sizing
+    const largeImages = allLoadTimes.filter(item => item.fileSize > 1024 * 1024);
+    if (largeImages.length > 0) {
+      opportunities.push({
+        type: 'responsive_images',
+        description: `${largeImages.length} images over 1MB could use responsive sizing`,
+        potentialSavings: largeImages.reduce((sum, item) => sum + item.fileSize * 0.5, 0), // 50% savings estimate
+        priority: 'high'
+      });
+    }
+
+    // Find slow-loading images that could benefit from CDN optimization
+    const slowImages = allLoadTimes.filter(item => item.loadTime > this.thresholds.slowLoad);
+    if (slowImages.length > 0) {
+      opportunities.push({
+        type: 'cdn_optimization',
+        description: `${slowImages.length} images loading slowly - CDN optimization needed`,
+        affectedUrls: slowImages.slice(0, 5).map(item => item.url), // Top 5 slowest
+        priority: 'medium'
+      });
+    }
+
+    return opportunities;
   }
 
   /**
