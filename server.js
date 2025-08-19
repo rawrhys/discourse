@@ -3778,6 +3778,86 @@ app.post('/api/courses/:courseId/unpublish', authenticateToken, async (req, res)
   }
 });
 
+// CAPTCHA verification endpoint for public course access
+app.get('/api/captcha/verify/:courseId', 
+  securityHeaders,
+  securityLogging,
+  botDetection,
+  publicCourseRateLimit,
+  publicCourseSlowDown,
+  async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const { challenge, response, challengeKey } = req.query;
+    
+    console.log(`[API] CAPTCHA verification for course ${courseId}:`, { challenge, response, challengeKey });
+    
+    // Verify CAPTCHA response
+    if (challenge && response && challengeKey) {
+      const captchaChallenges = global.captchaChallenges || new Map();
+      const storedChallenge = captchaChallenges.get(challengeKey);
+      
+      if (storedChallenge && storedChallenge.challenge === challenge) {
+        const expectedAnswer = eval(challenge); // Safe for simple math expressions
+        const userAnswer = parseInt(response);
+        
+        if (userAnswer === expectedAnswer) {
+          // CAPTCHA passed - create session and redirect to course
+          const sessionId = publicCourseSessionService.createSession(courseId);
+          captchaChallenges.delete(challengeKey); // Clean up
+          
+          console.log(`[API] CAPTCHA passed for course ${courseId}, created session: ${sessionId}`);
+          
+          return res.json({
+            success: true,
+            sessionId: sessionId,
+            redirectUrl: `/public/course/${courseId}?sessionId=${sessionId}`
+          });
+        } else {
+          // CAPTCHA failed
+          captchaChallenges.delete(challengeKey); // Clean up
+          return res.status(400).json({
+            success: false,
+            message: 'Incorrect answer. Please try again.',
+            requiresCaptcha: true
+          });
+        }
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid or expired challenge. Please refresh and try again.',
+          requiresCaptcha: true
+        });
+      }
+    }
+    
+    // No CAPTCHA parameters - generate new challenge
+    const captchaChallenges = global.captchaChallenges || new Map();
+    const num1 = Math.floor(Math.random() * 10) + 1;
+    const num2 = Math.floor(Math.random() * 10) + 1;
+    const challenge = `${num1} + ${num2}`;
+    const challengeKey = `captcha_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    captchaChallenges.set(challengeKey, {
+      challenge: challenge,
+      sessionId: null,
+      timestamp: Date.now()
+    });
+    
+    console.log(`[API] Generated CAPTCHA for course ${courseId}:`, { challenge, challengeKey });
+    
+    res.json({
+      requiresCaptcha: true,
+      challenge: challenge,
+      challengeKey: challengeKey,
+      message: 'Please solve this simple math problem to access the course.'
+    });
+  } catch (error) {
+    console.error('[API] CAPTCHA verification error:', error);
+    res.status(500).json({ error: 'CAPTCHA verification failed' });
+  }
+});
+
 // Handle public course access without specific course ID - redirect to a fallback course
 app.get('/api/public/courses', 
   securityHeaders,
@@ -3847,12 +3927,6 @@ Complete this lesson to unlock more content and continue your learning journey.`
     
     // Create session for the course
     const sessionId = publicCourseSessionService.createSession(course.id);
-    
-    // Check CAPTCHA
-    const captchaResult = await checkCaptcha(req, res, sessionId);
-    if (captchaResult.requiresCaptcha) {
-      return res.json(captchaResult);
-    }
     
     res.json({
       ...course,
@@ -3952,7 +4026,7 @@ Complete this lesson to unlock more content and continue your learning journey.`
       });
     }
     
-    // Create session ID first, then check CAPTCHA
+    // Create or restore session
     const sessionIdToUse = publicCourseSessionService.restoreOrCreateSession(normalizedId, sessionId);
     
     console.log(`[API] Session management result:`, {
@@ -3960,12 +4034,6 @@ Complete this lesson to unlock more content and continue your learning journey.`
       finalSessionId: sessionIdToUse,
       isNewSession: !sessionId || sessionId !== sessionIdToUse
     });
-    
-    // Now check CAPTCHA with the session ID available
-    const captchaResult = await checkCaptcha(req, res, sessionIdToUse);
-    if (captchaResult.requiresCaptcha) {
-      return res.json(captchaResult);
-    }
     
     console.log(`[API] Returning public course data:`, {
       id: course.id,

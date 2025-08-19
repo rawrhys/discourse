@@ -8,7 +8,7 @@ import ErrorState from './ErrorState';
 
 import Module from '../models/Module';
 import publicCourseSessionService from '../services/PublicCourseSessionService';
-import CaptchaChallenge from './CaptchaChallenge';
+
 
 // Lazy load QuizView
 const QuizView = lazy(() => import('./QuizView'));
@@ -38,9 +38,7 @@ const PublicCourseDisplay = () => {
   const [unlockedModules, setUnlockedModules] = useState(new Set());
   const [showUnlockToast, setShowUnlockToast] = useState(false);
   const [unlockedModuleName, setUnlockedModuleName] = useState('');
-  const [showCaptcha, setShowCaptcha] = useState(false);
-  const [captchaVerified, setCaptchaVerified] = useState(false);
-  const [captchaData, setCaptchaData] = useState(null);
+
   
   // Load quiz scores from session and apply to course data
   const loadSessionQuizScores = useCallback(async (courseData, sessionId) => {
@@ -78,19 +76,7 @@ const PublicCourseDisplay = () => {
     return courseData;
   }, [courseId]);
 
-  const handleCaptchaSuccess = useCallback(() => {
-    setCaptchaVerified(true);
-    setShowCaptcha(false);
-    setCaptchaData(null);
-    // Retry fetching the course data
-    window.location.reload();
-  }, []);
 
-  const handleCaptchaCancel = useCallback(() => {
-    setShowCaptcha(false);
-    setCaptchaData(null);
-    setError('Access denied. Please complete the security verification to continue.');
-  }, []);
 
   const handleQuizCompletion = useCallback(async (lessonId, score) => {
     if (!course || !sessionId) return;
@@ -228,34 +214,23 @@ const PublicCourseDisplay = () => {
         try {
           let courseData;
           
-          // Always try to get course data - CAPTCHA will be required for public access
+          // Check if user has a valid session - if not, redirect to CAPTCHA page
+          if (!existingSessionId) {
+            console.log('[PublicCourseDisplay] No session found, redirecting to CAPTCHA page');
+            navigate(`/captcha/${courseId}`);
+            return;
+          }
+          
+          // Try to get course data with existing session
           try {
             courseData = await api.getPublicCourse(courseId, existingSessionId);
-            
-            // Check if the response contains CAPTCHA data (successful response with CAPTCHA)
-            if (courseData && courseData.requiresCaptcha) {
-              console.log('[PublicCourseDisplay] CAPTCHA required from successful response:', courseData);
-              setCaptchaData({
-                challenge: courseData.challenge,
-                challengeKey: courseData.challengeKey,
-                message: courseData.message
-              });
-              setShowCaptcha(true);
-              return;
-            }
           } catch (error) {
             console.log('[PublicCourseDisplay] API error caught:', error);
-            console.log('[PublicCourseDisplay] Error response:', error.response);
             
-            // Check if server is requesting CAPTCHA
-            if (error.response && error.response.status === 200 && error.response.data && error.response.data.requiresCaptcha) {
-              console.log('[PublicCourseDisplay] CAPTCHA required, setting up CAPTCHA:', error.response.data);
-              setCaptchaData({
-                challenge: error.response.data.challenge,
-                challengeKey: error.response.data.challengeKey,
-                message: error.response.data.message
-              });
-              setShowCaptcha(true);
+            // If session is invalid or expired, redirect to CAPTCHA page
+            if (error.message && error.message.includes('401')) {
+              console.log('[PublicCourseDisplay] Session invalid, redirecting to CAPTCHA page');
+              navigate(`/captcha/${courseId}`);
               return;
             }
             throw error;
@@ -431,14 +406,6 @@ const PublicCourseDisplay = () => {
 
   return (
     <div className="flex h-screen bg-gray-100">
-      {showCaptcha && (
-        <CaptchaChallenge
-          onSuccess={handleCaptchaSuccess}
-          onCancel={handleCaptchaCancel}
-          challengeData={captchaData?.challenge}
-          challengeKey={captchaData?.challengeKey}
-        />
-      )}
       <div className={`fixed inset-y-0 left-0 transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 transition-transform duration-200 ease-in-out bg-white w-80 shadow-lg z-30 flex flex-col`}>
         <div className="p-5 border-b">
           <div className="flex justify-between items-center">

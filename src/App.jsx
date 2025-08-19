@@ -17,6 +17,7 @@ const Register = lazy(() => import('./components/auth/Register'));
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const CourseDisplay = lazy(() => import('./components/CourseDisplay'));
 const PublicCourseDisplay = lazy(() => import('./components/PublicCourseDisplay'));
+const CaptchaPage = lazy(() => import('./components/CaptchaPage'));
 const PrivacyPolicy = lazy(() => import('./components/legal/PrivacyPolicy.jsx'));
 const UserAgreement = lazy(() => import('./components/legal/UserAgreement.jsx'));
 
@@ -318,6 +319,7 @@ function App() {
                 <Route index element={<CourseDisplay />} />
                 <Route path="lesson/:lessonId" element={<CourseDisplay />} />
             </Route>
+            <Route path="/captcha/:courseId" element={<CaptchaPage />} />
             <Route path="/public/course/:courseId/*" element={<PublicCourseDisplay />} />
     
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
