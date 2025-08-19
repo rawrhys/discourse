@@ -535,25 +535,27 @@ const PublicLessonView = ({
           console.warn('[PublicLessonView] Slow image fetch detected:', fetchTime + 'ms');
         }
         
-        // If image search fails, use a fallback placeholder
-        if (!result || !result.url) {
-          console.warn('[PublicLessonView] Image search failed, using fallback placeholder');
+        // Always set image data - result should never be null due to fallbacks
+        if (result && result.url) {
+          console.log('[PublicLessonView] Setting image data:', result.title);
+          setImageData(result);
+        } else {
+          console.warn('[PublicLessonView] No image result, using fallback');
+          // This should never happen due to fallbacks, but just in case
           setImageData({
             url: 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
-            title: 'Placeholder Image',
+            title: 'Educational Content',
             pageURL: '',
             attribution: 'Wikimedia Commons',
             uploader: 'Wikimedia'
           });
-        } else {
-          setImageData(result ? { ...result, url: result.url } : null);
         }
       } catch (e) {
         console.warn('[PublicLessonView] Image fetch error:', e);
         // Use fallback placeholder on error
         setImageData({
           url: 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
-          title: 'Placeholder Image',
+          title: 'Educational Content',
           pageURL: '',
           attribution: 'Wikimedia Commons',
           uploader: 'Wikimedia'

@@ -584,11 +584,31 @@ const LessonView = ({
             attribution: result.attribution,
           }});
         }
+      } else if (!fallbackController.signal.aborted) {
+        // If no result, use fallback image
+        console.warn('[LessonView] Fallback search failed, using fallback image');
+        const fallbackImage = {
+          url: 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
+          title: 'Educational Content',
+          pageURL: '',
+          attribution: 'Wikimedia Commons',
+          uploader: 'Wikimedia'
+        };
+        setImageData(fallbackImage);
       }
     } catch (e) {
       // Only handle errors if not aborted
       if (!fallbackController.signal.aborted) {
         console.warn('[LessonView] Image fallback error:', e);
+        // Use fallback placeholder on error
+        const fallbackImage = {
+          url: 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
+          title: 'Educational Content',
+          pageURL: '',
+          attribution: 'Wikimedia Commons',
+          uploader: 'Wikimedia'
+        };
+        setImageData(fallbackImage);
       }
     }
     
@@ -1207,42 +1227,61 @@ const LessonView = ({
         if (!ignore && !abortController.signal.aborted) {
           console.log('[LessonView] Setting image data:', result);
           
-          // Only update if the image data has actually changed
-          const newImageData = result ? { ...result, url: normalizeImageUrl(result.url) } : null;
-          setImageData(prevData => {
-            if (prevData?.url === newImageData?.url && prevData?.title === newImageData?.title) {
-              return prevData; // No change needed
-            }
-            return newImageData;
-          });
-          
-          // Update local used image tracking when a new image is found
-          if (result) {
+          // Always set image data - result should never be null due to fallbacks
+          if (result && result.url) {
+            // Only update if the image data has actually changed
+            const newImageData = { ...result, url: normalizeImageUrl(result.url) };
+            setImageData(prevData => {
+              if (prevData?.url === newImageData?.url && prevData?.title === newImageData?.title) {
+                return prevData; // No change needed
+              }
+              return newImageData;
+            });
+            
+            // Update local used image tracking when a new image is found
             setLocalUsedImageTitles(prev => new Set([...prev, result.title]));
             setLocalUsedImageUrls(prev => new Set([...prev, result.url]));
-          }
-          
-          // Persist replacement image into lesson if we fetched a new one
-          if (result && onUpdateLesson && propLesson?.id) {
-            onUpdateLesson(propLesson.id, { image: {
-              imageTitle: result.title,
-              imageUrl: result.url,
-              pageURL: result.pageURL,
-              attribution: result.attribution,
-            }});
+            
+            // Persist replacement image into lesson if we fetched a new one
+            if (onUpdateLesson && propLesson?.id) {
+              onUpdateLesson(propLesson.id, { image: {
+                imageTitle: result.title,
+                imageUrl: result.url,
+                pageURL: result.pageURL,
+                attribution: result.attribution,
+              }});
+            }
+          } else {
+            console.warn('[LessonView] No image result, using fallback');
+            // This should never happen due to fallbacks, but just in case
+            const fallbackImage = {
+              url: 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
+              title: 'Educational Content',
+              pageURL: '',
+              attribution: 'Wikimedia Commons',
+              uploader: 'Wikimedia'
+            };
+            setImageData(fallbackImage);
           }
         }
       } catch (e) {
         if (!ignore && !abortController.signal.aborted) {
           console.warn('[LessonView] Image fetch error:', e);
-          setImageData(null);
+          // Use fallback placeholder on error
+          const fallbackImage = {
+            url: 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
+            title: 'Educational Content',
+            pageURL: '',
+            attribution: 'Wikimedia Commons',
+            uploader: 'Wikimedia'
+          };
+          setImageData(fallbackImage);
         }
       } finally {
         if (!ignore && !abortController.signal.aborted) {
           setImageLoading(false);
         }
       }
-    }
     
     // Run in background (non-blocking)
     fetchImage();

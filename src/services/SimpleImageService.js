@@ -154,6 +154,12 @@ const SimpleImageService = {
       this.initPersistentCache();
     }
 
+    // Ensure we have a valid lesson title
+    if (!lessonTitle || lessonTitle.trim() === '') {
+      console.warn('[SimpleImageService] Empty lesson title, using fallback');
+      lessonTitle = 'educational content';
+    }
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         // Ensure parameters are properly typed
@@ -250,8 +256,8 @@ const SimpleImageService = {
       }
     }
 
-    console.warn('[SimpleImageService] Search failed after retry, giving up');
-    return null;
+    console.warn('[SimpleImageService] Search failed after retry, using fallback image');
+    return this.getFallbackImage(lessonTitle);
   },
 
   // Perform the actual search request
@@ -295,7 +301,7 @@ const SimpleImageService = {
   },
 
   // Enhanced search with course context - optimized
-  searchWithContext: function(lessonTitle, courseSubject, content, usedImageTitles, usedImageUrls, courseId = undefined, lessonId = undefined, coursePrompt = null) {
+  searchWithContext: async function(lessonTitle, courseSubject, content, usedImageTitles, usedImageUrls, courseId = undefined, lessonId = undefined, coursePrompt = null) {
     try {
       // Ensure all parameters are properly typed
       lessonTitle = lessonTitle || '';
@@ -345,19 +351,34 @@ const SimpleImageService = {
 
       console.log('[SimpleImageService] Enhanced query created:', enhancedQuery);
 
-      return this.search(enhancedQuery, content, usedImageTitles, usedImageUrls, courseId, lessonId);
+      // Try the enhanced search first
+      const result = await this.search(enhancedQuery, content, usedImageTitles, usedImageUrls, courseId, lessonId);
+      
+      // If enhanced search fails, try with just the lesson title
+      if (!result || !result.url) {
+        console.log('[SimpleImageService] Enhanced search failed, trying basic search...');
+        return await this.search(lessonTitle, content, usedImageTitles, usedImageUrls, courseId, lessonId);
+      }
+      
+      return result;
 
     } catch (error) {
       console.error('[SimpleImageService] Enhanced search failed:', error);
       // Fallback to basic search with safe parameters
-      return this.search(
-        lessonTitle || '',
-        typeof content === 'string' ? content : '',
-        Array.isArray(usedImageTitles) ? usedImageTitles : [],
-        Array.isArray(usedImageUrls) ? usedImageUrls : [],
-        courseId,
-        lessonId
-      );
+      try {
+        return await this.search(
+          lessonTitle || '',
+          typeof content === 'string' ? content : '',
+          Array.isArray(usedImageTitles) ? usedImageTitles : [],
+          Array.isArray(usedImageUrls) ? usedImageUrls : [],
+          courseId,
+          lessonId
+        );
+      } catch (fallbackError) {
+        console.error('[SimpleImageService] Fallback search also failed:', fallbackError);
+        // Return a guaranteed fallback image
+        return this.getFallbackImage(lessonTitle || 'educational content');
+      }
     }
   },
 
@@ -387,6 +408,46 @@ const SimpleImageService = {
       expiredEntries,
       cacheTimeout: this.cacheTimeout
     };
+  },
+
+  // Get fallback image when search fails
+  getFallbackImage(lessonTitle) {
+    // Create a fallback image based on the lesson title
+    const fallbackImages = [
+      {
+        url: 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
+        title: 'Educational Content',
+        pageURL: 'https://commons.wikimedia.org/wiki/File:Profile_avatar_placeholder_large.png',
+        attribution: 'Wikimedia Commons',
+        uploader: 'Wikimedia'
+      },
+      {
+        url: 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=800&h=600&fit=crop',
+        title: 'Learning and Education',
+        pageURL: 'https://unsplash.com/photos/books-on-table',
+        attribution: 'Unsplash',
+        uploader: 'Unsplash'
+      },
+      {
+        url: 'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=800&h=600&fit=crop',
+        title: 'Knowledge and Wisdom',
+        pageURL: 'https://unsplash.com/photos/library-books',
+        attribution: 'Unsplash',
+        uploader: 'Unsplash'
+      }
+    ];
+
+    // Select a fallback image based on lesson title keywords
+    let selectedFallback = fallbackImages[0];
+    
+    if (lessonTitle.toLowerCase().includes('history') || lessonTitle.toLowerCase().includes('ancient')) {
+      selectedFallback = fallbackImages[1];
+    } else if (lessonTitle.toLowerCase().includes('science') || lessonTitle.toLowerCase().includes('technology')) {
+      selectedFallback = fallbackImages[2];
+    }
+
+    console.log(`[SimpleImageService] Using fallback image: ${selectedFallback.title}`);
+    return selectedFallback;
   }
 };
 

@@ -91,7 +91,7 @@ class LessonImagePreloader {
         console.warn('[LessonImagePreloader] Image search failed, using fallback placeholder');
         const fallbackImage = {
           url: 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
-          title: 'Placeholder Image',
+          title: 'Educational Content',
           pageURL: '',
           attribution: 'Wikimedia Commons',
           uploader: 'Wikimedia'
@@ -108,7 +108,7 @@ class LessonImagePreloader {
       // Return fallback image on error
       const fallbackImage = {
         url: 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
-        title: 'Placeholder Image',
+        title: 'Educational Content',
         pageURL: '',
         attribution: 'Wikimedia Commons',
         uploader: 'Wikimedia'
