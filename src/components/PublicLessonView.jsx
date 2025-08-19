@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import SimpleImageService from '../services/SimpleImageService';
 import imagePreloadService from '../services/ImagePreloadService';
+import imagePerformanceMonitor from '../services/ImagePerformanceMonitor';
 import { publicTTSService } from '../services/TTSService';
 import PerformanceMonitorService from '../services/PerformanceMonitorService';
 import markdownService from '../services/MarkdownService';
@@ -15,6 +16,7 @@ if (process.env.NODE_ENV === 'development') {
   });
 }
 import Flashcard from './Flashcard';
+import Image from './Image.jsx';
 import './LessonView.css';
 
 // Add CSS for proper paragraph spacing in public lesson view
@@ -283,6 +285,16 @@ const PublicLessonView = ({
       console.warn('[PublicLessonView] Performance monitoring error:', error);
     }
   }, [lesson?.id]);
+
+  // Start image performance monitoring
+  useEffect(() => {
+    try {
+      imagePerformanceMonitor.startPerformanceMonitoring();
+      console.log('[PublicLessonView] Image performance monitoring started');
+    } catch (error) {
+      console.warn('[PublicLessonView] Failed to start image performance monitoring:', error);
+    }
+  }, []);
 
   // Auto-pause TTS when lesson changes
   useEffect(() => {
@@ -1285,18 +1297,29 @@ const PublicLessonView = ({
          <div>
            {/* Image Section - Above content like private LessonView */}
            {imageLoading && (
-             <div className="lesson-image-container loading mb-6">
-               <div className="image-loading">Loading image...</div>
+             <div className="lesson-image-container loading mb-6" style={{ maxWidth: 700, margin: '0 auto' }}>
+               <div className="bg-gray-200 animate-pulse rounded-lg" style={{ 
+                 width: '100%', 
+                 height: '300px',
+                 display: 'flex',
+                 alignItems: 'center',
+                 justifyContent: 'center',
+                 color: '#6b7280',
+                 fontSize: '14px'
+               }}>
+                 Loading image...
+               </div>
              </div>
            )}
            
            {imageData && imageData.url && !imageLoading && (
              <figure className="lesson-image-container mb-6" style={{ maxWidth: 700, margin: '0 auto' }}>
-               <img
+               <Image
                  src={imageData.url}
                  alt={lesson?.title || 'Lesson illustration'}
                  className="lesson-image"
-                 style={{ width: '100%', height: 'auto' }}
+                 priority={true}
+                 sizes="(max-width: 768px) 100vw, 700px"
                  onError={(e) => {
                    e.target.style.display = 'none';
                  }}
