@@ -436,6 +436,12 @@ const PublicLessonView = ({
 
       // Check if we have a preloaded image
       const preloadedImage = lessonImagePreloader.getPreloadedImage(lesson.id, lesson.title, subject);
+      console.log('[PublicLessonView] Checking for preloaded image:', {
+        lessonId: lesson.id,
+        lessonTitle: lesson.title,
+        subject: subject,
+        preloadedImage: preloadedImage
+      });
       if (preloadedImage) {
         console.log('[PublicLessonView] Using preloaded image data:', preloadedImage.title);
         setImageData(preloadedImage);
@@ -459,7 +465,7 @@ const PublicLessonView = ({
         // Track image fetch performance
         const fetchTime = performance.now() - startTime;
         if (result && result.url) {
-          performanceMonitor.trackImageLoad(result.url, fetchTime, false);
+          imagePerformanceMonitor.trackImageLoad(result.url, fetchTime, false);
         }
         
         // Log slow image fetches
@@ -468,7 +474,9 @@ const PublicLessonView = ({
         }
         
         if (!ignore && !abortController.signal.aborted) {
-          setImageData(result ? { ...result, url: result.url } : null);
+          const newImageData = result ? { ...result, url: result.url } : null;
+          console.log('[PublicLessonView] Setting image data:', newImageData);
+          setImageData(newImageData);
         }
       } catch (e) {
         if (!ignore && !abortController.signal.aborted) {
@@ -531,7 +539,7 @@ const PublicLessonView = ({
           
           // Track performance
           const preloadTime = performance.now() - startTime;
-          performanceMonitor.trackImageLoad(imageUrl, preloadTime, true);
+          imagePerformanceMonitor.trackImageLoad(imageUrl, preloadTime, true);
         } catch (error) {
           console.warn('[PublicLessonView] Image preloading error:', error);
         }
