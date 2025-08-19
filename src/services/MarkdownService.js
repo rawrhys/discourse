@@ -103,6 +103,17 @@ class MarkdownService {
       .replace(/\*\*\*\*\*/g, '**')
       .replace(/\*\*\*\*\*\*/g, '**')
       
+      // Fix circa abbreviations and date ranges to prevent line breaks
+      .replace(/\bc\.\s+/g, 'c. ') // Ensure proper spacing after circa
+      .replace(/\(\s*c\.\s+/g, '(c. ') // Fix spacing in parentheses
+      .replace(/\bc\.\s*(\d{4})/g, 'c. $1') // Fix circa with year
+      .replace(/\bc\.\s*(\d{4})\s*–\s*(\d{4})/g, 'c. $1–$2') // Fix circa with date ranges
+      .replace(/\bc\.\s*(\d{4})\s*-\s*(\d{4})/g, 'c. $1-$2') // Fix circa with date ranges (hyphen)
+      .replace(/\bc\.\s*(\d{4})\s*BCE/g, 'c. $1 BCE') // Fix circa with BCE
+      .replace(/\bc\.\s*(\d{4})\s*CE/g, 'c. $1 CE') // Fix circa with CE
+      .replace(/\bc\.\s*(\d{4})\s*BC/g, 'c. $1 BC') // Fix circa with BC
+      .replace(/\bc\.\s*(\d{4})\s*AD/g, 'c. $1 AD') // Fix circa with AD
+      
       // Ensure proper paragraph structure by adding double newlines
       .replace(/\n\n---\n\n/g, '\n\n<hr>\n\n') // Convert markdown horizontal rules to HTML
       .replace(/\n\n/g, '\n\n') // Ensure double newlines for paragraph breaks
@@ -318,10 +329,26 @@ class MarkdownService {
       .replace(/\n{3,}/g, '\n\n')
       // Ensure proper line breaks within paragraphs
       .replace(/(<p[^>]*>)([^<]+)(<\/p>)/g, (match, openTag, content, closeTag) => {
-        // Add line breaks after sentences for better readability
+        // Add line breaks after sentences for better readability, but preserve circa abbreviations
         const formattedContent = content
+          // First, temporarily protect circa abbreviations from line break insertion
+          .replace(/\bc\.\s+(\d{4})/g, 'CIRCA_YEAR_$1')
+          .replace(/\bc\.\s+(\d{4})\s*–\s*(\d{4})/g, 'CIRCA_RANGE_$1_$2')
+          .replace(/\bc\.\s+(\d{4})\s*-\s*(\d{4})/g, 'CIRCA_RANGE_$1_$2')
+          .replace(/\bc\.\s+(\d{4})\s+BCE/g, 'CIRCA_BCE_$1')
+          .replace(/\bc\.\s+(\d{4})\s+CE/g, 'CIRCA_CE_$1')
+          .replace(/\bc\.\s+(\d{4})\s+BC/g, 'CIRCA_BC_$1')
+          .replace(/\bc\.\s+(\d{4})\s+AD/g, 'CIRCA_AD_$1')
+          // Add line breaks after sentences (but not after circa)
           .replace(/([.!?])\s+/g, '$1<br><br>') // Add double line breaks after sentences
-          .replace(/<br><br><br>/g, '<br><br>'); // Clean up excessive breaks
+          .replace(/<br><br><br>/g, '<br><br>') // Clean up excessive breaks
+          // Restore circa abbreviations
+          .replace(/CIRCA_YEAR_(\d{4})/g, 'c. $1')
+          .replace(/CIRCA_RANGE_(\d{4})_(\d{4})/g, 'c. $1–$2')
+          .replace(/CIRCA_BCE_(\d{4})/g, 'c. $1 BCE')
+          .replace(/CIRCA_CE_(\d{4})/g, 'c. $1 CE')
+          .replace(/CIRCA_BC_(\d{4})/g, 'c. $1 BC')
+          .replace(/CIRCA_AD_(\d{4})/g, 'c. $1 AD');
         return `${openTag}${formattedContent}${closeTag}`;
       })
       .trim();

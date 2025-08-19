@@ -1016,16 +1016,32 @@ const PublicLessonView = ({
           return `<p>${formattedParagraph}</p>`;
         }).join('\n\n');
       } else {
-        // If it already has paragraph tags, enhance the formatting
-        parsedContent = parsedContent
-          // Add line breaks within existing paragraphs for better readability
-          .replace(/(<p[^>]*>)([^<]+)(<\/p>)/g, (match, openTag, content, closeTag) => {
-            const formattedContent = content
-              .replace(/\n/g, '<br>') // Convert single newlines to <br> tags
-              .replace(/([.!?])\s+/g, '$1<br><br>') // Add double line breaks after sentences
-              .replace(/<br><br><br>/g, '<br><br>'); // Clean up excessive breaks
-            return `${openTag}${formattedContent}${closeTag}`;
-          });
+              // If it already has paragraph tags, enhance the formatting
+      parsedContent = parsedContent
+        // Add line breaks within existing paragraphs for better readability
+        .replace(/(<p[^>]*>)([^<]+)(<\/p>)/g, (match, openTag, content, closeTag) => {
+          const formattedContent = content
+            .replace(/\n/g, '<br>') // Convert single newlines to <br> tags
+            // First, temporarily protect circa abbreviations from line break insertion
+            .replace(/\bc\.\s+(\d{4})/g, 'CIRCA_YEAR_$1')
+            .replace(/\bc\.\s+(\d{4})\s*–\s*(\d{4})/g, 'CIRCA_RANGE_$1_$2')
+            .replace(/\bc\.\s+(\d{4})\s*-\s*(\d{4})/g, 'CIRCA_RANGE_$1_$2')
+            .replace(/\bc\.\s+(\d{4})\s+BCE/g, 'CIRCA_BCE_$1')
+            .replace(/\bc\.\s+(\d{4})\s+CE/g, 'CIRCA_CE_$1')
+            .replace(/\bc\.\s+(\d{4})\s+BC/g, 'CIRCA_BC_$1')
+            .replace(/\bc\.\s+(\d{4})\s+AD/g, 'CIRCA_AD_$1')
+            // Add line breaks after sentences (but not after circa)
+            .replace(/([.!?])\s+/g, '$1<br><br>') // Add double line breaks after sentences
+            .replace(/<br><br><br>/g, '<br><br>') // Clean up excessive breaks
+            // Restore circa abbreviations
+            .replace(/CIRCA_YEAR_(\d{4})/g, 'c. $1')
+            .replace(/CIRCA_RANGE_(\d{4})_(\d{4})/g, 'c. $1–$2')
+            .replace(/CIRCA_BCE_(\d{4})/g, 'c. $1 BCE')
+            .replace(/CIRCA_CE_(\d{4})/g, 'c. $1 CE')
+            .replace(/CIRCA_BC_(\d{4})/g, 'c. $1 BC')
+            .replace(/CIRCA_AD_(\d{4})/g, 'c. $1 AD');
+          return `${openTag}${formattedContent}${closeTag}`;
+        });
       }
       
       // Additional formatting improvements
@@ -1055,10 +1071,26 @@ const PublicLessonView = ({
         const trimmed = sentence.trim();
         if (trimmed.length === 0) return '';
         
-        // Add line breaks after sentences for better readability
+        // Add line breaks after sentences for better readability, but preserve circa abbreviations
         const formattedSentence = trimmed
+          // First, temporarily protect circa abbreviations from line break insertion
+          .replace(/\bc\.\s+(\d{4})/g, 'CIRCA_YEAR_$1')
+          .replace(/\bc\.\s+(\d{4})\s*–\s*(\d{4})/g, 'CIRCA_RANGE_$1_$2')
+          .replace(/\bc\.\s+(\d{4})\s*-\s*(\d{4})/g, 'CIRCA_RANGE_$1_$2')
+          .replace(/\bc\.\s+(\d{4})\s+BCE/g, 'CIRCA_BCE_$1')
+          .replace(/\bc\.\s+(\d{4})\s+CE/g, 'CIRCA_CE_$1')
+          .replace(/\bc\.\s+(\d{4})\s+BC/g, 'CIRCA_BC_$1')
+          .replace(/\bc\.\s+(\d{4})\s+AD/g, 'CIRCA_AD_$1')
+          // Add line breaks after sentences (but not after circa)
           .replace(/([.!?])\s+/g, '$1<br><br>') // Add double line breaks after sentences
-          .replace(/<br><br><br>/g, '<br><br>'); // Clean up excessive breaks
+          .replace(/<br><br><br>/g, '<br><br>') // Clean up excessive breaks
+          // Restore circa abbreviations
+          .replace(/CIRCA_YEAR_(\d{4})/g, 'c. $1')
+          .replace(/CIRCA_RANGE_(\d{4})_(\d{4})/g, 'c. $1–$2')
+          .replace(/CIRCA_BCE_(\d{4})/g, 'c. $1 BCE')
+          .replace(/CIRCA_CE_(\d{4})/g, 'c. $1 CE')
+          .replace(/CIRCA_BC_(\d{4})/g, 'c. $1 BC')
+          .replace(/CIRCA_AD_(\d{4})/g, 'c. $1 AD');
         
         return `<p>${formattedSentence}</p>`;
       }).join('\n\n');
