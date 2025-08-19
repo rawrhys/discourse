@@ -241,6 +241,26 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
         'sunrise', 'sunset', 'landscape', 'early morning', 'boating', 'intercoastal', 'marsh'
       ];
       
+      // Cultural mismatch penalties - heavy penalties for wrong civilizations
+      const culturalMismatches = {
+        'egypt': ['mesopotamia', 'sumerian', 'babylonian', 'assyrian', 'akkadian', 'hittite', 'hittites', 'norse', 'viking', 'germanic', 'north germanic', 'scandinavian', 'roman', 'greek', 'hellenistic', 'persian', 'achaemenid', 'sassanid', 'byzantine', 'ottoman', 'arabic', 'islamic', 'medieval europe', 'renaissance', 'feudal', 'crusader'],
+        'rome': ['egyptian', 'pharaoh', 'pyramid', 'nile', 'mesopotamia', 'sumerian', 'babylonian', 'assyrian', 'akkadian', 'hittite', 'hittites', 'norse', 'viking', 'germanic', 'north germanic', 'scandinavian', 'greek', 'hellenistic', 'persian', 'achaemenid', 'sassanid', 'byzantine', 'ottoman', 'arabic', 'islamic', 'medieval europe', 'renaissance', 'feudal', 'crusader'],
+        'greek': ['egyptian', 'pharaoh', 'pyramid', 'nile', 'mesopotamia', 'sumerian', 'babylonian', 'assyrian', 'akkadian', 'hittite', 'hittites', 'norse', 'viking', 'germanic', 'north germanic', 'scandinavian', 'roman', 'persian', 'achaemenid', 'sassanid', 'byzantine', 'ottoman', 'arabic', 'islamic', 'medieval europe', 'renaissance', 'feudal', 'crusader']
+      };
+      
+      // Check for cultural mismatches based on course context
+      const courseTopic = courseTitle + ' ' + courseSubject;
+      for (const [culture, mismatches] of Object.entries(culturalMismatches)) {
+        if (courseTopic.toLowerCase().includes(culture)) {
+          for (const mismatch of mismatches) {
+            if (haystack.includes(mismatch)) {
+              score -= 500; // Very heavy penalty for cultural mismatches
+              console.log(`[ImageScoring] Heavy cultural mismatch penalty for "${mismatch}" in ${culture} course`);
+            }
+          }
+        }
+      }
+      
       for (const obj of irrelevantObjects) {
         if (haystack.includes(obj)) {
           score -= 300; // Much heavier penalty for irrelevant objects in historical content
@@ -272,34 +292,43 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
       if (haystack.includes(tok)) score += 8;
     }
 
-    // Course context relevance scoring - more intelligent approach
+    // Course context relevance scoring - strict cultural matching
     if (courseTitle || courseSubject) {
-      const courseContextTerms = extractSearchKeywords(courseTitle + ' ' + courseSubject, null, 10);
-      const hasCourseContextMatch = courseContextTerms.some(term => 
-        term.length > 3 && haystack.includes(term)
-      );
+      const courseTopic = courseTitle + ' ' + courseSubject;
+      const courseContextTerms = extractSearchKeywords(courseTopic, null, 10);
       
-      if (!hasCourseContextMatch) {
-        // Only apply penalty if the image is clearly irrelevant to the course topic
-        const courseTopic = courseTitle + ' ' + courseSubject;
-        const isCompletelyIrrelevant = !isHistoricalContent && (
-          courseTopic.includes('egypt') && !haystack.includes('egypt') ||
-          courseTopic.includes('rome') && !haystack.includes('roman') ||
-          courseTopic.includes('greek') && !haystack.includes('greek') ||
-          courseTopic.includes('history') && !haystack.includes('historical')
-        );
-        
-        if (isCompletelyIrrelevant) {
-          score -= 50;
-          if (process.env.NODE_ENV === 'development') {
-            console.log(`[ImageScoring] Heavy penalty for image not matching course context: ${courseTitle}`);
-          }
+      // Check for cultural relevance based on course topic
+      let hasCulturalMatch = false;
+      let culturalBonus = 0;
+      
+      if (courseTopic.toLowerCase().includes('egypt')) {
+        const egyptianTerms = ['egypt', 'egyptian', 'pharaoh', 'pyramid', 'nile', 'dynasty', 'kingdom', 'ancient egypt', 'egyptian civilization', 'egyptian empire', 'egyptian kingdom', 'egyptian dynasty', 'egyptian pharaoh', 'egyptian pyramid', 'egyptian temple', 'egyptian tomb', 'egyptian artifact', 'egyptian hieroglyph', 'egyptian mummy', 'egyptian sphinx', 'egyptian obelisk', 'egyptian papyrus', 'egyptian scroll', 'egyptian statue', 'egyptian relief', 'egyptian painting', 'egyptian architecture', 'egyptian burial', 'egyptian religion', 'egyptian god', 'egyptian goddess', 'egyptian mythology'];
+        hasCulturalMatch = egyptianTerms.some(term => haystack.includes(term));
+        if (hasCulturalMatch) {
+          culturalBonus = 100; // Heavy bonus for Egyptian content in Egyptian course
         }
+      } else if (courseTopic.toLowerCase().includes('rome')) {
+        const romanTerms = ['rome', 'roman', 'roman empire', 'roman republic', 'roman civilization', 'roman architecture', 'roman temple', 'roman forum', 'roman colosseum', 'roman aqueduct', 'roman road', 'roman legion', 'roman emperor', 'roman senate', 'roman law', 'roman art', 'roman sculpture', 'roman mosaic', 'roman fresco', 'roman bath', 'roman villa', 'roman city', 'roman province', 'roman conquest', 'roman military', 'roman government'];
+        hasCulturalMatch = romanTerms.some(term => haystack.includes(term));
+        if (hasCulturalMatch) {
+          culturalBonus = 100; // Heavy bonus for Roman content in Roman course
+        }
+      } else if (courseTopic.toLowerCase().includes('greek')) {
+        const greekTerms = ['greek', 'greece', 'greek civilization', 'greek empire', 'greek city-state', 'greek temple', 'greek architecture', 'greek art', 'greek sculpture', 'greek pottery', 'greek mythology', 'greek god', 'greek goddess', 'greek philosophy', 'greek democracy', 'greek theater', 'greek olympics', 'greek warfare', 'greek colony', 'greek trade', 'greek culture', 'greek history', 'greek classical', 'greek hellenistic'];
+        hasCulturalMatch = greekTerms.some(term => haystack.includes(term));
+        if (hasCulturalMatch) {
+          culturalBonus = 100; // Heavy bonus for Greek content in Greek course
+        }
+      }
+      
+      // Apply cultural bonus or penalty
+      if (hasCulturalMatch) {
+        score += culturalBonus;
+        console.log(`[ImageScoring] Cultural match bonus: +${culturalBonus} for ${courseTopic}`);
       } else {
-        score += 30; // Bonus for images that match course context
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`[ImageScoring] Bonus for image matching course context: ${courseTitle}`);
-        }
+        // Heavy penalty for cultural mismatch
+        score -= 200;
+        console.log(`[ImageScoring] Cultural mismatch penalty: -200 for ${courseTopic}`);
       }
     }
 
@@ -592,13 +621,60 @@ function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitl
                           /\b(history|ancient|rome|greek|egypt|medieval|renaissance|empire|republic|kingdom|dynasty|civilization)\b/i.test(courseTitle || ''));
 
   if (isHistoryCourse) {
-    // Add historical-specific queries that are more likely to find relevant images
-    for (const phrase of properPhrases.slice(0, 4)) {
-      dedupePush(queries, `${phrase} ancient history`);
-      dedupePush(queries, `${phrase} historical artifact`);
-      dedupePush(queries, `${phrase} archaeological site`);
-      dedupePush(queries, `${phrase} ancient civilization`);
-      if (queries.length >= maxQueries) break;
+    // Add culturally specific queries based on course context
+    const courseContext = courseTitle || '';
+    
+    if (courseContext.toLowerCase().includes('egypt')) {
+      // Egyptian-specific queries
+      for (const phrase of properPhrases.slice(0, 4)) {
+        dedupePush(queries, `${phrase} ancient egypt`);
+        dedupePush(queries, `${phrase} egyptian civilization`);
+        dedupePush(queries, `${phrase} egyptian artifact`);
+        dedupePush(queries, `${phrase} egyptian archaeology`);
+        dedupePush(queries, `${phrase} egyptian history`);
+        if (queries.length >= maxQueries) break;
+      }
+      // Add general Egyptian terms
+      dedupePush(queries, 'ancient egypt civilization');
+      dedupePush(queries, 'egyptian pharaoh dynasty');
+      dedupePush(queries, 'egyptian pyramid temple');
+    } else if (courseContext.toLowerCase().includes('rome')) {
+      // Roman-specific queries
+      for (const phrase of properPhrases.slice(0, 4)) {
+        dedupePush(queries, `${phrase} roman empire`);
+        dedupePush(queries, `${phrase} roman civilization`);
+        dedupePush(queries, `${phrase} roman artifact`);
+        dedupePush(queries, `${phrase} roman archaeology`);
+        dedupePush(queries, `${phrase} roman history`);
+        if (queries.length >= maxQueries) break;
+      }
+      // Add general Roman terms
+      dedupePush(queries, 'roman empire civilization');
+      dedupePush(queries, 'roman architecture temple');
+      dedupePush(queries, 'roman military conquest');
+    } else if (courseContext.toLowerCase().includes('greek')) {
+      // Greek-specific queries
+      for (const phrase of properPhrases.slice(0, 4)) {
+        dedupePush(queries, `${phrase} ancient greece`);
+        dedupePush(queries, `${phrase} greek civilization`);
+        dedupePush(queries, `${phrase} greek artifact`);
+        dedupePush(queries, `${phrase} greek archaeology`);
+        dedupePush(queries, `${phrase} greek history`);
+        if (queries.length >= maxQueries) break;
+      }
+      // Add general Greek terms
+      dedupePush(queries, 'ancient greece civilization');
+      dedupePush(queries, 'greek temple architecture');
+      dedupePush(queries, 'greek mythology culture');
+    } else {
+      // Generic historical queries
+      for (const phrase of properPhrases.slice(0, 4)) {
+        dedupePush(queries, `${phrase} ancient history`);
+        dedupePush(queries, `${phrase} historical artifact`);
+        dedupePush(queries, `${phrase} archaeological site`);
+        dedupePush(queries, `${phrase} ancient civilization`);
+        if (queries.length >= maxQueries) break;
+      }
     }
     
     // Add lesson-specific context to ensure uniqueness
