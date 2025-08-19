@@ -399,9 +399,11 @@ window.debugCourseGeneration = {
   }
 };
 
-// Log that debug utilities are available
-console.log('🔧 [DEBUG] Course generation debug utilities loaded. Use window.debugCourseGeneration to access debug functions.');
-console.log('🔧 [DEBUG] Available functions:', Object.keys(window.debugCourseGeneration));
+// Log that debug utilities are available - only in development
+if (process.env.NODE_ENV === 'development') {
+  console.log('🔧 [DEBUG] Course generation debug utilities loaded. Use window.debugCourseGeneration to access debug functions.');
+  console.log('🔧 [DEBUG] Available functions:', Object.keys(window.debugCourseGeneration));
+}
 
 // Add TTS debugging functions
 window.debugTTS = {
@@ -477,7 +479,10 @@ window.debugTTS = {
   }
 };
 
-console.log('🔧 [DEBUG TTS] TTS debug utilities loaded. Use window.debugTTS to access TTS debug functions.');
-console.log('🔧 [DEBUG TTS] Available functions:', Object.keys(window.debugTTS));
+// Only log in development
+if (process.env.NODE_ENV === 'development') {
+  console.log('🔧 [DEBUG TTS] TTS debug utilities loaded. Use window.debugTTS to access TTS debug functions.');
+  console.log('🔧 [DEBUG TTS] Available functions:', Object.keys(window.debugTTS));
+}
 
 export default window.debugCourseGeneration; 

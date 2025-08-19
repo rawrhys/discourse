@@ -90,7 +90,10 @@ const SimpleImageService = {
         finalQuery = `${lessonTitle} ${uniqueStr}`;
       }
       
-      console.log('[SimpleImageService] Searching for:', finalQuery);
+      // Only log in development
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[SimpleImageService] Searching for:', finalQuery);
+      }
 
       // Truncate content more aggressively for faster requests
       const truncatedContent = content.length > 200 ? content.substring(0, 200) + '...' : content;
@@ -144,14 +147,20 @@ const SimpleImageService = {
       
     } catch (error) {
       if (error.name === 'AbortError') {
-        console.error('[SimpleImageService] Search timeout after 3 seconds');
+        // Only log timeout errors in development to reduce spam
+        if (process.env.NODE_ENV === 'development') {
+          console.error('[SimpleImageService] Search timeout after 3 seconds');
+        }
       } else {
         console.error('[SimpleImageService] Search failed:', error.message);
       }
 
       // Retry once with exponential backoff if not already retried
       if (retryCount === 0 && (error.name === 'AbortError' || error.message.includes('timeout'))) {
-        console.log('[SimpleImageService] Retrying search with shorter timeout...');
+        // Only log retry in development
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[SimpleImageService] Retrying search with shorter timeout...');
+        }
         await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
         return this.search(lessonTitle, content, usedImageTitles, usedImageUrls, courseId, lessonId, forceUnique, 1);
       }
@@ -210,7 +219,10 @@ const SimpleImageService = {
         enhancedQuery = `${truncatedPrompt} ${enhancedQuery}`;
       }
 
-      console.log('[SimpleImageService] Enhanced query created:', enhancedQuery);
+      // Only log in development
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[SimpleImageService] Enhanced query created:', enhancedQuery);
+      }
 
       return this.search(enhancedQuery, content, usedImageTitles, usedImageUrls, courseId, lessonId);
 

@@ -29,11 +29,17 @@ class LessonImagePreloader {
 
     // Check if already preloading
     if (this.activePreloads.has(lessonKey)) {
-      console.log('[LessonImagePreloader] Already preloading for:', lessonData.title);
+      // Only log in development
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[LessonImagePreloader] Already preloading for:', lessonData.title);
+      }
       return this.activePreloads.get(lessonKey);
     }
 
-    console.log('[LessonImagePreloader] Starting preload for:', lessonData.title);
+    // Only log in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[LessonImagePreloader] Starting preload for:', lessonData.title);
+    }
 
     // Start preloading in background
     const preloadPromise = this._performPreload(lessonData, subject, courseId, usedImageTitles, usedImageUrls, courseDescription);
@@ -45,7 +51,10 @@ class LessonImagePreloader {
       const result = await preloadPromise;
       this.preloadCache.set(lessonKey, result);
       this.activePreloads.delete(lessonKey);
-      console.log('[LessonImagePreloader] Preload completed for:', lessonData.title);
+      // Only log in development
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[LessonImagePreloader] Preload completed for:', lessonData.title);
+      }
       return result;
     } catch (error) {
       this.activePreloads.delete(lessonKey);

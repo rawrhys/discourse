@@ -24,10 +24,10 @@ class PerformanceMonitorService {
   initPerformanceObserver() {
     if ('PerformanceObserver' in window) {
       try {
-        // Monitor long tasks - reduced frequency to prevent spam
+        // Monitor long tasks - only in development and with higher threshold
         const longTaskObserver = new PerformanceObserver((list) => {
           for (const entry of list.getEntries()) {
-            if (entry.duration > 100) { // Increased threshold to reduce spam
+            if (entry.duration > 200 && process.env.NODE_ENV === 'development') { // Higher threshold, dev only
               console.warn('[Performance] Long task detected:', {
                 duration: entry.duration,
                 startTime: entry.startTime,
@@ -39,10 +39,10 @@ class PerformanceMonitorService {
         
         longTaskObserver.observe({ entryTypes: ['longtask'] });
         
-        // Monitor layout shifts - reduced frequency to prevent spam
+        // Monitor layout shifts - only in development and with higher threshold
         const layoutShiftObserver = new PerformanceObserver((list) => {
           for (const entry of list.getEntries()) {
-            if (entry.value > 0.2) { // Increased threshold to reduce spam
+            if (entry.value > 0.3 && process.env.NODE_ENV === 'development') { // Higher threshold, dev only
               console.warn('[Performance] Layout shift detected:', {
                 value: entry.value,
                 sources: entry.sources

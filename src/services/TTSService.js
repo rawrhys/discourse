@@ -110,7 +110,10 @@ class TTSService {
       }
     }
 
-    console.log(`[${this.serviceType} TTS] Browser support:`, support);
+    // Only log in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[${this.serviceType} TTS] Browser support:`, support);
+    }
     return support;
   }
 
@@ -119,7 +122,10 @@ class TTSService {
     try {
       if (typeof AudioContext !== 'undefined') {
         this.audioContext = new AudioContext();
-        console.log(`[${this.serviceType} TTS] Audio context created, state:`, this.audioContext.state);
+                // Only log in development
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[${this.serviceType} TTS] Audio context created, state:`, this.audioContext.state);
+        }
       }
     } catch (error) {
       console.warn(`[${this.serviceType} TTS] Failed to create audio context:`, error);
@@ -155,7 +161,10 @@ class TTSService {
     }
     
     this.initializationAttempts++;
-    console.log(`[${this.serviceType} TTS] Initializing speech engine (attempt ${this.initializationAttempts}/${this.maxInitAttempts})`);
+    // Only log in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[${this.serviceType} TTS] Initializing speech engine (attempt ${this.initializationAttempts}/${this.maxInitAttempts})`);
+    }
     
     try {
       // Check browser support first
