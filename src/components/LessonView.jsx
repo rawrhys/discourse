@@ -552,8 +552,8 @@ const LessonView = ({
         propLesson?.title,
         subject, // Pass the course subject here
         cleanAndCombineContent(propLesson?.content),
-        localUsedImageTitles,
-        localUsedImageUrls,
+        Array.from(localUsedImageTitles), // Convert Set to Array
+        Array.from(localUsedImageUrls),   // Convert Set to Array
         courseId,
         propLesson?.id || lessonId,
         courseDescription
@@ -1149,8 +1149,8 @@ const LessonView = ({
           propLesson.title,
           subject,
           cleanAndCombineContent(propLesson.content),
-          localUsedImageTitles,
-          localUsedImageUrls,
+          Array.from(localUsedImageTitles), // Convert Set to Array
+          Array.from(localUsedImageUrls),   // Convert Set to Array
           courseId,
           propLesson?.id || lessonId,
           courseDescription

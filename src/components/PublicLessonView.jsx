@@ -421,8 +421,8 @@ const PublicLessonView = ({
           lesson.title,
           subject,
           cleanAndCombineContent(lesson.content),
-          usedImageTitles,
-          usedImageUrls,
+          Array.from(usedImageTitles), // Convert Set to Array
+          Array.from(usedImageUrls),   // Convert Set to Array
           courseId,
           lesson.id,
           courseDescription
