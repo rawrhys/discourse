@@ -2,6 +2,12 @@
 
 // Dynamic API_BASE_URL based on environment
 const inferDefaultBaseUrl = () => {
+  // Check for environment variable override first
+  if (import.meta.env.VITE_API_BASE_URL) {
+    console.log('🔧 [API CONFIG] Using VITE_API_BASE_URL from environment:', import.meta.env.VITE_API_BASE_URL);
+    return import.meta.env.VITE_API_BASE_URL;
+  }
+  
   try {
     if (typeof window !== 'undefined') {
       const hostname = window.location.hostname;
@@ -14,15 +20,41 @@ const inferDefaultBaseUrl = () => {
         return ''; // Empty string means use relative URLs, which will be handled by Vite's proxy
       }
       
-      // For production, use the same domain as the frontend
-      // This assumes the backend is running on the same domain
+      // For production, always use the production API URL
+      if (hostname === 'thediscourse.ai' || hostname === 'www.thediscourse.ai') {
+        return 'https://www.thediscourse.ai';
+      }
+      
+      // For other production domains, use the same domain
       return `https://${hostname}`;
     }
   } catch (_) {}
-  return 'https://thediscourse.ai'; // Default to production API
+  return 'https://www.thediscourse.ai'; // Default to production API
 };
 
 export const API_BASE_URL = inferDefaultBaseUrl();
+
+// Validate the API URL and provide fallback if needed
+const validateApiUrl = () => {
+  const url = API_BASE_URL;
+  
+  // If the URL is pointing to localhost or the old IP, warn and suggest fix
+  if (url.includes('localhost') || url.includes('127.0.0.1') || url.includes('31.97.115.145')) {
+    console.warn('⚠️ [API CONFIG] API URL points to localhost/old server:', url);
+    console.warn('💡 [API CONFIG] This may cause connection issues in production');
+    console.warn('💡 [API CONFIG] Consider setting VITE_API_BASE_URL=https://www.thediscourse.ai');
+  }
+  
+  // If we're on the production domain but API URL is not production, warn
+  if (typeof window !== 'undefined' && 
+      (window.location.hostname === 'thediscourse.ai' || window.location.hostname === 'www.thediscourse.ai') &&
+      !url.includes('thediscourse.ai')) {
+    console.warn('⚠️ [API CONFIG] Production domain but non-production API URL:', url);
+  }
+};
+
+// Run validation
+validateApiUrl();
 
 export const debugApiConfig = () => {
   console.log('🔧 [API CONFIG DEBUG] Current API Configuration:', {
