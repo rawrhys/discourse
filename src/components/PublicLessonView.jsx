@@ -781,7 +781,7 @@ const PublicLessonView = ({
        </div>
 
                {/* Tab Navigation */}
-        <div className="flex space-x-2 mb-4 p-6 pb-0">
+        <div className="flex space-x-2 mb-6 p-6 pb-0">
           <button
             onClick={() => handleTabChange('content')}
             className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
@@ -828,7 +828,7 @@ const PublicLessonView = ({
 
        {/* Content View */}
        {view === 'content' && (
-         <div className="p-6">
+         <div className="p-6 space-y-8">
            {/* Image Section - Above content like private LessonView */}
            {imageLoading && (
              <div className="lesson-image-container loading mb-6">
@@ -886,7 +886,7 @@ const PublicLessonView = ({
            )}
 
            {/* Lesson Content */}
-           <div className="lesson-content max-w-none">
+           <div className="lesson-content max-w-none mt-8">
              <div 
                className="markdown-body prose max-w-none"
               dangerouslySetInnerHTML={{ 
@@ -896,12 +896,14 @@ const PublicLessonView = ({
            </div>
           
                   {/* Academic References Footer */}
+           <div className="mt-8">
         {referencesFooter && referencesFooter.references && (
           <AcademicReferencesFooter 
             references={referencesFooter.references}
             onCitationClick={handleCitationClick}
           />
         )}
+           </div>
          </div>
        )}
 

@@ -1273,8 +1273,8 @@ const LessonView = ({
   
   return (
     <div className="flex-1 flex flex-col p-6 bg-white overflow-y-auto">
-      <header className="mb-6">
-        <h2 className="text-3xl font-bold text-gray-900">{propLesson?.title}</h2>
+      <header className="mb-8">
+        <h2 className="text-3xl font-bold text-gray-900 mb-4">{propLesson?.title}</h2>
         <p className="text-md text-gray-600">{moduleTitle}</p>
         {imageLoading && (
           <div className="lesson-image-container loading">
@@ -1404,6 +1404,9 @@ const LessonView = ({
           )}
         </div>
         
+        {/* Spacing between navigation and content */}
+        <div className="mb-6"></div>
+        
         <div className="flex-1 overflow-y-auto">
           <Suspense fallback={<LoadingSpinner />}>
             {view === 'content' && (
@@ -1423,6 +1426,10 @@ const LessonView = ({
             )}
           </Suspense>
         </div>
+        
+        {/* Spacing between content and messages */}
+        <div className="mb-4"></div>
+        
         {showFailMessage && (
           <div className="p-3 mb-4 bg-yellow-100 text-yellow-800 rounded text-center text-sm">
             To move to the next module, you must score 5/5 on all quizzes within this module.
@@ -1439,6 +1446,9 @@ const LessonView = ({
             Quiz completed successfully! You scored 5/5 on this lesson.
           </div>
         )}
+        
+        {/* Spacing between messages and footer */}
+        <div className="mb-6"></div>
       </div>
 
       <footer className="mt-8 pt-6 border-t border-gray-200">
