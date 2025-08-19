@@ -3843,10 +3843,22 @@ app.get('/api/captcha/verify/:courseId',
         // Decode URL-encoded characters and normalize spaces
         const decoded = decodeURIComponent(challengeStr);
         // Remove all extra spaces and normalize to single spaces
-        return decoded.replace(/\s+/g, ' ').trim();
+        // Also handle plus signs that might be URL-encoded
+        return decoded.replace(/\s+/g, ' ').replace(/\+\s*/g, ' + ').trim();
       };
       const normalizedReceived = normalizeChallenge(challenge);
       const normalizedStored = storedChallenge ? normalizeChallenge(storedChallenge.challenge) : null;
+      
+      // Debug logging for challenge comparison
+      console.log(`[API] CAPTCHA verification details:`, {
+        receivedChallenge: challenge,
+        storedChallenge: storedChallenge?.challenge,
+        normalizedReceived,
+        normalizedStored,
+        challengeKey,
+        storedAnswer: storedChallenge?.answer,
+        userResponse
+      });
       
       if (storedChallenge && normalizedStored === normalizedReceived) {
         let expectedAnswer;
