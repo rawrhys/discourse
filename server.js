@@ -3896,60 +3896,8 @@ app.get('/api/captcha/verify/:courseId',
         const num2 = Math.floor(Math.random() * 6) + 2; // 2-7
         const answer = Math.floor(Math.random() * 6) + 1; // 1-6
         return { num1, num2, operator: '÷', answer: answer };
-      }},
-      // Removed counting challenges as they don't make sense without visual context
-      { type: 'sequence', operator: 'next', generate: () => {
-        const sequences = [
-          { pattern: [2, 4, 6, 8], answer: 10, description: '2, 4, 6, 8, ?' },
-          { pattern: [1, 3, 5, 7], answer: 9, description: '1, 3, 5, 7, ?' },
-          { pattern: [5, 10, 15, 20], answer: 25, description: '5, 10, 15, 20, ?' },
-          { pattern: [3, 6, 9, 12], answer: 15, description: '3, 6, 9, 12, ?' },
-          { pattern: [1, 2, 4, 8], answer: 16, description: '1, 2, 4, 8, ?' }
-        ];
-        const seq = sequences[Math.floor(Math.random() * sequences.length)];
-        return { 
-          num1: 0, 
-          num2: 0, 
-          operator: 'next', 
-          answer: seq.answer,
-          question: `What comes next in this sequence?`,
-          displayText: seq.description
-        };
-      }},
-      { type: 'word_count', operator: 'words', generate: () => {
-        const sentences = [
-          'The cat sat on the mat.',
-          'I love to read books.',
-          'She went to the store.',
-          'The sun is shining today.',
-          'We are learning together.',
-          'Birds fly in the sky.',
-          'Fish swim in the water.',
-          'Children play in the park.'
-        ];
-        const sentence = sentences[Math.floor(Math.random() * sentences.length)];
-        const wordCount = sentence.split(' ').length;
-        return { 
-          num1: 0, 
-          num2: 0, 
-          operator: 'words', 
-          answer: wordCount,
-          question: `How many words are in this sentence?`,
-          displayText: sentence
-        };
-      }},
-      { type: 'letter_count', operator: 'letters', generate: () => {
-        const words = ['hello', 'world', 'computer', 'science', 'learning', 'education', 'knowledge', 'student', 'teacher', 'school'];
-        const word = words[Math.floor(Math.random() * words.length)];
-        return { 
-          num1: 0, 
-          num2: 0, 
-          operator: 'letters', 
-          answer: word.length,
-          question: `How many letters are in this word?`,
-          displayText: word
-        };
       }}
+      // Removed sequence, word count, and letter count challenges - keeping only simple math
     ];
     
     // Randomly select a challenge type
@@ -4029,60 +3977,8 @@ app.get('/api/captcha/new/:courseId',
         const answer = Math.floor(Math.random() * 6) + 1; // 1-6
         const num1 = num2 * answer;
         return { num1, num2, operator: '÷', answer: answer };
-      }},
-      // Removed counting challenges as they don't make sense without visual context
-      { type: 'sequence', operator: 'next', generate: () => {
-        const sequences = [
-          { pattern: [2, 4, 6, 8], answer: 10, description: '2, 4, 6, 8, ?' },
-          { pattern: [1, 3, 5, 7], answer: 9, description: '1, 3, 5, 7, ?' },
-          { pattern: [5, 10, 15, 20], answer: 25, description: '5, 10, 15, 20, ?' },
-          { pattern: [3, 6, 9, 12], answer: 15, description: '3, 6, 9, 12, ?' },
-          { pattern: [1, 2, 4, 8], answer: 16, description: '1, 2, 4, 8, ?' }
-        ];
-        const seq = sequences[Math.floor(Math.random() * sequences.length)];
-        return { 
-          num1: 0, 
-          num2: 0, 
-          operator: 'next', 
-          answer: seq.answer,
-          question: `What comes next in this sequence?`,
-          displayText: seq.description
-        };
-      }},
-      { type: 'word_count', operator: 'words', generate: () => {
-        const sentences = [
-          'The cat sat on the mat.',
-          'I love to read books.',
-          'She went to the store.',
-          'The sun is shining today.',
-          'We are learning together.',
-          'Birds fly in the sky.',
-          'Fish swim in the water.',
-          'Children play in the park.'
-        ];
-        const sentence = sentences[Math.floor(Math.random() * sentences.length)];
-        const wordCount = sentence.split(' ').length;
-        return { 
-          num1: 0, 
-          num2: 0, 
-          operator: 'words', 
-          answer: wordCount,
-          question: `How many words are in this sentence?`,
-          displayText: sentence
-        };
-      }},
-      { type: 'letter_count', operator: 'letters', generate: () => {
-        const words = ['hello', 'world', 'computer', 'science', 'learning', 'education', 'knowledge', 'student', 'teacher', 'school'];
-        const word = words[Math.floor(Math.random() * words.length)];
-        return { 
-          num1: 0, 
-          num2: 0, 
-          operator: 'letters', 
-          answer: word.length,
-          question: `How many letters are in this word?`,
-          displayText: word
-        };
-      }}
+      }
+      // Removed sequence, word count, and letter count challenges - keeping only simple math
     ];
     
     // Randomly select a challenge type
