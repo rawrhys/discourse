@@ -25,6 +25,8 @@ const publicLessonStyles = `
     color: #374151 !important;
     text-align: justify !important;
     display: block !important;
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
   }
   
   .lesson-content-text p:first-child {
@@ -48,6 +50,8 @@ const publicLessonStyles = `
     margin-top: 2rem !important;
     margin-bottom: 1rem !important;
     line-height: 1.4 !important;
+    color: #1f2937 !important;
+    font-weight: 600 !important;
   }
   
   /* Ensure proper paragraph breaks */
@@ -74,6 +78,18 @@ const publicLessonStyles = `
     margin-top: 1rem !important;
   }
   
+  /* Enhanced line break styling */
+  .lesson-content-text br {
+    display: block !important;
+    content: "" !important;
+    margin: 0.5rem 0 !important;
+  }
+  
+  /* Double line breaks for sentence endings */
+  .lesson-content-text br + br {
+    margin: 1rem 0 !important;
+  }
+  
   /* Override any conflicting styles */
   .lesson-content-text .markdown-body p {
     margin-top: 1.5rem !important;
@@ -82,6 +98,23 @@ const publicLessonStyles = `
     color: #374151 !important;
     text-align: justify !important;
     display: block !important;
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+  }
+  
+  /* Ensure proper text wrapping and readability */
+  .lesson-content-text {
+    max-width: 100% !important;
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+    hyphens: auto !important;
+  }
+  
+  /* Improve readability for long paragraphs */
+  .lesson-content-text p {
+    max-width: 65ch !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
   }
 `;
 
@@ -681,13 +714,21 @@ const PublicLessonView = ({
       .replace(/\*\*\*\*\*\*/g, '**');
   };
 
-
-
-
-
-
-
-
+  // Enhanced content preprocessing for better line breaks and formatting
+  const preprocessContentForDisplay = (content) => {
+    if (!content || typeof content !== 'string') return content;
+    
+    return content
+      // Preserve intentional line breaks
+      .replace(/\n\n+/g, '\n\n') // Normalize multiple newlines to double newlines
+      .replace(/\n/g, '  \n') // Convert single newlines to markdown line breaks (two spaces + newline)
+      // Add spacing around headers for better readability
+      .replace(/(^|\n)(#{1,6}\s+)/g, '\n\n$2')
+      .replace(/(#{1,6}.*?)(\n|$)/g, '$1\n\n')
+      // Clean up excessive spacing
+      .replace(/\n{4,}/g, '\n\n\n')
+      .trim();
+  };
 
   // Helper function to clean and combine lesson content (copied from working LessonView)
   const cleanAndCombineContent = (content) => {
@@ -797,8 +838,11 @@ const PublicLessonView = ({
   // Apply markdown parsing to the content (same approach as private LessonView)
   let parsedContent = '';
   try {
+    // Preprocess content for better line breaks and formatting
+    let processedContent = preprocessContentForDisplay(displayContent);
+    
     // Remove in-text citations first, then apply markdown fix
-    let fixedContent = markdownService.removeInTextCitations(displayContent);
+    let fixedContent = markdownService.removeInTextCitations(processedContent);
     
     // Apply markdown fix after citation removal - use bibliography-aware parsing
     fixedContent = fixedContent.includes('## References') 
@@ -811,20 +855,45 @@ const PublicLessonView = ({
     // Apply markdown parsing to the fixed content
     parsedContent = fixMalformedMarkdown(fixedContent);
     
-    // Ensure proper paragraph structure by wrapping text blocks in <p> tags
+    // Enhanced paragraph structure and line break formatting
     if (parsedContent) {
       // If the content doesn't have paragraph tags, add them
       if (!parsedContent.includes('<p>')) {
         // Split by double newlines and wrap each section in <p> tags
         const paragraphs = parsedContent.split(/\n\n+/).filter(p => p.trim());
-        parsedContent = paragraphs.map(p => `<p>${p.trim()}</p>`).join('\n\n');
+        parsedContent = paragraphs.map(p => {
+          // Add line breaks within paragraphs for better readability
+          const formattedParagraph = p.trim()
+            .replace(/\n/g, '<br>') // Convert single newlines to <br> tags
+            .replace(/([.!?])\s+/g, '$1<br><br>') // Add double line breaks after sentences
+            .replace(/<br><br><br>/g, '<br><br>'); // Clean up excessive breaks
+          return `<p>${formattedParagraph}</p>`;
+        }).join('\n\n');
       } else {
-        // If it already has paragraph tags, ensure proper spacing between them
+        // If it already has paragraph tags, enhance the formatting
         parsedContent = parsedContent
+          // Ensure proper spacing between paragraphs
           .replace(/<\/p>\s*<p>/g, '</p>\n\n<p>')
           .replace(/<\/p>\s*<h/g, '</p>\n\n<h')
-          .replace(/<\/h[1-6]>\s*<p>/g, '</h$1>\n\n<p>');
+          .replace(/<\/h[1-6]>\s*<p>/g, '</h$1>\n\n<p>')
+          // Add line breaks within existing paragraphs for better readability
+          .replace(/(<p[^>]*>)([^<]+)(<\/p>)/g, (match, openTag, content, closeTag) => {
+            const formattedContent = content
+              .replace(/\n/g, '<br>') // Convert single newlines to <br> tags
+              .replace(/([.!?])\s+/g, '$1<br><br>') // Add double line breaks after sentences
+              .replace(/<br><br><br>/g, '<br><br>'); // Clean up excessive breaks
+            return `${openTag}${formattedContent}${closeTag}`;
+          });
       }
+      
+      // Additional formatting improvements
+      parsedContent = parsedContent
+        // Ensure proper spacing around headers
+        .replace(/(<h[1-6][^>]*>)/g, '\n\n$1')
+        .replace(/(<\/h[1-6]>)/g, '$1\n\n')
+        // Clean up excessive whitespace
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
     }
     
     // Debug log to check if JSON keys are still present
@@ -1020,9 +1089,15 @@ const PublicLessonView = ({
            )}
 
            {/* Lesson Content - Match private LessonView structure exactly */}
-           <div className="prose max-w-none lesson-content">
+           <div className="prose max-w-none lesson-content" style={{ padding: '0 2rem 2rem 2rem' }}>
              <div 
                className="markdown-body lesson-content-text"
+               style={{ 
+                 fontSize: '1.1rem',
+                 lineHeight: '1.8',
+                 color: '#374151',
+                 textAlign: 'justify'
+               }}
               dangerouslySetInnerHTML={{ 
                 __html: parsedContent 
               }}
