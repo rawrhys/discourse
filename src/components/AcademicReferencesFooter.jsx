@@ -83,7 +83,7 @@ const AcademicReferencesFooter = memo(({ references, onCitationClick }) => {
           {/* Footer note */}
           <div className="mt-6 pt-4 border-t border-gray-200">
             <p className="text-sm text-gray-600 text-center">
-              References follow academic citation standards. Click citation numbers to highlight related content in the text.
+              
             </p>
           </div>
         </div>
