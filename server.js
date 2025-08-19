@@ -3977,7 +3977,7 @@ app.get('/api/captcha/new/:courseId',
         const answer = Math.floor(Math.random() * 6) + 1; // 1-6
         const num1 = num2 * answer;
         return { num1, num2, operator: '÷', answer: answer };
-      }
+      }}
       // Removed sequence, word count, and letter count challenges - keeping only simple math
     ];
     
