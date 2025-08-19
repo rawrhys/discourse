@@ -12,6 +12,10 @@ class ImagePerformanceMonitor {
     // Performance observer for image loading
     this.observer = null;
     this.renderObserver = null;
+    this.longTaskThreshold = 300; // Increased threshold to 300ms to reduce noise
+    this.monitoringEnabled = true; // Can be disabled if causing issues
+    this.errorCount = 0; // Track errors to auto-disable if needed
+    this.maxErrors = 10; // Auto-disable after 10 errors
     this.initPerformanceObserver();
   }
 
@@ -31,8 +35,10 @@ class ImagePerformanceMonitor {
         
         // Monitor long tasks that might cause render lag
         this.renderObserver = new PerformanceObserver((list) => {
+          if (!this.monitoringEnabled) return;
+          
           for (const entry of list.getEntries()) {
-            if (entry.duration > 50) { // Tasks longer than 50ms
+            if (entry.duration > this.longTaskThreshold) { // Use configurable threshold
               this.trackLongTask(entry);
             }
           }
@@ -48,6 +54,8 @@ class ImagePerformanceMonitor {
   }
 
   trackImageLoad(entry) {
+    if (!this.monitoringEnabled) return;
+    
     const loadTime = entry.duration;
     const url = entry.name;
     
@@ -55,12 +63,12 @@ class ImagePerformanceMonitor {
     if ('requestIdleCallback' in window) {
       requestIdleCallback(() => {
         this.processImageLoad(entry, loadTime, url);
-      }, { timeout: 1000 });
+      }, { timeout: 3000 }); // Increased timeout to 3 seconds
     } else {
       // Fallback for browsers without requestIdleCallback
       setTimeout(() => {
         this.processImageLoad(entry, loadTime, url);
-      }, 0);
+      }, 200); // Increased delay to 200ms
     }
   }
 
@@ -99,33 +107,53 @@ class ImagePerformanceMonitor {
   trackLongTask(entry) {
     const duration = entry.duration;
     
-    // Only track tasks that are actually problematic (longer than 100ms)
-    if (duration > 100) {
+    // Only track tasks that are actually problematic (longer than threshold)
+    if (duration > this.longTaskThreshold) {
       // Use requestIdleCallback to avoid blocking the main thread
       if ('requestIdleCallback' in window) {
         requestIdleCallback(() => {
           this.processLongTask(entry, duration);
-        }, { timeout: 2000 }); // Increased timeout to reduce frequency
+        }, { timeout: 5000 }); // Increased timeout to 5 seconds to reduce frequency
       } else {
         // Fallback with longer delay to reduce blocking
         setTimeout(() => {
           this.processLongTask(entry, duration);
-        }, 100);
+        }, 500); // Increased delay to 500ms
       }
     }
   }
 
   processLongTask(entry, duration) {
-    // Only log if it's actually causing significant lag
-    if (duration > 200) {
-      console.error(`[Performance] Render-blocking task: ${duration.toFixed(2)}ms - this may cause lag`);
+    try {
+      // Only log if it's actually causing significant lag (500ms+)
+      if (duration > 500) {
+        console.error(`[Performance] Render-blocking task: ${duration.toFixed(2)}ms - this may cause lag`);
+        this.errorCount++;
+      } else if (duration > 300) {
+        // Only warn for moderately long tasks, not error
+        console.warn(`[Performance] Long task detected: ${duration.toFixed(2)}ms`);
+      }
+      
+      // Track component render times more efficiently
+      this.renderTimes.set(entry.name || 'unknown', {
+        duration,
+        timestamp: Date.now()
+      });
+      
+      // Auto-disable if too many errors
+      if (this.errorCount >= this.maxErrors) {
+        console.warn('[ImagePerformanceMonitor] Too many errors detected, auto-disabling monitoring');
+        this.disableMonitoring();
+      }
+    } catch (error) {
+      console.warn('[ImagePerformanceMonitor] Error in processLongTask:', error.message);
+      this.errorCount++;
+      
+      if (this.errorCount >= this.maxErrors) {
+        console.warn('[ImagePerformanceMonitor] Too many errors detected, auto-disabling monitoring');
+        this.disableMonitoring();
+      }
     }
-    
-    // Track component render times more efficiently
-    this.renderTimes.set(entry.name || 'unknown', {
-      duration,
-      timestamp: Date.now()
-    });
   }
 
   // Track render times for components
@@ -172,7 +200,7 @@ class ImagePerformanceMonitor {
           });
 
           console.warn(`[Performance] Manual slow image detection for ${url}: ${loadTime.toFixed(2)}ms`);
-        }, { timeout: 1000 });
+        }, { timeout: 3000 }); // Increased timeout to 3 seconds
       } else {
         // Fallback for browsers without requestIdleCallback
         setTimeout(() => {
@@ -185,9 +213,27 @@ class ImagePerformanceMonitor {
           });
 
           console.warn(`[Performance] Manual slow image detection for ${url}: ${loadTime.toFixed(2)}ms`);
-        }, 0);
+        }, 200); // Increased delay to 200ms
       }
     }
+  }
+
+  // Disable monitoring if it's causing issues
+  disableMonitoring() {
+    this.monitoringEnabled = false;
+    console.log('[ImagePerformanceMonitor] Performance monitoring disabled');
+  }
+
+  // Enable monitoring
+  enableMonitoring() {
+    this.monitoringEnabled = true;
+    console.log('[ImagePerformanceMonitor] Performance monitoring enabled');
+  }
+
+  // Set custom threshold for long tasks
+  setLongTaskThreshold(threshold) {
+    this.longTaskThreshold = threshold;
+    console.log(`[ImagePerformanceMonitor] Long task threshold set to ${threshold}ms`);
   }
 
   getSlowImages() {
@@ -199,7 +245,7 @@ class ImagePerformanceMonitor {
 
   getPerformanceStats() {
     const allLoadTimes = Array.from(this.performanceData.values()).map(data => data.loadTime);
-    const allRenderTimes = Array.from(this.renderTimes.values()).map(data => data.renderTime);
+    const allRenderTimes = Array.from(this.renderTimes.values()).map(data => data.duration || data.renderTime);
     
     if (allLoadTimes.length === 0) {
       return {
