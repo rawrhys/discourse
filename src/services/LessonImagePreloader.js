@@ -85,12 +85,43 @@ class LessonImagePreloader {
         // Also preload the image using ImagePreloadService
         await imagePreloadService.preloadImage(result.url, 10);
         console.log('[LessonImagePreloader] Image preloaded successfully:', result.title);
+        return result;
+      } else {
+        // Fallback to placeholder image if search fails
+        console.warn('[LessonImagePreloader] Image search failed, using fallback placeholder');
+        const fallbackImage = {
+          url: 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
+          title: 'Placeholder Image',
+          pageURL: '',
+          attribution: 'Wikimedia Commons',
+          uploader: 'Wikimedia'
+        };
+        
+        // Preload the fallback image
+        await imagePreloadService.preloadImage(fallbackImage.url, 10);
+        console.log('[LessonImagePreloader] Fallback image preloaded successfully');
+        return fallbackImage;
       }
-
-      return result;
     } catch (error) {
       console.error('[LessonImagePreloader] Preload error:', error);
-      throw error;
+      
+      // Return fallback image on error
+      const fallbackImage = {
+        url: 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
+        title: 'Placeholder Image',
+        pageURL: '',
+        attribution: 'Wikimedia Commons',
+        uploader: 'Wikimedia'
+      };
+      
+      try {
+        await imagePreloadService.preloadImage(fallbackImage.url, 10);
+        console.log('[LessonImagePreloader] Fallback image preloaded after error');
+      } catch (fallbackError) {
+        console.warn('[LessonImagePreloader] Failed to preload fallback image:', fallbackError);
+      }
+      
+      return fallbackImage;
     }
   }
 

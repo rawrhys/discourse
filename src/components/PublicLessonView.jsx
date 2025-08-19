@@ -468,12 +468,31 @@ const PublicLessonView = ({
         }
         
         if (!ignore && !abortController.signal.aborted) {
-          setImageData(result ? { ...result, url: result.url } : null);
+          // If image search fails, use a fallback placeholder
+          if (!result || !result.url) {
+            console.warn('[PublicLessonView] Image search failed, using fallback placeholder');
+            setImageData({
+              url: 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
+              title: 'Placeholder Image',
+              pageURL: '',
+              attribution: 'Wikimedia Commons',
+              uploader: 'Wikimedia'
+            });
+          } else {
+            setImageData(result ? { ...result, url: result.url } : null);
+          }
         }
       } catch (e) {
         if (!ignore && !abortController.signal.aborted) {
           console.warn('[PublicLessonView] Image fetch error:', e);
-          setImageData(null);
+          // Use fallback placeholder on error
+          setImageData({
+            url: 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
+            title: 'Placeholder Image',
+            pageURL: '',
+            attribution: 'Wikimedia Commons',
+            uploader: 'Wikimedia'
+          });
         }
       } finally {
         if (!ignore && !abortController.signal.aborted) {

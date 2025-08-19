@@ -65,93 +65,124 @@ const SimpleImageService = {
 
   // Simple image search - optimized with caching and timeout
   async search(lessonTitle, content = '', usedImageTitles = [], usedImageUrls = [], courseId = undefined, lessonId = undefined, forceUnique = false) {
-    try {
-      // Ensure parameters are properly typed
-      lessonTitle = lessonTitle || '';
-      content = content || '';
-      usedImageTitles = Array.isArray(usedImageTitles) ? usedImageTitles : [];
-      usedImageUrls = Array.isArray(usedImageUrls) ? usedImageUrls : [];
+    const maxRetries = 2;
+    let lastError = null;
 
-      // Skip cache if forceUnique is true
-      if (!forceUnique) {
-        const cacheKey = this.getCacheKey(lessonTitle, content, usedImageTitles, usedImageUrls, courseId, lessonId);
-        const cachedResult = this.getFromCache(cacheKey);
-        if (cachedResult) {
-          return cachedResult;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        // Ensure parameters are properly typed
+        lessonTitle = lessonTitle || '';
+        content = content || '';
+        usedImageTitles = Array.isArray(usedImageTitles) ? usedImageTitles : [];
+        usedImageUrls = Array.isArray(usedImageUrls) ? usedImageUrls : [];
+
+        // Skip cache if forceUnique is true
+        if (!forceUnique) {
+          const cacheKey = this.getCacheKey(lessonTitle, content, usedImageTitles, usedImageUrls, courseId, lessonId);
+          const cachedResult = this.getFromCache(cacheKey);
+          if (cachedResult) {
+            return cachedResult;
+          }
         }
-      }
 
-      const searchUrl = `${API_BASE_URL}/api/image-search/search`;
-      
-      // Optimize query - use shorter, more focused query
-      let finalQuery = lessonTitle;
-      if (forceUnique) {
-        const uniqueStr = Math.random().toString(36).substring(2, 8); // Shorter unique string
-        finalQuery = `${lessonTitle} ${uniqueStr}`;
-      }
-      
-      console.log('[SimpleImageService] Searching for:', finalQuery);
-
-      // Truncate content more aggressively for faster requests
-      const truncatedContent = content.length > 500 ? content.substring(0, 500) + '...' : content;
-      
-      const requestBody = { 
-        lessonTitle: finalQuery, 
-        content: truncatedContent,
-        usedImageTitles, 
-        usedImageUrls, 
-        courseId, 
-        lessonId,
-        disableModeration: true
-      };
-
-      // Add timeout to prevent hanging requests - increased to 10 seconds for better reliability
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-      
-      const response = await fetch(searchUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        if (response.status === 404) {
-          const errorText = await response.text();
-          console.log(`[SimpleImageService] No suitable image found. Server response: ${errorText}`);
-          return null;
+        const searchUrl = `${API_BASE_URL}/api/image-search/search`;
+        
+        // Optimize query - use shorter, more focused query
+        let finalQuery = lessonTitle;
+        if (forceUnique) {
+          const uniqueStr = Math.random().toString(36).substring(2, 8); // Shorter unique string
+          finalQuery = `${lessonTitle} ${uniqueStr}`;
         }
         
-        console.warn(`[SimpleImageService] Server returned ${response.status}`);
-        const errorText = await response.text();
-        console.error('[SimpleImageService] Error response body:', errorText);
-        throw new Error(`Image search failed: ${response.status} - ${errorText}`);
-      }
-      
-      const data = await response.json();
-      console.log('[SimpleImageService] Found image:', data.title);
+        console.log(`[SimpleImageService] Searching for: ${finalQuery} (attempt ${attempt}/${maxRetries})`);
 
-      // Cache the result if not forceUnique
-      if (!forceUnique) {
-        const cacheKey = this.getCacheKey(lessonTitle, content, usedImageTitles, usedImageUrls, courseId, lessonId);
-        this.setCache(cacheKey, data);
-      }
+        // Truncate content more aggressively for faster requests
+        const truncatedContent = content.length > 500 ? content.substring(0, 500) + '...' : content;
+        
+        const requestBody = { 
+          lessonTitle: finalQuery, 
+          content: truncatedContent,
+          usedImageTitles, 
+          usedImageUrls, 
+          courseId, 
+          lessonId,
+          disableModeration: true
+        };
 
-      return data;
-      
-    } catch (error) {
-      if (error.name === 'AbortError') {
-        console.error('[SimpleImageService] Search timeout after 8 seconds');
-      } else {
-      console.error('[SimpleImageService] Search failed:', error.message);
-      }
+        // Add timeout to prevent hanging requests - increased to 10 seconds for better reliability
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        
+        const response = await fetch(searchUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody),
+          signal: controller.signal
+        });
 
-      // Return null to let the calling code handle the error appropriately
-      return null;
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          if (response.status === 404) {
+            const errorText = await response.text();
+            console.log(`[SimpleImageService] No suitable image found. Server response: ${errorText}`);
+            return null;
+          }
+          
+          console.warn(`[SimpleImageService] Server returned ${response.status} on attempt ${attempt}`);
+          const errorText = await response.text();
+          console.error('[SimpleImageService] Error response body:', errorText);
+          
+          // Don't retry on 4xx errors (client errors)
+          if (response.status >= 400 && response.status < 500) {
+            throw new Error(`Image search failed: ${response.status} - ${errorText}`);
+          }
+          
+          // For 5xx errors, continue to retry
+          lastError = new Error(`Image search failed: ${response.status} - ${errorText}`);
+          if (attempt < maxRetries) {
+            console.log(`[SimpleImageService] Retrying in ${attempt * 1000}ms...`);
+            await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+            continue;
+          }
+          throw lastError;
+        }
+        
+        const data = await response.json();
+        console.log('[SimpleImageService] Found image:', data.title);
+
+        // Cache the result if not forceUnique
+        if (!forceUnique) {
+          const cacheKey = this.getCacheKey(lessonTitle, content, usedImageTitles, usedImageUrls, courseId, lessonId);
+          this.setCache(cacheKey, data);
+        }
+
+        return data;
+        
+      } catch (error) {
+        lastError = error;
+        
+        if (error.name === 'AbortError') {
+          console.error(`[SimpleImageService] Search timeout after 10 seconds on attempt ${attempt}`);
+        } else {
+          console.error(`[SimpleImageService] Search failed on attempt ${attempt}:`, error.message);
+        }
+
+        // Don't retry on AbortError or client errors
+        if (error.name === 'AbortError' || (error.message && error.message.includes('4'))) {
+          break;
+        }
+
+        // Retry on network errors or server errors
+        if (attempt < maxRetries) {
+          console.log(`[SimpleImageService] Retrying in ${attempt * 1000}ms...`);
+          await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+        }
+      }
     }
+
+    console.warn('[SimpleImageService] Search failed after retry, giving up');
+    return null;
   },
 
   // Enhanced search with course context - optimized
