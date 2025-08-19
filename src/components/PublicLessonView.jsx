@@ -194,7 +194,7 @@ const PublicLessonView = ({
       console.log('[PublicLessonView] Stopped TTS and reset pause data on lesson change');
     } catch (error) {
       console.warn('[PublicLessonView] TTS auto-pause error:', error);
-      // If stop fails, try to reset the service
+      // Only reset if stop fails, but don't clear the stopped state
       try {
         publicTTSService.reset();
         console.log('[PublicLessonView] Reset TTS service after stop error');
@@ -395,11 +395,11 @@ const PublicLessonView = ({
       try {
         console.log('[PublicLessonView] Component unmounting, cleaning up TTS...');
         publicTTSService.stop();
-        publicTTSService.reset();
-        console.log('[PublicLessonView] Cleaned up TTS service on unmount');
+        // Don't call reset() after stop() - this clears the stopped state and allows restarts
+        console.log('[PublicLessonView] Cleaned up TTS service on unmount (stopped without reset)');
       } catch (error) {
         console.warn('[PublicLessonView] Error cleaning up TTS service:', error);
-        // Force reset even if stop fails
+        // Only reset if stop fails, but don't clear the stopped state
         try {
           publicTTSService.reset();
         } catch (resetError) {
@@ -426,7 +426,11 @@ const PublicLessonView = ({
     if (serviceStatus.isStopped) {
       console.log('[PublicLessonView] TTS service was stopped, restarting service...');
       try {
-        await publicTTSService.initSpeech();
+        const restartSuccess = await publicTTSService.restart();
+        if (!restartSuccess) {
+          console.error('[PublicLessonView] Failed to restart TTS service');
+          return;
+        }
         console.log('[PublicLessonView] TTS service restarted successfully');
       } catch (error) {
         console.error('[PublicLessonView] Failed to restart TTS service:', error);
@@ -513,19 +517,15 @@ const PublicLessonView = ({
   }, [view, lesson]); // Removed ttsStatus dependencies to prevent auto-restart
 
   const handleStopAudio = useCallback(async () => {
-    // Add a small delay to prevent rapid button clicks
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
-    console.log('[PublicLessonView] handleStopAudio called, stopping TTS...');
+    console.log('[PublicLessonView] handleStopAudio called');
     
     try {
       // Stop the TTS service
       await publicTTSService.stop();
       console.log('[PublicLessonView] TTS stop completed successfully');
       
-      // Force reset the service state
-      publicTTSService.reset();
-      console.log('[PublicLessonView] TTS service reset completed');
+      // Don't call reset() after stop() - this clears the stopped state and allows restarts
+      console.log('[PublicLessonView] TTS service stopped (without reset to preserve stopped state)');
       
       // Always reset state when stopping
       setTtsStatus(prev => ({ 
@@ -538,7 +538,7 @@ const PublicLessonView = ({
     } catch (error) {
       console.warn('[PublicLessonView] TTS stop error:', error);
       
-      // Even if stop fails, try to reset the service
+      // Only reset if stop fails, but don't clear the stopped state
       try {
         publicTTSService.reset();
         console.log('[PublicLessonView] TTS service reset after stop error');

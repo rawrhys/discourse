@@ -652,6 +652,7 @@ const LessonView = ({
         console.log('[LessonView] Stopped TTS and reset pause data on lesson change');
       } catch (error) {
         console.warn('[LessonView] TTS auto-pause error:', error);
+        // Only reset if stop fails, but don't clear the stopped state
         try {
           privateTTSService.reset();
           console.log('[LessonView] Reset TTS service after stop error');
@@ -760,7 +761,11 @@ const LessonView = ({
     if (serviceStatus.isStopped) {
       console.log('[LessonView] TTS service was stopped, restarting service...');
       try {
-        await privateTTSService.initSpeech();
+        const restartSuccess = await privateTTSService.restart();
+        if (!restartSuccess) {
+          console.error('[LessonView] Failed to restart TTS service');
+          return;
+        }
         console.log('[LessonView] TTS service restarted successfully');
       } catch (error) {
         console.error('[LessonView] Failed to restart TTS service:', error);

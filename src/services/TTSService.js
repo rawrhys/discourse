@@ -140,58 +140,86 @@ class TTSService {
 
   // Enhanced initialization with multiple fallback strategies
   async initSpeech() {
-    // Clear the stopped flag when reinitializing
-    this.isStopped = false;
+    // Don't clear the stopped flag when reinitializing - let the calling method handle it
+    // this.isStopped = false; // REMOVED: Don't auto-clear stopped state
     
-    if (this.initializationAttempts >= this.maxInitAttempts) {
-      console.warn(`[${this.serviceType} TTS] Max initialization attempts reached`);
+    // If TTS was manually stopped, don't reinitialize
+    if (this.wasManuallyStopped) {
+      console.log(`[${this.serviceType} TTS] TTS was manually stopped, skipping initialization`);
       return;
     }
-
+    
+    if (this.initializationAttempts >= this.maxInitAttempts) {
+      console.warn(`[${this.serviceType} TTS] Max initialization attempts reached (${this.maxInitAttempts}), skipping initialization`);
+      return;
+    }
+    
     this.initializationAttempts++;
+    console.log(`[${this.serviceType} TTS] Initializing speech engine (attempt ${this.initializationAttempts}/${this.maxInitAttempts})`);
     
     try {
-      console.log(`[${this.serviceType} TTS] Starting speech engine initialization (attempt ${this.initializationAttempts}/${this.maxInitAttempts})...`);
-      
-      // Check if speech synthesis is supported
+      // Check browser support first
       if (!this.browserSupport.speechSynthesis) {
-        console.warn(`[${this.serviceType} TTS] Speech synthesis not supported in this browser`);
-        this.isInitialized = false;
-        return;
+        throw new Error('Speech synthesis not supported in this browser');
       }
-
-      // Wait for voices to be available
-      const voices = await this.waitForVoices();
       
-      // Check if we have voices available
-      if (!voices || voices.length === 0) {
-        console.log(`[${this.serviceType} TTS] No voices available, but proceeding with initialization`);
-      }
-
-      const initConfig = this.getInitConfig();
-      
-      await this.speech.init(initConfig);
+      // Initialize speak-tts with enhanced configuration
+      await this.speech.init({
+        volume: 1,
+        lang: 'en-US',
+        rate: 0.9,
+        pitch: 1,
+        voice: 'Google UK English Female', // Use a reliable voice
+        splitSentences: false, // We handle chunking ourselves
+        listeners: {
+          onvoiceschanged: () => {
+            console.log(`[${this.serviceType} TTS] Voices changed event fired`);
+          },
+          onend: () => {
+            console.log(`[${this.serviceType} TTS] Speech ended`);
+            this.isPlaying = false;
+          },
+          onerror: (error) => {
+            console.warn(`[${this.serviceType} TTS] Speech error:`, error);
+            this.isPlaying = false;
+          },
+          onpause: () => {
+            console.log(`[${this.serviceType} TTS] Speech paused`);
+            this.isPaused = true;
+            this.isPlaying = false;
+          },
+          onresume: () => {
+            console.log(`[${this.serviceType} TTS] Speech resumed`);
+            this.isPaused = false;
+            this.isPlaying = true;
+          },
+          onstart: () => {
+            console.log(`[${this.serviceType} TTS] Speech started`);
+            this.isPlaying = true;
+            this.isPaused = false;
+          }
+        }
+      });
       
       this.isInitialized = true;
       this.initializationAttempts = 0; // Reset on success
       console.log(`[${this.serviceType} TTS] Speech engine initialized successfully`);
       
-      // Test TTS functionality after initialization
-      if (process.env.NODE_ENV === 'development') {
-        setTimeout(() => {
-          this.testTTS();
-        }, 1000); // Test after 1 second
-      }
-      
     } catch (error) {
       console.warn(`[${this.serviceType} TTS] Failed to initialize speech engine (attempt ${this.initializationAttempts}):`, error);
       this.isInitialized = false;
       
-      // Try fallback initialization with delay
+      // Try fallback initialization with minimal config
       if (this.initializationAttempts < this.maxInitAttempts) {
-        setTimeout(() => {
-          this.initSpeech();
-        }, 1000 * this.initializationAttempts); // Exponential backoff
+        console.log(`[${this.serviceType} TTS] Attempting fallback initialization...`);
+        try {
+          await this.speech.init();
+          this.isInitialized = true;
+          this.initializationAttempts = 0;
+          console.log(`[${this.serviceType} TTS] Fallback initialization successful`);
+        } catch (fallbackError) {
+          console.warn(`[${this.serviceType} TTS] Fallback initialization also failed:`, fallbackError);
+        }
       }
     }
   }
@@ -730,7 +758,14 @@ class TTSService {
       return;
     }
     
-    this.isStopped = false; // <-- PATCH: clear stop flag at the start of speak
+    // Only clear stop flag if we're not in a manually stopped state
+    if (!this.wasManuallyStopped) {
+      this.isStopped = false; // Only clear if not manually stopped
+    } else {
+      console.log(`[${this.serviceType} TTS] TTS was manually stopped, keeping stopped state`);
+      return;
+    }
+    
     this.wasManuallyStopped = false; // Reset manual stop flag when starting new speech
     
     // Check if service is properly initialized
@@ -1049,7 +1084,7 @@ class TTSService {
                 console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} fallback timeout reached, checking stop state...`);
                 
                 // CRITICAL: If TTS was stopped, DO NOT force resolve - let it stop completely
-                if (this.isStopped) {
+                if (this.isStopped || this.wasManuallyStopped) {
                   console.log(`[${this.serviceType} TTS] Chunk ${i + 1} timeout reached but TTS was stopped, NOT forcing resolve - allowing complete stop`);
                   // Don't resolve - let the stop mechanism handle it completely
                   return;
@@ -1068,7 +1103,7 @@ class TTSService {
                 clearTimeout(fallbackTimeout);
                 console.log(`[${this.serviceType} TTS] Chunk ${i + 1} speak-tts completed successfully:`, result);
                 // CRITICAL: Check if we've been stopped after chunk completion
-                if (this.isStopped) {
+                if (this.isStopped || this.wasManuallyStopped) {
                   console.log(`[${this.serviceType} TTS] Stop detected after chunk ${i + 1} completion, NOT resolving - allowing complete stop`);
                   // Don't resolve if stopped - let the stop mechanism handle it completely
                   return;
@@ -1084,7 +1119,7 @@ class TTSService {
                 clearTimeout(fallbackTimeout);
                 console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} speak-tts failed:`, error);
                 // CRITICAL: Check if we've been stopped after chunk error
-                if (this.isStopped) {
+                if (this.isStopped || this.wasManuallyStopped) {
                   console.log(`[${this.serviceType} TTS] Stop detected after chunk ${i + 1} error in speakChunksFrom, NOT resolving - allowing complete stop`);
                   // Don't resolve if stopped - let the stop mechanism handle it completely
                   return;
@@ -1197,6 +1232,9 @@ class TTSService {
     // Only clear stop flag if we're resuming from a pause, not from a stop
     if (!this.wasManuallyStopped) {
       this.isStopped = false; // Only clear if not manually stopped
+    } else {
+      console.log(`[${this.serviceType} TTS] TTS was manually stopped, keeping stopped state in speakChunksFrom`);
+      return;
     }
     
     console.log(`[${this.serviceType} TTS] Speaking chunks from index ${startIndex}/${this.currentChunks.length}`);
@@ -1247,7 +1285,7 @@ class TTSService {
     this.isPlaying = true;
     this.isPaused = false;
     this.wasManuallyPaused = false;
-    this.isStopped = false; // Reset stop flag when starting chunked speech
+    // Don't reset isStopped here - let the calling method handle it
     this.speakingStartTime = Date.now();
     
     // Wait a moment for state to stabilize
@@ -1345,7 +1383,7 @@ class TTSService {
                 hasResolved = true;
                   console.log(`[${this.serviceType} TTS] Chunk ${i + 1} speak-tts completed successfully:`, result);
                   // Check if we've been stopped after chunk completion
-                  if (this.isStopped) {
+                  if (this.isStopped || this.wasManuallyStopped) {
                     console.log(`[${this.serviceType} TTS] Stop detected after chunk ${i + 1} completion in speakChunksFrom, ending chunked speech`);
                   }
                   resolve();
@@ -1816,7 +1854,19 @@ class TTSService {
         clearTimeout(this.speakTimeout);
         this.speakTimeout = null;
       }
-      console.log(`[${this.serviceType} TTS] Stopped and state cleared`);
+      
+      // Force clear any remaining speech synthesis
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        try {
+          window.speechSynthesis.pause();
+          window.speechSynthesis.cancel();
+          console.log(`[${this.serviceType} TTS] Forced clear of native speech synthesis`);
+        } catch (e) {
+          console.warn(`[${this.serviceType} TTS] Error forcing clear of speech synthesis:`, e);
+        }
+      }
+      
+      console.log(`[${this.serviceType} TTS] Stopped and state cleared - TTS will remain stopped until manually reset`);
     } catch (error) {
       console.warn(`[${this.serviceType} TTS] Stop failed:`, error);
     }
@@ -1921,46 +1971,68 @@ class TTSService {
     }
   }
 
-  // Reset TTS state - useful for recovery from inconsistent states
+  // Enhanced reset method that properly clears all state
   reset() {
-    console.log(`[${this.serviceType} TTS] Resetting TTS state`);
-    
-    // Reset stop flag
-    this.isStopped = false;
-    
-    // Cancel any ongoing speech synthesis using speak-tts
-    if (this.speech && typeof this.speech.cancel === 'function') {
-      try {
-        this.speech.cancel();
-        console.log(`[${this.serviceType} TTS] Canceled ongoing speech synthesis during reset`);
-      } catch (error) {
-        console.warn(`[${this.serviceType} TTS] Failed to cancel speech synthesis during reset:`, error);
+    try {
+      console.log(`[${this.serviceType} TTS] Resetting TTS service state`);
+      
+      // Clear all state flags
+      this.isPlaying = false;
+      this.isPaused = false;
+      this.isChunkedSpeech = false;
+      this.errorCount = 0;
+      this.initializationAttempts = 0;
+      this.pauseTime = 0;
+      this.speakingStartTime = 0;
+      this.finishedNormally = false;
+      this.wasManuallyPaused = false;
+      
+      // Clear text state
+      this.currentText = '';
+      this.currentLessonId = null;
+      this.fullText = '';
+      
+      // Reset position tracking
+      this.pausePosition = 0;
+      this.totalSpokenTime = 0;
+      
+      // Clear chunked speech state
+      this.currentChunks = null;
+      this.currentChunkIndex = 0;
+      
+      // Clear any pending timeouts
+      if (this.speakTimeout) {
+        clearTimeout(this.speakTimeout);
+        this.speakTimeout = null;
       }
+      
+      console.log(`[${this.serviceType} TTS] Reset completed`);
+    } catch (error) {
+      console.warn(`[${this.serviceType} TTS] Reset failed:`, error);
     }
-    
-    // Reset all state
-    this.isPlaying = false;
-    this.isPaused = false;
-    this.errorCount = 0;
-    this.currentText = '';
-    this.currentLessonId = null;
-    this.fullText = '';
-    
-    // Reset position tracking
-    this.pausePosition = 0;
-    this.pauseTime = 0;
-    this.totalSpokenTime = 0;
-    this.speakingStartTime = 0;
-         this.finishedNormally = false;
-     this.wasManuallyPaused = false;
-     
-     // Clear any pending timeouts
-    if (this.speakTimeout) {
-      clearTimeout(this.speakTimeout);
-      this.speakTimeout = null;
+  }
+
+  // New method to properly restart TTS after it was stopped
+  async restart() {
+    try {
+      console.log(`[${this.serviceType} TTS] Restarting TTS service after stop`);
+      
+      // Clear the stopped flags to allow restart
+      this.isStopped = false;
+      this.wasManuallyStopped = false;
+      
+      // Reset all state
+      this.reset();
+      
+      // Reinitialize the speech engine
+      await this.initSpeech();
+      
+      console.log(`[${this.serviceType} TTS] Restart completed successfully`);
+      return true;
+    } catch (error) {
+      console.warn(`[${this.serviceType} TTS] Restart failed:`, error);
+      return false;
     }
-    
-    console.log(`[${this.serviceType} TTS] Reset complete, ready for new requests`);
   }
 
   // Check if TTS is supported
