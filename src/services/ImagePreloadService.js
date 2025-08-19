@@ -15,8 +15,15 @@ class ImagePreloadService {
    * @returns {Promise<boolean>} - Whether preload was successful
    */
   async preloadImage(imageUrl, priority = 5) {
-    if (!imageUrl || this.preloadedImages.has(imageUrl)) {
-      return true; // Already preloaded or invalid URL
+    // Validate URL before attempting to preload
+    if (!imageUrl || typeof imageUrl !== 'string' || imageUrl.trim() === '') {
+      console.warn('[ImagePreloadService] Invalid URL provided for preload:', imageUrl);
+      return false;
+    }
+
+    // Check if already preloaded
+    if (this.preloadedImages.has(imageUrl)) {
+      return true; // Already preloaded
     }
 
     // Check if already in cache
@@ -82,6 +89,23 @@ class ImagePreloadService {
    */
   async preloadSingleImage(imageUrl) {
     try {
+      // Additional URL validation
+      if (!imageUrl || typeof imageUrl !== 'string') {
+        console.warn('[ImagePreloadService] Invalid URL for preload:', imageUrl);
+        return false;
+      }
+
+      // Check if URL is valid format
+      try {
+        if (!imageUrl.startsWith('data:') && !imageUrl.startsWith('blob:') && !imageUrl.startsWith('/') && !imageUrl.startsWith('http')) {
+          console.warn('[ImagePreloadService] Invalid URL format for preload:', imageUrl);
+          return false;
+        }
+      } catch (error) {
+        console.warn('[ImagePreloadService] URL validation error:', error);
+        return false;
+      }
+
       // Check if preload link already exists
       const existingLink = document.querySelector(`link[rel="preload"][href="${imageUrl}"]`);
       if (existingLink) {

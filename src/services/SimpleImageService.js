@@ -72,6 +72,12 @@ const SimpleImageService = {
       usedImageTitles = Array.isArray(usedImageTitles) ? usedImageTitles : [];
       usedImageUrls = Array.isArray(usedImageUrls) ? usedImageUrls : [];
 
+      // Validate lesson title - don't search if title is empty or invalid
+      if (!lessonTitle || lessonTitle.trim() === '') {
+        console.warn('[SimpleImageService] Empty lesson title provided, skipping search');
+        return null;
+      }
+
       // Skip cache if forceUnique is true
       if (!forceUnique) {
         const cacheKey = this.getCacheKey(lessonTitle, content, usedImageTitles, usedImageUrls, courseId, lessonId);
@@ -163,6 +169,11 @@ const SimpleImageService = {
         }
         await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
         return this.search(lessonTitle, content, usedImageTitles, usedImageUrls, courseId, lessonId, forceUnique, 1);
+      }
+
+      // If we've already retried or it's not a timeout error, don't retry again
+      if (retryCount > 0) {
+        console.warn('[SimpleImageService] Search failed after retry, giving up');
       }
 
       // Return null to let the calling code handle the error appropriately
@@ -285,6 +296,18 @@ const SimpleImageService = {
     // Validate URL format
     if (typeof baseUrl !== 'string' || baseUrl.trim() === '') {
       console.warn('[SimpleImageService] Invalid baseUrl provided:', baseUrl);
+      return baseUrl;
+    }
+
+    // Additional URL validation
+    try {
+      // Check if it's a valid URL or relative path
+      if (!baseUrl.startsWith('data:') && !baseUrl.startsWith('blob:') && !baseUrl.startsWith('/') && !baseUrl.startsWith('http')) {
+        console.warn('[SimpleImageService] Invalid URL format:', baseUrl);
+        return baseUrl;
+      }
+    } catch (error) {
+      console.warn('[SimpleImageService] URL validation error:', error);
       return baseUrl;
     }
 

@@ -3633,7 +3633,7 @@ async function imageSearchHandler(req, res) {
       console.log('[ImageSearch] Calling fetchRelevantImage...');
       
       // Add timeout to prevent hanging requests
-      const searchTimeout = 15000; // 15 seconds
+      const searchTimeout = 8000; // 8 seconds - reduced from 15
       const searchPromise = global.aiService.fetchRelevantImage(lessonTitle, content, safeUsedTitles, safeUsedUrls, { relaxed: false }, courseContext);
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error('Image search timeout')), searchTimeout);
