@@ -59,10 +59,10 @@ class ImagePerformanceMonitor {
       this.metrics.responseSizes.push(fileSize);
     }
 
-    // Performance warnings
+    // Performance warnings - reduced frequency to prevent spam
     if (loadTime > this.thresholds.verySlowLoad) {
       console.warn(`[ImagePerformance] Very slow image load: ${imageUrl} (${loadTime}ms)`);
-    } else if (loadTime > this.thresholds.slowLoad) {
+    } else if (loadTime > this.thresholds.slowLoad && Math.random() < 0.1) { // Only log 10% of slow loads
       console.warn(`[ImagePerformance] Slow image load: ${imageUrl} (${loadTime}ms)`);
     }
 
@@ -115,26 +115,29 @@ class ImagePerformanceMonitor {
   }
 
   /**
-   * Monitor image loading using Performance Observer
+   * Monitor image loading using Performance Observer - optimized
    */
   startPerformanceMonitoring() {
     if (!('PerformanceObserver' in window)) return;
 
     try {
-      // Monitor resource timing for images
+      // Monitor resource timing for images - only track slow loads to reduce overhead
       const resourceObserver = new PerformanceObserver((list) => {
         for (const entry of list.getEntries()) {
           if (entry.initiatorType === 'img' || entry.name.includes('image')) {
             const loadTime = entry.responseEnd - entry.fetchStart;
-            const fileSize = entry.transferSize || 0;
             
-            this.trackImageLoad(
-              entry.name, 
-              loadTime, 
-              false, // We can't determine cache hit from resource timing
-              fileSize,
-              this.detectFormatFromUrl(entry.name)
-            );
+            // Only track slow loads to reduce overhead
+            if (loadTime > this.thresholds.slowLoad) {
+              const fileSize = entry.transferSize || 0;
+              this.trackImageLoad(
+                entry.name, 
+                loadTime, 
+                false, // We can't determine cache hit from resource timing
+                fileSize,
+                this.detectFormatFromUrl(entry.name)
+              );
+            }
           }
         }
       });
@@ -142,7 +145,7 @@ class ImagePerformanceMonitor {
       resourceObserver.observe({ entryTypes: ['resource'] });
       this.observers.set('resource', resourceObserver);
 
-      console.log('[ImagePerformance] Performance monitoring started');
+      console.log('[ImagePerformance] Performance monitoring started (optimized)');
     } catch (error) {
       console.warn('[ImagePerformance] Failed to start performance monitoring:', error);
     }

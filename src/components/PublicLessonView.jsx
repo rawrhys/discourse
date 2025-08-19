@@ -403,7 +403,7 @@ const PublicLessonView = ({
     };
   }, [ttsStatus.isPlaying, ttsStatus.isPaused]); // Added dependencies back for proper updates
 
-  // Handle image loading for public courses (simplified)
+  // Handle image loading for public courses (simplified) - with debounce
   useEffect(() => {
     if (!lesson?.title) return;
 
@@ -414,7 +414,8 @@ const PublicLessonView = ({
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
     
-    async function fetchImage() {
+    // Add debounce to prevent rapid successive searches
+    const timeoutId = setTimeout(async function fetchImage() {
       try {
         // For public courses, use a simplified image search
         const result = await SimpleImageService.searchWithContext(
@@ -441,15 +442,14 @@ const PublicLessonView = ({
           setImageLoading(false);
         }
       }
-    }
-    
-    fetchImage();
+    }, 300); // 300ms debounce
     
     return () => { 
       ignore = true;
       abortController.abort();
+      clearTimeout(timeoutId);
     };
-  }, [lesson, subject, courseId, courseDescription]);
+  }, [lesson?.id, lesson?.title, subject, courseId]); // Only depend on stable values
 
   // Preload current lesson image for better performance (public courses)
   useEffect(() => {
@@ -486,16 +486,17 @@ const PublicLessonView = ({
         ? getContentAsString(lesson.content)
         : getContentAsString(lesson.content);
       
-      // Debug logging
-      console.log('[PublicLessonView] Content processing debug:', {
-        originalContentType: typeof lesson.content,
-        originalContentLength: typeof lesson.content === 'string' ? lesson.content.length : 'object',
-        lessonContentStringLength: lessonContentString.length,
-        lessonContentStringPreview: lessonContentString.substring(0, 200) + '...',
-        hasIntroductionKey: lessonContentString.includes('"introduction":'),
-        hasMainContentKey: lessonContentString.includes('"main_content":'),
-        hasConclusionKey: lessonContentString.includes('"conclusion":')
-      });
+      // Debug logging - reduced frequency
+      if (process.env.NODE_ENV === 'development' && Math.random() < 0.1) { // Only log 10% of the time
+        console.log('[PublicLessonView] Content processing debug:', {
+          originalContentType: typeof lesson.content,
+          originalContentLength: typeof lesson.content === 'string' ? lesson.content.length : 'object',
+          lessonContentStringLength: lessonContentString.length,
+          hasIntroductionKey: lessonContentString.includes('"introduction":'),
+          hasMainContentKey: lessonContentString.includes('"main_content":'),
+          hasConclusionKey: lessonContentString.includes('"conclusion":')
+        });
+      }
       
       // Generate academic references
       const references = academicReferencesService.generateReferences(
@@ -956,17 +957,15 @@ const PublicLessonView = ({
     // Use the same content processing approach as private LessonView
     lessonContent = cleanAndCombineContent(lesson.content);
     
-    // Debug logging for main content processing
-    console.log('[PublicLessonView] Main content processing:', {
-      originalContentType: typeof lesson.content,
-      lessonContentLength: lessonContent.length,
-      lessonContentPreview: lessonContent.substring(0, 200) + '...',
-      hasContent: !!lessonContent,
-      isEmpty: lessonContent.trim() === '',
-      hasSectionHeaders: lessonContent.includes('## Introduction') || lessonContent.includes('## Main Content') || lessonContent.includes('## Conclusion'),
-      hasHorizontalRules: lessonContent.includes('---'),
-      rawContentKeys: typeof lesson.content === 'object' ? Object.keys(lesson.content) : 'string'
-    });
+    // Debug logging for main content processing - reduced frequency
+    if (process.env.NODE_ENV === 'development' && Math.random() < 0.1) { // Only log 10% of the time
+      console.log('[PublicLessonView] Main content processing:', {
+        originalContentType: typeof lesson.content,
+        lessonContentLength: lessonContent.length,
+        hasContent: !!lessonContent,
+        isEmpty: lessonContent.trim() === ''
+      });
+    }
   } catch (error) {
     console.error('[PublicLessonView] Error processing lesson content:', error);
     lessonContent = typeof lesson.content === 'string' ? lesson.content : '';
@@ -979,16 +978,17 @@ const PublicLessonView = ({
       : contentWithCitations
     : lessonContent;
   
-  // Debug logging for display content
-  console.log('[PublicLessonView] Display content processing:', {
-    hasContentWithCitations: !!contentWithCitations,
-    contentWithCitationsLength: contentWithCitations ? contentWithCitations.length : 0,
-    lessonContentLength: lessonContent.length,
-    displayContentLength: displayContent.length,
-    displayContentPreview: displayContent.substring(0, 200) + '...',
-    hasContent: !!displayContent,
-    isEmpty: displayContent.trim() === ''
-  });
+  // Debug logging for display content - reduced frequency
+  if (process.env.NODE_ENV === 'development' && Math.random() < 0.1) { // Only log 10% of the time
+    console.log('[PublicLessonView] Display content processing:', {
+      hasContentWithCitations: !!contentWithCitations,
+      contentWithCitationsLength: contentWithCitations ? contentWithCitations.length : 0,
+      lessonContentLength: lessonContent.length,
+      displayContentLength: displayContent.length,
+      hasContent: !!displayContent,
+      isEmpty: displayContent.trim() === ''
+    });
+  }
   
   // Apply markdown parsing to the content (same approach as private LessonView)
   let parsedContent = '';
@@ -1380,19 +1380,12 @@ const PublicLessonView = ({
           
            {/* Academic References Footer */}
            <div className="mt-8">
-             {(() => {
-               console.log('[PublicLessonView] Rendering Academic References Footer:', {
-                 hasReferencesFooter: !!referencesFooter,
-                 hasReferences: !!(referencesFooter && referencesFooter.references),
-                 referencesCount: referencesFooter?.references?.length || 0
-               });
-               return referencesFooter && referencesFooter.references && (
-                 <AcademicReferencesFooter 
-                   references={referencesFooter.references}
-                   onCitationClick={handleCitationClick}
-                 />
-               );
-             })()}
+             {referencesFooter && referencesFooter.references && (
+               <AcademicReferencesFooter 
+                 references={referencesFooter.references}
+                 onCitationClick={handleCitationClick}
+               />
+             )}
            </div>
          </div>
        )}
