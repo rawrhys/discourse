@@ -3860,28 +3860,92 @@ app.get('/api/captcha/verify/:courseId',
     
     // No CAPTCHA parameters - generate new challenge
     
-    // Generate more varied challenges
+    // Generate more varied and simpler challenges
     const challengeTypes = [
-      { type: 'addition', operator: '+', generate: () => {
-        const num1 = Math.floor(Math.random() * 15) + 1;
-        const num2 = Math.floor(Math.random() * 15) + 1;
+      { type: 'simple_addition', operator: '+', generate: () => {
+        const num1 = Math.floor(Math.random() * 9) + 1; // 1-9
+        const num2 = Math.floor(Math.random() * 9) + 1; // 1-9
         return { num1, num2, operator: '+', answer: num1 + num2 };
       }},
-      { type: 'subtraction', operator: '-', generate: () => {
-        const num1 = Math.floor(Math.random() * 20) + 10; // 10-29
-        const num2 = Math.floor(Math.random() * num1) + 1; // 1 to num1-1
+      { type: 'simple_subtraction', operator: '-', generate: () => {
+        const num1 = Math.floor(Math.random() * 15) + 5; // 5-19
+        const num2 = Math.floor(Math.random() * (num1 - 1)) + 1; // 1 to num1-1
         return { num1, num2, operator: '-', answer: num1 - num2 };
       }},
-      { type: 'multiplication', operator: '×', generate: () => {
-        const num1 = Math.floor(Math.random() * 12) + 1; // 1-12
-        const num2 = Math.floor(Math.random() * 12) + 1; // 1-12
+      { type: 'easy_multiplication', operator: '×', generate: () => {
+        const num1 = Math.floor(Math.random() * 6) + 1; // 1-6
+        const num2 = Math.floor(Math.random() * 6) + 1; // 1-6
         return { num1, num2, operator: '×', answer: num1 * num2 };
       }},
       { type: 'simple_division', operator: '÷', generate: () => {
-        const num2 = Math.floor(Math.random() * 10) + 2; // 2-11
-        const answer = Math.floor(Math.random() * 10) + 1; // 1-10
-        const num1 = num2 * answer;
+        const num2 = Math.floor(Math.random() * 6) + 2; // 2-7
+        const answer = Math.floor(Math.random() * 6) + 1; // 1-6
         return { num1, num2, operator: '÷', answer: answer };
+      }},
+      { type: 'counting', operator: 'count', generate: () => {
+        const items = ['apples', 'bananas', 'oranges', 'books', 'pens', 'cars', 'houses', 'trees', 'stars', 'flowers'];
+        const item = items[Math.floor(Math.random() * items.length)];
+        const count = Math.floor(Math.random() * 8) + 2; // 2-9
+        return { 
+          num1: count, 
+          num2: 0, 
+          operator: 'count', 
+          answer: count,
+          question: `How many ${item} are there?`,
+          displayText: `${count} ${item}`
+        };
+      }},
+      { type: 'sequence', operator: 'next', generate: () => {
+        const sequences = [
+          { pattern: [2, 4, 6, 8], answer: 10, description: '2, 4, 6, 8, ?' },
+          { pattern: [1, 3, 5, 7], answer: 9, description: '1, 3, 5, 7, ?' },
+          { pattern: [5, 10, 15, 20], answer: 25, description: '5, 10, 15, 20, ?' },
+          { pattern: [3, 6, 9, 12], answer: 15, description: '3, 6, 9, 12, ?' },
+          { pattern: [1, 2, 4, 8], answer: 16, description: '1, 2, 4, 8, ?' }
+        ];
+        const seq = sequences[Math.floor(Math.random() * sequences.length)];
+        return { 
+          num1: 0, 
+          num2: 0, 
+          operator: 'next', 
+          answer: seq.answer,
+          question: `What comes next in this sequence?`,
+          displayText: seq.description
+        };
+      }},
+      { type: 'word_count', operator: 'words', generate: () => {
+        const sentences = [
+          'The cat sat on the mat.',
+          'I love to read books.',
+          'She went to the store.',
+          'The sun is shining today.',
+          'We are learning together.',
+          'Birds fly in the sky.',
+          'Fish swim in the water.',
+          'Children play in the park.'
+        ];
+        const sentence = sentences[Math.floor(Math.random() * sentences.length)];
+        const wordCount = sentence.split(' ').length;
+        return { 
+          num1: 0, 
+          num2: 0, 
+          operator: 'words', 
+          answer: wordCount,
+          question: `How many words are in this sentence?`,
+          displayText: sentence
+        };
+      }},
+      { type: 'letter_count', operator: 'letters', generate: () => {
+        const words = ['hello', 'world', 'computer', 'science', 'learning', 'education', 'knowledge', 'student', 'teacher', 'school'];
+        const word = words[Math.floor(Math.random() * words.length)];
+        return { 
+          num1: 0, 
+          num2: 0, 
+          operator: 'letters', 
+          answer: word.length,
+          question: `How many letters are in this word?`,
+          displayText: word
+        };
       }}
     ];
     
@@ -3889,7 +3953,16 @@ app.get('/api/captcha/verify/:courseId',
     const selectedType = challengeTypes[Math.floor(Math.random() * challengeTypes.length)];
     const challengeInfo = selectedType.generate();
     
-    const challengeData = `${challengeInfo.num1} ${challengeInfo.operator} ${challengeInfo.num2}`;
+    // Generate challenge display text based on type
+    let challengeData;
+    if (challengeInfo.question && challengeInfo.displayText) {
+      // For non-math challenges, use the question format
+      challengeData = challengeInfo.question;
+    } else {
+      // For math challenges, use the standard format
+      challengeData = `${challengeInfo.num1} ${challengeInfo.operator} ${challengeInfo.num2}`;
+    }
+    
     const newChallengeKey = `captcha_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
     global.captchaChallenges.set(newChallengeKey, {
@@ -3910,7 +3983,7 @@ app.get('/api/captcha/verify/:courseId',
       requiresCaptcha: true,
       challenge: challengeData,
       challengeKey: newChallengeKey,
-      message: 'Please solve this math problem to access the course.'
+      message: 'Please solve this verification challenge to access the course.'
     });
   } catch (error) {
     console.error('[API] CAPTCHA verification error:', error);
@@ -3931,28 +4004,93 @@ app.get('/api/captcha/new/:courseId',
     
     // Generate new challenge
     
-    // Generate more varied challenges
+    // Generate more varied and simpler challenges
     const challengeTypes = [
-      { type: 'addition', operator: '+', generate: () => {
-        const num1 = Math.floor(Math.random() * 15) + 1;
-        const num2 = Math.floor(Math.random() * 15) + 1;
+      { type: 'simple_addition', operator: '+', generate: () => {
+        const num1 = Math.floor(Math.random() * 9) + 1; // 1-9
+        const num2 = Math.floor(Math.random() * 9) + 1; // 1-9
         return { num1, num2, operator: '+', answer: num1 + num2 };
       }},
-      { type: 'subtraction', operator: '-', generate: () => {
-        const num1 = Math.floor(Math.random() * 20) + 10; // 10-29
-        const num2 = Math.floor(Math.random() * num1) + 1; // 1 to num1-1
+      { type: 'simple_subtraction', operator: '-', generate: () => {
+        const num1 = Math.floor(Math.random() * 15) + 5; // 5-19
+        const num2 = Math.floor(Math.random() * (num1 - 1)) + 1; // 1 to num1-1
         return { num1, num2, operator: '-', answer: num1 - num2 };
       }},
-      { type: 'multiplication', operator: '×', generate: () => {
-        const num1 = Math.floor(Math.random() * 12) + 1; // 1-12
-        const num2 = Math.floor(Math.random() * 12) + 1; // 1-12
+      { type: 'easy_multiplication', operator: '×', generate: () => {
+        const num1 = Math.floor(Math.random() * 6) + 1; // 1-6
+        const num2 = Math.floor(Math.random() * 6) + 1; // 1-6
         return { num1, num2, operator: '×', answer: num1 * num2 };
       }},
       { type: 'simple_division', operator: '÷', generate: () => {
-        const num2 = Math.floor(Math.random() * 10) + 2; // 2-11
-        const answer = Math.floor(Math.random() * 10) + 1; // 1-10
+        const num2 = Math.floor(Math.random() * 6) + 2; // 2-7
+        const answer = Math.floor(Math.random() * 6) + 1; // 1-6
         const num1 = num2 * answer;
         return { num1, num2, operator: '÷', answer: answer };
+      }},
+      { type: 'counting', operator: 'count', generate: () => {
+        const items = ['apples', 'bananas', 'oranges', 'books', 'pens', 'cars', 'houses', 'trees', 'stars', 'flowers'];
+        const item = items[Math.floor(Math.random() * items.length)];
+        const count = Math.floor(Math.random() * 8) + 2; // 2-9
+        return { 
+          num1: count, 
+          num2: 0, 
+          operator: 'count', 
+          answer: count,
+          question: `How many ${item} are there?`,
+          displayText: `${count} ${item}`
+        };
+      }},
+      { type: 'sequence', operator: 'next', generate: () => {
+        const sequences = [
+          { pattern: [2, 4, 6, 8], answer: 10, description: '2, 4, 6, 8, ?' },
+          { pattern: [1, 3, 5, 7], answer: 9, description: '1, 3, 5, 7, ?' },
+          { pattern: [5, 10, 15, 20], answer: 25, description: '5, 10, 15, 20, ?' },
+          { pattern: [3, 6, 9, 12], answer: 15, description: '3, 6, 9, 12, ?' },
+          { pattern: [1, 2, 4, 8], answer: 16, description: '1, 2, 4, 8, ?' }
+        ];
+        const seq = sequences[Math.floor(Math.random() * sequences.length)];
+        return { 
+          num1: 0, 
+          num2: 0, 
+          operator: 'next', 
+          answer: seq.answer,
+          question: `What comes next in this sequence?`,
+          displayText: seq.description
+        };
+      }},
+      { type: 'word_count', operator: 'words', generate: () => {
+        const sentences = [
+          'The cat sat on the mat.',
+          'I love to read books.',
+          'She went to the store.',
+          'The sun is shining today.',
+          'We are learning together.',
+          'Birds fly in the sky.',
+          'Fish swim in the water.',
+          'Children play in the park.'
+        ];
+        const sentence = sentences[Math.floor(Math.random() * sentences.length)];
+        const wordCount = sentence.split(' ').length;
+        return { 
+          num1: 0, 
+          num2: 0, 
+          operator: 'words', 
+          answer: wordCount,
+          question: `How many words are in this sentence?`,
+          displayText: sentence
+        };
+      }},
+      { type: 'letter_count', operator: 'letters', generate: () => {
+        const words = ['hello', 'world', 'computer', 'science', 'learning', 'education', 'knowledge', 'student', 'teacher', 'school'];
+        const word = words[Math.floor(Math.random() * words.length)];
+        return { 
+          num1: 0, 
+          num2: 0, 
+          operator: 'letters', 
+          answer: word.length,
+          question: `How many letters are in this word?`,
+          displayText: word
+        };
       }}
     ];
     
@@ -3960,7 +4098,16 @@ app.get('/api/captcha/new/:courseId',
     const selectedType = challengeTypes[Math.floor(Math.random() * challengeTypes.length)];
     const challengeInfo = selectedType.generate();
     
-    const challengeData = `${challengeInfo.num1} ${challengeInfo.operator} ${challengeInfo.num2}`;
+    // Generate challenge display text based on type
+    let challengeData;
+    if (challengeInfo.question && challengeInfo.displayText) {
+      // For non-math challenges, use the question format
+      challengeData = challengeInfo.question;
+    } else {
+      // For math challenges, use the standard format
+      challengeData = `${challengeInfo.num1} ${challengeInfo.operator} ${challengeInfo.num2}`;
+    }
+    
     const newChallengeKey = `captcha_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
     global.captchaChallenges.set(newChallengeKey, {

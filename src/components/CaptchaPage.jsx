@@ -188,12 +188,12 @@ const CaptchaPage = () => {
               </svg>
             </div>
             <h2 className="text-2xl font-bold text-gray-800 mb-2">Security Verification</h2>
-            <p className="text-gray-600">Please solve this simple math problem to continue</p>
+            <p className="text-gray-600">Please solve this verification challenge to continue</p>
           </div>
 
           <div className="bg-gray-100 rounded-lg p-6 mb-6 text-center">
-            <span className="text-4xl font-bold text-gray-800">
-              {captchaData.challenge} = ?
+            <span className="text-2xl font-bold text-gray-800 leading-relaxed">
+              {captchaData.challenge}
             </span>
           </div>
 
