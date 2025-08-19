@@ -120,15 +120,31 @@ const Image = ({
     setIsError(false);
     setShowFallback(false);
     
-    // Track performance metrics
-    const imageSize = img.naturalWidth * img.naturalHeight || 0;
-    imagePerformanceMonitor.trackManualImageLoad(src, loadTime, imageSize);
-    
-    // Log slow loads for monitoring
-    if (loadTime > 3000) {
-      console.warn(`[Image] Slow image load detected for ${src}: ${loadTime}ms`);
+    // Track performance metrics asynchronously to avoid blocking
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(() => {
+        const imageSize = img.naturalWidth * img.naturalHeight || 0;
+        imagePerformanceMonitor.trackManualImageLoad(src, loadTime, imageSize);
+        
+        // Log slow loads for monitoring
+        if (loadTime > 3000) {
+          console.warn(`[Image] Slow image load detected for ${src}: ${loadTime}ms`);
+        } else {
+          console.log(`[Image] Loaded ${src} in ${loadTime}ms`);
+        }
+      }, { timeout: 1000 });
     } else {
-      console.log(`[Image] Loaded ${src} in ${loadTime}ms`);
+      // Fallback for browsers without requestIdleCallback
+      setTimeout(() => {
+        const imageSize = img.naturalWidth * img.naturalHeight || 0;
+        imagePerformanceMonitor.trackManualImageLoad(src, loadTime, imageSize);
+        
+        if (loadTime > 3000) {
+          console.warn(`[Image] Slow image load detected for ${src}: ${loadTime}ms`);
+        } else {
+          console.log(`[Image] Loaded ${src} in ${loadTime}ms`);
+        }
+      }, 0);
     }
   }, [src]);
 

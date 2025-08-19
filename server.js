@@ -261,20 +261,24 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
       if (haystack.includes(tok)) score += 4;
     }
 
-    // Course context relevance scoring
+    // Course context relevance scoring - more lenient approach
     if (courseTitle || courseSubject) {
-      // Heavy penalty for images that don't match the course context
       const courseContextTerms = extractSearchKeywords(courseTitle + ' ' + courseSubject, null, 10);
       const hasCourseContextMatch = courseContextTerms.some(term => 
         term.length > 3 && haystack.includes(term)
       );
       
       if (!hasCourseContextMatch) {
-        score -= 50; // Heavy penalty for images not relevant to course context
-        console.log(`[ImageScoring] Heavy penalty for image not matching course context: ${courseTitle}`);
+        // Reduced penalty - only -10 instead of -50
+        score -= 10;
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[ImageScoring] Minor penalty for image not matching course context: ${courseTitle}`);
+        }
       } else {
         score += 20; // Bonus for images that match course context
-        console.log(`[ImageScoring] Bonus for image matching course context: ${courseTitle}`);
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[ImageScoring] Bonus for image matching course context: ${courseTitle}`);
+        }
       }
     }
 
@@ -471,7 +475,7 @@ function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitl
     .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim());
-  const STOPWORDS = new Set(['the','a','an','and','or','of','in','on','to','for','by','with','at','from','as','is','are','was','were','be','being','been','this','that','these','those','it','its','into','about','over','under','between','through','during','before','after','above','below','up','down','out','off','than','introduction','overview','lesson','chapter','period','era','history','modern','course','explores','rich','covering','political','cultural','religious']);
+  const STOPWORDS = new Set(['the','a','an','and','or','of','in','on','to','for','by','with','at','from','as','is','are','was','were','be','being','been','this','that','these','those','it','its','into','about','over','under','between','through','during','before','after','above','below','up','down','out','off','than','introduction','overview','lesson','chapter','era','modern','course','explores','rich','covering','political','cultural','religious']);
   const GENERIC_EVENT_WORDS = new Set(['fall','collapse','decline','rise','war','battle','revolution','crisis','empire','dynasty','state','society']);
   const tokenize = (str) => normalize(str).split(/\s+/).filter(t => t && t.length > 2 && !STOPWORDS.has(t));
 
@@ -564,7 +568,7 @@ function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitl
                          (/\b(history|ancient|rome|greek|egypt|medieval|renaissance|empire|republic|kingdom|dynasty|civilization)\b/i.test(contentText) || 
                           /\b(history|ancient|rome|greek|egypt|medieval|renaissance|empire|republic|kingdom|dynasty|civilization)\b/i.test(courseTitle || ''));
 
-    if (isHistoryCourse) {
+  if (isHistoryCourse) {
     // Add historical-specific queries that are more likely to find relevant images
     for (const phrase of properPhrases.slice(0, 4)) {
       dedupePush(queries, `${phrase} ancient history`);
@@ -578,6 +582,26 @@ function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitl
     for (const term of historicalTerms) {
       if (queries.length < maxQueries) {
         dedupePush(queries, `${normalizedSubject} ${term}`);
+      }
+    }
+    
+    // Add Egypt-specific terms for better relevance
+    if (/\b(egypt|egyptian|pharaoh|pyramid|dynastic|nile)\b/i.test(subjectPhrase) || 
+        /\b(egypt|egyptian|pharaoh|pyramid|dynastic|nile)\b/i.test(contentText) ||
+        /\b(egypt|egyptian|pharaoh|pyramid|dynastic|nile)\b/i.test(courseTitle || '')) {
+      
+      const egyptTerms = ['ancient egypt', 'egyptian civilization', 'pharaoh', 'pyramid', 'nile river', 'egyptian artifact'];
+      for (const term of egyptTerms) {
+        if (queries.length < maxQueries) {
+          dedupePush(queries, `${normalizedSubject} ${term}`);
+        }
+      }
+      
+      // Add specific Egypt-related queries
+      if (queries.length < maxQueries) {
+        dedupePush(queries, 'ancient egypt civilization');
+        dedupePush(queries, 'egyptian pharaoh dynasty');
+        dedupePush(queries, 'ancient egyptian artifact');
       }
     }
   }
@@ -3767,6 +3791,17 @@ app.get('/api/image/fast', async (req, res) => {
     if (!allowedDomains.some(domain => hostname.endsWith(domain))) {
       console.warn(`[FastImageProxy] Forbidden domain: ${hostname}`);
       return res.status(403).json({ error: 'Forbidden domain' });
+    }
+
+    // Validate image format - allow all common image formats
+    const validImageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.tiff', '.tif'];
+    const hasValidExtension = validImageExtensions.some(ext => 
+      parsedUrl.pathname.toLowerCase().includes(ext)
+    );
+    
+    if (!hasValidExtension) {
+      console.warn(`[FastImageProxy] Invalid image format: ${parsedUrl.pathname}`);
+      return res.status(400).json({ error: 'Invalid image format' });
     }
 
     // Check server-side cache first

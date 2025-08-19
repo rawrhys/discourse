@@ -33,15 +33,26 @@ const PerformanceWrapper = memo(({
     const currentTime = performance.now();
     const renderTime = currentTime - lastRenderTime.current;
     
-    // Track render time
-    performanceMonitor.trackRenderTime(componentName || 'PerformanceWrapper', renderTime);
-    
-    // Track component render count
-    performanceMonitor.trackComponentRender(componentName || 'PerformanceWrapper');
-    
-    // Warn if rendering too frequently
-    if (renderCount.current > 50) {
-      console.warn(`[Performance] Component ${componentName || 'PerformanceWrapper'} has rendered ${renderCount.current} times - consider optimization`);
+    // Track render time asynchronously to avoid blocking
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(() => {
+        performanceMonitor.trackRenderTime(componentName || 'PerformanceWrapper', renderTime);
+        performanceMonitor.trackComponentRender(componentName || 'PerformanceWrapper');
+        
+        // Warn if rendering too frequently
+        if (renderCount.current > 50) {
+          console.warn(`[Performance] Component ${componentName || 'PerformanceWrapper'} has rendered ${renderCount.current} times - consider optimization`);
+        }
+      }, { timeout: 1000 });
+    } else {
+      setTimeout(() => {
+        performanceMonitor.trackRenderTime(componentName || 'PerformanceWrapper', renderTime);
+        performanceMonitor.trackComponentRender(componentName || 'PerformanceWrapper');
+        
+        if (renderCount.current > 50) {
+          console.warn(`[Performance] Component ${componentName || 'PerformanceWrapper'} has rendered ${renderCount.current} times - consider optimization`);
+        }
+      }, 0);
     }
     
     lastRenderTime.current = currentTime;

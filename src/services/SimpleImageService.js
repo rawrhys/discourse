@@ -153,13 +153,14 @@ const SimpleImageService = {
     // Check cache first
     const cached = this.getFromCache(cacheKey);
     if (cached) {
+      console.log('[SimpleImageService] Using cached image for:', lessonTitle);
       return cached;
     }
 
     try {
       console.log('[SimpleImageService] Searching for:', lessonTitle);
       
-      // Try the main image search API first
+      // Try the main image search API first with enhanced error handling
       const response = await fetch(`${API_BASE_URL}/api/image-search/search`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -172,7 +173,7 @@ const SimpleImageService = {
           lessonId,
           disableModeration: true
         }),
-        signal: AbortSignal.timeout(8000) // 8 second timeout
+        signal: AbortSignal.timeout(10000) // Increased timeout to 10 seconds
       });
 
       if (response.ok) {
@@ -182,7 +183,11 @@ const SimpleImageService = {
           console.log('[SimpleImageService] Found image via API:', data.title);
           this.setCache(cacheKey, data);
           return data;
+        } else {
+          console.warn('[SimpleImageService] API returned no valid image data');
         }
+      } else {
+        console.warn('[SimpleImageService] API request failed with status:', response.status);
       }
 
       // If API fails, try direct Pixabay search as fallback
@@ -202,6 +207,20 @@ const SimpleImageService = {
 
     } catch (error) {
       console.warn('[SimpleImageService] Search failed:', error.message);
+      
+      // Try Pixabay as emergency fallback even if main API fails
+      try {
+        console.log('[SimpleImageService] Trying emergency Pixabay fallback');
+        const pixabayImage = await this.searchPixabay(lessonTitle);
+        if (pixabayImage) {
+          console.log('[SimpleImageService] Found emergency Pixabay image:', pixabayImage.title);
+          this.setCache(cacheKey, pixabayImage);
+          return pixabayImage;
+        }
+      } catch (pixabayError) {
+        console.warn('[SimpleImageService] Emergency Pixabay fallback also failed:', pixabayError.message);
+      }
+      
       const fallback = this.getFallbackImage(lessonTitle);
       this.setCache(cacheKey, fallback);
       return fallback;
@@ -219,11 +238,12 @@ const SimpleImageService = {
 
       // Clean and optimize search query
       const cleanQuery = this.optimizeSearchQuery(query);
+      console.log('[SimpleImageService] Pixabay search query:', cleanQuery);
       
       const response = await fetch(
         `https://pixabay.com/api/?key=${pixabayApiKey}&q=${encodeURIComponent(cleanQuery)}&image_type=photo&orientation=horizontal&safesearch=true&per_page=10&min_width=800&min_height=600`,
         {
-          signal: AbortSignal.timeout(5000) // 5 second timeout
+          signal: AbortSignal.timeout(8000) // Increased timeout to 8 seconds
         }
       );
 
@@ -234,17 +254,31 @@ const SimpleImageService = {
       const data = await response.json();
       
       if (data.hits && data.hits.length > 0) {
-        const hit = data.hits[0]; // Get the best match
-        return {
-          url: hit.webformatURL,
-          title: hit.tags || cleanQuery,
-          pageURL: hit.pageURL,
+        // Try to find the best match by checking image quality and relevance
+        let bestHit = data.hits[0];
+        
+        // Look for a better quality image if available
+        for (const hit of data.hits.slice(0, 5)) {
+          if (hit.imageWidth >= 1200 && hit.imageHeight >= 800) {
+            bestHit = hit;
+            break;
+          }
+        }
+        
+        const result = {
+          url: bestHit.webformatURL,
+          title: bestHit.tags || cleanQuery,
+          pageURL: bestHit.pageURL,
           attribution: 'Pixabay',
-          uploader: hit.user,
-          description: hit.tags || cleanQuery
+          uploader: bestHit.user,
+          description: bestHit.tags || cleanQuery
         };
+        
+        console.log('[SimpleImageService] Pixabay found image:', result.title);
+        return result;
       }
 
+      console.warn('[SimpleImageService] No Pixabay images found for query:', cleanQuery);
       return null;
     } catch (error) {
       console.warn('[SimpleImageService] Pixabay search failed:', error.message);
@@ -263,21 +297,39 @@ const SimpleImageService = {
       .replace(/[^\w\s]/g, ' ')
       .split(/\s+/)
       .filter(word => word.length > 2 && !stopWords.includes(word))
-      .slice(0, 3) // Take first 3 meaningful words
+      .slice(0, 4) // Take first 4 meaningful words for better results
       .join(' ');
     
     // Add topic-specific keywords for better results
-    if (cleanQuery.includes('egypt') || cleanQuery.includes('ancient')) {
-      cleanQuery += ' ancient civilization';
+    if (cleanQuery.includes('egypt') || cleanQuery.includes('ancient') || cleanQuery.includes('dynastic') || cleanQuery.includes('pharaoh')) {
+      cleanQuery += ' ancient egypt civilization';
     } else if (cleanQuery.includes('rome') || cleanQuery.includes('roman')) {
       cleanQuery += ' roman empire';
     } else if (cleanQuery.includes('greek') || cleanQuery.includes('greece')) {
       cleanQuery += ' greek civilization';
-    } else if (cleanQuery.includes('history')) {
-      cleanQuery += ' historical';
+    } else if (cleanQuery.includes('history') || cleanQuery.includes('historical')) {
+      cleanQuery += ' historical ancient';
+    } else if (cleanQuery.includes('early') || cleanQuery.includes('period')) {
+      cleanQuery += ' ancient historical';
+    } else if (cleanQuery.includes('fall') || cleanQuery.includes('decline')) {
+      cleanQuery += ' empire collapse';
+    } else if (cleanQuery.includes('rise') || cleanQuery.includes('growth')) {
+      cleanQuery += ' empire expansion';
+    } else if (cleanQuery.includes('city') || cleanQuery.includes('urban')) {
+      cleanQuery += ' ancient city';
+    } else if (cleanQuery.includes('culture') || cleanQuery.includes('society')) {
+      cleanQuery += ' ancient culture';
+    } else if (cleanQuery.includes('art') || cleanQuery.includes('architecture')) {
+      cleanQuery += ' ancient art';
     }
     
-    return cleanQuery || 'education';
+    // Ensure we have at least some meaningful content
+    if (!cleanQuery || cleanQuery.trim().length < 3) {
+      cleanQuery = 'education learning';
+    }
+    
+    console.log('[SimpleImageService] Optimized query:', { original: query, optimized: cleanQuery });
+    return cleanQuery;
   },
 
   // Get appropriate fallback image based on topic
@@ -297,6 +349,14 @@ const SimpleImageService = {
       category = 'science';
     } else if (title.includes('education') || title.includes('learning') || title.includes('study') || title.includes('knowledge')) {
       category = 'education';
+    } else if (title.includes('fall') || title.includes('decline') || title.includes('collapse')) {
+      category = 'history'; // Use historical images for decline/collapse topics
+    } else if (title.includes('rise') || title.includes('growth') || title.includes('expansion')) {
+      category = 'ancient'; // Use ancient civilization images for growth topics
+    } else if (title.includes('city') || title.includes('urban') || title.includes('civilization')) {
+      category = 'ancient'; // Use ancient city images
+    } else if (title.includes('culture') || title.includes('society') || title.includes('art')) {
+      category = 'ancient'; // Use ancient culture images
     }
     
     // Get a random image from the appropriate category

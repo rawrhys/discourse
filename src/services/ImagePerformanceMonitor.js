@@ -51,6 +51,20 @@ class ImagePerformanceMonitor {
     const loadTime = entry.duration;
     const url = entry.name;
     
+    // Use requestIdleCallback to avoid blocking the main thread
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(() => {
+        this.processImageLoad(entry, loadTime, url);
+      }, { timeout: 1000 });
+    } else {
+      // Fallback for browsers without requestIdleCallback
+      setTimeout(() => {
+        this.processImageLoad(entry, loadTime, url);
+      }, 0);
+    }
+  }
+
+  processImageLoad(entry, loadTime, url) {
     // Track all image loads
     this.performanceData.set(url, {
       loadTime,
@@ -86,38 +100,87 @@ class ImagePerformanceMonitor {
     const duration = entry.duration;
     const startTime = entry.startTime;
     
-    console.warn(`[Performance] Long task detected: ${duration.toFixed(2)}ms at ${new Date(startTime).toISOString()}`);
-    
-    // Track render-blocking tasks
-    if (duration > 100) {
-      console.error(`[Performance] Render-blocking task: ${duration.toFixed(2)}ms - this may cause lag`);
+    // Use requestIdleCallback to avoid blocking the main thread
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(() => {
+        console.warn(`[Performance] Long task detected: ${duration.toFixed(2)}ms at ${new Date(startTime).toISOString()}`);
+        
+        // Track render-blocking tasks
+        if (duration > 100) {
+          console.error(`[Performance] Render-blocking task: ${duration.toFixed(2)}ms - this may cause lag`);
+        }
+      }, { timeout: 1000 });
+    } else {
+      // Fallback for browsers without requestIdleCallback
+      setTimeout(() => {
+        console.warn(`[Performance] Long task detected: ${duration.toFixed(2)}ms at ${new Date(startTime).toISOString()}`);
+        
+        if (duration > 100) {
+          console.error(`[Performance] Render-blocking task: ${duration.toFixed(2)}ms - this may cause lag`);
+        }
+      }, 0);
     }
   }
 
   // Track render times for components
   trackRenderTime(componentName, renderTime) {
-    this.renderTimes.set(componentName, {
-      renderTime,
-      timestamp: Date.now()
-    });
-    
-    if (renderTime > 1000) {
-      console.warn(`[Performance] Slow render detected for ${componentName}: ${renderTime.toFixed(2)}ms`);
+    // Use requestIdleCallback to avoid blocking the main thread
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(() => {
+        this.renderTimes.set(componentName, {
+          renderTime,
+          timestamp: Date.now()
+        });
+        
+        if (renderTime > 1000) {
+          console.warn(`[Performance] Slow render detected for ${componentName}: ${renderTime.toFixed(2)}ms`);
+        }
+      }, { timeout: 1000 });
+    } else {
+      // Fallback for browsers without requestIdleCallback
+      setTimeout(() => {
+        this.renderTimes.set(componentName, {
+          renderTime,
+          timestamp: Date.now()
+        });
+        
+        if (renderTime > 1000) {
+          console.warn(`[Performance] Slow render detected for ${componentName}: ${renderTime.toFixed(2)}ms`);
+        }
+      }, 0);
     }
   }
 
   // Manual tracking for images not caught by performance observer
   trackManualImageLoad(url, loadTime, size = 0) {
     if (loadTime > this.slowThreshold) {
-      this.slowImages.set(url, {
-        loadTime,
-        timestamp: Date.now(),
-        size,
-        domain: new URL(url).hostname,
-        manual: true
-      });
+      // Use requestIdleCallback to avoid blocking the main thread
+      if ('requestIdleCallback' in window) {
+        requestIdleCallback(() => {
+          this.slowImages.set(url, {
+            loadTime,
+            timestamp: Date.now(),
+            size,
+            domain: new URL(url).hostname,
+            manual: true
+          });
 
-      console.warn(`[Performance] Manual slow image detection for ${url}: ${loadTime.toFixed(2)}ms`);
+          console.warn(`[Performance] Manual slow image detection for ${url}: ${loadTime.toFixed(2)}ms`);
+        }, { timeout: 1000 });
+      } else {
+        // Fallback for browsers without requestIdleCallback
+        setTimeout(() => {
+          this.slowImages.set(url, {
+            loadTime,
+            timestamp: Date.now(),
+            size,
+            domain: new URL(url).hostname,
+            manual: true
+          });
+
+          console.warn(`[Performance] Manual slow image detection for ${url}: ${loadTime.toFixed(2)}ms`);
+        }, 0);
+      }
     }
   }
 

@@ -990,9 +990,17 @@ const LessonView = ({
     
     const result = <FlashcardRenderer flashcards={flashcardData} />;
     
-    // Track render time for performance monitoring
+    // Track render time for performance monitoring asynchronously
     const renderTime = performance.now() - startTime;
-    imagePerformanceMonitor.trackRenderTime('FlashcardRenderer', renderTime);
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(() => {
+        imagePerformanceMonitor.trackRenderTime('FlashcardRenderer', renderTime);
+      }, { timeout: 1000 });
+    } else {
+      setTimeout(() => {
+        imagePerformanceMonitor.trackRenderTime('FlashcardRenderer', renderTime);
+      }, 0);
+    }
     
     if (process.env.NODE_ENV === 'development') {
       console.log('[LessonView] renderFlashcards called with data:', flashcardData);
@@ -1210,26 +1218,20 @@ const LessonView = ({
     (async function fetchImage() {
       const startTime = performance.now();
       
-      // Create a cache key for this lesson
-      const cacheKey = `${propLesson.id}-${propLesson.title}-${subject}`;
-      
-          // Check if we already have a cached result for this lesson
-    if (imageData && imageData.url && imageData.title) {
-      console.log('[LessonView] Using existing image data, skipping fetch');
-      return;
-    }
-
-    // Check if we have a preloaded image
-    const preloadedImage = lessonImagePreloader.getPreloadedImage(propLesson.id, propLesson.title, subject);
-    if (preloadedImage) {
-      console.log('[LessonView] Using preloaded image data:', preloadedImage.title);
-      setImageData(preloadedImage);
-      setImageLoading(false);
-      return;
-    }
+      // Check if we have a preloaded image first
+      const preloadedImage = lessonImagePreloader.getPreloadedImage(propLesson.id, propLesson.title, subject);
+      if (preloadedImage) {
+        console.log('[LessonView] Using preloaded image data:', preloadedImage.title);
+        if (!ignore && !abortController.signal.aborted) {
+          setImageData(preloadedImage);
+          setImageLoading(false);
+        }
+        return;
+      }
       
       try {
-        // Use the simplified approach
+        // Use the simplified approach with better error handling
+        console.log('[LessonView] Fetching new image for lesson:', propLesson.title);
         const result = await SimpleImageService.search(
           propLesson.title,
           courseId,
@@ -1267,6 +1269,7 @@ const LessonView = ({
             
             // Persist replacement image into lesson if we fetched a new one
             if (onUpdateLesson && propLesson?.id) {
+              console.log('[LessonView] Persisting new image to lesson:', result.title);
               onUpdateLesson(propLesson.id, { image: {
                 imageTitle: result.title,
                 imageUrl: result.url,
@@ -1709,9 +1712,17 @@ const LessonView = ({
     </div>
   );
   
-  // Track render time and return component
+  // Track render time and return component asynchronously
   const renderTime = performance.now() - currentRenderTime;
-  imagePerformanceMonitor.trackRenderTime('LessonView', renderTime);
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(() => {
+      imagePerformanceMonitor.trackRenderTime('LessonView', renderTime);
+    }, { timeout: 1000 });
+  } else {
+    setTimeout(() => {
+      imagePerformanceMonitor.trackRenderTime('LessonView', renderTime);
+    }, 0);
+  }
   
   return componentJSX;
 }
