@@ -409,7 +409,7 @@ const PublicCourseDisplay = () => {
       <div className={`fixed inset-y-0 left-0 transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 transition-transform duration-200 ease-in-out bg-white w-80 shadow-lg z-30 flex flex-col`}>
         <div className="p-5 border-b">
           <div className="flex justify-between items-center">
-             <h1 className="text-2xl font-bold text-gray-800 leading-tight">{course.title}</h1>
+             <h1 className="text-2xl font-bold text-black leading-tight">{course.title}</h1>
           </div>
           <p className="text-sm text-gray-500 mt-1">{course.subject}</p>
         </div>
@@ -485,7 +485,7 @@ const PublicCourseDisplay = () => {
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
           </button>
           <div className="text-center flex-1">
-            {currentLesson && <h1 className="text-2xl font-bold text-gray-900 truncate">{currentLesson.title}</h1>}
+            {currentLesson && <h1 className="text-2xl font-bold text-black truncate">{currentLesson.title}</h1>}
           </div>
         </header>
 

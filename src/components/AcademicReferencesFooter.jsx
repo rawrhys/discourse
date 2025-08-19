@@ -1,11 +1,13 @@
-import React, { memo } from 'react';
+import React, { memo, useState } from 'react';
 import markdownService from '../services/MarkdownService';
 
 /**
  * Academic References Footer Component
- * Displays academic references with proper citation formatting and styling
+ * Displays academic references with proper citation formatting and styling in an accordion format
  */
 const AcademicReferencesFooter = memo(({ references, onCitationClick }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
   if (!references || references.length === 0) {
     return null;
   }
@@ -29,12 +31,24 @@ const AcademicReferencesFooter = memo(({ references, onCitationClick }) => {
   return (
     <footer className="academic-references-footer mt-12 pt-8 border-t-2 border-gray-300 bg-gray-50">
       <div className="max-w-4xl mx-auto px-4">
-        <h2 className="academic-references-header text-2xl font-bold text-gray-900 mb-6 flex items-center">
-          <span className="mr-3">📚</span>
-          Academic References
-        </h2>
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="academic-references-header w-full text-left text-2xl font-bold text-black mb-6 flex items-center justify-between hover:bg-gray-100 p-3 rounded-lg transition-colors duration-200"
+        >
+          <span>Academic References</span>
+          <svg
+            className={`w-6 h-6 transform transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
         
-        <div className="academic-references-list space-y-4">
+        <div className={`academic-references-list space-y-4 transition-all duration-300 ease-in-out overflow-hidden ${
+          isExpanded ? 'max-h-screen opacity-100' : 'max-h-0 opacity-0'
+        }`}>
           {references.map((ref) => (
             <div 
               key={ref.id} 
@@ -65,13 +79,13 @@ const AcademicReferencesFooter = memo(({ references, onCitationClick }) => {
               </div>
             </div>
           ))}
-        </div>
-        
-        {/* Footer note */}
-        <div className="mt-6 pt-4 border-t border-gray-200">
-          <p className="text-sm text-gray-600 text-center">
-            References follow academic citation standards. Click citation numbers to highlight related content in the text.
-          </p>
+          
+          {/* Footer note */}
+          <div className="mt-6 pt-4 border-t border-gray-200">
+            <p className="text-sm text-gray-600 text-center">
+              References follow academic citation standards. Click citation numbers to highlight related content in the text.
+            </p>
+          </div>
         </div>
       </div>
     </footer>
