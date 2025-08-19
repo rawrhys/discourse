@@ -33,17 +33,22 @@ const CaptchaChallenge = ({ onSuccess, onCancel, challengeData, challengeKey }) 
       // If we have a challenge key, verify with server
       if (challengeKey) {
         const urlParams = new URLSearchParams(window.location.search);
-        const sessionId = urlParams.get('sessionId');
         const courseId = window.location.pathname.split('/').pop();
         
-        const verifyUrl = `/api/public/courses/${courseId}?sessionId=${sessionId}&challenge=${challenge}&response=${response}&challengeKey=${challengeKey}`;
+        // Fix: Use the correct captcha verification endpoint
+        const verifyUrl = `/api/captcha/verify/${courseId}?challenge=${encodeURIComponent(challenge)}&response=${encodeURIComponent(response)}&challengeKey=${encodeURIComponent(challengeKey)}`;
+        
+        console.log('[CaptchaChallenge] Verifying with URL:', verifyUrl);
         
         const fetchResponse = await fetch(verifyUrl);
-        if (fetchResponse.ok) {
+        const responseData = await fetchResponse.json();
+        
+        if (fetchResponse.ok && responseData.success) {
+          console.log('[CaptchaChallenge] Verification successful:', responseData);
           onSuccess();
         } else {
-          const errorData = await fetchResponse.json();
-          setError(errorData.message || 'Incorrect answer. Please try again.');
+          console.error('[CaptchaChallenge] Verification failed:', responseData);
+          setError(responseData.message || 'Incorrect answer. Please try again.');
           // Request new challenge from server
           onCancel(); // This will trigger a new request
         }
@@ -59,6 +64,7 @@ const CaptchaChallenge = ({ onSuccess, onCancel, challengeData, challengeKey }) 
         }
       }
     } catch (err) {
+      console.error('[CaptchaChallenge] Error during verification:', err);
       setError('Invalid input. Please try again.');
       generateChallenge();
     } finally {
@@ -127,14 +133,17 @@ const CaptchaChallenge = ({ onSuccess, onCancel, challengeData, challengeKey }) 
                 {loading ? 'Verifying...' : 'Submit'}
               </button>
             </div>
-          </form>
 
-          <button
-            onClick={onCancel}
-            className="mt-4 text-gray-500 hover:text-gray-700 text-sm"
-          >
-            Cancel
-          </button>
+            <div className="pt-4 border-t border-gray-200">
+              <button
+                type="button"
+                onClick={onCancel}
+                className="text-gray-500 hover:text-gray-700 text-sm"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </div>

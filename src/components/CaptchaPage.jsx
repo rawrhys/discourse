@@ -55,7 +55,7 @@ const CaptchaPage = () => {
       console.log('[CaptchaPage] Submitting CAPTCHA response:', response);
       
       // Submit CAPTCHA response to the dedicated endpoint
-      const verifyUrl = `/api/captcha/verify/${courseId}?challenge=${captchaData.challenge}&response=${response}&challengeKey=${captchaData.challengeKey}`;
+      const verifyUrl = `/api/captcha/verify/${courseId}?challenge=${encodeURIComponent(captchaData.challenge)}&response=${encodeURIComponent(response)}&challengeKey=${encodeURIComponent(captchaData.challengeKey)}`;
       
       const fetchResponse = await fetch(verifyUrl);
       const result = await fetchResponse.json();

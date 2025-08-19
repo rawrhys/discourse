@@ -3829,6 +3829,15 @@ app.get('/api/captcha/verify/:courseId',
       
       console.log(`[API] CAPTCHA map size:`, global.captchaChallenges.size);
       console.log(`[API] Available challenge keys:`, Array.from(global.captchaChallenges.keys()));
+      console.log(`[API] Looking for challenge key:`, challengeKey);
+      console.log(`[API] Stored challenge found:`, !!storedChallenge);
+      if (storedChallenge) {
+        console.log(`[API] Stored challenge data:`, {
+          challenge: storedChallenge.challenge,
+          answer: storedChallenge.answer,
+          timestamp: storedChallenge.timestamp
+        });
+      }
       
       console.log(`[API] CAPTCHA verification details:`, {
         receivedChallenge: challenge,
@@ -3845,7 +3854,14 @@ app.get('/api/captcha/verify/:courseId',
         const decoded = decodeURIComponent(challengeStr);
         // Remove all extra spaces and normalize to single spaces
         // Also handle plus signs that might be URL-encoded
-        return decoded.replace(/\s+/g, ' ').replace(/\+\s*/g, ' + ').trim();
+        // More robust normalization that handles various space patterns around operators
+        return decoded
+          .replace(/\s+/g, ' ') // Normalize multiple spaces to single space
+          .replace(/\s*\+\s*/g, ' + ') // Normalize spaces around plus
+          .replace(/\s*-\s*/g, ' - ') // Normalize spaces around minus
+          .replace(/\s*×\s*/g, ' × ') // Normalize spaces around multiplication
+          .replace(/\s*÷\s*/g, ' ÷ ') // Normalize spaces around division
+          .trim();
       };
       const normalizedReceived = normalizeChallenge(challenge);
       const normalizedStored = storedChallenge ? normalizeChallenge(storedChallenge.challenge) : null;
@@ -4080,6 +4096,7 @@ app.get('/api/captcha/verify/:courseId',
     });
     
     res.json({
+      success: true,
       requiresCaptcha: true,
       challenge: challengeData,
       challengeKey: newChallengeKey,

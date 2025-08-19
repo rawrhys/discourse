@@ -82,25 +82,25 @@ const SimpleImageService = {
       }
 
       const searchUrl = `${API_BASE_URL}/api/image-search/search`;
-
+      
       // Optimize query - use shorter, more focused query
       let finalQuery = lessonTitle;
       if (forceUnique) {
         const uniqueStr = Math.random().toString(36).substring(2, 8); // Shorter unique string
         finalQuery = `${lessonTitle} ${uniqueStr}`;
       }
-
+      
       console.log('[SimpleImageService] Searching for:', finalQuery);
 
       // Truncate content more aggressively for faster requests
       const truncatedContent = content.length > 500 ? content.substring(0, 500) + '...' : content;
-
-      const requestBody = {
-        lessonTitle: finalQuery,
+      
+      const requestBody = { 
+        lessonTitle: finalQuery, 
         content: truncatedContent,
-        usedImageTitles,
-        usedImageUrls,
-        courseId,
+        usedImageTitles, 
+        usedImageUrls, 
+        courseId, 
         lessonId,
         disableModeration: true
       };
@@ -108,7 +108,7 @@ const SimpleImageService = {
       // Add timeout to prevent hanging requests - reduced to 8 seconds
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
-
+      
       const response = await fetch(searchUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -117,20 +117,20 @@ const SimpleImageService = {
       });
 
       clearTimeout(timeoutId);
-
+      
       if (!response.ok) {
         if (response.status === 404) {
           const errorText = await response.text();
           console.log(`[SimpleImageService] No suitable image found. Server response: ${errorText}`);
           return null;
         }
-
+        
         console.warn(`[SimpleImageService] Server returned ${response.status}`);
         const errorText = await response.text();
         console.error('[SimpleImageService] Error response body:', errorText);
         throw new Error(`Image search failed: ${response.status} - ${errorText}`);
       }
-
+      
       const data = await response.json();
       console.log('[SimpleImageService] Found image:', data.title);
 
@@ -141,12 +141,12 @@ const SimpleImageService = {
       }
 
       return data;
-
+      
     } catch (error) {
       if (error.name === 'AbortError') {
         console.error('[SimpleImageService] Search timeout after 8 seconds');
       } else {
-        console.error('[SimpleImageService] Search failed:', error.message);
+      console.error('[SimpleImageService] Search failed:', error.message);
       }
 
       // Return null to let the calling code handle the error appropriately
@@ -180,7 +180,7 @@ const SimpleImageService = {
         }
 
         // Ensure content is a string
-        content = String(content);
+          content = String(content);
 
         // Limit content length to prevent overly large requests - reduced to 500 chars
         if (content.length > 500) {
@@ -189,7 +189,7 @@ const SimpleImageService = {
       } else {
         content = '';
       }
-
+      
       // Create enhanced query with course context - simplified for better performance
       let enhancedQuery = lessonTitle;
       if (courseSubject && courseSubject !== lessonTitle) {
