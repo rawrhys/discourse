@@ -6,7 +6,7 @@ on:
       - main
 
 jobs:
-    deploy-vps:
+  deploy-vps:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -39,8 +39,9 @@ jobs:
             echo "PM2 status:"
             pm2 status
             
-                         echo "=== VPS deployment completed ==="
-   deploy-shared-hosting:
+            echo "=== VPS deployment completed ==="
+
+  deploy-shared-hosting:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -63,7 +64,6 @@ jobs:
         run: |
           npm run build
           date > dist/build-timestamp.txt
-          echo "Build completed at $(date)" > dist/build-info.txt
           echo "Build completed at $(date)" > dist/build-info.txt
       
       - name: Backup critical files before deployment
@@ -156,6 +156,7 @@ jobs:
             </FilesMatch>
           </IfModule>
           EOF
+
       - name: Clear cache headers (optional)
         run: |
           echo "=== Clearing cache for main assets ==="
