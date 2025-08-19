@@ -2,7 +2,7 @@ import axios from 'axios';
 
 const updateUserCredits = async () => {
   try {
-    const response = await axios.post('http://31.97.115.145:4003/api/debug/add-credits', {
+    const response = await axios.post('https://thediscourse.ai/api/debug/add-credits', {
       email: 'rhys.higgs@outlook.com',
       credits: 10
     });
