@@ -1699,21 +1699,34 @@ class TTSService {
           }
         }
         
-        // For non-chunked speech, always restart from pause position
-        console.log(`[${this.serviceType} TTS] Restarting non-chunked speech from pause position`);
+        // For non-chunked speech, restart from pause position only if not stopped
+        if (!this.isStopped) {
+          console.log(`[${this.serviceType} TTS] Restarting non-chunked speech from pause position`);
           setTimeout(() => {
-          this.restartFromPausePosition(pauseData);
+            if (!this.isStopped) { // Double-check before restarting
+              this.restartFromPausePosition(pauseData);
+            }
           }, 100); // Small delay to ensure state is stable
           return true; // Consider this successful for our purposes
+        } else {
+          console.log(`[${this.serviceType} TTS] Not restarting - TTS was stopped`);
+          return false;
+        }
         }
         
       } catch (error) {
         console.warn(`[${this.serviceType} TTS] Resume failed completely:`, error);
-        // If resume fails, try to restart from pause position
-        console.log(`[${this.serviceType} TTS] Attempting to restart from pause position...`);
-        setTimeout(() => {
-          this.restartFromPausePosition();
-        }, 100); // Small delay to ensure state is stable
+        // If resume fails, try to restart from pause position only if not stopped
+        if (!this.isStopped) {
+          console.log(`[${this.serviceType} TTS] Attempting to restart from pause position...`);
+          setTimeout(() => {
+            if (!this.isStopped) { // Double-check before restarting
+              this.restartFromPausePosition();
+            }
+          }, 100); // Small delay to ensure state is stable
+        } else {
+          console.log(`[${this.serviceType} TTS] Not restarting - TTS was stopped`);
+        }
         return false;
       }
     } else {
@@ -2108,6 +2121,12 @@ class TTSService {
 
   // Restart from pause position (handles both server and local data)
   async restartFromPausePosition(pauseData = null) {
+    // CRITICAL: Check if TTS was stopped - if so, DO NOT restart
+    if (this.isStopped) {
+      console.log(`[${this.serviceType} TTS] TTS was stopped, BLOCKING restartFromPausePosition attempt`);
+      return false;
+    }
+    
     if (!this.fullText) {
       console.warn(`[${this.serviceType} TTS] Cannot restart from pause position - no text`);
       return false;
@@ -2162,6 +2181,12 @@ class TTSService {
       
       console.log(`[${this.serviceType} TTS] Speaking remaining text (${remainingText.length} characters) from position ${resumePosition}`);
       console.log(`[${this.serviceType} TTS] Remaining text preview: ${remainingText.substring(0, 100)}...`);
+      
+      // CRITICAL: Check if TTS was stopped before speaking
+      if (this.isStopped) {
+        console.log(`[${this.serviceType} TTS] TTS was stopped before speaking remaining text, aborting restart`);
+        return false;
+      }
       
       // Speak the remaining text
       await this.speak(remainingText);

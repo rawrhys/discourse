@@ -58,6 +58,31 @@ const publicLessonStyles = `
   .lesson-content-text > *:last-child {
     margin-bottom: 0 !important;
   }
+  
+  /* Force paragraph spacing even if CSS is overridden */
+  .lesson-content-text p + p {
+    margin-top: 1.5rem !important;
+  }
+  
+  /* Ensure proper spacing after headers */
+  .lesson-content-text h1 + p,
+  .lesson-content-text h2 + p,
+  .lesson-content-text h3 + p,
+  .lesson-content-text h4 + p,
+  .lesson-content-text h5 + p,
+  .lesson-content-text h6 + p {
+    margin-top: 1rem !important;
+  }
+  
+  /* Override any conflicting styles */
+  .lesson-content-text .markdown-body p {
+    margin-top: 1.5rem !important;
+    margin-bottom: 1.5rem !important;
+    line-height: 1.8 !important;
+    color: #374151 !important;
+    text-align: justify !important;
+    display: block !important;
+  }
 `;
 
 const PublicLessonView = ({ 
@@ -787,10 +812,19 @@ const PublicLessonView = ({
     parsedContent = fixMalformedMarkdown(fixedContent);
     
     // Ensure proper paragraph structure by wrapping text blocks in <p> tags
-    if (parsedContent && !parsedContent.includes('<p>')) {
-      // Split by double newlines and wrap each section in <p> tags
-      const paragraphs = parsedContent.split(/\n\n+/).filter(p => p.trim());
-      parsedContent = paragraphs.map(p => `<p>${p.trim()}</p>`).join('\n\n');
+    if (parsedContent) {
+      // If the content doesn't have paragraph tags, add them
+      if (!parsedContent.includes('<p>')) {
+        // Split by double newlines and wrap each section in <p> tags
+        const paragraphs = parsedContent.split(/\n\n+/).filter(p => p.trim());
+        parsedContent = paragraphs.map(p => `<p>${p.trim()}</p>`).join('\n\n');
+      } else {
+        // If it already has paragraph tags, ensure proper spacing between them
+        parsedContent = parsedContent
+          .replace(/<\/p>\s*<p>/g, '</p>\n\n<p>')
+          .replace(/<\/p>\s*<h/g, '</p>\n\n<h')
+          .replace(/<\/h[1-6]>\s*<p>/g, '</h$1>\n\n<p>');
+      }
     }
     
     // Debug log to check if JSON keys are still present
