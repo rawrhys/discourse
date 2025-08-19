@@ -3,7 +3,7 @@ class ImagePreloadService {
     this.preloadedImages = new Set();
     this.preloadQueue = [];
     this.isProcessing = false;
-    this.maxConcurrent = 3; // Increased from 1 to 3 for faster bulk loading
+    this.maxConcurrent = 1; // Reduced to 1 for better performance and to prevent conflicts
     this.activePreloads = 0;
     this.preloadCache = new Map(); // Add cache to prevent duplicate preloads
   }
@@ -15,15 +15,8 @@ class ImagePreloadService {
    * @returns {Promise<boolean>} - Whether preload was successful
    */
   async preloadImage(imageUrl, priority = 5) {
-    // Validate URL before attempting to preload
-    if (!imageUrl || typeof imageUrl !== 'string' || imageUrl.trim() === '') {
-      console.warn('[ImagePreloadService] Invalid URL provided for preload:', imageUrl);
-      return false;
-    }
-
-    // Check if already preloaded
-    if (this.preloadedImages.has(imageUrl)) {
-      return true; // Already preloaded
+    if (!imageUrl || this.preloadedImages.has(imageUrl)) {
+      return true; // Already preloaded or invalid URL
     }
 
     // Check if already in cache
@@ -89,23 +82,6 @@ class ImagePreloadService {
    */
   async preloadSingleImage(imageUrl) {
     try {
-      // Additional URL validation
-      if (!imageUrl || typeof imageUrl !== 'string') {
-        console.warn('[ImagePreloadService] Invalid URL for preload:', imageUrl);
-        return false;
-      }
-
-      // Check if URL is valid format
-      try {
-        if (!imageUrl.startsWith('data:') && !imageUrl.startsWith('blob:') && !imageUrl.startsWith('/') && !imageUrl.startsWith('http')) {
-          console.warn('[ImagePreloadService] Invalid URL format for preload:', imageUrl);
-          return false;
-        }
-      } catch (error) {
-        console.warn('[ImagePreloadService] URL validation error:', error);
-        return false;
-      }
-
       // Check if preload link already exists
       const existingLink = document.querySelector(`link[rel="preload"][href="${imageUrl}"]`);
       if (existingLink) {
@@ -174,20 +150,7 @@ class ImagePreloadService {
    * @returns {boolean} - Whether image is preloaded
    */
   isPreloaded(imageUrl) {
-    // Check our internal cache first
-    if (this.preloadedImages.has(imageUrl) || this.preloadCache.has(imageUrl)) {
-      return true;
-    }
-
-    // Check browser cache if possible (not 100% reliable, but helps)
-    try {
-      const img = document.createElement('img');
-      img.src = imageUrl;
-      return img.complete && img.naturalWidth !== 0;
-    } catch (error) {
-      // Fallback to internal cache only
-      return false;
-    }
+    return this.preloadedImages.has(imageUrl) || this.preloadCache.has(imageUrl);
   }
 
   /**

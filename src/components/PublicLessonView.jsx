@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, memo, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import SimpleImageService from '../services/SimpleImageService';
 import imagePreloadService from '../services/ImagePreloadService';
 import lessonImagePreloader from '../services/LessonImagePreloader';
@@ -436,12 +436,6 @@ const PublicLessonView = ({
 
       // Check if we have a preloaded image
       const preloadedImage = lessonImagePreloader.getPreloadedImage(lesson.id, lesson.title, subject);
-      console.log('[PublicLessonView] Checking for preloaded image:', {
-        lessonId: lesson.id,
-        lessonTitle: lesson.title,
-        subject: subject,
-        preloadedImage: preloadedImage
-      });
       if (preloadedImage) {
         console.log('[PublicLessonView] Using preloaded image data:', preloadedImage.title);
         setImageData(preloadedImage);
@@ -465,31 +459,21 @@ const PublicLessonView = ({
         // Track image fetch performance
         const fetchTime = performance.now() - startTime;
         if (result && result.url) {
-          imagePerformanceMonitor.trackImageLoad(result.url, fetchTime, false);
+          performanceMonitor.trackImageLoad(result.url, fetchTime, false);
         }
         
         // Log slow image fetches
-        if (fetchTime > 1500) {
+        if (fetchTime > 2000) {
           console.warn('[PublicLessonView] Slow image fetch detected:', fetchTime + 'ms');
         }
         
         if (!ignore && !abortController.signal.aborted) {
-          const newImageData = result ? { ...result, url: result.url } : null;
-          console.log('[PublicLessonView] Setting image data:', newImageData);
-          setImageData(newImageData);
+          setImageData(result ? { ...result, url: result.url } : null);
         }
       } catch (e) {
         if (!ignore && !abortController.signal.aborted) {
           console.warn('[PublicLessonView] Image fetch error:', e);
-          
-          // If it's a timeout, try to use a fallback image
-          if (e.name === 'AbortError' || e.message.includes('timeout')) {
-            console.log('[PublicLessonView] Using fallback image due to timeout');
-            // Set a simple fallback image or null
-            setImageData(null);
-          } else {
-            setImageData(null);
-          }
+          setImageData(null);
         }
       } finally {
         if (!ignore && !abortController.signal.aborted) {
@@ -547,7 +531,7 @@ const PublicLessonView = ({
           
           // Track performance
           const preloadTime = performance.now() - startTime;
-          imagePerformanceMonitor.trackImageLoad(imageUrl, preloadTime, true);
+          performanceMonitor.trackImageLoad(imageUrl, preloadTime, true);
         } catch (error) {
           console.warn('[PublicLessonView] Image preloading error:', error);
         }

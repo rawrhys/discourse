@@ -64,19 +64,13 @@ const SimpleImageService = {
   },
 
   // Simple image search - optimized with caching and timeout
-  async search(lessonTitle, content = '', usedImageTitles = [], usedImageUrls = [], courseId = undefined, lessonId = undefined, forceUnique = false, retryCount = 0) {
+  async search(lessonTitle, content = '', usedImageTitles = [], usedImageUrls = [], courseId = undefined, lessonId = undefined, forceUnique = false) {
     try {
       // Ensure parameters are properly typed
       lessonTitle = lessonTitle || '';
       content = content || '';
       usedImageTitles = Array.isArray(usedImageTitles) ? usedImageTitles : [];
       usedImageUrls = Array.isArray(usedImageUrls) ? usedImageUrls : [];
-
-      // Validate lesson title - don't search if title is empty or invalid
-      if (!lessonTitle || lessonTitle.trim() === '') {
-        console.warn('[SimpleImageService] Empty lesson title provided, skipping search');
-        return null;
-      }
 
       // Skip cache if forceUnique is true
       if (!forceUnique) {
@@ -96,13 +90,10 @@ const SimpleImageService = {
         finalQuery = `${lessonTitle} ${uniqueStr}`;
       }
       
-      // Only log in development
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[SimpleImageService] Searching for:', finalQuery);
-      }
+      console.log('[SimpleImageService] Searching for:', finalQuery);
 
       // Truncate content more aggressively for faster requests
-      const truncatedContent = content.length > 200 ? content.substring(0, 200) + '...' : content;
+      const truncatedContent = content.length > 500 ? content.substring(0, 500) + '...' : content;
       
       const requestBody = { 
         lessonTitle: finalQuery, 
@@ -114,9 +105,9 @@ const SimpleImageService = {
         disableModeration: true
       };
 
-      // Add timeout to prevent hanging requests - reduced to 3 seconds for faster response
+      // Add timeout to prevent hanging requests - increased to 10 seconds for better reliability
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
       
       const response = await fetch(searchUrl, {
         method: 'POST',
@@ -153,27 +144,9 @@ const SimpleImageService = {
       
     } catch (error) {
       if (error.name === 'AbortError') {
-        // Only log timeout errors in development to reduce spam
-        if (process.env.NODE_ENV === 'development') {
-          console.error('[SimpleImageService] Search timeout after 3 seconds');
-        }
+        console.error('[SimpleImageService] Search timeout after 8 seconds');
       } else {
-        console.error('[SimpleImageService] Search failed:', error.message);
-      }
-
-      // Retry once with exponential backoff if not already retried
-      if (retryCount === 0 && (error.name === 'AbortError' || error.message.includes('timeout'))) {
-        // Only log retry in development
-        if (process.env.NODE_ENV === 'development') {
-          console.log('[SimpleImageService] Retrying search with shorter timeout...');
-        }
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
-        return this.search(lessonTitle, content, usedImageTitles, usedImageUrls, courseId, lessonId, forceUnique, 1);
-      }
-
-      // If we've already retried or it's not a timeout error, don't retry again
-      if (retryCount > 0) {
-        console.warn('[SimpleImageService] Search failed after retry, giving up');
+      console.error('[SimpleImageService] Search failed:', error.message);
       }
 
       // Return null to let the calling code handle the error appropriately
@@ -209,9 +182,9 @@ const SimpleImageService = {
         // Ensure content is a string
           content = String(content);
 
-        // Limit content length to prevent overly large requests - reduced to 200 chars
-        if (content.length > 200) {
-          content = content.substring(0, 200) + '...';
+        // Limit content length to prevent overly large requests - reduced to 500 chars
+        if (content.length > 500) {
+          content = content.substring(0, 500) + '...';
         }
       } else {
         content = '';
@@ -230,10 +203,7 @@ const SimpleImageService = {
         enhancedQuery = `${truncatedPrompt} ${enhancedQuery}`;
       }
 
-      // Only log in development
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[SimpleImageService] Enhanced query created:', enhancedQuery);
-      }
+      console.log('[SimpleImageService] Enhanced query created:', enhancedQuery);
 
       return this.search(enhancedQuery, content, usedImageTitles, usedImageUrls, courseId, lessonId);
 
@@ -277,129 +247,6 @@ const SimpleImageService = {
       expiredEntries,
       cacheTimeout: this.cacheTimeout
     };
-  },
-
-  /**
-   * Generate optimized image URL with size and format parameters
-   * @param {string} baseUrl - Base image URL
-   * @param {Object} options - Optimization options
-   * @param {number} options.width - Target width in pixels
-   * @param {number} options.height - Target height in pixels (optional)
-   * @param {string} options.format - Image format (webp, jpeg, png)
-   * @param {number} options.quality - Quality percentage (1-100)
-   * @param {boolean} options.webp - Force WebP format if supported
-   * @returns {string} Optimized image URL
-   */
-  generateOptimizedUrl(baseUrl, options = {}) {
-    if (!baseUrl) return baseUrl;
-
-    // Validate URL format
-    if (typeof baseUrl !== 'string' || baseUrl.trim() === '') {
-      console.warn('[SimpleImageService] Invalid baseUrl provided:', baseUrl);
-      return baseUrl;
-    }
-
-    // Additional URL validation
-    try {
-      // Check if it's a valid URL or relative path
-      if (!baseUrl.startsWith('data:') && !baseUrl.startsWith('blob:') && !baseUrl.startsWith('/') && !baseUrl.startsWith('http')) {
-        console.warn('[SimpleImageService] Invalid URL format:', baseUrl);
-        return baseUrl;
-      }
-    } catch (error) {
-      console.warn('[SimpleImageService] URL validation error:', error);
-      return baseUrl;
-    }
-
-    // Check if URL is already a data URL or relative path
-    if (baseUrl.startsWith('data:') || baseUrl.startsWith('blob:') || baseUrl.startsWith('/')) {
-      console.log('[SimpleImageService] Skipping optimization for data/blob/relative URL:', baseUrl);
-      return baseUrl;
-    }
-
-    const {
-      width,
-      height,
-      format = 'webp',
-      quality = 80,
-      webp = true
-    } = options;
-
-    try {
-      // Ensure URL has protocol
-      let urlToProcess = baseUrl;
-      if (!urlToProcess.startsWith('http://') && !urlToProcess.startsWith('https://')) {
-        urlToProcess = 'https://' + urlToProcess;
-      }
-      
-      const url = new URL(urlToProcess);
-      
-      // Add size parameters if provided
-      if (width) {
-        url.searchParams.set('width', width.toString());
-      }
-      if (height) {
-        url.searchParams.set('height', height.toString());
-      }
-      
-      // Add format parameter
-      if (format && format !== 'unknown') {
-        url.searchParams.set('format', format);
-      }
-      
-      // Add quality parameter
-      if (quality && quality !== 80) {
-        url.searchParams.set('quality', quality.toString());
-      }
-      
-      // Add WebP preference
-      if (webp && this.supportsWebP()) {
-        url.searchParams.set('webp', 'true');
-      }
-
-      return url.toString();
-    } catch (error) {
-      console.warn('[SimpleImageService] Failed to generate optimized URL for:', baseUrl, error);
-      return baseUrl; // Fallback to original URL
-    }
-  },
-
-  /**
-   * Check if browser supports WebP format
-   * @returns {boolean} WebP support status
-   */
-  supportsWebP() {
-    // Check if WebP is supported by the browser
-    const canvas = document.createElement('canvas');
-    canvas.width = 1;
-    canvas.height = 1;
-    return canvas.toDataURL('image/webp').indexOf('data:image/webp') === 0;
-  },
-
-  /**
-   * Generate responsive image URLs for different screen sizes
-   * @param {string} baseUrl - Base image URL
-   * @param {Object} options - Responsive options
-   * @returns {Object} Object with different size URLs
-   */
-  generateResponsiveUrls(baseUrl, options = {}) {
-    const {
-      sizes = [400, 800, 1200],
-      format = 'webp',
-      quality = 80
-    } = options;
-
-    const urls = {};
-    
-    sizes.forEach(size => {
-      urls[`${size}w`] = this.generateOptimizedUrl(baseUrl, {
-        width: size,
-        format,
-        quality
-      });
-    });
-
-    return urls;
   }
 };
 

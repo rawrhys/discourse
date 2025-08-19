@@ -121,7 +121,7 @@ const ADMIN_EMAILS = new Set(
 );
 
 // --- IMAGE SEARCH SETTINGS & HELPERS (top-level) ---
-const FETCH_TIMEOUT_MS = Number(process.env.IMAGE_SEARCH_TIMEOUT_MS || 5000);
+const FETCH_TIMEOUT_MS = Number(process.env.IMAGE_SEARCH_TIMEOUT_MS || 8000);
 const DISALLOWED_IMAGE_URL_SUBSTRINGS = [
   'e613b3a12ea22955fd9868b841af153a79db6a07',
   'api-proxy.php/cached-images/',
@@ -1568,7 +1568,7 @@ Context: "${context.substring(0, 1000)}..."`;
     
     // Add timeout to prevent hanging
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Image search timeout')), 10000); // 10 second timeout
+      setTimeout(() => reject(new Error('Image search timeout')), 15000); // 15 second timeout
     });
     
     try {
@@ -3633,18 +3633,35 @@ async function imageSearchHandler(req, res) {
       console.log('[ImageSearch] Calling fetchRelevantImage...');
       
       // Add timeout to prevent hanging requests
-      const searchTimeout = 8000; // 8 seconds - reduced from 15
+      const searchTimeout = 12000; // 12 seconds - increased for better reliability
       const searchPromise = global.aiService.fetchRelevantImage(lessonTitle, content, safeUsedTitles, safeUsedUrls, { relaxed: false }, courseContext);
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error('Image search timeout')), searchTimeout);
       });
       
-      let imageData = await Promise.race([searchPromise, timeoutPromise]);
+      let imageData;
+      try {
+        imageData = await Promise.race([searchPromise, timeoutPromise]);
+      } catch (timeoutError) {
+        console.warn('[ImageSearch] Strict search timed out, trying relaxed...');
+        const relaxedPromise = global.aiService.fetchRelevantImage(lessonTitle, content, safeUsedTitles, safeUsedUrls, { relaxed: true }, courseContext);
+        try {
+          imageData = await Promise.race([relaxedPromise, timeoutPromise]);
+        } catch (relaxedTimeoutError) {
+          console.error('[ImageSearch] Both strict and relaxed searches timed out');
+          imageData = null;
+        }
+      }
       
       if (!imageData) {
           console.log('[ImageSearch] No image found with strict search, trying relaxed...');
           const relaxedPromise = global.aiService.fetchRelevantImage(lessonTitle, content, safeUsedTitles, safeUsedUrls, { relaxed: true }, courseContext);
-          imageData = await Promise.race([relaxedPromise, timeoutPromise]);
+          try {
+            imageData = await Promise.race([relaxedPromise, timeoutPromise]);
+          } catch (relaxedError) {
+            console.error('[ImageSearch] Relaxed search also failed:', relaxedError.message);
+            imageData = null;
+          }
       }
       
       if (imageData) {
