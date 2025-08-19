@@ -255,17 +255,50 @@ const Content = memo(({ content, bibliography, lessonTitle, courseSubject }) => 
     );
   }
 
-  // Use embedded bibliography from lesson data if available, otherwise fall back to separate service
-  let finalBibliography = bibliography;
-  if (!finalBibliography || finalBibliography.length === 0) {
-    // Check if lesson has embedded bibliography data
-    if (content && typeof content === 'object' && content.bibliography) {
-      finalBibliography = content.bibliography;
-    } else {
-      // Fall back to API service bibliography generation
-      finalBibliography = api.generateBibliography(lessonTitle, courseSubject, 5);
+  // Generate academic references using the same service as PublicLessonView
+  const [academicReferences, setAcademicReferences] = useState([]);
+  const [highlightedCitation, setHighlightedCitation] = useState(null);
+  
+  useEffect(() => {
+    try {
+      const lessonContentString = getContentAsString(content);
+      
+      console.log('[LessonView] Generating academic references for:', {
+        lessonTitle,
+        courseSubject,
+        contentLength: lessonContentString?.length || 0
+      });
+      
+      // Generate academic references using the same method as PublicLessonView
+      const references = academicReferencesService.generateReferences(
+        lessonContentString,
+        courseSubject,
+        lessonTitle
+      );
+      
+      setAcademicReferences(references);
+      
+      console.log('[LessonView] Academic references generated:', {
+        referencesCount: references.length,
+        references: references
+      });
+    } catch (error) {
+      console.error('[LessonView] Error generating academic references:', error);
+      setAcademicReferences([]);
     }
-  }
+  }, [content, lessonTitle, courseSubject]);
+
+  // Handle citation click
+  const handleCitationClick = useCallback((referenceId) => {
+    setHighlightedCitation(referenceId);
+    
+    // Remove highlight after 3 seconds
+    setTimeout(() => {
+      setHighlightedCitation(null);
+    }, 3000);
+    
+    console.log('[LessonView] Citation clicked:', referenceId);
+  }, []);
 
   // Remove in-text citations first, then apply markdown fix
   let fixedContent = markdownService.removeInTextCitations(contentStr);
@@ -295,48 +328,13 @@ const Content = memo(({ content, bibliography, lessonTitle, courseSubject }) => 
     });
   }
 
-  // Append bibliography to the content if we have references and it's not already in the content
-  if (finalBibliography && finalBibliography.length > 0 && !contentStr.includes('## References')) {
-    const bibliographyMarkdown = api.formatBibliographyAsMarkdown(finalBibliography);
-    const { contentWithoutRefs: contentWithoutBib, references: bibRefs } = extractReferences(bibliographyMarkdown);
-    const parsedBibContent = fixMalformedMarkdown(contentWithoutBib);
-    
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[LessonView] Bibliography processing:', {
-        bibliographyCount: finalBibliography?.length || 0,
-        bibRefsCount: bibRefs?.length || 0,
-        bibRefs: bibRefs
-      });
-    }
-    
-    return (
-      <div className="prose max-w-none lesson-content">
-        <div 
-          className="markdown-body"
-          dangerouslySetInnerHTML={{ __html: parsedContent }}
-        />
-        <div 
-          className="markdown-body"
-          dangerouslySetInnerHTML={{ __html: parsedBibContent }}
-        />
-        {bibRefs && bibRefs.length > 0 && (
-          <AcademicReferencesFooter 
-            references={bibRefs}
-            onCitationClick={(referenceId) => {
-              // Handle citation click if needed
-              console.log('[LessonView] Bibliography citation clicked:', referenceId);
-            }}
-          />
-        )}
-      </div>
-    );
-  }
+  // Use academic references instead of old bibliography processing
 
-  // Create academic references footer
+  // Create academic references footer using the same method as PublicLessonView
   let referencesFooter = null;
   try {
-    if (references && references.length > 0) {
-      referencesFooter = academicReferencesService.createReferencesFooter(references);
+    if (academicReferences && academicReferences.length > 0) {
+      referencesFooter = academicReferencesService.createReferencesFooter(academicReferences);
     }
   } catch (error) {
     console.warn('[LessonView] Error creating references footer:', error);
@@ -364,10 +362,7 @@ const Content = memo(({ content, bibliography, lessonTitle, courseSubject }) => 
       {referencesFooter && referencesFooter.references && (
         <AcademicReferencesFooter 
           references={referencesFooter.references}
-          onCitationClick={(referenceId) => {
-            // Handle citation click if needed
-            console.log('[LessonView] Citation clicked:', referenceId);
-          }}
+          onCitationClick={handleCitationClick}
         />
       )}
     </div>
