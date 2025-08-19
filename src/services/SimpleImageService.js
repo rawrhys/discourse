@@ -263,16 +263,34 @@ const SimpleImageService = {
   generateOptimizedUrl(baseUrl, options = {}) {
     if (!baseUrl) return baseUrl;
 
+    // Add cache busting for development
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[SimpleImageService] Generating optimized URL for:', baseUrl);
+    }
+
     // Validate URL format
     if (typeof baseUrl !== 'string' || baseUrl.trim() === '') {
       console.warn('[SimpleImageService] Invalid baseUrl provided:', baseUrl);
       return baseUrl;
     }
 
-    // Check if URL is already a data URL or relative path
-    if (baseUrl.startsWith('data:') || baseUrl.startsWith('blob:') || baseUrl.startsWith('/')) {
-      console.log('[SimpleImageService] Skipping optimization for data/blob/relative URL:', baseUrl);
+    // Check if URL is already a data URL or blob
+    if (baseUrl.startsWith('data:') || baseUrl.startsWith('blob:')) {
+      console.log('[SimpleImageService] Skipping optimization for data/blob URL:', baseUrl);
       return baseUrl;
+    }
+
+    // Handle relative URLs by converting to absolute
+    if (baseUrl.startsWith('/')) {
+      console.log('[SimpleImageService] Converting relative URL to absolute:', baseUrl);
+      // For relative URLs, we'll try to optimize them by adding parameters
+      try {
+        const url = new URL(baseUrl, window.location.origin);
+        return this.addOptimizationParams(url, options);
+      } catch (error) {
+        console.warn('[SimpleImageService] Failed to process relative URL:', baseUrl, error);
+        return baseUrl;
+      }
     }
 
     const {
@@ -291,35 +309,52 @@ const SimpleImageService = {
       }
       
       const url = new URL(urlToProcess);
-      
-      // Add size parameters if provided
-      if (width) {
-        url.searchParams.set('width', width.toString());
-      }
-      if (height) {
-        url.searchParams.set('height', height.toString());
-      }
-      
-      // Add format parameter
-      if (format && format !== 'unknown') {
-        url.searchParams.set('format', format);
-      }
-      
-      // Add quality parameter
-      if (quality && quality !== 80) {
-        url.searchParams.set('quality', quality.toString());
-      }
-      
-      // Add WebP preference
-      if (webp && this.supportsWebP()) {
-        url.searchParams.set('webp', 'true');
-      }
-
-      return url.toString();
+      return this.addOptimizationParams(url, options);
     } catch (error) {
       console.warn('[SimpleImageService] Failed to generate optimized URL for:', baseUrl, error);
       return baseUrl; // Fallback to original URL
     }
+  },
+
+  /**
+   * Add optimization parameters to a URL
+   * @param {URL} url - URL object to modify
+   * @param {Object} options - Optimization options
+   * @returns {string} Optimized URL string
+   */
+  addOptimizationParams(url, options = {}) {
+    const {
+      width,
+      height,
+      format = 'webp',
+      quality = 80,
+      webp = true
+    } = options;
+
+    // Add size parameters if provided
+    if (width) {
+      url.searchParams.set('width', width.toString());
+    }
+    if (height) {
+      url.searchParams.set('height', height.toString());
+    }
+    
+    // Add format parameter
+    if (format && format !== 'unknown') {
+      url.searchParams.set('format', format);
+    }
+    
+    // Add quality parameter
+    if (quality && quality !== 80) {
+      url.searchParams.set('quality', quality.toString());
+    }
+    
+    // Add WebP preference
+    if (webp && this.supportsWebP()) {
+      url.searchParams.set('webp', 'true');
+    }
+
+    return url.toString();
   },
 
   /**

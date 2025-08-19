@@ -163,6 +163,12 @@ const Image = ({
   }, [priority, src, shouldShowImage, isLoaded]);
 
   const handleLoad = useCallback(() => {
+    // Prevent duplicate load handling
+    if (isLoaded) {
+      console.log('[Image] Ignoring duplicate load event for:', src);
+      return;
+    }
+    
     setIsLoaded(true);
     setIsError(false);
     
@@ -203,7 +209,7 @@ const Image = ({
     } catch (error) {
       console.warn('[Image] Performance tracking error:', error);
     }
-  }, [src, isCached]);
+  }, [src, isCached, isLoaded]);
 
   const handleError = useCallback((e) => {
     console.error('[Image] Failed to load image:', src);
