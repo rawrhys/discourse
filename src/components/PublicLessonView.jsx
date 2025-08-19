@@ -450,8 +450,8 @@ const PublicLessonView = ({
       }
       
       try {
-        // For public courses, use a simplified image search
-        const result = await SimpleImageService.searchWithContext(
+        // For public courses, use a simplified image search with aggressive timeout
+        const searchPromise = SimpleImageService.searchWithContext(
           lesson.title,
           subject,
           cleanAndCombineContent(lesson.content),
@@ -461,6 +461,13 @@ const PublicLessonView = ({
           lesson.id,
           courseDescription
         );
+
+        // Add additional timeout wrapper for extra safety
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Image search timeout')), 4000); // 4 second timeout
+        });
+
+        const result = await Promise.race([searchPromise, timeoutPromise]);
         
         // Track image fetch performance
         const fetchTime = performance.now() - startTime;
@@ -481,14 +488,40 @@ const PublicLessonView = ({
       } catch (e) {
         if (!ignore && !abortController.signal.aborted) {
           console.warn('[PublicLessonView] Image fetch error:', e);
-          setImageData(null);
+          
+          // If it's a timeout error, try a simplified search as fallback
+          if (e.message === 'Image search timeout') {
+            try {
+              console.log('[PublicLessonView] Trying simplified fallback search...');
+              const fallbackResult = await SimpleImageService.search(
+                lesson.title,
+                '', // No content for fallback
+                [],
+                [],
+                courseId,
+                lesson.id
+              );
+              
+              if (fallbackResult && fallbackResult.url) {
+                console.log('[PublicLessonView] Fallback search successful:', fallbackResult.title);
+                setImageData(fallbackResult);
+              } else {
+                setImageData(null);
+              }
+            } catch (fallbackError) {
+              console.warn('[PublicLessonView] Fallback search also failed:', fallbackError);
+              setImageData(null);
+            }
+          } else {
+            setImageData(null);
+          }
         }
       } finally {
         if (!ignore && !abortController.signal.aborted) {
           setImageLoading(false);
         }
       }
-    }, 300); // 300ms debounce
+    }, 100); // 100ms debounce for faster response
     
     return () => { 
       ignore = true;

@@ -105,9 +105,9 @@ const SimpleImageService = {
         disableModeration: true
       };
 
-      // Add timeout to prevent hanging requests - reduced to 5 seconds for faster response
+      // Add timeout to prevent hanging requests - reduced to 3 seconds for faster response
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
       
       const response = await fetch(searchUrl, {
         method: 'POST',
@@ -144,9 +144,9 @@ const SimpleImageService = {
       
     } catch (error) {
       if (error.name === 'AbortError') {
-        console.error('[SimpleImageService] Search timeout after 8 seconds');
+        console.error('[SimpleImageService] Search timeout after 3 seconds');
       } else {
-      console.error('[SimpleImageService] Search failed:', error.message);
+        console.error('[SimpleImageService] Search failed:', error.message);
       }
 
       // Return null to let the calling code handle the error appropriately
