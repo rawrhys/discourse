@@ -24,6 +24,7 @@ const publicLessonStyles = `
     line-height: 1.8 !important;
     color: #374151 !important;
     text-align: justify !important;
+    display: block !important;
   }
   
   .lesson-content-text p:first-child {
@@ -47,6 +48,15 @@ const publicLessonStyles = `
     margin-top: 2rem !important;
     margin-bottom: 1rem !important;
     line-height: 1.4 !important;
+  }
+  
+  /* Ensure proper paragraph breaks */
+  .lesson-content-text > * {
+    margin-bottom: 1.5rem !important;
+  }
+  
+  .lesson-content-text > *:last-child {
+    margin-bottom: 0 !important;
   }
 `;
 
@@ -776,6 +786,13 @@ const PublicLessonView = ({
     // Apply markdown parsing to the fixed content
     parsedContent = fixMalformedMarkdown(fixedContent);
     
+    // Ensure proper paragraph structure by wrapping text blocks in <p> tags
+    if (parsedContent && !parsedContent.includes('<p>')) {
+      // Split by double newlines and wrap each section in <p> tags
+      const paragraphs = parsedContent.split(/\n\n+/).filter(p => p.trim());
+      parsedContent = paragraphs.map(p => `<p>${p.trim()}</p>`).join('\n\n');
+    }
+    
     // Debug log to check if JSON keys are still present
     if (process.env.NODE_ENV === 'development') {
       console.log('[PublicLessonView] Content processing debug:', {
@@ -783,7 +800,8 @@ const PublicLessonView = ({
         hasMainContentKey: displayContent.includes('"main_content":'),
         hasConclusionKey: displayContent.includes('"conclusion":'),
         displayContentLength: displayContent.length,
-        parsedContentLength: parsedContent.length
+        parsedContentLength: parsedContent.length,
+        hasParagraphTags: parsedContent.includes('<p>')
       });
     }
   } catch (error) {

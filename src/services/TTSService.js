@@ -74,6 +74,7 @@ class TTSService {
      this.finishedNormally = false; // Track if TTS finished normally (not interrupted)
      this.wasManuallyPaused = false; // Track if user manually paused TTS
      this.isStopped = false; // Track if TTS has been stopped by user
+     this.wasManuallyStopped = false; // Track if user manually stopped TTS
     
     // Position tracking for pause/resume functionality
     this.pausePosition = 0; // Track where we paused in the text
@@ -730,6 +731,7 @@ class TTSService {
     }
     
     this.isStopped = false; // <-- PATCH: clear stop flag at the start of speak
+    this.wasManuallyStopped = false; // Reset manual stop flag when starting new speech
     
     // Check if service is properly initialized
     if (!this.isInitialized || !this.speech) {
@@ -931,6 +933,7 @@ class TTSService {
     }
     
     this.isStopped = false; // <-- PATCH: clear stop flag at the start
+    this.wasManuallyStopped = false; // Reset manual stop flag when starting new chunked speech
     
     // Check if TTS has been stopped - if so, don't start chunked speech
     if (this.isStopped) {
@@ -1045,14 +1048,16 @@ class TTSService {
                 hasResolved = true;
                 console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} fallback timeout reached, checking stop state...`);
                 
-                // Only force resolve if we haven't been stopped
-                if (!this.isStopped) {
-                  console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} forcing resolve (not stopped)`);
-                  resolve();
-                } else {
-                  console.log(`[${this.serviceType} TTS] Chunk ${i + 1} timeout reached but TTS was stopped, not forcing resolve`);
-                  // Don't resolve - let the stop mechanism handle it
+                // CRITICAL: If TTS was stopped, DO NOT force resolve - let it stop completely
+                if (this.isStopped) {
+                  console.log(`[${this.serviceType} TTS] Chunk ${i + 1} timeout reached but TTS was stopped, NOT forcing resolve - allowing complete stop`);
+                  // Don't resolve - let the stop mechanism handle it completely
+                  return;
                 }
+                
+                // Only force resolve if we haven't been stopped
+                console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} forcing resolve (not stopped)`);
+                resolve();
               }
             }, 30000); // 30 second timeout
             
@@ -1062,10 +1067,10 @@ class TTSService {
                 hasResolved = true;
                 clearTimeout(fallbackTimeout);
                 console.log(`[${this.serviceType} TTS] Chunk ${i + 1} speak-tts completed successfully:`, result);
-                // Check if we've been stopped after chunk completion
+                // CRITICAL: Check if we've been stopped after chunk completion
                 if (this.isStopped) {
-                  console.log(`[${this.serviceType} TTS] Stop detected after chunk ${i + 1} completion, ending chunked speech`);
-                  // Don't resolve if stopped - let the stop mechanism handle it
+                  console.log(`[${this.serviceType} TTS] Stop detected after chunk ${i + 1} completion, NOT resolving - allowing complete stop`);
+                  // Don't resolve if stopped - let the stop mechanism handle it completely
                   return;
                 }
                 resolve();
@@ -1078,10 +1083,10 @@ class TTSService {
                 hasResolved = true;
                 clearTimeout(fallbackTimeout);
                 console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} speak-tts failed:`, error);
-                // Check if we've been stopped after chunk error
+                // CRITICAL: Check if we've been stopped after chunk error
                 if (this.isStopped) {
-                  console.log(`[${this.serviceType} TTS] Stop detected after chunk ${i + 1} error in speakChunksFrom, ending chunked speech`);
-                  // Don't resolve if stopped - let the stop mechanism handle it
+                  console.log(`[${this.serviceType} TTS] Stop detected after chunk ${i + 1} error in speakChunksFrom, NOT resolving - allowing complete stop`);
+                  // Don't resolve if stopped - let the stop mechanism handle it completely
                   return;
                 }
                 // Try to reinitialize if there's a voice error
@@ -1189,7 +1194,10 @@ class TTSService {
       return;
     }
     
-    this.isStopped = false; // <-- PATCH: clear stop flag at the start
+    // Only clear stop flag if we're resuming from a pause, not from a stop
+    if (!this.wasManuallyStopped) {
+      this.isStopped = false; // Only clear if not manually stopped
+    }
     
     console.log(`[${this.serviceType} TTS] Speaking chunks from index ${startIndex}/${this.currentChunks.length}`);
     
@@ -1746,6 +1754,7 @@ class TTSService {
 
       // Mark as stopped immediately, block all further chunk/speak actions
       this.isStopped = true;
+      this.wasManuallyStopped = true; // Track that this was a manual stop
 
       // Try to cancel any ongoing speech using both speak-tts and native API
       if (this.speech && typeof this.speech.cancel === 'function') {
