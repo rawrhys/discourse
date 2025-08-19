@@ -33,11 +33,15 @@ const SimpleImageService = {
 
   // Get cache key for search
   getCacheKey(lessonTitle, content, usedImageTitles, usedImageUrls, courseId, lessonId) {
+    // Ensure arrays are actually arrays before calling slice
+    const safeUsedImageTitles = Array.isArray(usedImageTitles) ? usedImageTitles.slice(0, 5) : [];
+    const safeUsedImageUrls = Array.isArray(usedImageUrls) ? usedImageUrls.slice(0, 5) : [];
+    
     const key = JSON.stringify({
       lessonTitle,
       content: content ? content.substring(0, 100) : '', // Truncate content for cache key
-      usedImageTitles: usedImageTitles.slice(0, 5), // Limit to first 5
-      usedImageUrls: usedImageUrls.slice(0, 5), // Limit to first 5
+      usedImageTitles: safeUsedImageTitles,
+      usedImageUrls: safeUsedImageUrls,
       courseId,
       lessonId
     });
@@ -69,6 +73,12 @@ const SimpleImageService = {
   // Simple image search - optimized with caching and timeout
   async search(lessonTitle, content = '', usedImageTitles = [], usedImageUrls = [], courseId = undefined, lessonId = undefined, forceUnique = false) {
     try {
+      // Ensure parameters are properly typed
+      lessonTitle = lessonTitle || '';
+      content = content || '';
+      usedImageTitles = Array.isArray(usedImageTitles) ? usedImageTitles : [];
+      usedImageUrls = Array.isArray(usedImageUrls) ? usedImageUrls : [];
+
       // Skip cache if forceUnique is true
       if (!forceUnique) {
         const cacheKey = this.getCacheKey(lessonTitle, content, usedImageTitles, usedImageUrls, courseId, lessonId);
@@ -142,20 +152,20 @@ const SimpleImageService = {
         console.error('[SimpleImageService] Search failed:', error.message);
       }
       
-      // Return fallback image on error
-      return {
-        url: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2Y5ZjlmOSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l5ZT0iMTQiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5JbWFnZSBOdCBBdmFpbGFibGU8L3RleHQ+PC9zdmc+',
-        title: lessonTitle || 'Lesson Image',
-        pageURL: '',
-        attribution: 'Placeholder image',
-        uploader: 'System'
-      };
+      // Return null to let the calling code handle the error appropriately
+      return null;
     }
   },
 
   // Enhanced search with course context
   searchWithContext: function(lessonTitle, courseSubject, content, usedImageTitles, usedImageUrls, courseId, lessonId, coursePrompt = null) {
     try {
+      // Ensure all parameters are properly typed
+      lessonTitle = lessonTitle || '';
+      courseSubject = courseSubject || '';
+      usedImageTitles = Array.isArray(usedImageTitles) ? usedImageTitles : [];
+      usedImageUrls = Array.isArray(usedImageUrls) ? usedImageUrls : [];
+
       // Ensure content is a string and handle various input types
       if (content) {
         if (typeof content === 'object') {
@@ -172,10 +182,15 @@ const SimpleImageService = {
           }
         }
         
+        // Ensure content is a string
+        content = String(content);
+        
         // Limit content length to prevent overly large requests
         if (content.length > 1000) {
           content = content.substring(0, 1000) + '...';
         }
+      } else {
+        content = '';
       }
 
       // Create enhanced query with course context
@@ -194,7 +209,15 @@ const SimpleImageService = {
       
     } catch (error) {
       console.error('[SimpleImageService] Enhanced search failed:', error);
-      return this.search(lessonTitle, content, usedImageTitles, usedImageUrls, courseId, lessonId);
+      // Fallback to basic search with safe parameters
+      return this.search(
+        lessonTitle || '', 
+        typeof content === 'string' ? content : '', 
+        Array.isArray(usedImageTitles) ? usedImageTitles : [], 
+        Array.isArray(usedImageUrls) ? usedImageUrls : [], 
+        courseId, 
+        lessonId
+      );
     }
   },
 
