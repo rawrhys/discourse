@@ -82,6 +82,13 @@ class ImagePreloadService {
    */
   async preloadSingleImage(imageUrl) {
     try {
+      // Check if preload link already exists
+      const existingLink = document.querySelector(`link[rel="preload"][href="${imageUrl}"]`);
+      if (existingLink) {
+        console.log(`[ImagePreloadService] Preload link already exists for: ${imageUrl}`);
+        return true;
+      }
+
       // Create link preload element
       const link = document.createElement('link');
       link.rel = 'preload';
@@ -98,13 +105,19 @@ class ImagePreloadService {
 
         img.onload = () => {
           this.preloadedImages.add(imageUrl);
-          document.head.removeChild(link);
+          // Only remove link if we created it
+          if (document.head.contains(link)) {
+            document.head.removeChild(link);
+          }
           console.log(`[ImagePreloadService] Successfully preloaded: ${imageUrl}`);
           resolve(true);
         };
 
         img.onerror = () => {
-          document.head.removeChild(link);
+          // Only remove link if we created it
+          if (document.head.contains(link)) {
+            document.head.removeChild(link);
+          }
           console.warn(`[ImagePreloadService] Failed to preload: ${imageUrl}`);
           resolve(false);
         };

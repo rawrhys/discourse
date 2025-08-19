@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import PropTypes from 'prop-types';
+import imagePreloadService from '../services/ImagePreloadService';
 
 const Image = ({ 
   src, 
@@ -97,21 +98,26 @@ const Image = ({
     }
   }, [shouldShowImage]);
 
-  // Improved preload strategy with cleanup - only preload if not already loaded
+  // Improved preload strategy with cleanup - only preload if not already loaded and not handled by ImagePreloadService
   useEffect(() => {
     if (priority && src && shouldShowImage && !isLoaded) {
-      // Remove existing preload link if any
-      if (preloadLinkRef.current) {
-        document.head.removeChild(preloadLinkRef.current);
-      }
+      // Check if ImagePreloadService is already handling this image
+      const isHandledByService = imagePreloadService.isPreloaded(src);
       
-      const link = document.createElement('link');
-      link.rel = 'preload';
-      link.as = 'image';
-      link.href = src;
-      link.fetchPriority = 'high';
-      preloadLinkRef.current = link;
-      document.head.appendChild(link);
+      if (!isHandledByService) {
+        // Remove existing preload link if any
+        if (preloadLinkRef.current) {
+          document.head.removeChild(preloadLinkRef.current);
+        }
+        
+        const link = document.createElement('link');
+        link.rel = 'preload';
+        link.as = 'image';
+        link.href = src;
+        link.fetchPriority = 'high';
+        preloadLinkRef.current = link;
+        document.head.appendChild(link);
+      }
       
       return () => {
         if (preloadLinkRef.current && document.head.contains(preloadLinkRef.current)) {

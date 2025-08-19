@@ -1122,24 +1122,30 @@ const LessonView = ({
   useEffect(() => {
     let ignore = false;
     
-    // If image is already present on lesson, use it
+    // If image is already present on lesson, use it (optimized check)
     if (propLesson?.image && (propLesson.image.imageUrl || propLesson.image.url)) {
-      const existing = {
-        url: normalizeImageUrl(propLesson.image.imageUrl || propLesson.image.url),
-        title: propLesson.image.imageTitle || propLesson.image.title,
-        pageURL: propLesson.image.pageURL,
-        attribution: propLesson.image.attribution,
-        uploader: undefined,
-      };
-      const currentTitle = existing.title;
-      const currentUrl = existing.url;
-      const appearsMoreThanOnce = (currentTitle && imageTitleCounts[currentTitle] > 1) || (currentUrl && imageUrlCounts[currentUrl] > 1);
+      const imageUrl = propLesson.image.imageUrl || propLesson.image.url;
+      const imageTitle = propLesson.image.imageTitle || propLesson.image.title;
+      
+      // Check if this image is already being used too frequently
+      const appearsMoreThanOnce = (imageTitle && imageTitleCounts[imageTitle] > 1) || (imageUrl && imageUrlCounts[imageUrl] > 1);
+      
       if (!appearsMoreThanOnce) {
+        const existing = {
+          url: normalizeImageUrl(imageUrl),
+          title: imageTitle,
+          pageURL: propLesson.image.pageURL,
+          attribution: propLesson.image.attribution,
+          uploader: undefined,
+        };
+        
         setImageData(existing);
         setImageLoading(false);
+        console.log('[LessonView] Using existing lesson image');
         return () => { ignore = true; };
       }
       // If duplicate, fall through to fetch a replacement
+      console.log('[LessonView] Image appears too frequently, fetching replacement');
     }
     
     setImageLoading(true);
@@ -1149,6 +1155,10 @@ const LessonView = ({
     
     async function fetchImage() {
       const startTime = performance.now();
+      
+      // Create a cache key for this lesson
+      const cacheKey = `${propLesson.id}-${propLesson.title}-${subject}`;
+      
       try {
         // Use the same simplified approach as PublicLessonView
         const result = await SimpleImageService.searchWithContext(
@@ -1223,30 +1233,34 @@ const LessonView = ({
     };
   }, [propLesson, subject, courseId, courseDescription]);
 
-  // Preload current lesson image for better performance
+  // Preload current lesson image for better performance (only if not already loaded)
   useEffect(() => {
     if (!propLesson || !propLesson.image) return;
 
-    const preloadCurrentImage = async () => {
-      try {
-        // Preload the current lesson's image with high priority
-        await imagePreloadService.preloadLessonImages(propLesson, 10);
-        console.log('[LessonView] Preloaded current lesson image');
-        
-        // Track performance
-        const preloadTime = performance.now() - renderStartTime.current;
-        performanceMonitor.trackImageLoad(
-          propLesson.image.imageUrl || propLesson.image.url,
-          preloadTime,
-          true // cache hit
-        );
-      } catch (error) {
-        console.warn('[LessonView] Image preloading error:', error);
-      }
-    };
+    const imageUrl = propLesson.image.imageUrl || propLesson.image.url;
+    if (!imageUrl) return;
 
-    // Run preloading in background with higher priority
-    preloadCurrentImage();
+    // Only preload if not already preloaded
+    if (!imagePreloadService.isPreloaded(imageUrl)) {
+      const preloadCurrentImage = async () => {
+        try {
+          // Preload the current lesson's image with high priority
+          await imagePreloadService.preloadLessonImages(propLesson, 10);
+          console.log('[LessonView] Preloaded current lesson image');
+          
+          // Track performance
+          const preloadTime = performance.now() - renderStartTime.current;
+          performanceMonitor.trackImageLoad(imageUrl, preloadTime, true);
+        } catch (error) {
+          console.warn('[LessonView] Image preloading error:', error);
+        }
+      };
+
+      // Run preloading in background with higher priority
+      preloadCurrentImage();
+    } else {
+      console.log('[LessonView] Image already preloaded, skipping preload');
+    }
   }, [propLesson?.id, propLesson?.image]);
 
   // Clean up any remaining malformed asterisks after content is rendered
