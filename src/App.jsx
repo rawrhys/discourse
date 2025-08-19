@@ -20,6 +20,7 @@ const PublicCourseDisplay = lazy(() => import('./components/PublicCourseDisplay'
 const CaptchaPage = lazy(() => import('./components/CaptchaPage'));
 const PrivacyPolicy = lazy(() => import('./components/legal/PrivacyPolicy.jsx'));
 const UserAgreement = lazy(() => import('./components/legal/UserAgreement.jsx'));
+const PerformanceDashboard = lazy(() => import('./components/PerformanceDashboard'));
 
 
 
@@ -280,6 +281,7 @@ const CourseLayout = () => {
 
 function App() {
   const location = useLocation();
+  const [showPerformanceDashboard, setShowPerformanceDashboard] = useState(false);
   useApi(); // Activate the global auth error listener
 
   useEffect(() => {
@@ -324,6 +326,23 @@ function App() {
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </Suspense>
+        
+        {/* Performance Dashboard Toggle Button */}
+        {process.env.NODE_ENV === 'development' && (
+          <button
+            onClick={() => setShowPerformanceDashboard(!showPerformanceDashboard)}
+            className="fixed top-4 right-4 z-50 bg-blue-600 text-white p-2 rounded-full shadow-lg hover:bg-blue-700 transition-colors"
+            title="Toggle Performance Dashboard"
+          >
+            📊
+          </button>
+        )}
+        
+        {/* Performance Dashboard */}
+        <PerformanceDashboard 
+          isVisible={showPerformanceDashboard} 
+          onClose={() => setShowPerformanceDashboard(false)} 
+        />
       </ErrorBoundary>
     </div>
   );

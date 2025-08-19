@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import PropTypes from 'prop-types';
 import imagePreloadService from '../services/ImagePreloadService';
+import imagePerformanceMonitor from '../services/ImagePerformanceMonitor';
 
 const Image = ({ 
   src, 
@@ -98,8 +99,10 @@ const Image = ({
   useEffect(() => {
     if (shouldShowImage && imgRef.current) {
       imgRef.current.dataset.startTime = Date.now().toString();
+      // Track image load start for performance monitoring
+      imagePerformanceMonitor.trackManualImageLoad(src, 0, 0);
     }
-  }, [shouldShowImage]);
+  }, [shouldShowImage, src]);
 
   // Handle image load with timeout and performance monitoring
   const handleImageLoad = useCallback((event) => {
@@ -116,6 +119,10 @@ const Image = ({
     setIsLoaded(true);
     setIsError(false);
     setShowFallback(false);
+    
+    // Track performance metrics
+    const imageSize = img.naturalWidth * img.naturalHeight || 0;
+    imagePerformanceMonitor.trackManualImageLoad(src, loadTime, imageSize);
     
     // Log slow loads for monitoring
     if (loadTime > 3000) {

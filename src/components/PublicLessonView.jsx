@@ -499,7 +499,7 @@ const PublicLessonView = ({
 
   // Debounced image search to prevent multiple simultaneous requests
   const debouncedImageSearch = useMemo(
-    () => debounce(async (lessonData, subject, courseId, usedImageTitles, usedImageUrls, courseDescription) => {
+    () => debounce(async (lessonData, subject, courseId) => {
       const startTime = performance.now();
       
       try {
@@ -512,16 +512,11 @@ const PublicLessonView = ({
           return;
         }
         
-        // For public courses, use a simplified image search
-        const result = await SimpleImageService.searchWithContext(
+        // Simple image search
+        const result = await SimpleImageService.search(
           lessonData.title,
-          subject,
-          cleanAndCombineContent(lessonData.content),
-          Array.from(usedImageTitles), // Convert Set to Array
-          Array.from(usedImageUrls),   // Convert Set to Array
           courseId,
-          lessonData.id,
-          courseDescription
+          lessonData.id
         );
         
         // Track image fetch performance
@@ -693,7 +688,7 @@ const PublicLessonView = ({
     
     // Defer image loading to idle time to prevent blocking
     const loadImage = () => {
-      debouncedImageSearch(lesson, subject, courseId, usedImageTitles, usedImageUrls, courseDescription);
+      debouncedImageSearch(lesson, subject, courseId);
     };
     
     if ('requestIdleCallback' in window) {
@@ -719,10 +714,7 @@ const PublicLessonView = ({
         await lessonImagePreloader.preloadLessonImage(
           lesson,
           subject,
-          courseId,
-          Array.from(usedImageTitles),
-          Array.from(usedImageUrls),
-          courseDescription
+          courseId
         );
       } catch (error) {
         console.warn('[PublicLessonView] Background preload error:', error);

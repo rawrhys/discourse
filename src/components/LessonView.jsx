@@ -16,6 +16,8 @@ import { privateTTSService } from '../services/TTSService.js';
 import Flashcard from './Flashcard';
 import { useThrottledLogger, useDebounce, useStableValue } from '../hooks/usePerformanceOptimization';
 import performanceMonitor from '../services/PerformanceMonitorService';
+import imagePerformanceMonitor from '../services/ImagePerformanceMonitor';
+import predictiveAnalyticsService from '../services/PredictiveAnalyticsService';
 import api from '../services/api.js';
 import quizPersistenceService from '../services/QuizPersistenceService';
 import markdownService from '../services/MarkdownService';
@@ -491,6 +493,7 @@ const LessonView = ({
   const [error, setError] = useState(null);
   const [retryCount, setRetryCount] = useState(0);
   const [imageFallbackTried, setImageFallbackTried] = useState(false);
+  const [lessonStartTime, setLessonStartTime] = useState(Date.now());
   
   // Manage used images as local state like PublicLessonView
   const [localUsedImageTitles, setLocalUsedImageTitles] = useState(new Set(usedImageTitles));
@@ -980,12 +983,22 @@ const LessonView = ({
 
   // Memoized renderFlashcards function to prevent recreation on every render
   const renderFlashcards = useCallback(() => {
+    const startTime = performance.now();
+    
     // Track flashcard rendering for performance monitoring
     performanceMonitor.trackFlashcardRender();
+    
+    const result = <FlashcardRenderer flashcards={flashcardData} />;
+    
+    // Track render time for performance monitoring
+    const renderTime = performance.now() - startTime;
+    imagePerformanceMonitor.trackRenderTime('FlashcardRenderer', renderTime);
+    
     if (process.env.NODE_ENV === 'development') {
       console.log('[LessonView] renderFlashcards called with data:', flashcardData);
     }
-    return <FlashcardRenderer flashcards={flashcardData} />;
+    
+    return result;
   }, [flashcardData]);
 
   // Update lesson state when prop changes
@@ -1002,6 +1015,25 @@ const LessonView = ({
       setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
     }
   }, [propLesson]);
+
+  // Track navigation for predictive analytics
+  useEffect(() => {
+    if (propLesson?.id && activeModule?.id && courseId) {
+      // Update lesson start time
+      setLessonStartTime(Date.now());
+      
+      // Record navigation to current lesson
+      predictiveAnalyticsService.recordNavigation(
+        'previous', // We don't know the previous lesson yet
+        propLesson.id,
+        {
+          timeSpent: 0, // Will be updated when leaving
+          scrollDepth: 0,
+          interactions: 0
+        }
+      );
+    }
+  }, [propLesson?.id, activeModule?.id, courseId]);
 
   // Handle quiz completion with API submission and module unlock
   const handleQuizComplete = useCallback(
@@ -1196,16 +1228,11 @@ const LessonView = ({
     }
       
       try {
-        // Use the same simplified approach as PublicLessonView
-        const result = await SimpleImageService.searchWithContext(
+        // Use the simplified approach
+        const result = await SimpleImageService.search(
           propLesson.title,
-          subject,
-          cleanAndCombineContent(propLesson.content),
-          Array.from(localUsedImageTitles), // Convert Set to Array
-          Array.from(localUsedImageUrls),   // Convert Set to Array
           courseId,
-          propLesson?.id || lessonId,
-          courseDescription
+          propLesson?.id || lessonId
         );
         
         // Track image fetch performance
@@ -1217,11 +1244,6 @@ const LessonView = ({
         // Log slow image fetches
         if (fetchTime > 2000) {
           console.warn('[LessonView] Slow image fetch detected:', fetchTime + 'ms');
-        }
-        
-        // If fetch is too slow, don't retry immediately
-        if (fetchTime > 5000) {
-          console.warn('[LessonView] Very slow image fetch, may skip future attempts');
         }
         
         if (!ignore && !abortController.signal.aborted) {
@@ -1432,7 +1454,10 @@ const LessonView = ({
   console.log('[LessonView] imageLoading state:', imageLoading);
   }
   
-  return (
+  // Track main component render time
+  const renderStartTime = performance.now();
+  
+  const componentJSX = (
     <div className="flex-1 flex flex-col p-6 bg-white overflow-y-auto">
       <header className="mb-8">
         <h2 className="text-3xl font-bold text-gray-900 mb-4">{propLesson?.title}</h2>
@@ -1632,6 +1657,19 @@ const LessonView = ({
           <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-2">
             <button
               onClick={() => {
+                // Track navigation for analytics
+                if (propLesson?.id && activeModule?.id) {
+                  predictiveAnalyticsService.recordNavigation(
+                    propLesson.id,
+                    'previous',
+                    {
+                      timeSpent: Date.now() - (lessonStartTime || Date.now()),
+                      scrollDepth: window.scrollY / document.body.scrollHeight,
+                      interactions: 0
+                    }
+                  );
+                }
+                
                 handleStopAudio();
                 if (onPreviousLesson) onPreviousLesson();
               }}
@@ -1645,6 +1683,19 @@ const LessonView = ({
             </span>
             <button
               onClick={() => {
+                // Track navigation for analytics
+                if (propLesson?.id && activeModule?.id) {
+                  predictiveAnalyticsService.recordNavigation(
+                    propLesson.id,
+                    'next',
+                    {
+                      timeSpent: Date.now() - (lessonStartTime || Date.now()),
+                      scrollDepth: window.scrollY / document.body.scrollHeight,
+                      interactions: 0
+                    }
+                  );
+                }
+                
                 handleStopAudio();
                 if (onNextLesson) onNextLesson();
               }}
@@ -1658,6 +1709,12 @@ const LessonView = ({
       </footer>
     </div>
   );
+  
+  // Track render time and return component
+  const renderTime = performance.now() - renderStartTime;
+  imagePerformanceMonitor.trackRenderTime('LessonView', renderTime);
+  
+  return componentJSX;
 }
 
 LessonView.propTypes = {
