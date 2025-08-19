@@ -169,11 +169,26 @@ class ImagePreloadService {
 
   /**
    * Preload images for a lesson with smart prioritization
-   * @param {Array} imageUrls - Array of image URLs
+   * @param {Array|Object} imageUrlsOrLesson - Array of image URLs or lesson object
    * @param {number} visibleIndex - Index of currently visible image
    * @returns {Promise<Array>} - Array of success statuses
    */
-  async preloadLessonImages(imageUrls, visibleIndex = 0) {
+  async preloadLessonImages(imageUrlsOrLesson, visibleIndex = 0) {
+    let imageUrls = [];
+    
+    // Handle both array of URLs and lesson object
+    if (Array.isArray(imageUrlsOrLesson)) {
+      imageUrls = imageUrlsOrLesson;
+    } else if (imageUrlsOrLesson && typeof imageUrlsOrLesson === 'object') {
+      // Extract image URL from lesson object
+      if (imageUrlsOrLesson.image) {
+        const imageUrl = imageUrlsOrLesson.image.imageUrl || imageUrlsOrLesson.image.url;
+        if (imageUrl) {
+          imageUrls = [imageUrl];
+        }
+      }
+    }
+    
     if (!imageUrls || imageUrls.length === 0) {
       return [];
     }

@@ -261,14 +261,16 @@ const Content = memo(({ content, bibliography, lessonTitle, courseSubject }) => 
   const [highlightedCitation, setHighlightedCitation] = useState(null);
   
   useEffect(() => {
-    try {
-      const lessonContentString = getContentAsString(content);
-      
-      console.log('[LessonView] Generating academic references for:', {
-        lessonTitle,
-        courseSubject,
-        contentLength: lessonContentString?.length || 0
-      });
+    // Debounce academic references generation to prevent excessive processing
+    const timeoutId = setTimeout(() => {
+      try {
+        const lessonContentString = getContentAsString(content);
+        
+        console.log('[LessonView] Generating academic references for:', {
+          lessonTitle,
+          courseSubject,
+          contentLength: lessonContentString?.length || 0
+        });
       
       // Generate academic references using the same method as PublicLessonView
       const references = academicReferencesService.generateReferences(
@@ -286,10 +288,13 @@ const Content = memo(({ content, bibliography, lessonTitle, courseSubject }) => 
         courseSubject,
         lessonTitle
       });
-    } catch (error) {
-      console.error('[LessonView] Error generating academic references:', error);
-      setAcademicReferences([]);
-    }
+          } catch (error) {
+        console.error('[LessonView] Error generating academic references:', error);
+        setAcademicReferences([]);
+      }
+    }, 300); // 300ms debounce
+    
+    return () => clearTimeout(timeoutId);
   }, [content, lessonTitle, courseSubject]);
 
   // Handle citation click
@@ -1143,6 +1148,7 @@ const LessonView = ({
     let abortController = new AbortController();
     
     async function fetchImage() {
+      const startTime = performance.now();
       try {
         // Use the same simplified approach as PublicLessonView
         const result = await SimpleImageService.searchWithContext(
@@ -1156,9 +1162,23 @@ const LessonView = ({
           courseDescription
         );
         
+        // Track image fetch performance
+        const fetchTime = performance.now() - startTime;
+        if (result && result.url) {
+          performanceMonitor.trackImageLoad(result.url, fetchTime, false);
+        }
+        
         if (!ignore && !abortController.signal.aborted) {
           console.log('[LessonView] Setting image data:', result);
-          setImageData(result ? { ...result, url: normalizeImageUrl(result.url) } : null);
+          
+          // Only update if the image data has actually changed
+          const newImageData = result ? { ...result, url: normalizeImageUrl(result.url) } : null;
+          setImageData(prevData => {
+            if (prevData?.url === newImageData?.url && prevData?.title === newImageData?.title) {
+              return prevData; // No change needed
+            }
+            return newImageData;
+          });
           
           // Update local used image tracking when a new image is found
           if (result) {
@@ -1204,15 +1224,22 @@ const LessonView = ({
 
     const preloadCurrentImage = async () => {
       try {
-        // Preload the current lesson's image
+        // Preload the current lesson's image with high priority
         await imagePreloadService.preloadLessonImages(propLesson, 10);
         console.log('[LessonView] Preloaded current lesson image');
+        
+        // Track performance
+        performanceMonitor.trackImageLoad(
+          propLesson.image.imageUrl || propLesson.image.url,
+          Date.now() - performance.now(),
+          true // cache hit
+        );
       } catch (error) {
         console.warn('[LessonView] Image preloading error:', error);
       }
     };
 
-    // Run preloading in background
+    // Run preloading in background with higher priority
     preloadCurrentImage();
   }, [propLesson?.id, propLesson?.image]);
 
@@ -1236,11 +1263,18 @@ const LessonView = ({
     }
   }, [propLesson?.content]);
 
-  // Performance monitoring (console logging disabled)
+  // Performance monitoring with enhanced tracking
   useEffect(() => {
     const renderTime = performance.now() - renderStartTime.current;
     performanceMonitor.trackComponentRender('LessonView', renderTime);
-    // Console logging disabled to prevent overload
+    
+    // Track render performance and provide recommendations
+    if (renderTime > 100) {
+      console.warn('[LessonView] Slow render detected:', renderTime + 'ms');
+    }
+    
+    // Track component render count
+    performanceMonitor.trackComponentRender('LessonView');
   }, [propLesson?.id, view]); // Only track when lesson or view changes
 
   // Early return if no lesson
@@ -1281,9 +1315,11 @@ const LessonView = ({
     );
   }
 
-  // Debug logging for image data
-  console.log('[LessonView] Current imageData state:', imageData);
-  console.log('[LessonView] imageLoading state:', imageLoading);
+  // Debug logging for image data (reduced frequency to prevent spam)
+  if (process.env.NODE_ENV === 'development' && Math.random() < 0.1) {
+    console.log('[LessonView] Current imageData state:', imageData);
+    console.log('[LessonView] imageLoading state:', imageLoading);
+  }
   
   return (
     <div className="flex-1 flex flex-col p-6 bg-white overflow-y-auto">
@@ -1291,17 +1327,32 @@ const LessonView = ({
         <h2 className="text-3xl font-bold text-gray-900 mb-4">{propLesson?.title}</h2>
         <p className="text-md text-gray-600">{moduleTitle}</p>
         {imageLoading && (
-          <div className="lesson-image-container loading">
+          <div className="lesson-image-container loading" style={{ 
+            minHeight: '300px', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            backgroundColor: '#f3f4f6',
+            borderRadius: '8px'
+          }}>
             <div className="image-loading">Loading image...</div>
           </div>
         )}
         {imageData && imageData.url && !imageLoading && (
-          <figure className="lesson-image-container" style={{ maxWidth: 700, margin: '0 auto' }}>
+          <figure className="lesson-image-container" style={{ 
+            maxWidth: 700, 
+            margin: '0 auto',
+            minHeight: '300px',
+            position: 'relative'
+          }}>
             <Image
               src={imageData.url}
               alt={propLesson?.title || 'Lesson illustration'}
               className="lesson-image"
               style={{ width: '100%', height: 'auto' }}
+              priority={true}
+              preload={true}
+              lazy={false}
             />
             <figcaption className="image-description" style={{ 
               textAlign: 'center', 
