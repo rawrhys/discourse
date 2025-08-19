@@ -1184,18 +1184,18 @@ const LessonView = ({
       const appearsMoreThanOnce = (imageTitle && imageTitleCounts[imageTitle] > 1) || (imageUrl && imageUrlCounts[imageUrl] > 1);
       
       if (!appearsMoreThanOnce) {
-      const existing = {
+        const existing = {
           url: normalizeImageUrl(imageUrl),
           title: imageTitle,
-        pageURL: propLesson.image.pageURL,
-        attribution: propLesson.image.attribution,
-        uploader: undefined,
-      };
+          pageURL: propLesson.image.pageURL,
+          attribution: propLesson.image.attribution,
+          uploader: undefined,
+        };
         
         setImageData(existing);
         setImageLoading(false);
         console.log('[LessonView] Using existing lesson image');
-        return () => { ignore = true; };
+        return;
       }
       // If duplicate, fall through to fetch a replacement
       console.log('[LessonView] Image appears too frequently, fetching replacement');
@@ -1206,7 +1206,8 @@ const LessonView = ({
     
     let abortController = new AbortController();
     
-    async function fetchImage() {
+    // Run in background (non-blocking)
+    (async function fetchImage() {
       const startTime = performance.now();
       
       // Create a cache key for this lesson
@@ -1304,9 +1305,7 @@ const LessonView = ({
           setImageLoading(false);
         }
       }
-    
-    // Run in background (non-blocking)
-    fetchImage();
+    })();
     
     return () => { 
       ignore = true;
@@ -1348,22 +1347,22 @@ const LessonView = ({
 
     // Only preload if not already preloaded and not already loaded
     if (!imagePreloadService.isPreloaded(imageUrl) && !imageData?.url) {
-    const preloadCurrentImage = async () => {
-      try {
+      const preloadCurrentImage = async () => {
+        try {
           // Preload the current lesson's image with high priority
-        await imagePreloadService.preloadLessonImages(propLesson, 10);
-        console.log('[LessonView] Preloaded current lesson image');
+          await imagePreloadService.preloadLessonImages(propLesson, 10);
+          console.log('[LessonView] Preloaded current lesson image');
           
           // Track performance
           const preloadTime = performance.now() - renderStartTime.current;
           performanceMonitor.trackImageLoad(imageUrl, preloadTime, true);
-      } catch (error) {
-        console.warn('[LessonView] Image preloading error:', error);
-      }
-    };
+        } catch (error) {
+          console.warn('[LessonView] Image preloading error:', error);
+        }
+      };
 
       // Run preloading in background with higher priority
-    preloadCurrentImage();
+      preloadCurrentImage();
     } else {
       console.log('[LessonView] Image already preloaded or loaded, skipping preload');
     }
@@ -1455,7 +1454,7 @@ const LessonView = ({
   }
   
   // Track main component render time
-  const renderStartTime = performance.now();
+  const currentRenderTime = performance.now();
   
   const componentJSX = (
     <div className="flex-1 flex flex-col p-6 bg-white overflow-y-auto">
@@ -1711,7 +1710,7 @@ const LessonView = ({
   );
   
   // Track render time and return component
-  const renderTime = performance.now() - renderStartTime;
+  const renderTime = performance.now() - currentRenderTime;
   imagePerformanceMonitor.trackRenderTime('LessonView', renderTime);
   
   return componentJSX;
