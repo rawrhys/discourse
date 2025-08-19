@@ -1040,6 +1040,36 @@ const PublicLessonView = ({
         .trim();
     }
     
+    // FALLBACK: If still no paragraph tags, force create them from the raw content
+    if (!parsedContent.includes('<p>') && displayContent) {
+      console.log('[PublicLessonView] No paragraph tags found, forcing paragraph creation from raw content');
+      
+      // Split the raw content into sentences and create paragraphs
+      const sentences = displayContent
+        .replace(/\n/g, ' ') // Replace newlines with spaces
+        .replace(/([.!?])\s+/g, '$1|') // Mark sentence endings
+        .split('|')
+        .filter(s => s.trim().length > 10); // Filter out very short fragments
+      
+      parsedContent = sentences.map(sentence => {
+        const trimmed = sentence.trim();
+        if (trimmed.length === 0) return '';
+        
+        // Add line breaks after sentences for better readability
+        const formattedSentence = trimmed
+          .replace(/([.!?])\s+/g, '$1<br><br>') // Add double line breaks after sentences
+          .replace(/<br><br><br>/g, '<br><br>'); // Clean up excessive breaks
+        
+        return `<p>${formattedSentence}</p>`;
+      }).join('\n\n');
+      
+      console.log('[PublicLessonView] Forced paragraph creation result:', {
+        sentenceCount: sentences.length,
+        paragraphCount: (parsedContent.match(/<p>/g) || []).length,
+        contentPreview: parsedContent.substring(0, 300) + '...'
+      });
+    }
+    
     // Debug log to check if JSON keys are still present
     if (process.env.NODE_ENV === 'development') {
       console.log('[PublicLessonView] Content processing debug:', {
@@ -1054,7 +1084,9 @@ const PublicLessonView = ({
         hasCustomSectionHeaders: parsedContent.includes('section-header'),
         hasCustomDividers: parsedContent.includes('section-divider'),
         contentPreview: parsedContent.substring(0, 500) + '...',
-        rawContentPreview: displayContent.substring(0, 200) + '...'
+        rawContentPreview: displayContent.substring(0, 200) + '...',
+        paragraphCount: (parsedContent.match(/<p>/g) || []).length,
+        lineBreakCount: (parsedContent.match(/<br>/g) || []).length
       });
     }
   } catch (error) {

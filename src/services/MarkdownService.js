@@ -14,6 +14,11 @@ class MarkdownService {
 
     // Enable GitHub Flavored Markdown
     this.md.enable(['table', 'strikethrough', 'autolink']);
+    
+    // Add custom rule to ensure proper paragraph breaks
+    this.md.renderer.rules.paragraph_open = function() {
+      return '<p style="margin-top: 1.5rem; margin-bottom: 1.5rem; line-height: 1.8;">';
+    };
   }
 
   // Main parsing function with pre-processing
@@ -97,6 +102,11 @@ class MarkdownService {
       .replace(/\*\*\*\*/g, '**')
       .replace(/\*\*\*\*\*/g, '**')
       .replace(/\*\*\*\*\*\*/g, '**')
+      
+      // Ensure proper paragraph structure by adding double newlines
+      .replace(/\n\n---\n\n/g, '\n\n<hr>\n\n') // Convert markdown horizontal rules to HTML
+      .replace(/\n\n/g, '\n\n') // Ensure double newlines for paragraph breaks
+      .replace(/\n/g, '  \n') // Convert single newlines to markdown line breaks (two spaces + newline)
       
       // Final separator cleanup
       .replace(/\|\|\|---\|\|\|/g, '')
