@@ -327,6 +327,15 @@ class MarkdownService {
       .replace(/<\/p>\s*<hr[^>]*>\s*<p>/g, '</p>\n\n<hr>\n\n<p>')
       // Clean up excessive whitespace
       .replace(/\n{3,}/g, '\n\n')
+      // FORCE REMOVE line breaks after circa abbreviations
+      .replace(/c\.\s*<br[^>]*>\s*(\d{4})/g, 'c. $1') // Remove <br> after c.
+      .replace(/c\.\s*<br[^>]*>\s*<br[^>]*>\s*(\d{4})/g, 'c. $1') // Remove double <br> after c.
+      .replace(/c\.\s*<br[^>]*>\s*(\d{4})\s*–\s*(\d{4})/g, 'c. $1–$2') // Remove <br> in date ranges
+      .replace(/c\.\s*<br[^>]*>\s*(\d{4})\s*-\s*(\d{4})/g, 'c. $1-$2') // Remove <br> in date ranges (hyphen)
+      .replace(/c\.\s*<br[^>]*>\s*(\d{4})\s+BCE/g, 'c. $1 BCE') // Remove <br> before BCE
+      .replace(/c\.\s*<br[^>]*>\s*(\d{4})\s+CE/g, 'c. $1 CE') // Remove <br> before CE
+      .replace(/c\.\s*<br[^>]*>\s*(\d{4})\s+BC/g, 'c. $1 BC') // Remove <br> before BC
+      .replace(/c\.\s*<br[^>]*>\s*(\d{4})\s+AD/g, 'c. $1 AD') // Remove <br> before AD
       // Ensure proper line breaks within paragraphs
       .replace(/(<p[^>]*>)([^<]+)(<\/p>)/g, (match, openTag, content, closeTag) => {
         // Add line breaks after sentences for better readability, but preserve circa abbreviations

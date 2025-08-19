@@ -990,18 +990,27 @@ const PublicLessonView = ({
     // Apply markdown parsing to the fixed content
     parsedContent = parseWithSectionPreservation(fixedContent);
     
-    // Enhanced paragraph structure and line break formatting
-    if (parsedContent) {
-      // Force paragraph breaks for better readability
-      parsedContent = parsedContent
-        // Ensure proper spacing between paragraphs
-        .replace(/<\/p>\s*<p>/g, '</p>\n\n<p>')
-        .replace(/<\/p>\s*<h/g, '</p>\n\n<h')
-        .replace(/<\/h[1-6]>\s*<p>/g, '</h$1>\n\n<p>')
-        // Ensure proper spacing around horizontal rules
-        .replace(/<\/p>\s*<hr[^>]*>\s*<p>/g, '</p>\n\n<hr>\n\n<p>')
-        // Clean up excessive whitespace
-        .replace(/\n{3,}/g, '\n\n');
+          // Enhanced paragraph structure and line break formatting
+      if (parsedContent) {
+        // Force paragraph breaks for better readability
+        parsedContent = parsedContent
+          // Ensure proper spacing between paragraphs
+          .replace(/<\/p>\s*<p>/g, '</p>\n\n<p>')
+          .replace(/<\/p>\s*<h/g, '</p>\n\n<h')
+          .replace(/<\/h[1-6]>\s*<p>/g, '</h$1>\n\n<p>')
+          // Ensure proper spacing around horizontal rules
+          .replace(/<\/p>\s*<hr[^>]*>\s*<p>/g, '</p>\n\n<hr>\n\n<p>')
+          // FORCE REMOVE line breaks after circa abbreviations
+          .replace(/c\.\s*<br[^>]*>\s*(\d{4})/g, 'c. $1') // Remove <br> after c.
+          .replace(/c\.\s*<br[^>]*>\s*<br[^>]*>\s*(\d{4})/g, 'c. $1') // Remove double <br> after c.
+          .replace(/c\.\s*<br[^>]*>\s*(\d{4})\s*–\s*(\d{4})/g, 'c. $1–$2') // Remove <br> in date ranges
+          .replace(/c\.\s*<br[^>]*>\s*(\d{4})\s*-\s*(\d{4})/g, 'c. $1-$2') // Remove <br> in date ranges (hyphen)
+          .replace(/c\.\s*<br[^>]*>\s*(\d{4})\s+BCE/g, 'c. $1 BCE') // Remove <br> before BCE
+          .replace(/c\.\s*<br[^>]*>\s*(\d{4})\s+CE/g, 'c. $1 CE') // Remove <br> before CE
+          .replace(/c\.\s*<br[^>]*>\s*(\d{4})\s+BC/g, 'c. $1 BC') // Remove <br> before BC
+          .replace(/c\.\s*<br[^>]*>\s*(\d{4})\s+AD/g, 'c. $1 AD') // Remove <br> before AD
+          // Clean up excessive whitespace
+          .replace(/\n{3,}/g, '\n\n');
       
       // If the content doesn't have paragraph tags, add them
       if (!parsedContent.includes('<p>')) {
@@ -1051,6 +1060,15 @@ const PublicLessonView = ({
         .replace(/(<\/h[1-6]>)/g, '$1\n\n')
         // Ensure proper spacing around horizontal rules
         .replace(/(<hr[^>]*>)/g, '\n\n$1\n\n')
+        // FINAL FORCE REMOVE any remaining line breaks after circa
+        .replace(/c\.\s*<br[^>]*>\s*(\d{4})/g, 'c. $1') // Remove <br> after c.
+        .replace(/c\.\s*<br[^>]*>\s*<br[^>]*>\s*(\d{4})/g, 'c. $1') // Remove double <br> after c.
+        .replace(/c\.\s*<br[^>]*>\s*(\d{4})\s*–\s*(\d{4})/g, 'c. $1–$2') // Remove <br> in date ranges
+        .replace(/c\.\s*<br[^>]*>\s*(\d{4})\s*-\s*(\d{4})/g, 'c. $1-$2') // Remove <br> in date ranges (hyphen)
+        .replace(/c\.\s*<br[^>]*>\s*(\d{4})\s+BCE/g, 'c. $1 BCE') // Remove <br> before BCE
+        .replace(/c\.\s*<br[^>]*>\s*(\d{4})\s+CE/g, 'c. $1 CE') // Remove <br> before CE
+        .replace(/c\.\s*<br[^>]*>\s*(\d{4})\s+BC/g, 'c. $1 BC') // Remove <br> before BC
+        .replace(/c\.\s*<br[^>]*>\s*(\d{4})\s+AD/g, 'c. $1 AD') // Remove <br> before AD
         // Clean up excessive whitespace
         .replace(/\n{3,}/g, '\n\n')
         .trim();
