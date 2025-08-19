@@ -116,6 +116,32 @@ const publicLessonStyles = `
     margin-left: auto !important;
     margin-right: auto !important;
   }
+  
+  /* Enhanced horizontal rule styling for section breaks */
+  .lesson-content-text hr {
+    border: none !important;
+    height: 2px !important;
+    background: linear-gradient(to right, transparent, #e5e7eb, transparent) !important;
+    margin: 3rem auto !important;
+    max-width: 80% !important;
+  }
+  
+  /* Section header styling */
+  .lesson-content-text h2 {
+    color: #1f2937 !important;
+    font-size: 1.5rem !important;
+    font-weight: 700 !important;
+    margin-top: 3rem !important;
+    margin-bottom: 1.5rem !important;
+    text-align: center !important;
+    border-bottom: 2px solid #e5e7eb !important;
+    padding-bottom: 0.5rem !important;
+  }
+  
+  /* First section header should not have top margin */
+  .lesson-content-text h2:first-of-type {
+    margin-top: 0 !important;
+  }
 `;
 
 const PublicLessonView = ({ 
@@ -719,12 +745,16 @@ const PublicLessonView = ({
     if (!content || typeof content !== 'string') return content;
     
     return content
+      // Preserve section breaks and horizontal rules
+      .replace(/\n\n---\n\n/g, '\n\n<hr>\n\n') // Convert markdown horizontal rules to HTML
       // Preserve intentional line breaks
       .replace(/\n\n+/g, '\n\n') // Normalize multiple newlines to double newlines
       .replace(/\n/g, '  \n') // Convert single newlines to markdown line breaks (two spaces + newline)
       // Add spacing around headers for better readability
       .replace(/(^|\n)(#{1,6}\s+)/g, '\n\n$2')
       .replace(/(#{1,6}.*?)(\n|$)/g, '$1\n\n')
+      // Ensure proper spacing around horizontal rules
+      .replace(/(<hr>)/g, '\n\n$1\n\n')
       // Clean up excessive spacing
       .replace(/\n{4,}/g, '\n\n\n')
       .trim();
@@ -777,9 +807,22 @@ const PublicLessonView = ({
     const cleanedMain = main_content ? cleanupRemainingAsterisks(cleanContentPart(main_content)) : '';
     const cleanedConclusion = conclusion ? cleanupRemainingAsterisks(cleanContentPart(conclusion)) : '';
     
-    const result = [cleanedIntro, cleanedMain, cleanedConclusion]
-      .filter(Boolean)
-      .join('\n\n')
+    // Create sections with clear section headers and proper spacing
+    const sections = [];
+    
+    if (cleanedIntro) {
+      sections.push(`## Introduction\n\n${cleanedIntro}`);
+    }
+    
+    if (cleanedMain) {
+      sections.push(`## Main Content\n\n${cleanedMain}`);
+    }
+    
+    if (cleanedConclusion) {
+      sections.push(`## Conclusion\n\n${cleanedConclusion}`);
+    }
+    
+    const result = sections.join('\n\n---\n\n')
       .replace(/\|\|\|---\|\|\|/g, '') // Final cleanup of any remaining patterns
       .replace(/\|\|\|/g, ''); // Final cleanup of any remaining ||| patterns
     
@@ -891,6 +934,8 @@ const PublicLessonView = ({
         // Ensure proper spacing around headers
         .replace(/(<h[1-6][^>]*>)/g, '\n\n$1')
         .replace(/(<\/h[1-6]>)/g, '$1\n\n')
+        // Ensure proper spacing around horizontal rules
+        .replace(/(<hr[^>]*>)/g, '\n\n$1\n\n')
         // Clean up excessive whitespace
         .replace(/\n{3,}/g, '\n\n')
         .trim();
@@ -904,7 +949,10 @@ const PublicLessonView = ({
         hasConclusionKey: displayContent.includes('"conclusion":'),
         displayContentLength: displayContent.length,
         parsedContentLength: parsedContent.length,
-        hasParagraphTags: parsedContent.includes('<p>')
+        hasParagraphTags: parsedContent.includes('<p>'),
+        hasSectionHeaders: parsedContent.includes('<h2>'),
+        hasHorizontalRules: parsedContent.includes('<hr>'),
+        contentPreview: parsedContent.substring(0, 500) + '...'
       });
     }
   } catch (error) {
