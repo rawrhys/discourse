@@ -17,7 +17,7 @@ import performanceMonitor from '../services/PerformanceMonitorService';
 import api from '../services/api.js';
 import quizPersistenceService from '../services/QuizPersistenceService';
 import markdownService from '../services/MarkdownService';
-import { fixMalformedContent, formatContentForDisplay, cleanContentFormatting, validateContent } from '../utils/contentFormatter';
+import { fixMalformedContent, formatContentForDisplay, cleanContentFormatting, validateContent, getContentAsString } from '../utils/contentFormatter';
 import AcademicReferencesFooter from './AcademicReferencesFooter';
 import academicReferencesService from '../services/AcademicReferencesService';
 
@@ -280,7 +280,10 @@ const Content = memo(({ content, bibliography, lessonTitle, courseSubject }) => 
       
       console.log('[LessonView] Academic references generated:', {
         referencesCount: references.length,
-        references: references
+        references: references,
+        lessonContentStringLength: lessonContentString?.length || 0,
+        courseSubject,
+        lessonTitle
       });
     } catch (error) {
       console.error('[LessonView] Error generating academic references:', error);
@@ -335,6 +338,9 @@ const Content = memo(({ content, bibliography, lessonTitle, courseSubject }) => 
   try {
     if (academicReferences && academicReferences.length > 0) {
       referencesFooter = academicReferencesService.createReferencesFooter(academicReferences);
+      console.log('[LessonView] Created references footer:', referencesFooter);
+    } else {
+      console.log('[LessonView] No academic references available:', academicReferences);
     }
   } catch (error) {
     console.warn('[LessonView] Error creating references footer:', error);
