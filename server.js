@@ -5167,7 +5167,8 @@ app.use('/images', express.static(imageLibraryDir, {
 // Trust proxy setting already configured above
 
 // --- IMAGE CACHE HELPERS ---
-const imageCacheDir = path.resolve(__dirname, 'data', 'image_cache');
+// imageCacheDir is already imported from diskImageCache.js
+// Ensure the directory exists
 if (!fs.existsSync(imageCacheDir)) {
   fs.mkdirSync(imageCacheDir, { recursive: true });
 }
