@@ -3804,6 +3804,22 @@ app.get('/api/captcha/verify/:courseId',
     const { courseId } = req.params;
     const { challenge, response, challengeKey } = req.query;
     
+    // Validate courseId parameter
+    if (!courseId || typeof courseId !== 'string' || courseId.trim() === '') {
+      console.error('[API] Invalid courseId parameter:', courseId);
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid course identifier.',
+        requiresCaptcha: true
+      });
+    }
+    
+    // Ensure global.captchaChallenges map exists
+    if (!global.captchaChallenges || !(global.captchaChallenges instanceof Map)) {
+      console.error('[API] Global captchaChallenges map not initialized');
+      global.captchaChallenges = new Map();
+    }
+    
     console.log(`[API] CAPTCHA verification for course ${courseId}:`, { challenge, response, challengeKey });
     
     // Verify CAPTCHA response
@@ -3831,14 +3847,56 @@ app.get('/api/captcha/verify/:courseId',
       const normalizedStored = storedChallenge ? normalizeChallenge(storedChallenge.challenge) : null;
       
       if (storedChallenge && normalizedStored === normalizedReceived) {
-        const expectedAnswer = storedChallenge.answer || eval(challenge.replace(/[×÷]/g, (match) => {
-          return match === '×' ? '*' : '/';
-        })); // Use stored answer or fallback to eval
+        let expectedAnswer;
+        try {
+          // Use stored answer if available, otherwise calculate from challenge
+          if (storedChallenge.answer !== undefined && storedChallenge.answer !== null) {
+            expectedAnswer = storedChallenge.answer;
+          } else {
+            // Safely calculate answer from challenge string
+            const sanitizedChallenge = challenge.replace(/[×÷]/g, (match) => {
+              return match === '×' ? '*' : '/';
+            });
+            // Use Function constructor instead of eval for safer execution
+            expectedAnswer = new Function(`return ${sanitizedChallenge}`)();
+          }
+        } catch (calcError) {
+          console.error('[API] Error calculating expected answer:', calcError);
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid challenge format. Please refresh and try again.',
+            requiresCaptcha: true
+          });
+        }
+        
         const userAnswer = parseInt(response);
+        
+        // Validate that we have a valid expected answer
+        if (isNaN(expectedAnswer) || expectedAnswer === undefined) {
+          console.error('[API] Invalid expected answer:', expectedAnswer);
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid challenge. Please refresh and try again.',
+            requiresCaptcha: true
+          });
+        }
         
         if (userAnswer === expectedAnswer) {
           // CAPTCHA passed - create session and redirect to course
-          const sessionId = publicCourseSessionService.createSession(courseId);
+          let sessionId;
+          try {
+            if (!publicCourseSessionService || typeof publicCourseSessionService.createSession !== 'function') {
+              throw new Error('Public course session service not available');
+            }
+            sessionId = publicCourseSessionService.createSession(courseId);
+          } catch (sessionError) {
+            console.error('[API] Error creating session:', sessionError);
+            return res.status(500).json({
+              success: false,
+              message: 'Failed to create session. Please try again.',
+              requiresCaptcha: true
+            });
+          }
           global.captchaChallenges.delete(challengeKey); // Clean up
           
           console.log(`[API] CAPTCHA passed for course ${courseId}, created session: ${sessionId}`);
@@ -3902,26 +3960,69 @@ app.get('/api/captcha/verify/:courseId',
     
     // Randomly select a challenge type
     const selectedType = challengeTypes[Math.floor(Math.random() * challengeTypes.length)];
-    const challengeInfo = selectedType.generate();
+    let challengeInfo;
+    try {
+      challengeInfo = selectedType.generate();
+      
+      // Validate challenge info
+      if (!challengeInfo || typeof challengeInfo !== 'object') {
+        throw new Error('Invalid challenge info generated');
+      }
+    } catch (genError) {
+      console.error('[API] Error generating challenge:', genError);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to generate verification challenge. Please try again.',
+        requiresCaptcha: true
+      });
+    }
     
     // Generate challenge display text based on type
     let challengeData;
-    if (challengeInfo.question && challengeInfo.displayText) {
-      // For non-math challenges, use the question format
-      challengeData = challengeInfo.question;
-    } else {
-      // For math challenges, use the standard format
-      challengeData = `${challengeInfo.num1} ${challengeInfo.operator} ${challengeInfo.num2}`;
+    try {
+      if (challengeInfo.question && challengeInfo.displayText) {
+        // For non-math challenges, use the question format
+        challengeData = challengeInfo.question;
+      } else {
+        // For math challenges, use the standard format
+        challengeData = `${challengeInfo.num1} ${challengeInfo.operator} ${challengeInfo.num2}`;
+      }
+      
+      // Validate challenge data
+      if (!challengeData || typeof challengeData !== 'string') {
+        throw new Error('Invalid challenge data generated');
+      }
+    } catch (formatError) {
+      console.error('[API] Error formatting challenge:', formatError);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to format verification challenge. Please try again.',
+        requiresCaptcha: true
+      });
     }
     
     const newChallengeKey = `captcha_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
-    global.captchaChallenges.set(newChallengeKey, {
-      challenge: challengeData,
-      answer: challengeInfo.answer,
-      sessionId: null,
-      timestamp: Date.now()
-    });
+    try {
+      // Validate challenge info before storing
+      if (!challengeInfo.answer || isNaN(challengeInfo.answer)) {
+        throw new Error('Invalid challenge answer');
+      }
+      
+      global.captchaChallenges.set(newChallengeKey, {
+        challenge: challengeData,
+        answer: challengeInfo.answer,
+        sessionId: null,
+        timestamp: Date.now()
+      });
+    } catch (storageError) {
+      console.error('[API] Error storing challenge:', storageError);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to store verification challenge. Please try again.',
+        requiresCaptcha: true
+      });
+    }
     
     console.log(`[API] Generated CAPTCHA for course ${courseId}:`, { 
       challenge: challengeData, 
@@ -3938,7 +4039,24 @@ app.get('/api/captcha/verify/:courseId',
     });
   } catch (error) {
     console.error('[API] CAPTCHA verification error:', error);
-    res.status(500).json({ error: 'CAPTCHA verification failed' });
+    
+    // Provide more specific error messages based on error type
+    let errorMessage = 'CAPTCHA verification failed';
+    let statusCode = 500;
+    
+    if (error.name === 'TypeError' || error.name === 'ReferenceError') {
+      errorMessage = 'Invalid challenge format. Please refresh and try again.';
+      statusCode = 400;
+    } else if (error.message && error.message.includes('challenge')) {
+      errorMessage = 'Invalid challenge. Please refresh and try again.';
+      statusCode = 400;
+    }
+    
+    res.status(statusCode).json({ 
+      success: false,
+      error: errorMessage,
+      requiresCaptcha: true 
+    });
   }
 });
 
