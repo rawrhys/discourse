@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import imagePerformanceMonitor from '../services/ImagePerformanceMonitor';
+import imagePreloadService from '../services/ImagePreloadService';
 
 const Image = ({ 
   src, 
