@@ -69,7 +69,13 @@ const CaptchaPage = () => {
         // CAPTCHA failed
         setAttempts(prev => prev + 1);
         setResponse('');
-        setError(result.message || 'Incorrect answer. Please try again.');
+        
+        // Check if it's a challenge match error and provide better feedback
+        if (result.message && result.message.includes('Invalid or expired challenge')) {
+          setError('Challenge verification failed. Please try the "New Challenge" button to get a fresh challenge.');
+        } else {
+          setError(result.message || 'Incorrect answer. Please try again.');
+        }
         
         if (attempts >= 2) {
           setError('Too many failed attempts. Please refresh the page to try again.');
@@ -103,6 +109,7 @@ const CaptchaPage = () => {
       if (response.ok && result.success) {
         console.log('[CaptchaPage] New challenge received:', result);
         setCaptchaData(result);
+        setError(null); // Clear any previous errors
       } else {
         console.error('[CaptchaPage] Failed to get new challenge:', result);
         setError('Failed to generate new challenge. Please try again.');

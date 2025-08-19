@@ -3821,8 +3821,12 @@ app.get('/api/captcha/verify/:courseId',
         userResponse: response
       });
       
-      // Normalize challenge strings for comparison (remove extra spaces)
-      const normalizeChallenge = (challengeStr) => challengeStr.replace(/\s+/g, ' ').trim();
+      // Normalize challenge strings for comparison (handle URL encoding issues)
+      const normalizeChallenge = (challengeStr) => {
+        // Decode URL-encoded characters and normalize spaces
+        const decoded = decodeURIComponent(challengeStr);
+        return decoded.replace(/\s+/g, ' ').trim();
+      };
       const normalizedReceived = normalizeChallenge(challenge);
       const normalizedStored = storedChallenge ? normalizeChallenge(storedChallenge.challenge) : null;
       
@@ -3893,19 +3897,7 @@ app.get('/api/captcha/verify/:courseId',
         const answer = Math.floor(Math.random() * 6) + 1; // 1-6
         return { num1, num2, operator: '÷', answer: answer };
       }},
-      { type: 'counting', operator: 'count', generate: () => {
-        const items = ['apples', 'bananas', 'oranges', 'books', 'pens', 'cars', 'houses', 'trees', 'stars', 'flowers'];
-        const item = items[Math.floor(Math.random() * items.length)];
-        const count = Math.floor(Math.random() * 8) + 2; // 2-9
-        return { 
-          num1: count, 
-          num2: 0, 
-          operator: 'count', 
-          answer: count,
-          question: `How many ${item} are there?`,
-          displayText: `${count} ${item}`
-        };
-      }},
+      // Removed counting challenges as they don't make sense without visual context
       { type: 'sequence', operator: 'next', generate: () => {
         const sequences = [
           { pattern: [2, 4, 6, 8], answer: 10, description: '2, 4, 6, 8, ?' },
@@ -4038,19 +4030,7 @@ app.get('/api/captcha/new/:courseId',
         const num1 = num2 * answer;
         return { num1, num2, operator: '÷', answer: answer };
       }},
-      { type: 'counting', operator: 'count', generate: () => {
-        const items = ['apples', 'bananas', 'oranges', 'books', 'pens', 'cars', 'houses', 'trees', 'stars', 'flowers'];
-        const item = items[Math.floor(Math.random() * items.length)];
-        const count = Math.floor(Math.random() * 8) + 2; // 2-9
-        return { 
-          num1: count, 
-          num2: 0, 
-          operator: 'count', 
-          answer: count,
-          question: `How many ${item} are there?`,
-          displayText: `${count} ${item}`
-        };
-      }},
+      // Removed counting challenges as they don't make sense without visual context
       { type: 'sequence', operator: 'next', generate: () => {
         const sequences = [
           { pattern: [2, 4, 6, 8], answer: 10, description: '2, 4, 6, 8, ?' },
@@ -4115,7 +4095,7 @@ app.get('/api/captcha/new/:courseId',
       // For non-math challenges, use the question format
       challengeData = challengeInfo.question;
     } else {
-      // For math challenges, use the standard format
+      // For math challenges, use the standard format with proper encoding
       challengeData = `${challengeInfo.num1} ${challengeInfo.operator} ${challengeInfo.num2}`;
     }
     
