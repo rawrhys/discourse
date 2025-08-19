@@ -3850,6 +3850,15 @@ app.get('/api/captcha/verify/:courseId',
       const normalizedReceived = normalizeChallenge(challenge);
       const normalizedStored = storedChallenge ? normalizeChallenge(storedChallenge.challenge) : null;
       
+      console.log(`[API] CAPTCHA NORMALIZATION DEBUG:`, {
+        originalChallenge: challenge,
+        originalStoredChallenge: storedChallenge?.challenge,
+        normalizedReceived,
+        normalizedStored,
+        challengeMatch: normalizedStored === normalizedReceived,
+        challengeKey: challengeKey
+      });
+      
       // Debug logging for challenge comparison
       console.log(`[API] CAPTCHA verification details:`, {
         receivedChallenge: challenge,
@@ -3858,18 +3867,21 @@ app.get('/api/captcha/verify/:courseId',
         normalizedStored,
         challengeKey,
         storedAnswer: storedChallenge?.answer,
-        userResponse
+        userResponse: response,
+        challengeExists: !!storedChallenge,
+        challengeMatch: normalizedStored === normalizedReceived
       });
       
       if (storedChallenge && normalizedStored === normalizedReceived) {
         let expectedAnswer;
         try {
-          // Use stored answer if available, otherwise calculate from challenge
+          // Always use the stored answer - it's more reliable than recalculating
           if (storedChallenge.answer !== undefined && storedChallenge.answer !== null) {
             expectedAnswer = storedChallenge.answer;
           } else {
-            // Safely calculate answer from challenge string
-            const sanitizedChallenge = challenge.replace(/[×÷]/g, (match) => {
+            // Fallback: try to calculate from the stored challenge (not the URL-encoded one)
+            const storedChallengeText = storedChallenge.challenge;
+            const sanitizedChallenge = storedChallengeText.replace(/[×÷]/g, (match) => {
               return match === '×' ? '*' : '/';
             });
             // Use Function constructor instead of eval for safer execution
@@ -3877,6 +3889,11 @@ app.get('/api/captcha/verify/:courseId',
           }
         } catch (calcError) {
           console.error('[API] Error calculating expected answer:', calcError);
+          console.error('[API] Challenge calculation details:', {
+            storedAnswer: storedChallenge?.answer,
+            storedChallenge: storedChallenge?.challenge,
+            receivedChallenge: challenge
+          });
           return res.status(400).json({
             success: false,
             message: 'Invalid challenge format. Please refresh and try again.',
@@ -3935,7 +3952,14 @@ app.get('/api/captcha/verify/:courseId',
           challengeExists: !!storedChallenge,
           challengeMatch: storedChallenge ? normalizedStored === normalizedReceived : false,
           normalizedReceived,
-          normalizedStored
+          normalizedStored,
+          challengeKey: challengeKey,
+          storedChallengeExists: !!storedChallenge,
+          storedChallengeData: storedChallenge ? {
+            challenge: storedChallenge.challenge,
+            answer: storedChallenge.answer,
+            timestamp: storedChallenge.timestamp
+          } : null
         });
         
         return res.status(400).json({

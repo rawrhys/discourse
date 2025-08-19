@@ -8,8 +8,8 @@ import slowDown from 'express-slow-down';
 import helmet from 'helmet';
 import UserAgent from 'user-agents';
 
-// In-memory storage for CAPTCHA challenges (since we don't have express-session)
-const captchaChallenges = new Map();
+// Use global CAPTCHA challenges map instead of local one
+// const captchaChallenges = new Map(); // Removed local map
 const botDetectionData = new Map();
 
 // Cleanup function to prevent memory leaks
