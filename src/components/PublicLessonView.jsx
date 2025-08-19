@@ -16,6 +16,40 @@ if (process.env.NODE_ENV === 'development') {
 import Flashcard from './Flashcard';
 import './LessonView.css';
 
+// Add CSS for proper paragraph spacing in public lesson view
+const publicLessonStyles = `
+  .lesson-content-text p {
+    margin-top: 1.5rem !important;
+    margin-bottom: 1.5rem !important;
+    line-height: 1.8 !important;
+    color: #374151 !important;
+    text-align: justify !important;
+  }
+  
+  .lesson-content-text p:first-child {
+    margin-top: 0 !important;
+  }
+  
+  .lesson-content-text p:last-child {
+    margin-bottom: 0 !important;
+  }
+  
+  .lesson-content-text {
+    line-height: 1.7 !important;
+  }
+  
+  .lesson-content-text h1,
+  .lesson-content-text h2,
+  .lesson-content-text h3,
+  .lesson-content-text h4,
+  .lesson-content-text h5,
+  .lesson-content-text h6 {
+    margin-top: 2rem !important;
+    margin-bottom: 1rem !important;
+    line-height: 1.4 !important;
+  }
+`;
+
 const PublicLessonView = ({ 
   lesson, 
   moduleTitle, 
@@ -772,6 +806,7 @@ const PublicLessonView = ({
 
   return (
     <div className="lesson-view bg-white rounded-lg shadow-sm overflow-hidden">
+      <style>{publicLessonStyles}</style>
       {/* Lesson Header */}
       <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6">
         <div className="flex items-center justify-between mb-4">
@@ -875,7 +910,7 @@ const PublicLessonView = ({
 
        {/* Content View */}
        {view === 'content' && (
-         <div className="p-6 space-y-8">
+         <div>
            {/* Image Section - Above content like private LessonView */}
            {imageLoading && (
              <div className="lesson-image-container loading mb-6">
@@ -932,24 +967,24 @@ const PublicLessonView = ({
              </figure>
            )}
 
-           {/* Lesson Content */}
+           {/* Lesson Content - Match private LessonView structure exactly */}
            <div className="prose max-w-none lesson-content">
              <div 
-               className="markdown-body"
+               className="markdown-body lesson-content-text"
               dangerouslySetInnerHTML={{ 
                 __html: parsedContent 
               }}
              />
            </div>
           
-                  {/* Academic References Footer */}
+           {/* Academic References Footer */}
            <div className="mt-8">
-        {referencesFooter && referencesFooter.references && (
-          <AcademicReferencesFooter 
-            references={referencesFooter.references}
-            onCitationClick={handleCitationClick}
-          />
-        )}
+             {referencesFooter && referencesFooter.references && (
+               <AcademicReferencesFooter 
+                 references={referencesFooter.references}
+                 onCitationClick={handleCitationClick}
+               />
+             )}
            </div>
          </div>
        )}
