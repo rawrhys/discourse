@@ -1043,8 +1043,16 @@ class TTSService {
             const fallbackTimeout = setTimeout(() => {
               if (!hasResolved) {
                 hasResolved = true;
-                console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} fallback timeout reached, forcing resolve`);
-                resolve();
+                console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} fallback timeout reached, checking stop state...`);
+                
+                // Only force resolve if we haven't been stopped
+                if (!this.isStopped) {
+                  console.warn(`[${this.serviceType} TTS] Chunk ${i + 1} forcing resolve (not stopped)`);
+                  resolve();
+                } else {
+                  console.log(`[${this.serviceType} TTS] Chunk ${i + 1} timeout reached but TTS was stopped, not forcing resolve`);
+                  // Don't resolve - let the stop mechanism handle it
+                }
               }
             }, 30000); // 30 second timeout
             
@@ -1057,6 +1065,8 @@ class TTSService {
                 // Check if we've been stopped after chunk completion
                 if (this.isStopped) {
                   console.log(`[${this.serviceType} TTS] Stop detected after chunk ${i + 1} completion, ending chunked speech`);
+                  // Don't resolve if stopped - let the stop mechanism handle it
+                  return;
                 }
                 resolve();
               }
@@ -1071,6 +1081,8 @@ class TTSService {
                 // Check if we've been stopped after chunk error
                 if (this.isStopped) {
                   console.log(`[${this.serviceType} TTS] Stop detected after chunk ${i + 1} error in speakChunksFrom, ending chunked speech`);
+                  // Don't resolve if stopped - let the stop mechanism handle it
+                  return;
                 }
                 // Try to reinitialize if there's a voice error
                 if (error && (error.includes('voice') || error.includes('not-allowed'))) {
@@ -1097,9 +1109,32 @@ class TTSService {
           }
         });
         
-        // Remove timeout promise to prevent forcing chunk completion
-        // Let the speak-tts promise resolve naturally when speech completes or is cancelled
-        await chunkPromise;
+        // Wait for chunk promise with stop state checking
+        try {
+          // Create a timeout promise that checks stop state
+          const timeoutPromise = new Promise((resolve, reject) => {
+            const checkInterval = setInterval(() => {
+              if (this.isStopped) {
+                clearInterval(checkInterval);
+                reject(new Error('TTS_STOPPED'));
+              }
+            }, 100); // Check every 100ms
+            
+            // Clear interval after 30 seconds to prevent memory leaks
+            setTimeout(() => {
+              clearInterval(checkInterval);
+            }, 30000);
+          });
+          
+          // Race between chunk completion and stop detection
+          await Promise.race([chunkPromise, timeoutPromise]);
+        } catch (error) {
+          if (error.message === 'TTS_STOPPED') {
+            console.log(`[${this.serviceType} TTS] Chunk ${i + 1} stopped during execution`);
+            return; // Exit the chunk loop
+          }
+          throw error; // Re-throw other errors
+        }
         
         console.log(`[${this.serviceType} TTS] Chunk ${i + 1} promise resolved, checking state...`);
         
