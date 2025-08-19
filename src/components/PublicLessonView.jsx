@@ -240,6 +240,96 @@ const PublicLessonView = ({
   const ttsStateUpdateTimeoutRef = useRef(null); // For debouncing state updates
   const isLessonChanging = useRef(false); // Track lesson changes to prevent TTS conflicts
 
+  // Deferred rendering for better performance
+  const [renderPhase, setRenderPhase] = useState('initial'); // initial, content, images, references
+  const [deferredContent, setDeferredContent] = useState(null);
+  const [deferredReferences, setDeferredReferences] = useState(null);
+  const renderQueueRef = useRef([]);
+
+  // Initial render - just the essential content
+  useEffect(() => {
+    if (!lesson?.content) return;
+    
+    setRenderPhase('initial');
+    
+    // Render core content immediately
+    const coreContent = cleanAndCombineContent(lesson.content);
+    setDeferredContent(coreContent);
+    
+    // Schedule deferred rendering for non-essential elements
+    const scheduleDeferredRender = () => {
+      if ('requestIdleCallback' in window) {
+        requestIdleCallback(() => {
+          setRenderPhase('content');
+          
+          // Schedule image rendering
+          requestIdleCallback(() => {
+            setRenderPhase('images');
+          }, { timeout: 1000 });
+          
+          // Schedule references rendering
+          requestIdleCallback(() => {
+            setRenderPhase('references');
+          }, { timeout: 2000 });
+        }, { timeout: 500 });
+      } else {
+        // Fallback for browsers without requestIdleCallback
+        setTimeout(() => setRenderPhase('content'), 100);
+        setTimeout(() => setRenderPhase('images'), 500);
+        setTimeout(() => setRenderPhase('references'), 1000);
+      }
+    };
+    
+    scheduleDeferredRender();
+  }, [lesson?.content]);
+
+  // Deferred academic references generation
+  useEffect(() => {
+    if (renderPhase !== 'references' || !deferredContent || !subject) return;
+    
+    const generateReferences = async () => {
+      try {
+        console.log('[PublicLessonView] Generating academic references for:', lesson.title);
+        
+        const references = AcademicReferencesService.generateReferences(
+          deferredContent,
+          subject,
+          lesson.title,
+          courseDescription
+        );
+        
+        setAcademicReferences(references);
+        
+        // Generate content with inline citations
+        const { content: contentWithInlineCitations } = AcademicReferencesService.generateInlineCitations(
+          deferredContent,
+          references
+        );
+        
+        setDeferredContent(contentWithInlineCitations);
+        
+        console.log('[PublicLessonView] Academic references generated:', references);
+        
+        // Create references footer
+        try {
+          if (references && references.length > 0) {
+            const footer = AcademicReferencesService.createReferencesFooter(references);
+            setReferencesFooter(footer);
+            console.log('[PublicLessonView] Created references footer:', footer);
+          }
+        } catch (error) {
+          console.warn('[PublicLessonView] Failed to create references footer:', error);
+        }
+        
+      } catch (error) {
+        console.error('[PublicLessonView] Failed to generate academic references:', error);
+        setAcademicReferences([]);
+      }
+    };
+    
+    generateReferences();
+  }, [renderPhase, deferredContent, subject, lesson?.title, courseDescription]);
+
   // Get flashcards data
   const flashcardData = lesson?.flashcards || lesson?.content?.flashcards || [];
 
@@ -592,20 +682,29 @@ const PublicLessonView = ({
     };
   }, [ttsStatus.isPlaying, ttsStatus.isPaused]); // Added dependencies back for proper updates
 
-  // Handle image loading for public courses with enhanced debouncing
+  // Handle image loading for public courses with enhanced debouncing and deferred rendering
   useEffect(() => {
-    if (!lesson?.title || !subject || !courseId) return;
+    if (!lesson?.title || !subject || !courseId || renderPhase !== 'images') return;
 
     setImageLoading(true);
     setImageData(null);
     
-    // Use debounced image search to prevent multiple simultaneous requests
-    debouncedImageSearch(lesson, subject, courseId, usedImageTitles, usedImageUrls, courseDescription);
+    // Defer image loading to idle time to prevent blocking
+    const loadImage = () => {
+      debouncedImageSearch(lesson, subject, courseId, usedImageTitles, usedImageUrls, courseDescription);
+    };
+    
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(loadImage, { timeout: 1000 });
+    } else {
+      // Fallback for browsers without requestIdleCallback
+      setTimeout(loadImage, 100);
+    }
     
     return () => {
       // Cleanup is handled by the debounced function
     };
-  }, [lesson?.id, lesson?.title, subject, courseId, debouncedImageSearch]); // Include debounced function in dependencies
+  }, [lesson?.id, lesson?.title, subject, courseId, renderPhase, debouncedImageSearch]); // Include renderPhase in dependencies
 
   // Start preloading lesson image as soon as lesson data is available
   useEffect(() => {

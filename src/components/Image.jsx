@@ -11,6 +11,7 @@ const Image = ({
   preload = false, 
   priority = false,
   placeholder = null,
+  timeout = 3000, // 3 second timeout for fallback
   ...props 
 }) => {
   const [isLoaded, setIsLoaded] = useState(false);
@@ -18,10 +19,12 @@ const Image = ({
   const [isInView, setIsInView] = useState(!lazy || preload);
   const [lowQualitySrc, setLowQualitySrc] = useState(null);
   const [aspectRatio, setAspectRatio] = useState(null);
+  const [showFallback, setShowFallback] = useState(false);
   
   const pictureRef = useRef(null);
   const imgRef = useRef(null);
   const preloadLinkRef = useRef(null);
+  const timeoutRef = useRef(null);
 
   // Determine if we should show the image
   const shouldShowImage = isInView || preload;
@@ -104,8 +107,15 @@ const Image = ({
     const startTime = parseInt(img.dataset.startTime || '0');
     const loadTime = Date.now() - startTime;
     
+    // Clear timeout since image loaded successfully
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    
     setIsLoaded(true);
     setIsError(false);
+    setShowFallback(false);
     
     // Log slow loads for monitoring
     if (loadTime > 3000) {
@@ -120,6 +130,12 @@ const Image = ({
     console.error(`[Image] Failed to load: ${src}`);
     setIsError(true);
     
+    // Clear timeout since we're handling the error
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    
     // Try fallback to original URL if using proxy
     if (src && src.includes('/api/image/')) {
       const originalUrl = src.replace(/.*url=/, '').replace(/&.*/, '');
@@ -129,121 +145,118 @@ const Image = ({
         return;
       }
     }
+    
+    // Show fallback placeholder
+    setShowFallback(true);
   }, [src]);
+
+  // Set up timeout for slow loading images
+  useEffect(() => {
+    if (shouldShowImage && src && !isLoaded && !isError) {
+      timeoutRef.current = setTimeout(() => {
+        console.warn(`[Image] Timeout after ${timeout}ms for: ${src}`);
+        setShowFallback(true);
+      }, timeout);
+    }
+
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+  }, [shouldShowImage, src, isLoaded, isError, timeout]);
 
   // Improved preload strategy with cleanup - only preload if not already loaded and not handled by ImagePreloadService
   useEffect(() => {
-    if (priority && src && shouldShowImage && !isLoaded) {
-      // Check if ImagePreloadService is already handling this image
-      const isHandledByService = imagePreloadService.isPreloaded(src);
-      
-      if (!isHandledByService) {
-        // Remove existing preload link if any
-        if (preloadLinkRef.current) {
-          document.head.removeChild(preloadLinkRef.current);
+    if (!shouldShowImage || isLoaded || !src) return;
+
+    // Use requestIdleCallback for non-critical preloading
+    const preloadImage = () => {
+      if (priority && imgRef.current) {
+        // High priority images get immediate preload
+        imagePreloadService.preloadImage(src, 'high');
+      } else {
+        // Low priority images use idle time
+        if ('requestIdleCallback' in window) {
+          requestIdleCallback(() => {
+            imagePreloadService.preloadImage(src, 'low');
+          }, { timeout: 2000 });
+        } else {
+          // Fallback for browsers without requestIdleCallback
+          setTimeout(() => {
+            imagePreloadService.preloadImage(src, 'low');
+          }, 100);
         }
-        
-        const link = document.createElement('link');
-        link.rel = 'preload';
-        link.as = 'image';
-        link.href = src;
-        link.fetchPriority = 'high';
-        preloadLinkRef.current = link;
-        document.head.appendChild(link);
       }
-      
-      return () => {
-        if (preloadLinkRef.current && document.head.contains(preloadLinkRef.current)) {
-          document.head.removeChild(preloadLinkRef.current);
-          preloadLinkRef.current = null;
-        }
-      };
-    }
+    };
+
+    preloadImage();
   }, [priority, src, shouldShowImage, isLoaded]);
 
   // Memoized srcSet creation for better performance - only create if needed
-  const webpSrcSet = useMemo(() => {
-    if (!shouldShowImage || isLoaded) return '';
+  const srcSet = useMemo(() => {
+    if (!shouldShowImage || !src) return '';
     return createSrcSet(src, 'webp');
-  }, [createSrcSet, src, shouldShowImage, isLoaded]);
-  
-  const jpegSrcSet = useMemo(() => {
-    if (!shouldShowImage || isLoaded) return '';
-    return createSrcSet(src, 'jpeg');
-  }, [createSrcSet, src, shouldShowImage, isLoaded]);
+  }, [shouldShowImage, src, createSrcSet]);
 
-  const actualSrc = shouldShowImage ? src : 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+  // Fallback placeholder image
+  const fallbackImage = 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png';
 
-  // Calculate container styles to prevent layout shifts
-  const containerStyle = useMemo(() => ({
-    ...style, 
-    position: 'relative',
-    display: 'block',
-    overflow: 'hidden',
-    aspectRatio: aspectRatio ? `${1 / aspectRatio}` : 'auto',
-    minHeight: aspectRatio ? '200px' : 'auto'
-  }), [style, aspectRatio]);
+  // If showing fallback, render placeholder
+  if (showFallback) {
+    return (
+      <div 
+        ref={pictureRef}
+        className={`image-fallback ${className}`}
+        style={{
+          ...style,
+          backgroundImage: `url(${fallbackImage})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundColor: '#f3f4f6',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: '200px'
+        }}
+        {...props}
+      >
+        <span style={{ color: '#6b7280', fontSize: '14px' }}>
+          Image unavailable
+        </span>
+      </div>
+    );
+  }
 
   return (
-    <picture 
-      ref={pictureRef} 
-      className={`image-container ${className}`} 
-      style={containerStyle}
-    >
-      {/* Low-quality placeholder for blur-up effect - only show if not loaded */}
-      {!isLoaded && lowQualitySrc && !placeholder && (
-        <img
-          src={lowQualitySrc}
-          alt=""
-          className="absolute inset-0 w-full h-full object-cover blur-sm scale-110"
-          style={{ zIndex: 1 }}
-          aria-hidden="true"
+    <picture ref={pictureRef} className={className}>
+      {/* WebP format for better performance */}
+      {srcSet && (
+        <source
+          type="image/webp"
+          srcSet={srcSet}
+          sizes="(max-width: 768px) 100vw, 800px"
         />
       )}
-
-      {/* Progressive loading skeleton - only show if not loaded and no placeholder */}
-      {!isLoaded && !lowQualitySrc && !placeholder && (
-        <div
-          className="absolute inset-0 bg-gradient-to-br from-gray-200 to-gray-300 animate-pulse"
-          style={{ zIndex: 1 }}
-        />
-      )}
-
-      {/* Main image element with better loading attributes */}
+      
       <img
         ref={imgRef}
-        src={actualSrc}
+        src={src}
         alt={alt}
-        loading={lazy ? 'lazy' : 'eager'}
-        decoding="async"
-        className={`
-          transition-all duration-300 ease-out
-          ${isLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-105'}
-          ${isError ? 'hidden' : ''}
-          w-full h-full object-cover
-        `}
+        className={`image-component ${isLoaded ? 'loaded' : 'loading'}`}
+        loading={priority ? 'eager' : 'lazy'}
+        fetchPriority={priority ? 'high' : 'low'}
         style={{
-          position: 'relative',
-          zIndex: 2,
+          ...style,
+          opacity: isLoaded ? 1 : 0.7,
+          transition: 'opacity 0.3s ease-in-out',
           ...(isLoaded ? {} : { filter: 'blur(1px)' })
         }}
         onLoad={handleImageLoad}
         onError={handleImageError}
         {...props}
       />
-
-      {/* Error state with better styling */}
-      {isError && (
-        <div
-          className="absolute inset-0 bg-gradient-to-br from-red-50 to-red-100 border-2 border-red-200 rounded-lg flex items-center justify-center"
-          style={{ zIndex: 3 }}
-        >
-          <div className="text-center p-4">
-            <div className="text-red-500 text-sm font-medium mb-2">Image not available</div>
-            <div className="text-red-400 text-xs">{alt || 'Failed to load image'}</div>
-          </div>
-        </div>
-      )}
     </picture>
   );
 };
@@ -256,7 +269,8 @@ Image.propTypes = {
   lazy: PropTypes.bool,
   preload: PropTypes.bool,
   priority: PropTypes.bool,
-  placeholder: PropTypes.string
+  placeholder: PropTypes.string,
+  timeout: PropTypes.number // Added timeout prop
 };
 
 export default Image; 

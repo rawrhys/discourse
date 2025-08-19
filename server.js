@@ -49,17 +49,21 @@ global.captchaChallenges = new Map();
 // Initialize global image search cache
 global.imageSearchCache = new Map();
 
-// Clean up old cache entries every 10 minutes
+// Initialize global image cache for better performance
+global.imageCache = new Map();
+global.imageCacheTimeout = 30 * 60 * 1000; // 30 minutes
+
+// Clean up old cache entries every 5 minutes
 setInterval(() => {
-  if (global.imageSearchCache) {
+  if (global.imageCache) {
     const now = Date.now();
-    for (const [key, value] of global.imageSearchCache.entries()) {
-      if (now - value.timestamp > 300000) { // 5 minutes
-        global.imageSearchCache.delete(key);
+    for (const [key, value] of global.imageCache.entries()) {
+      if (now - value.timestamp > global.imageCacheTimeout) {
+        global.imageCache.delete(key);
       }
     }
   }
-}, 600000); // 10 minutes
+}, 5 * 60 * 1000); // 5 minutes
 
 const app = express();
 
@@ -3733,7 +3737,7 @@ app.get('/api/image/proxy', (req, res) => {
   enhancedImageProxy.serveImage(req, res);
 });
 
-// Fast image proxy - direct serving without processing
+// Fast image proxy with caching - direct serving without processing
 app.get('/api/image/fast', async (req, res) => {
   try {
     const { url } = req.query;
@@ -3746,6 +3750,20 @@ app.get('/api/image/fast', async (req, res) => {
     const allowedDomains = ['upload.wikimedia.org', 'pixabay.com', 'images.unsplash.com'];
     if (!allowedDomains.some(domain => hostname.endsWith(domain))) {
       return res.status(403).json({ error: 'Forbidden domain' });
+    }
+
+    // Check server-side cache first
+    const cacheKey = `image_${Buffer.from(url).toString('base64')}`;
+    const cachedImage = global.imageCache.get(cacheKey);
+    
+    if (cachedImage && Date.now() - cachedImage.timestamp < global.imageCacheTimeout) {
+      console.log(`[FastImageProxy] Cache HIT for: ${url.substring(0, 50)}...`);
+      res.set('Content-Type', cachedImage.contentType);
+      res.set('Cache-Control', 'public, max-age=86400, s-maxage=86400, stale-while-revalidate=3600');
+      res.set('X-Fast-Path', 'true');
+      res.set('X-Cache-Hit', 'true');
+      res.set('X-Image-Size', cachedImage.buffer.length.toString());
+      return res.send(cachedImage.buffer);
     }
 
     // Enhanced fetch with better timeout and connection settings
@@ -3767,10 +3785,20 @@ app.get('/api/image/fast', async (req, res) => {
     const imageBuffer = Buffer.from(await response.arrayBuffer());
     const contentType = response.headers.get('content-type') || 'image/jpeg';
     
+    // Cache the image for future requests
+    global.imageCache.set(cacheKey, {
+      buffer: imageBuffer,
+      contentType,
+      timestamp: Date.now()
+    });
+    
+    console.log(`[FastImageProxy] Cached image: ${url.substring(0, 50)}... (${imageBuffer.length} bytes)`);
+    
     // Enhanced caching headers for better performance
     res.set('Content-Type', contentType);
     res.set('Cache-Control', 'public, max-age=86400, s-maxage=86400, stale-while-revalidate=3600');
     res.set('X-Fast-Path', 'true');
+    res.set('X-Cache-Hit', 'false');
     res.set('X-Image-Size', imageBuffer.length.toString());
     res.send(imageBuffer);
 
