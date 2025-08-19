@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo, useMemo } from 'react';
 import SimpleImageService from '../services/SimpleImageService';
 import imagePreloadService from '../services/ImagePreloadService';
 import lessonImagePreloader from '../services/LessonImagePreloader';
