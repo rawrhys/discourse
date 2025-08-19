@@ -3,7 +3,7 @@ class ImagePreloadService {
     this.preloadedImages = new Set();
     this.preloadQueue = [];
     this.isProcessing = false;
-    this.maxConcurrent = 2; // Reduced from 3 to 2 for better performance
+    this.maxConcurrent = 1; // Reduced to 1 for better performance and to prevent conflicts
     this.activePreloads = 0;
     this.preloadCache = new Map(); // Add cache to prevent duplicate preloads
   }

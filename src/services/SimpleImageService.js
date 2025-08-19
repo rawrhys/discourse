@@ -105,9 +105,9 @@ const SimpleImageService = {
         disableModeration: true
       };
 
-      // Add timeout to prevent hanging requests - reduced to 6 seconds
+      // Add timeout to prevent hanging requests - reduced to 3 seconds for faster failure
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000); // 6 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
       
       const response = await fetch(searchUrl, {
         method: 'POST',

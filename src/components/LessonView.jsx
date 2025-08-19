@@ -257,29 +257,30 @@ const Content = memo(({ content, bibliography, lessonTitle, courseSubject }) => 
   }
 
   // Generate academic references using the same service as PublicLessonView
-  const [academicReferences, setAcademicReferences] = useState([]);
   const [highlightedCitation, setHighlightedCitation] = useState(null);
   
-  useEffect(() => {
-    // Debounce academic references generation to prevent excessive processing
-    const timeoutId = setTimeout(() => {
-      try {
-        const lessonContentString = getContentAsString(content);
-        
-        console.log('[LessonView] Generating academic references for:', {
-          lessonTitle,
-          courseSubject,
-          contentLength: lessonContentString?.length || 0
-        });
+  // Memoize academic references to prevent regeneration on every render
+  const academicReferences = useMemo(() => {
+    if (!content || !lessonTitle || !courseSubject) return [];
+    
+    try {
+      const lessonContentString = getContentAsString(content);
       
+      // Only generate if content is substantial
+      if (lessonContentString.length < 100) return [];
+      
+      console.log('[LessonView] Generating academic references for:', {
+        lessonTitle,
+        courseSubject,
+        contentLength: lessonContentString?.length || 0
+      });
+    
       // Generate academic references using the same method as PublicLessonView
       const references = academicReferencesService.generateReferences(
         lessonContentString,
         courseSubject,
         lessonTitle
       );
-      
-      setAcademicReferences(references);
       
       console.log('[LessonView] Academic references generated:', {
         referencesCount: references.length,
@@ -288,13 +289,12 @@ const Content = memo(({ content, bibliography, lessonTitle, courseSubject }) => 
         courseSubject,
         lessonTitle
       });
-          } catch (error) {
-        console.error('[LessonView] Error generating academic references:', error);
-        setAcademicReferences([]);
-      }
-    }, 300); // 300ms debounce
-    
-    return () => clearTimeout(timeoutId);
+      
+      return references;
+    } catch (error) {
+      console.error('[LessonView] Error generating academic references:', error);
+      return [];
+    }
   }, [content, lessonTitle, courseSubject]);
 
   // Handle citation click
@@ -1159,6 +1159,12 @@ const LessonView = ({
       // Create a cache key for this lesson
       const cacheKey = `${propLesson.id}-${propLesson.title}-${subject}`;
       
+      // Check if we already have a cached result for this lesson
+      if (imageData && imageData.url && imageData.title) {
+        console.log('[LessonView] Using existing image data, skipping fetch');
+        return;
+      }
+      
       try {
         // Use the same simplified approach as PublicLessonView
         const result = await SimpleImageService.searchWithContext(
@@ -1181,6 +1187,11 @@ const LessonView = ({
         // Log slow image fetches
         if (fetchTime > 2000) {
           console.warn('[LessonView] Slow image fetch detected:', fetchTime + 'ms');
+        }
+        
+        // If fetch is too slow, don't retry immediately
+        if (fetchTime > 5000) {
+          console.warn('[LessonView] Very slow image fetch, may skip future attempts');
         }
         
         if (!ignore && !abortController.signal.aborted) {
@@ -1240,8 +1251,8 @@ const LessonView = ({
     const imageUrl = propLesson.image.imageUrl || propLesson.image.url;
     if (!imageUrl) return;
 
-    // Only preload if not already preloaded
-    if (!imagePreloadService.isPreloaded(imageUrl)) {
+    // Only preload if not already preloaded and not already loaded
+    if (!imagePreloadService.isPreloaded(imageUrl) && !imageData?.url) {
       const preloadCurrentImage = async () => {
         try {
           // Preload the current lesson's image with high priority
@@ -1259,16 +1270,17 @@ const LessonView = ({
       // Run preloading in background with higher priority
       preloadCurrentImage();
     } else {
-      console.log('[LessonView] Image already preloaded, skipping preload');
+      console.log('[LessonView] Image already preloaded or loaded, skipping preload');
     }
-  }, [propLesson?.id, propLesson?.image]);
+  }, [propLesson?.id, propLesson?.image, imageData?.url]);
 
-  // Clean up any remaining malformed asterisks after content is rendered
+  // Clean up any remaining malformed asterisks after content is rendered (optimized for performance)
   useEffect(() => {
     if (propLesson?.content) {
       const lessonContent = cleanAndCombineContent(propLesson.content);
-      // Use a timeout to ensure the DOM is updated
-      const timer = setTimeout(() => {
+      
+      // Use requestIdleCallback for better performance if available, otherwise use timeout
+      const cleanupFunction = () => {
         const markdownElements = document.querySelectorAll('.lesson-content .markdown-body');
         markdownElements.forEach(element => {
           // Only clean up obvious malformed patterns, not entire paragraphs
@@ -1277,9 +1289,15 @@ const LessonView = ({
             .replace(/\*\*\*\*\*/g, '**')
             .replace(/\*\*\*\*\*\*/g, '**');
         });
-      }, 100);
+      };
       
-      return () => clearTimeout(timer);
+      if (window.requestIdleCallback) {
+        const idleId = requestIdleCallback(cleanupFunction, { timeout: 1000 });
+        return () => window.cancelIdleCallback(idleId);
+      } else {
+        const timer = setTimeout(cleanupFunction, 100);
+        return () => clearTimeout(timer);
+      }
     }
   }, [propLesson?.content]);
 
@@ -1336,7 +1354,7 @@ const LessonView = ({
   }
 
   // Debug logging for image data (reduced frequency to prevent spam)
-  if (process.env.NODE_ENV === 'development' && Math.random() < 0.1) {
+  if (process.env.NODE_ENV === 'development' && Math.random() < 0.05) {
     console.log('[LessonView] Current imageData state:', imageData);
     console.log('[LessonView] imageLoading state:', imageLoading);
   }
