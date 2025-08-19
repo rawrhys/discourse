@@ -3801,6 +3801,7 @@ app.get('/api/captcha/verify/:courseId',
   publicCourseSlowDown,
   async (req, res) => {
   try {
+    
     const { courseId } = req.params;
     const { challenge, response, challengeKey } = req.query;
     
@@ -4062,6 +4063,7 @@ app.get('/api/captcha/verify/:courseId',
     });
   } catch (error) {
     console.error('[API] CAPTCHA verification error:', error);
+    console.error('[API] Error stack:', error.stack);
     
     // Provide more specific error messages based on error type
     let errorMessage = 'CAPTCHA verification failed';
@@ -4073,6 +4075,9 @@ app.get('/api/captcha/verify/:courseId',
     } else if (error.message && error.message.includes('challenge')) {
       errorMessage = 'Invalid challenge. Please refresh and try again.';
       statusCode = 400;
+    } else if (error.message && error.message.includes('import')) {
+      errorMessage = 'Service configuration error. Please try again.';
+      statusCode = 500;
     }
     
     res.status(statusCode).json({ 
@@ -5626,4 +5631,3 @@ app.get('*', (req, res, next) => {
   }
 });
 
-export { app, db, startServer };
