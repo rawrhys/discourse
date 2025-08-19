@@ -8,7 +8,15 @@ import markdownService from '../services/MarkdownService';
 const AcademicReferencesFooter = memo(({ references, onCitationClick }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
+  // Debug logging
+  console.log('[AcademicReferencesFooter] Component rendered with:', {
+    hasReferences: !!references,
+    referencesCount: references?.length || 0,
+    references: references
+  });
+
   if (!references || references.length === 0) {
+    console.log('[AcademicReferencesFooter] No references provided, returning null');
     return null;
   }
 
@@ -34,13 +42,15 @@ const AcademicReferencesFooter = memo(({ references, onCitationClick }) => {
         <button
           onClick={() => setIsExpanded(!isExpanded)}
           className="academic-references-header w-full text-left text-2xl font-bold text-black mb-6 flex items-center justify-between hover:bg-gray-100 p-3 rounded-lg transition-colors duration-200"
+          style={{ color: '#000000 !important' }}
         >
-          <span>Academic References</span>
+          <span style={{ color: '#000000 !important', fontWeight: 'bold' }}>Academic References</span>
           <svg
             className={`w-6 h-6 transform transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
+            style={{ color: '#000000' }}
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
           </svg>

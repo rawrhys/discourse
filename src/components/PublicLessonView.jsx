@@ -1338,12 +1338,19 @@ const PublicLessonView = ({
           
            {/* Academic References Footer */}
            <div className="mt-8">
-             {referencesFooter && referencesFooter.references && (
-               <AcademicReferencesFooter 
-                 references={referencesFooter.references}
-                 onCitationClick={handleCitationClick}
-               />
-             )}
+             {(() => {
+               console.log('[PublicLessonView] Rendering Academic References Footer:', {
+                 hasReferencesFooter: !!referencesFooter,
+                 hasReferences: !!(referencesFooter && referencesFooter.references),
+                 referencesCount: referencesFooter?.references?.length || 0
+               });
+               return referencesFooter && referencesFooter.references && (
+                 <AcademicReferencesFooter 
+                   references={referencesFooter.references}
+                   onCitationClick={handleCitationClick}
+                 />
+               );
+             })()}
            </div>
          </div>
        )}
