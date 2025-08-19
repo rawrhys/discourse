@@ -3995,14 +3995,6 @@ app.get('/api/captcha/verify/:courseId',
       if (!challengeData || typeof challengeData !== 'string') {
         throw new Error('Invalid challenge data generated');
       }
-      
-      // Log the generated challenge for debugging
-      console.log(`[API] Generated new CAPTCHA for course ${courseId}:`, {
-        challenge: challengeData,
-        challengeKey: newChallengeKey,
-        type: selectedType.type,
-        answer: challengeInfo.answer
-      });
     } catch (formatError) {
       console.error('[API] Error formatting challenge:', formatError);
       return res.status(500).json({
@@ -4013,6 +4005,14 @@ app.get('/api/captcha/verify/:courseId',
     }
     
     const newChallengeKey = `captcha_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Log the generated challenge for debugging
+    console.log(`[API] Generated new CAPTCHA for course ${courseId}:`, {
+      challenge: challengeData,
+      challengeKey: newChallengeKey,
+      type: selectedType.type,
+      answer: challengeInfo.answer
+    });
     
     try {
       // Validate challenge info before storing
