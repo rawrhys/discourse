@@ -895,34 +895,28 @@ const PublicLessonView = ({
   const cleanAndCombineContent = (content) => {
     if (!content) return '';
     
-    // Helper function to clean individual content parts
+    // Helper function to clean individual content parts (without markdown processing)
     const cleanContentPart = (part) => {
       if (!part) return '';
       
-      // First, remove all separator patterns before any other processing
+      // Only clean separator patterns, don't apply markdown processing yet
       let cleaned = part
         .replace(/Content generation completed\./g, '')
         .replace(/\|\|\|---\|\|\|/g, '') // Remove |||---||| patterns
         .replace(/\|\|\|/g, '') // Remove all remaining ||| patterns
         .trim();
       
-      // Then apply markdown processing
-      cleaned = fixMalformedMarkdown(cleaned);
-      
-      // Final cleanup of any separators that might have been reintroduced
-      cleaned = cleaned
-        .replace(/\|\|\|---\|\|\|/g, '')
-        .replace(/\|\|\|/g, '');
+      // Clean up remaining asterisks
+      cleaned = cleanupRemainingAsterisks(cleaned);
       
       return cleaned;
     };
     
     if (typeof content === 'string') {
       const cleaned = cleanContentPart(content);
-      const result = cleanupRemainingAsterisks(cleaned);
       
       // Final separator cleanup after all processing
-      const finalResult = result
+      const finalResult = cleaned
         .replace(/\|\|\|---\|\|\|/g, '')
         .replace(/\|\|\|/g, '');
       
@@ -932,11 +926,11 @@ const PublicLessonView = ({
     const { introduction, main_content, conclusion } = content;
     
     const cleanedIntro = introduction 
-      ? cleanupRemainingAsterisks(cleanContentPart(introduction))
+      ? cleanContentPart(introduction)
       : '';
 
-    const cleanedMain = main_content ? cleanupRemainingAsterisks(cleanContentPart(main_content)) : '';
-    const cleanedConclusion = conclusion ? cleanupRemainingAsterisks(cleanContentPart(conclusion)) : '';
+    const cleanedMain = main_content ? cleanContentPart(main_content) : '';
+    const cleanedConclusion = conclusion ? cleanContentPart(conclusion) : '';
     
     // Create sections with clear section headers and proper spacing
     const sections = [];
@@ -984,7 +978,10 @@ const PublicLessonView = ({
       lessonContentLength: lessonContent.length,
       lessonContentPreview: lessonContent.substring(0, 200) + '...',
       hasContent: !!lessonContent,
-      isEmpty: lessonContent.trim() === ''
+      isEmpty: lessonContent.trim() === '',
+      hasSectionHeaders: lessonContent.includes('## Introduction') || lessonContent.includes('## Main Content') || lessonContent.includes('## Conclusion'),
+      hasHorizontalRules: lessonContent.includes('---'),
+      rawContentKeys: typeof lesson.content === 'object' ? Object.keys(lesson.content) : 'string'
     });
   } catch (error) {
     console.error('[PublicLessonView] Error processing lesson content:', error);
@@ -1014,6 +1011,17 @@ const PublicLessonView = ({
   try {
     // Preprocess content for better line breaks and formatting
     let processedContent = preprocessContentForDisplay(displayContent);
+    
+    // Debug the preprocessing step
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[PublicLessonView] Preprocessing debug:', {
+        originalLength: displayContent.length,
+        processedLength: processedContent.length,
+        hasSectionHeaders: processedContent.includes('## Introduction') || processedContent.includes('## Main Content') || processedContent.includes('## Conclusion'),
+        hasHorizontalRules: processedContent.includes('---'),
+        processedPreview: processedContent.substring(0, 300) + '...'
+      });
+    }
     
     // Remove in-text citations first, then apply markdown fix
     let fixedContent = markdownService.removeInTextCitations(processedContent);
