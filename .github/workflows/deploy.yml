@@ -6,7 +6,7 @@ on:
       - main
 
 jobs:
-  deploy-vps:
+    deploy-vps:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -22,21 +22,6 @@ jobs:
             cd /root/discourse
             echo "=== Starting VPS deployment ==="
             
-            # Stop the application first to prevent conflicts
-            echo "Stopping PM2 application..."
-            pm2 stop discourse-app || echo "Application was not running"
-            
-            # Handle any local changes that might conflict
-            echo "Checking git status..."
-            git status
-            # Remove conflicting untracked files
-            rm -f discourse discourse.pub
-            # Clean up any other untracked files
-            git clean -fd
-            # Stash any local changes to avoid conflicts
-            git stash
-            # Reset to clean state
-            git reset --hard HEAD
             # Pull the latest changes
             echo "Pulling latest changes from main branch..."
             git pull origin main
@@ -46,54 +31,16 @@ jobs:
             echo "server.js last modified: $(stat -c %y server.js)"
             echo "TTSService.js last modified: $(stat -c %y src/services/TTSService.js)"
             
-            # Ensure server.js is executable and properly formatted
-            echo "Ensuring server.js is properly formatted..."
-            chmod +x server.js
-            dos2unix server.js 2>/dev/null || echo "dos2unix not available, continuing..."
+            # Simply restart all PM2 processes
+            echo "Restarting PM2 processes..."
+            pm2 restart all
             
-            # Update PM2 ecosystem file if needed
-            echo "Checking PM2 ecosystem configuration..."
-            if [ -f "ecosystem.config.cjs" ]; then
-              echo "PM2 ecosystem file exists and is up to date"
-            else
-              echo "WARNING: PM2 ecosystem file not found"
-            fi
-            
-            # Install dependencies
-            echo "Installing dependencies..."
-            npm ci
-            
-            # Clean and build
-            echo "Cleaning and building..."
-            rm -rf dist/*
-            npm run build
-            
-            # Verify the build was successful
-            echo "Verifying build..."
-            if [ -f "dist/index.html" ]; then
-              echo "Build successful - dist/index.html exists"
-            else
-              echo "ERROR: Build failed - dist/index.html not found"
-              exit 1
-            fi
-            
-            # Start the application with fresh configuration
-            echo "Starting PM2 application with fresh configuration..."
-            pm2 delete discourse-app 2>/dev/null || echo "No existing PM2 process to delete"
-            pm2 start ecosystem.config.cjs
-            
-            # Verify the application is running
-            echo "Verifying application status..."
+            # Show status
+            echo "PM2 status:"
             pm2 status
-            pm2 logs discourse-app --lines 10
             
-            # Test the server is responding
-            echo "Testing server response..."
-            sleep 5
-            curl -f http://localhost:4003/api/health || echo "Server health check failed, but continuing..."
-            
-            echo "=== VPS deployment completed ==="
-  deploy-shared-hosting:
+                         echo "=== VPS deployment completed ==="
+   deploy-shared-hosting:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
