@@ -6,30 +6,112 @@ const SimpleImageService = {
   cache: new Map(),
   cacheTimeout: 30 * 60 * 1000, // 30 minutes
 
-  // Basic fallback images
-  fallbackImages: [
-    {
-      url: 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
-      title: 'Educational Content',
-      pageURL: 'https://commons.wikimedia.org/wiki/File:Profile_avatar_placeholder_large.png',
-      attribution: 'Wikimedia Commons',
-      uploader: 'Wikimedia'
-    },
-    {
-      url: 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=800&h=600&fit=crop',
-      title: 'Learning and Education',
-      pageURL: 'https://unsplash.com/photos/books-on-table',
-      attribution: 'Unsplash',
-      uploader: 'Unsplash'
-    },
-    {
-      url: 'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=800&h=600&fit=crop',
-      title: 'Knowledge and Wisdom',
-      pageURL: 'https://unsplash.com/photos/library-books',
-      attribution: 'Unsplash',
-      uploader: 'Unsplash'
-    }
-  ],
+  // Enhanced fallback images for different topics
+  fallbackImages: {
+    history: [
+      {
+        url: 'https://images.unsplash.com/photo-1461360370896-922624d12aa1?w=800&h=600&fit=crop',
+        title: 'Ancient Historical Architecture',
+        pageURL: 'https://unsplash.com/photos/ancient-ruins',
+        attribution: 'Unsplash',
+        uploader: 'Unsplash'
+      },
+      {
+        url: 'https://images.unsplash.com/photo-1513475382585-d06e58bcb0e0?w=800&h=600&fit=crop',
+        title: 'Classical Architecture',
+        pageURL: 'https://unsplash.com/photos/classical-building',
+        attribution: 'Unsplash',
+        uploader: 'Unsplash'
+      },
+      {
+        url: 'https://images.unsplash.com/photo-1539650116574-75c0c6d73dd3?w=800&h=600&fit=crop',
+        title: 'Ancient Manuscripts',
+        pageURL: 'https://unsplash.com/photos/ancient-manuscript',
+        attribution: 'Unsplash',
+        uploader: 'Unsplash'
+      }
+    ],
+    ancient: [
+      {
+        url: 'https://images.unsplash.com/photo-1539650116574-75c0c6d73dd3?w=800&h=600&fit=crop',
+        title: 'Ancient Civilization',
+        pageURL: 'https://unsplash.com/photos/ancient-civilization',
+        attribution: 'Unsplash',
+        uploader: 'Unsplash'
+      },
+      {
+        url: 'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=800&h=600&fit=crop',
+        title: 'Historical Monument',
+        pageURL: 'https://unsplash.com/photos/historical-monument',
+        attribution: 'Unsplash',
+        uploader: 'Unsplash'
+      }
+    ],
+    egypt: [
+      {
+        url: 'https://images.unsplash.com/photo-1539650116574-75c0c6d73dd3?w=800&h=600&fit=crop',
+        title: 'Ancient Egypt',
+        pageURL: 'https://unsplash.com/photos/ancient-egypt',
+        attribution: 'Unsplash',
+        uploader: 'Unsplash'
+      },
+      {
+        url: 'https://images.unsplash.com/photo-1471919743851-c4df8b6ee133?w=800&h=600&fit=crop',
+        title: 'Egyptian Architecture',
+        pageURL: 'https://unsplash.com/photos/egyptian-architecture',
+        attribution: 'Unsplash',
+        uploader: 'Unsplash'
+      }
+    ],
+    science: [
+      {
+        url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&h=600&fit=crop',
+        title: 'Scientific Discovery',
+        pageURL: 'https://unsplash.com/photos/science-lab',
+        attribution: 'Unsplash',
+        uploader: 'Unsplash'
+      },
+      {
+        url: 'https://images.unsplash.com/photo-1532094349884-543bc11b234d?w=800&h=600&fit=crop',
+        title: 'Scientific Equipment',
+        pageURL: 'https://unsplash.com/photos/science-equipment',
+        attribution: 'Unsplash',
+        uploader: 'Unsplash'
+      }
+    ],
+    education: [
+      {
+        url: 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=800&h=600&fit=crop',
+        title: 'Learning and Education',
+        pageURL: 'https://unsplash.com/photos/books-on-table',
+        attribution: 'Unsplash',
+        uploader: 'Unsplash'
+      },
+      {
+        url: 'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=800&h=600&fit=crop',
+        title: 'Knowledge and Wisdom',
+        pageURL: 'https://unsplash.com/photos/library-books',
+        attribution: 'Unsplash',
+        uploader: 'Unsplash'
+      }
+    ],
+    default: [
+      {
+        url: 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
+        title: 'Educational Content',
+        pageURL: 'https://commons.wikimedia.org/wiki/File:Profile_avatar_placeholder_large.png',
+        attribution: 'Wikimedia Commons',
+        uploader: 'Wikimedia'
+      },
+      {
+        url: 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=800&h=600&fit=crop',
+        title: 'Learning and Education',
+        pageURL: 'https://unsplash.com/photos/books-on-table',
+        attribution: 'Unsplash',
+        uploader: 'Unsplash'
+      }
+    ]
+  },
 
   // Simple cache key generation
   getCacheKey(lessonTitle, courseId, lessonId) {
@@ -58,7 +140,7 @@ const SimpleImageService = {
     console.log('[SimpleImageService] Cached:', cacheKey);
   },
 
-  // Basic image search
+  // Enhanced image search with multiple fallbacks
   async search(lessonTitle, courseId, lessonId) {
     // Validate inputs
     if (!lessonTitle || !courseId || !lessonId) {
@@ -77,6 +159,7 @@ const SimpleImageService = {
     try {
       console.log('[SimpleImageService] Searching for:', lessonTitle);
       
+      // Try the main image search API first
       const response = await fetch(`${API_BASE_URL}/api/image-search/search`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -92,19 +175,30 @@ const SimpleImageService = {
         signal: AbortSignal.timeout(8000) // 8 second timeout
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+      if (response.ok) {
+        const data = await response.json();
+        
+        if (data && data.url) {
+          console.log('[SimpleImageService] Found image via API:', data.title);
+          this.setCache(cacheKey, data);
+          return data;
+        }
       }
 
-      const data = await response.json();
-      
-      if (data && data.url) {
-        console.log('[SimpleImageService] Found image:', data.title);
-        this.setCache(cacheKey, data);
-        return data;
-      } else {
-        throw new Error('No image data received');
+      // If API fails, try direct Pixabay search as fallback
+      console.log('[SimpleImageService] API failed, trying Pixabay fallback');
+      const pixabayImage = await this.searchPixabay(lessonTitle);
+      if (pixabayImage) {
+        console.log('[SimpleImageService] Found Pixabay image:', pixabayImage.title);
+        this.setCache(cacheKey, pixabayImage);
+        return pixabayImage;
       }
+
+      // If all else fails, use topic-specific fallback
+      console.log('[SimpleImageService] All searches failed, using fallback');
+      const fallback = this.getFallbackImage(lessonTitle);
+      this.setCache(cacheKey, fallback);
+      return fallback;
 
     } catch (error) {
       console.warn('[SimpleImageService] Search failed:', error.message);
@@ -114,17 +208,103 @@ const SimpleImageService = {
     }
   },
 
-  // Get appropriate fallback image
+  // Direct Pixabay search as fallback
+  async searchPixabay(query) {
+    try {
+      const pixabayApiKey = process.env.PIXABAY_API_KEY;
+      if (!pixabayApiKey) {
+        console.warn('[SimpleImageService] No Pixabay API key available');
+        return null;
+      }
+
+      // Clean and optimize search query
+      const cleanQuery = this.optimizeSearchQuery(query);
+      
+      const response = await fetch(
+        `https://pixabay.com/api/?key=${pixabayApiKey}&q=${encodeURIComponent(cleanQuery)}&image_type=photo&orientation=horizontal&safesearch=true&per_page=10&min_width=800&min_height=600`,
+        {
+          signal: AbortSignal.timeout(5000) // 5 second timeout
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Pixabay API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.hits && data.hits.length > 0) {
+        const hit = data.hits[0]; // Get the best match
+        return {
+          url: hit.webformatURL,
+          title: hit.tags || cleanQuery,
+          pageURL: hit.pageURL,
+          attribution: 'Pixabay',
+          uploader: hit.user,
+          description: hit.tags || cleanQuery
+        };
+      }
+
+      return null;
+    } catch (error) {
+      console.warn('[SimpleImageService] Pixabay search failed:', error.message);
+      return null;
+    }
+  },
+
+  // Optimize search query for better results
+  optimizeSearchQuery(query) {
+    if (!query) return 'education';
+    
+    // Remove common stop words and clean up
+    const stopWords = ['the', 'a', 'an', 'and', 'or', 'of', 'in', 'on', 'to', 'for', 'by', 'with', 'at', 'from', 'as', 'is', 'are', 'was', 'were', 'be', 'being', 'been', 'this', 'that', 'these', 'those', 'it', 'its', 'into', 'about', 'over', 'under', 'between', 'through', 'during', 'before', 'after', 'above', 'below', 'up', 'down', 'out', 'off', 'than'];
+    
+    let cleanQuery = query.toLowerCase()
+      .replace(/[^\w\s]/g, ' ')
+      .split(/\s+/)
+      .filter(word => word.length > 2 && !stopWords.includes(word))
+      .slice(0, 3) // Take first 3 meaningful words
+      .join(' ');
+    
+    // Add topic-specific keywords for better results
+    if (cleanQuery.includes('egypt') || cleanQuery.includes('ancient')) {
+      cleanQuery += ' ancient civilization';
+    } else if (cleanQuery.includes('rome') || cleanQuery.includes('roman')) {
+      cleanQuery += ' roman empire';
+    } else if (cleanQuery.includes('greek') || cleanQuery.includes('greece')) {
+      cleanQuery += ' greek civilization';
+    } else if (cleanQuery.includes('history')) {
+      cleanQuery += ' historical';
+    }
+    
+    return cleanQuery || 'education';
+  },
+
+  // Get appropriate fallback image based on topic
   getFallbackImage(lessonTitle) {
     const title = lessonTitle?.toLowerCase() || '';
     
-    if (title.includes('history') || title.includes('ancient')) {
-      return this.fallbackImages[1];
-    } else if (title.includes('science') || title.includes('technology')) {
-      return this.fallbackImages[2];
+    // Determine the best category for this lesson
+    let category = 'default';
+    
+    if (title.includes('egypt') || title.includes('pharaoh') || title.includes('pyramid')) {
+      category = 'egypt';
+    } else if (title.includes('ancient') || title.includes('rome') || title.includes('roman') || title.includes('greek') || title.includes('greece')) {
+      category = 'ancient';
+    } else if (title.includes('history') || title.includes('historical') || title.includes('dynasty') || title.includes('empire')) {
+      category = 'history';
+    } else if (title.includes('science') || title.includes('technology') || title.includes('scientific') || title.includes('research')) {
+      category = 'science';
+    } else if (title.includes('education') || title.includes('learning') || title.includes('study') || title.includes('knowledge')) {
+      category = 'education';
     }
     
-    return this.fallbackImages[0];
+    // Get a random image from the appropriate category
+    const images = this.fallbackImages[category] || this.fallbackImages.default;
+    const randomIndex = Math.floor(Math.random() * images.length);
+    
+    console.log(`[SimpleImageService] Using ${category} fallback image for: ${lessonTitle}`);
+    return images[randomIndex];
   },
 
   // Clear cache
@@ -152,6 +332,52 @@ const SimpleImageService = {
       valid,
       expired
     };
+  },
+
+  // Validate URL format
+  isValidUrl(url) {
+    if (!url || typeof url !== 'string') {
+      return false;
+    }
+    
+    try {
+      new URL(url);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  // Pre-cache image with validation
+  async preCacheImage(imageData) {
+    if (!imageData || !imageData.url) {
+      console.warn('[SimpleImageService] Invalid image data for pre-caching');
+      return false;
+    }
+
+    if (!this.isValidUrl(imageData.url)) {
+      console.warn('[SimpleImageService] Invalid URL for pre-caching:', imageData.url);
+      return false;
+    }
+
+    try {
+      // Try to fetch the image to ensure it's accessible
+      const response = await fetch(imageData.url, {
+        method: 'HEAD',
+        signal: AbortSignal.timeout(3000)
+      });
+      
+      if (response.ok) {
+        console.log('[SimpleImageService] Successfully pre-cached image:', imageData.url.substring(0, 50) + '...');
+        return true;
+      } else {
+        console.warn('[SimpleImageService] Failed to pre-cache image, status:', response.status);
+        return false;
+      }
+    } catch (error) {
+      console.warn('[SimpleImageService] Failed to pre-cache image:', error.message);
+      return false;
+    }
   }
 };
 

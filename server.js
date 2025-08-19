@@ -471,7 +471,7 @@ function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitl
     .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim());
-  const STOPWORDS = new Set(['the','a','an','and','or','of','in','on','to','for','by','with','at','from','as','is','are','was','were','be','being','been','this','that','these','those','it','its','into','about','over','under','between','through','during','before','after','above','below','up','down','out','off','than','introduction','overview','lesson','chapter','period','era','history','modern']);
+  const STOPWORDS = new Set(['the','a','an','and','or','of','in','on','to','for','by','with','at','from','as','is','are','was','were','be','being','been','this','that','these','those','it','its','into','about','over','under','between','through','during','before','after','above','below','up','down','out','off','than','introduction','overview','lesson','chapter','period','era','history','modern','course','explores','rich','covering','political','cultural','religious']);
   const GENERIC_EVENT_WORDS = new Set(['fall','collapse','decline','rise','war','battle','revolution','crisis','empire','dynasty','state','society']);
   const tokenize = (str) => normalize(str).split(/\s+/).filter(t => t && t.length > 2 && !STOPWORDS.has(t));
 
@@ -1434,6 +1434,13 @@ Context: "${context.substring(0, 1000)}..."`;
         }
 
         console.warn(`[AIService] No Wikipedia image found for "${subject}" after simplified search.`);
+        
+        // Try a more relaxed search as final fallback
+        if (!options.relaxed) {
+          console.log(`[AIService] Trying relaxed Wikipedia search for "${subject}"`);
+          return this.fetchWikipediaImage(subject, content, usedImageTitles, usedImageUrls, { relaxed: true }, courseContext);
+        }
+        
         return null;
         
     } catch (err) {
@@ -3745,10 +3752,20 @@ app.get('/api/image/fast', async (req, res) => {
       return res.status(400).json({ error: 'Missing URL parameter' });
     }
 
+    // Validate URL format
+    let parsedUrl;
+    try {
+      parsedUrl = new URL(url);
+    } catch (urlError) {
+      console.warn(`[FastImageProxy] Invalid URL format: ${url}`);
+      return res.status(400).json({ error: 'Invalid URL format' });
+    }
+
     // Security validation
-    const hostname = new URL(url).hostname;
-    const allowedDomains = ['upload.wikimedia.org', 'pixabay.com', 'images.unsplash.com'];
+    const hostname = parsedUrl.hostname;
+    const allowedDomains = ['upload.wikimedia.org', 'pixabay.com', 'images.unsplash.com', 'cdn.pixabay.com'];
     if (!allowedDomains.some(domain => hostname.endsWith(domain))) {
+      console.warn(`[FastImageProxy] Forbidden domain: ${hostname}`);
       return res.status(403).json({ error: 'Forbidden domain' });
     }
 
