@@ -98,8 +98,8 @@ class ImagePreloadService {
       link.href = imageUrl;
       link.fetchPriority = 'high';
       
-      // Add cross-origin for external images
-      if (imageUrl.includes('api/image/')) {
+      // Fix credentials mismatch: use consistent crossorigin settings
+      if (imageUrl.includes('api/image/') || imageUrl.includes('pixabay.com') || imageUrl.includes('wikimedia.org')) {
         link.crossOrigin = 'anonymous';
       }
 
@@ -124,6 +124,11 @@ class ImagePreloadService {
           console.warn(`[ImagePreloadService] Timeout preloading: ${imageUrl}`);
           resolve(false);
         }, 10000); // 10 second timeout
+
+        // Fix credentials mismatch: use consistent crossorigin settings
+        if (imageUrl.includes('api/image/') || imageUrl.includes('pixabay.com') || imageUrl.includes('wikimedia.org')) {
+          img.crossOrigin = 'anonymous';
+        }
 
         img.onload = () => {
           cleanup();

@@ -5,6 +5,48 @@ const SimpleImageService = {
   // Cache for image search results
   imageCache: new Map(),
   cacheTimeout: 10 * 60 * 1000, // 10 minutes - increased for better performance
+  
+  // Persistent cache for better performance
+  persistentCache: new Map(),
+  persistentCacheKey: 'imageSearchCache',
+  
+  // Track active requests to prevent duplicates
+  activeRequests: new Map(),
+
+  // Initialize persistent cache from localStorage
+  initPersistentCache() {
+    try {
+      const cached = localStorage.getItem(this.persistentCacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        const now = Date.now();
+        
+        // Only keep entries that haven't expired
+        for (const [key, value] of Object.entries(parsed)) {
+          if (now - value.timestamp < this.cacheTimeout) {
+            this.persistentCache.set(key, value);
+          }
+        }
+        
+        console.log(`[SimpleImageService] Loaded ${this.persistentCache.size} cached entries from localStorage`);
+      }
+    } catch (error) {
+      console.warn('[SimpleImageService] Failed to load persistent cache:', error);
+    }
+  },
+
+  // Save persistent cache to localStorage
+  savePersistentCache() {
+    try {
+      const cacheData = {};
+      for (const [key, value] of this.persistentCache.entries()) {
+        cacheData[key] = value;
+      }
+      localStorage.setItem(this.persistentCacheKey, JSON.stringify(cacheData));
+    } catch (error) {
+      console.warn('[SimpleImageService] Failed to save persistent cache:', error);
+    }
+  },
 
   // Test server connectivity
   async testServerConnection() {
@@ -43,30 +85,74 @@ const SimpleImageService = {
 
   // Check cache for existing result
   getFromCache(cacheKey) {
+    // Check in-memory cache first
     const cached = this.imageCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
-      console.log('[SimpleImageService] Cache HIT for:', cacheKey.substring(0, 50) + '...');
+      console.log('[SimpleImageService] Memory cache HIT for:', cacheKey.substring(0, 50) + '...');
       return cached.data;
     }
     if (cached) {
       this.imageCache.delete(cacheKey); // Remove expired cache
     }
+    
+    // Check persistent cache
+    const persistentCached = this.persistentCache.get(cacheKey);
+    if (persistentCached && Date.now() - persistentCached.timestamp < this.cacheTimeout) {
+      console.log('[SimpleImageService] Persistent cache HIT for:', cacheKey.substring(0, 50) + '...');
+      // Move to memory cache for faster access
+      this.imageCache.set(cacheKey, persistentCached);
+      return persistentCached.data;
+    }
+    if (persistentCached) {
+      this.persistentCache.delete(cacheKey); // Remove expired cache
+    }
+    
     return null;
   },
 
   // Store result in cache
   setCache(cacheKey, data) {
-    this.imageCache.set(cacheKey, {
+    const cacheEntry = {
       data,
       timestamp: Date.now()
-    });
+    };
+    
+    // Store in both caches
+    this.imageCache.set(cacheKey, cacheEntry);
+    this.persistentCache.set(cacheKey, cacheEntry);
+    
+    // Save to localStorage periodically
+    if (this.persistentCache.size % 10 === 0) {
+      this.savePersistentCache();
+    }
+    
     console.log('[SimpleImageService] Cached result for:', cacheKey.substring(0, 50) + '...');
+  },
+
+  // Check if request is already in progress
+  isRequestInProgress(cacheKey) {
+    return this.activeRequests.has(cacheKey);
+  },
+
+  // Add request to active requests
+  addActiveRequest(cacheKey, promise) {
+    this.activeRequests.set(cacheKey, promise);
+  },
+
+  // Remove request from active requests
+  removeActiveRequest(cacheKey) {
+    this.activeRequests.delete(cacheKey);
   },
 
   // Simple image search - optimized with caching and timeout
   async search(lessonTitle, content = '', usedImageTitles = [], usedImageUrls = [], courseId = undefined, lessonId = undefined, forceUnique = false) {
     const maxRetries = 2;
     let lastError = null;
+
+    // Initialize persistent cache if not already done
+    if (this.persistentCache.size === 0) {
+      this.initPersistentCache();
+    }
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
@@ -82,6 +168,14 @@ const SimpleImageService = {
           const cachedResult = this.getFromCache(cacheKey);
           if (cachedResult) {
             return cachedResult;
+          }
+
+          // Check if request is already in progress
+          if (this.isRequestInProgress(cacheKey)) {
+            console.log('[SimpleImageService] Request already in progress, waiting...');
+            const existingPromise = this.activeRequests.get(cacheKey);
+            const result = await existingPromise;
+            return result;
           }
         }
 
@@ -109,50 +203,25 @@ const SimpleImageService = {
           disableModeration: true
         };
 
-        // Add timeout to prevent hanging requests - increased to 10 seconds for better reliability
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        // Create the search promise
+        const searchPromise = this._performSearch(searchUrl, requestBody, attempt, maxRetries);
         
-        const response = await fetch(searchUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestBody),
-          signal: controller.signal
-        });
-
-        clearTimeout(timeoutId);
-        
-        if (!response.ok) {
-          if (response.status === 404) {
-            const errorText = await response.text();
-            console.log(`[SimpleImageService] No suitable image found. Server response: ${errorText}`);
-            return null;
-          }
-          
-          console.warn(`[SimpleImageService] Server returned ${response.status} on attempt ${attempt}`);
-          const errorText = await response.text();
-          console.error('[SimpleImageService] Error response body:', errorText);
-          
-          // Don't retry on 4xx errors (client errors)
-          if (response.status >= 400 && response.status < 500) {
-            throw new Error(`Image search failed: ${response.status} - ${errorText}`);
-          }
-          
-          // For 5xx errors, continue to retry
-          lastError = new Error(`Image search failed: ${response.status} - ${errorText}`);
-          if (attempt < maxRetries) {
-            console.log(`[SimpleImageService] Retrying in ${attempt * 1000}ms...`);
-            await new Promise(resolve => setTimeout(resolve, attempt * 1000));
-            continue;
-          }
-          throw lastError;
+        // Track active request if not forceUnique
+        if (!forceUnique) {
+          const cacheKey = this.getCacheKey(lessonTitle, content, usedImageTitles, usedImageUrls, courseId, lessonId);
+          this.addActiveRequest(cacheKey, searchPromise);
         }
+
+        const data = await searchPromise;
         
-        const data = await response.json();
-        console.log('[SimpleImageService] Found image:', data.title);
+        // Remove from active requests
+        if (!forceUnique) {
+          const cacheKey = this.getCacheKey(lessonTitle, content, usedImageTitles, usedImageUrls, courseId, lessonId);
+          this.removeActiveRequest(cacheKey);
+        }
 
         // Cache the result if not forceUnique
-        if (!forceUnique) {
+        if (!forceUnique && data) {
           const cacheKey = this.getCacheKey(lessonTitle, content, usedImageTitles, usedImageUrls, courseId, lessonId);
           this.setCache(cacheKey, data);
         }
@@ -183,6 +252,46 @@ const SimpleImageService = {
 
     console.warn('[SimpleImageService] Search failed after retry, giving up');
     return null;
+  },
+
+  // Perform the actual search request
+  async _performSearch(searchUrl, requestBody, attempt, maxRetries) {
+    // Add timeout to prevent hanging requests - increased to 10 seconds for better reliability
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    
+    const response = await fetch(searchUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        const errorText = await response.text();
+        console.log(`[SimpleImageService] No suitable image found. Server response: ${errorText}`);
+        return null;
+      }
+      
+      console.warn(`[SimpleImageService] Server returned ${response.status} on attempt ${attempt}`);
+      const errorText = await response.text();
+      console.error('[SimpleImageService] Error response body:', errorText);
+      
+      // Don't retry on 4xx errors (client errors)
+      if (response.status >= 400 && response.status < 500) {
+        throw new Error(`Image search failed: ${response.status} - ${errorText}`);
+      }
+      
+      // For 5xx errors, continue to retry
+      throw new Error(`Image search failed: ${response.status} - ${errorText}`);
+    }
+    
+    const data = await response.json();
+    console.log('[SimpleImageService] Found image:', data.title);
+    return data;
   },
 
   // Enhanced search with course context - optimized

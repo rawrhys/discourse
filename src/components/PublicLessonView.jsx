@@ -1,25 +1,20 @@
-import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import SimpleImageService from '../services/SimpleImageService';
 import imagePreloadService from '../services/ImagePreloadService';
 import lessonImagePreloader from '../services/LessonImagePreloader';
-import imagePerformanceMonitor from '../services/ImagePerformanceMonitor';
-import { publicTTSService } from '../services/TTSService';
-import PerformanceMonitorService from '../services/PerformanceMonitorService';
-const performanceMonitor = PerformanceMonitorService;
-import markdownService from '../services/MarkdownService';
-import academicReferencesService from '../services/AcademicReferencesService';
-import { fixMalformedContent, formatContentForDisplay, cleanContentFormatting, validateContent, stripSectionKeys, getContentAsString } from '../utils/contentFormatter';
+import performanceMonitor from '../services/ImagePerformanceMonitor';
+import AcademicReferencesService from '../services/AcademicReferencesService';
 import AcademicReferencesFooter from './AcademicReferencesFooter';
-
-// Import test utilities for development
-if (process.env.NODE_ENV === 'development') {
-  import('../utils/testContentFormatter.js').then(module => {
-    module.runContentFormatterTests();
-  });
-}
-import Flashcard from './Flashcard';
-import Image from './Image.jsx';
 import './LessonView.css';
+
+// Debounce utility for image search
+const debounce = (fn, delay) => {
+  let timer;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), delay);
+  };
+};
 
 // Add CSS for proper paragraph spacing in public lesson view
 const publicLessonStyles = `
@@ -239,7 +234,7 @@ const PublicLessonView = ({
   });
   
   // Use isolated public TTS service
-  const performanceMonitor = useRef(PerformanceMonitorService);
+  const performanceMonitor = useRef(performanceMonitor);
   const renderStartTime = useRef(performance.now());
   const abortControllerRef = useRef(null);
   const ttsStateUpdateTimeoutRef = useRef(null); // For debouncing state updates
@@ -298,7 +293,7 @@ const PublicLessonView = ({
   // Start image performance monitoring
   useEffect(() => {
     try {
-      imagePerformanceMonitor.startPerformanceMonitoring();
+      performanceMonitor.startPerformanceMonitoring();
       console.log('[PublicLessonView] Image performance monitoring started');
     } catch (error) {
       console.warn('[PublicLessonView] Failed to start image performance monitoring:', error);
@@ -412,47 +407,30 @@ const PublicLessonView = ({
     };
   }, [ttsStatus.isPlaying, ttsStatus.isPaused]); // Added dependencies back for proper updates
 
-  // Handle image loading for public courses (simplified) - with debounce
-  useEffect(() => {
-    if (!lesson?.title) return;
-
-    let ignore = false;
-    setImageLoading(true);
-    setImageData(null);
-    
-    const abortController = new AbortController();
-    abortControllerRef.current = abortController;
-    
-    // Add debounce to prevent rapid successive searches
-    const timeoutId = setTimeout(async function fetchImage() {
+  // Debounced image search to prevent multiple simultaneous requests
+  const debouncedImageSearch = useMemo(
+    () => debounce(async (lessonData, subject, courseId, usedImageTitles, usedImageUrls, courseDescription) => {
       const startTime = performance.now();
       
-      // Check if we already have a cached result for this lesson
-      if (imageData && imageData.url && imageData.title) {
-        console.log('[PublicLessonView] Using existing image data, skipping fetch');
-        setImageLoading(false);
-        return;
-      }
-
-      // Check if we have a preloaded image
-      const preloadedImage = lessonImagePreloader.getPreloadedImage(lesson.id, lesson.title, subject);
-      if (preloadedImage) {
-        console.log('[PublicLessonView] Using preloaded image data:', preloadedImage.title);
-        setImageData(preloadedImage);
-        setImageLoading(false);
-        return;
-      }
-      
       try {
+        // Check for preloaded image first
+        const preloadedImage = await lessonImagePreloader.getPreloadedImage(lessonData.id, lessonData.title, subject);
+        if (preloadedImage) {
+          console.log('[PublicLessonView] Using preloaded image data:', preloadedImage.title);
+          setImageData(preloadedImage);
+          setImageLoading(false);
+          return;
+        }
+        
         // For public courses, use a simplified image search
         const result = await SimpleImageService.searchWithContext(
-          lesson.title,
+          lessonData.title,
           subject,
-          cleanAndCombineContent(lesson.content),
+          cleanAndCombineContent(lessonData.content),
           Array.from(usedImageTitles), // Convert Set to Array
           Array.from(usedImageUrls),   // Convert Set to Array
           courseId,
-          lesson.id,
+          lessonData.id,
           courseDescription
         );
         
@@ -467,25 +445,9 @@ const PublicLessonView = ({
           console.warn('[PublicLessonView] Slow image fetch detected:', fetchTime + 'ms');
         }
         
-        if (!ignore && !abortController.signal.aborted) {
-          // If image search fails, use a fallback placeholder
-          if (!result || !result.url) {
-            console.warn('[PublicLessonView] Image search failed, using fallback placeholder');
-            setImageData({
-              url: 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
-              title: 'Placeholder Image',
-              pageURL: '',
-              attribution: 'Wikimedia Commons',
-              uploader: 'Wikimedia'
-            });
-          } else {
-            setImageData(result ? { ...result, url: result.url } : null);
-          }
-        }
-      } catch (e) {
-        if (!ignore && !abortController.signal.aborted) {
-          console.warn('[PublicLessonView] Image fetch error:', e);
-          // Use fallback placeholder on error
+        // If image search fails, use a fallback placeholder
+        if (!result || !result.url) {
+          console.warn('[PublicLessonView] Image search failed, using fallback placeholder');
           setImageData({
             url: 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
             title: 'Placeholder Image',
@@ -493,20 +455,157 @@ const PublicLessonView = ({
             attribution: 'Wikimedia Commons',
             uploader: 'Wikimedia'
           });
+        } else {
+          setImageData(result ? { ...result, url: result.url } : null);
         }
+      } catch (e) {
+        console.warn('[PublicLessonView] Image fetch error:', e);
+        // Use fallback placeholder on error
+        setImageData({
+          url: 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
+          title: 'Placeholder Image',
+          pageURL: '',
+          attribution: 'Wikimedia Commons',
+          uploader: 'Wikimedia'
+        });
       } finally {
-        if (!ignore && !abortController.signal.aborted) {
-          setImageLoading(false);
-        }
+        setImageLoading(false);
       }
-    }, 300); // 300ms debounce
+    }, 300), // 300ms debounce
+    [courseId, subject]
+  );
+
+  // Start image performance monitoring
+  useEffect(() => {
+    try {
+      performanceMonitor.startPerformanceMonitoring();
+      console.log('[PublicLessonView] Image performance monitoring started');
+    } catch (error) {
+      console.warn('[PublicLessonView] Failed to start image performance monitoring:', error);
+    }
+  }, []);
+
+  // Auto-pause TTS when lesson changes
+  useEffect(() => {
+    // Only trigger on actual lesson ID changes, not TTS status changes
+    if (!lesson?.id) return;
     
-    return () => { 
-      ignore = true;
-      abortController.abort();
-      clearTimeout(timeoutId);
+    // Prevent multiple rapid triggers
+    if (isLessonChanging.current) {
+      console.log('[PublicLessonView] Lesson change already in progress, skipping');
+      return;
+    }
+    
+    // Only stop TTS if it's actually playing or paused
+    const currentStatus = publicTTSService.getStatus();
+    if (!currentStatus.isPlaying && !currentStatus.isPaused) {
+      console.log('[PublicLessonView] TTS not playing, no need to stop on lesson change');
+      return;
+    }
+    
+    // Set flag to prevent TTS conflicts during lesson change
+    isLessonChanging.current = true;
+    console.log('[PublicLessonView] Lesson change detected, pausing TTS');
+    
+    // Stop TTS if it's currently playing or paused
+    try {
+      publicTTSService.stop(); // This will reset pause data via resetPauseData()
+      console.log('[PublicLessonView] Stopped TTS and reset pause data on lesson change');
+    } catch (error) {
+      console.warn('[PublicLessonView] TTS auto-pause error:', error);
+      // Only reset if stop fails, but don't clear the stopped state
+      try {
+        publicTTSService.reset();
+        console.log('[PublicLessonView] Reset TTS service after stop error');
+      } catch (resetError) {
+        console.warn('[PublicLessonView] Error resetting TTS service:', resetError);
+      }
+    }
+    
+    // Update TTS status to reflect stopped state
+    setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
+    
+    // Clear the flag after a delay to prevent rapid re-triggers
+    setTimeout(() => {
+      isLessonChanging.current = false;
+      console.log('[PublicLessonView] Lesson change flag cleared, TTS can resume');
+    }, 1000); // Increased to 1 second to prevent rapid re-triggers
+  }, [lesson?.id]); // Only depend on lesson ID, not TTS status
+
+  // Sync TTS state with service state periodically
+  useEffect(() => {
+    const interval = setInterval(() => {
+      try {
+        const serviceStatus = publicTTSService.getStableStatus();
+          
+          // Only update state if there's an actual meaningful change
+          const hasSignificantChange = (
+            serviceStatus.isPlaying !== ttsStatus.isPlaying || 
+            serviceStatus.isPaused !== ttsStatus.isPaused
+          );
+          
+          if (hasSignificantChange) {
+            // Clear any pending state update
+            if (ttsStateUpdateTimeoutRef.current) {
+              clearTimeout(ttsStateUpdateTimeoutRef.current);
+            }
+            
+            // Debounce the state update to prevent rapid changes
+            ttsStateUpdateTimeoutRef.current = setTimeout(() => {
+              console.log('[PublicLessonView] TTS state changed:', {
+                wasPlaying: ttsStatus.isPlaying,
+                wasPaused: ttsStatus.isPaused,
+                nowPlaying: serviceStatus.isPlaying,
+                nowPaused: serviceStatus.isPaused
+              });
+              
+              // Only update if the service is actually in a different state
+              // This prevents unnecessary re-renders that might trigger other effects
+              setTtsStatus(prev => {
+                if (prev.isPlaying === serviceStatus.isPlaying && prev.isPaused === serviceStatus.isPaused) {
+                  return prev; // No change needed
+                }
+                return {
+                  ...prev,
+                  isPlaying: serviceStatus.isPlaying,
+                  isPaused: serviceStatus.isPaused
+                };
+              });
+          }, 100); // Reduced debounce to 100ms for better responsiveness
+        }
+      } catch (error) {
+        console.warn('[PublicLessonView] TTS state sync error:', error);
+        // If sync fails, reset to stopped state
+        setTtsStatus(prev => ({ 
+          ...prev, 
+          isPlaying: false, 
+          isPaused: false 
+        }));
+      }
+    }, 1000); // Reduced to 1 second for more responsive state updates
+
+    return () => {
+      clearInterval(interval);
+      if (ttsStateUpdateTimeoutRef.current) {
+        clearTimeout(ttsStateUpdateTimeoutRef.current);
+      }
     };
-  }, [lesson?.id, lesson?.title, subject, courseId]); // Only depend on stable values
+  }, [ttsStatus.isPlaying, ttsStatus.isPaused]); // Added dependencies back for proper updates
+
+  // Handle image loading for public courses with enhanced debouncing
+  useEffect(() => {
+    if (!lesson?.title || !subject || !courseId) return;
+
+    setImageLoading(true);
+    setImageData(null);
+    
+    // Use debounced image search to prevent multiple simultaneous requests
+    debouncedImageSearch(lesson, subject, courseId, usedImageTitles, usedImageUrls, courseDescription);
+    
+    return () => {
+      // Cleanup is handled by the debounced function
+    };
+  }, [lesson?.id, lesson?.title, subject, courseId, debouncedImageSearch]); // Include debounced function in dependencies
 
   // Start preloading lesson image as soon as lesson data is available
   useEffect(() => {
@@ -594,7 +693,7 @@ const PublicLessonView = ({
       }
       
       // Generate academic references
-      const references = academicReferencesService.generateReferences(
+      const references = AcademicReferencesService.generateReferences(
         lessonContentString,
         subject,
         lesson.title
@@ -622,7 +721,7 @@ const PublicLessonView = ({
         : getContentAsString(lesson.content);
       
       // Generate content with inline citations
-      const { content: contentWithInlineCitations } = academicReferencesService.generateInlineCitations(
+      const { content: contentWithInlineCitations } = AcademicReferencesService.generateInlineCitations(
         lessonContentString,
         academicReferences
       );
@@ -660,7 +759,7 @@ const PublicLessonView = ({
         try {
           publicTTSService.reset();
         } catch (resetError) {
-          console.warn('[PublicLessonView] Error resetting TTS service:', resetError);
+          console.warn('[PublicLessonView] TTS reset error:', resetError);
         }
       }
       
@@ -1289,7 +1388,7 @@ const PublicLessonView = ({
   let referencesFooter = null;
   try {
     if (academicReferences && academicReferences.length > 0) {
-      referencesFooter = academicReferencesService.createReferencesFooter(academicReferences);
+      referencesFooter = AcademicReferencesService.createReferencesFooter(academicReferences);
     }
   } catch (error) {
     console.warn('[PublicLessonView] Error creating references footer:', error);
