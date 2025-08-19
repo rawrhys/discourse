@@ -327,6 +327,13 @@ const CourseDisplay = () => {
   }, [course, activeModuleId, activeLessonId]);
 
   const handleShare = () => {
+    // Check if course is published
+    if (!course.published) {
+      // Show a message asking to publish the course first
+      alert('Please publish your course first before sharing it. You can publish it from the Dashboard.');
+      return;
+    }
+    
     const publicUrl = `${window.location.origin}/public/course/${courseId}`;
     navigator.clipboard.writeText(publicUrl);
     setShareCopied(true);
@@ -480,9 +487,17 @@ const CourseDisplay = () => {
           })}
         </nav>
         <div className="p-4 border-t">
-          <button onClick={handleShare} className="w-full relative bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition flex items-center justify-center shadow">
+          <button 
+            onClick={handleShare} 
+            className={`w-full relative px-4 py-2 rounded-lg transition flex items-center justify-center shadow ${
+              course.published 
+                ? 'bg-blue-500 text-white hover:bg-blue-600' 
+                : 'bg-gray-400 text-white cursor-not-allowed'
+            }`}
+            title={course.published ? 'Share course link' : 'Publish course first to share'}
+          >
               <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12s-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z"></path></svg>
-              Share
+              {course.published ? 'Share' : 'Publish to Share'}
               {shareCopied && <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-green-600 text-white text-xs rounded px-2 py-1 shadow-lg">Copied!</span>}
           </button>
         </div>
