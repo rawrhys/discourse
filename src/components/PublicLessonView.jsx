@@ -450,8 +450,8 @@ const PublicLessonView = ({
       }
       
       try {
-        // For public courses, use a simplified image search with aggressive timeout
-        const searchPromise = SimpleImageService.searchWithContext(
+        // For public courses, use a simplified image search
+        const result = await SimpleImageService.searchWithContext(
           lesson.title,
           subject,
           cleanAndCombineContent(lesson.content),
@@ -461,13 +461,6 @@ const PublicLessonView = ({
           lesson.id,
           courseDescription
         );
-
-        // Add additional timeout wrapper for extra safety
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Image search timeout')), 4000); // 4 second timeout
-        });
-
-        const result = await Promise.race([searchPromise, timeoutPromise]);
         
         // Track image fetch performance
         const fetchTime = performance.now() - startTime;
@@ -476,7 +469,7 @@ const PublicLessonView = ({
         }
         
         // Log slow image fetches
-        if (fetchTime > 2000) {
+        if (fetchTime > 1500) {
           console.warn('[PublicLessonView] Slow image fetch detected:', fetchTime + 'ms');
         }
         
@@ -489,29 +482,11 @@ const PublicLessonView = ({
         if (!ignore && !abortController.signal.aborted) {
           console.warn('[PublicLessonView] Image fetch error:', e);
           
-          // If it's a timeout error, try a simplified search as fallback
-          if (e.message === 'Image search timeout') {
-            try {
-              console.log('[PublicLessonView] Trying simplified fallback search...');
-              const fallbackResult = await SimpleImageService.search(
-                lesson.title,
-                '', // No content for fallback
-                [],
-                [],
-                courseId,
-                lesson.id
-              );
-              
-              if (fallbackResult && fallbackResult.url) {
-                console.log('[PublicLessonView] Fallback search successful:', fallbackResult.title);
-                setImageData(fallbackResult);
-              } else {
-                setImageData(null);
-              }
-            } catch (fallbackError) {
-              console.warn('[PublicLessonView] Fallback search also failed:', fallbackError);
-              setImageData(null);
-            }
+          // If it's a timeout, try to use a fallback image
+          if (e.name === 'AbortError' || e.message.includes('timeout')) {
+            console.log('[PublicLessonView] Using fallback image due to timeout');
+            // Set a simple fallback image or null
+            setImageData(null);
           } else {
             setImageData(null);
           }
@@ -521,7 +496,7 @@ const PublicLessonView = ({
           setImageLoading(false);
         }
       }
-    }, 100); // 100ms debounce for faster response
+    }, 300); // 300ms debounce
     
     return () => { 
       ignore = true;

@@ -25,10 +25,8 @@ const UserAgreement = lazy(() => import('./components/legal/UserAgreement.jsx'))
 
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
-  const hasToken = typeof window !== 'undefined' && !!localStorage.getItem('token');
-  // If we have a token but user hasn't been hydrated (e.g., backend 5xx),
-  // keep showing a loader instead of redirecting to login.
-  if (loading || (hasToken && !user)) return <LoadingScreen />;
+  // If still loading, show loading screen
+  if (loading) return <LoadingScreen />;
   if (!user) return <Navigate to="/login" replace />;
   return children;
 };

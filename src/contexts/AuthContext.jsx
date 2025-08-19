@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import api from '../services/api'; // We'll use our API client
+import { supabase } from '../config/supabase';
 
 const AuthContext = createContext(null);
 
@@ -8,43 +8,59 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const checkUser = async () => {
-      const token = localStorage.getItem('token');
-      if (token) {
-        try {
-          const currentUser = await api.getCurrentUser();
-          if (currentUser) {
-            setUser(currentUser);
-          } else {
-            // If getCurrentUser returns null, clear the token
-            console.warn('⚠️ [AUTH] getCurrentUser returned null during check, clearing token');
-            localStorage.removeItem('token');
-            setUser(null);
-          }
-        } catch (error) {
-          console.error('Failed to fetch user:', error);
-          // Only clear token for explicit auth failures or invalid server responses on this critical path.
-          if (error.message === 'Server returned invalid JSON response' || (error && (error.status === 401 || error.status === 403))) {
-            localStorage.removeItem('token');
-            setUser(null);
-          } else {
-            // Keep the session on server/network issues
-            console.warn('Keeping auth token after user check error (non-auth error)');
-          }
+    // Get initial session
+    const getInitialSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) {
+          console.error('Error getting session:', error);
+        } else if (session) {
+          setUser(session.user);
         }
+      } catch (error) {
+        console.error('Failed to get initial session:', error);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
-    checkUser();
+
+    getInitialSession();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('🔧 [AUTH] Auth state changed:', event, session?.user?.email);
+        
+        if (session) {
+          setUser(session.user);
+        } else {
+          setUser(null);
+        }
+        setLoading(false);
+      }
+    );
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const login = async (email, password) => {
     try {
-      const response = await api.login(email, password);
-      localStorage.setItem('token', response.token);
-      // Extract the user data from the response
-      setUser(response.user);
-      return response;
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        console.error('Login error:', error);
+        throw new Error(error.message);
+      }
+
+      if (data.user) {
+        setUser(data.user);
+        return { user: data.user, session: data.session };
+      } else {
+        throw new Error('No user data returned');
+      }
     } catch (error) {
       console.error('Login error:', error);
       throw error;
@@ -53,20 +69,46 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (email, password, name, options = {}) => {
     try {
-      const response = await api.register(email, password, name, options);
-      localStorage.setItem('token', response.token);
-      // Extract the user data from the response
-      setUser(response.user);
-      return response;
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { 
+            name,
+            gdpr_policy_version: options.policyVersion || '1.0',
+            gdpr_consent_at: new Date().toISOString()
+          },
+          emailRedirectTo: window.location.origin
+        }
+      });
+
+      if (error) {
+        console.error('Registration error:', error);
+        throw new Error(error.message);
+      }
+
+      if (data.user) {
+        setUser(data.user);
+        return { user: data.user, session: data.session };
+      } else {
+        throw new Error('No user data returned');
+      }
     } catch (error) {
       console.error('Registration error:', error);
       throw error;
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem('token');
-    setUser(null);
+  const logout = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('Logout error:', error);
+      }
+      setUser(null);
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
   return (

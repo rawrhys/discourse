@@ -3,11 +3,16 @@
 /* eslint-env browser, es2020 */
 import JsonParser from '../utils/jsonParser';
 import { API_BASE_URL } from '../config/api';
+import { supabase } from '../config/supabase';
 import logger from '../utils/logger';
 
 const apiClient = async (url, options = {}) => {
   const { onProgress, ...fetchOptions } = options;
-  const token = localStorage.getItem('token');
+  
+  // Get the current session from Supabase
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  
   const defaultHeaders = {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
@@ -78,8 +83,8 @@ const apiClient = async (url, options = {}) => {
             errorData.code === 'TOKEN_EXPIRED' ||
             errorData.code === 'TOKEN_FORMAT_INVALID') {
           logger.warn('🔒 [AUTH ERROR] Token is invalid:', errorData.code);
-          // Clear the invalid token
-          localStorage.removeItem('token');
+          // Sign out from Supabase to clear the session
+          await supabase.auth.signOut();
           // Broadcast auth error event
           window.dispatchEvent(new CustomEvent('auth-error'));
           throw new Error('Your session has expired. Please log in again.');
@@ -92,8 +97,8 @@ const apiClient = async (url, options = {}) => {
         // Special handling for user/current endpoint - return null instead of throwing
         if (url.includes('/user/current')) {
           logger.warn('⚠️ [AUTH WARNING] 401 error on user/current - likely session expired');
-          // Clear the invalid token
-          localStorage.removeItem('token');
+          // Sign out from Supabase to clear the session
+          await supabase.auth.signOut();
           return null;
         }
 

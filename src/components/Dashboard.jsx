@@ -7,6 +7,7 @@ import { API_BASE_URL, debugApiConfig, testBackendConnection } from '../config/a
 import LoadingIndicator from './LoadingIndicator';
 import logger from '../utils/logger';
 import ConfettiAnimation from './ConfettiAnimation';
+import { supabase } from '../config/supabase';
 
 const Dashboard = () => {
   const { user, logout } = useAuth();
