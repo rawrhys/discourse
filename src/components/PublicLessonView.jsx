@@ -439,40 +439,23 @@ const PublicLessonView = ({
     };
   }, [lesson, subject, courseId, courseDescription]);
 
-  // Preload next lesson images for better performance (public courses)
+  // Preload current lesson image for better performance (public courses)
   useEffect(() => {
-    if (!lesson || !course) return;
+    if (!lesson || !lesson.image) return;
 
-    const preloadNextImages = async () => {
+    const preloadCurrentImage = async () => {
       try {
-        // Find current module and lesson index
-        const currentModuleIndex = course.modules.findIndex(module => 
-          module.lessons.some(lessonItem => lessonItem.id === lesson.id)
-        );
-
-        if (currentModuleIndex === -1) return;
-
-        const currentModule = course.modules[currentModuleIndex];
-        const currentLessonIndex = currentModule.lessons.findIndex(lessonItem => lessonItem.id === lesson.id);
-
-        if (currentLessonIndex === -1) return;
-
-        // Preload next 2 lessons in the current module (fewer for public courses)
-        await imagePreloadService.preloadModuleImages(
-          currentModule, 
-          currentLessonIndex, 
-          2
-        );
-
-        console.log('[PublicLessonView] Preloaded next lesson images');
+        // Preload the current lesson's image
+        await imagePreloadService.preloadLessonImages(lesson, 10);
+        console.log('[PublicLessonView] Preloaded current lesson image');
       } catch (error) {
         console.warn('[PublicLessonView] Image preloading error:', error);
       }
     };
 
     // Run preloading in background
-    preloadNextImages();
-  }, [lesson?.id, course]);
+    preloadCurrentImage();
+  }, [lesson?.id, lesson?.image]);
 
   // Academic references state
   const [academicReferences, setAcademicReferences] = useState([]);
