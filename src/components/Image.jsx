@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import PropTypes from 'prop-types';
-import imagePerformanceMonitor from '../services/ImagePerformanceMonitor';
-import imagePreloadService from '../services/ImagePreloadService';
 
 const Image = ({ 
   src, 
@@ -111,24 +109,10 @@ const Image = ({
     setIsLoaded(true);
     setIsError(false);
     
-    // Track performance (with error handling)
+    // Basic performance tracking (without external services)
     try {
       const loadTime = Date.now() - (imgRef.current?.dataset?.startTime || Date.now());
-      const wasPreloaded = imagePreloadService?.isPreloaded?.(src) || false;
-      
-      if (imagePerformanceMonitor?.trackImageLoad) {
-        imagePerformanceMonitor.trackImageLoad(
-          src, 
-          loadTime, 
-          wasPreloaded,
-          0, // File size not available in browser
-          src.includes('webp') ? 'webp' : 'jpeg'
-        );
-      }
-      
-      if (imagePerformanceMonitor?.trackPreloadPerformance) {
-        imagePerformanceMonitor.trackPreloadPerformance(src, wasPreloaded, loadTime);
-      }
+      console.log(`[Image] Loaded ${src} in ${loadTime}ms`);
     } catch (error) {
       console.warn('[Image] Performance tracking error:', error);
     }
@@ -138,15 +122,6 @@ const Image = ({
     console.error('[Image] Failed to load image:', src);
     setIsError(true);
     setIsLoaded(false);
-    
-    // Track error (with error handling)
-    try {
-      if (imagePerformanceMonitor?.trackImageError) {
-        imagePerformanceMonitor.trackImageError(src, e.message || 'Unknown error');
-      }
-    } catch (error) {
-      console.warn('[Image] Error tracking failed:', error);
-    }
     
     // Create fallback placeholder
     const placeholderDiv = document.createElement('div');
