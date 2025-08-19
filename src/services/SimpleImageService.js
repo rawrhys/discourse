@@ -446,7 +446,23 @@ const SimpleImageService = {
     }
     
     try {
-      new URL(url);
+      const parsedUrl = new URL(url);
+      
+      // Check if it's a valid image URL
+      const validImageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.tiff', '.tif'];
+      const hasValidExtension = validImageExtensions.some(ext => 
+        parsedUrl.pathname.toLowerCase().includes(ext)
+      );
+      
+      // Special handling for SVG files - they might have additional parameters
+      const isSvgFile = parsedUrl.pathname.toLowerCase().includes('.svg');
+      const hasValidSvgExtension = isSvgFile || hasValidExtension;
+      
+      if (!hasValidSvgExtension) {
+        console.warn('[SimpleImageService] Invalid image format in URL:', parsedUrl.pathname);
+        return false;
+      }
+      
       return true;
     } catch {
       return false;
@@ -469,11 +485,22 @@ const SimpleImageService = {
       // Try to fetch the image to ensure it's accessible
       const response = await fetch(imageData.url, {
         method: 'HEAD',
-        signal: AbortSignal.timeout(3000)
+        signal: AbortSignal.timeout(5000), // Increased timeout for SVG files
+        headers: {
+          'Accept': 'image/*, image/svg+xml', // Accept SVG files
+          'User-Agent': 'SimpleImageService/1.0'
+        }
       });
       
       if (response.ok) {
-        console.log('[SimpleImageService] Successfully pre-cached image:', imageData.url.substring(0, 50) + '...');
+        const contentType = response.headers.get('content-type') || '';
+        const isSvg = contentType.includes('svg') || imageData.url.toLowerCase().includes('.svg');
+        
+        console.log('[SimpleImageService] Successfully pre-cached image:', {
+          url: imageData.url.substring(0, 50) + '...',
+          contentType,
+          isSvg
+        });
         return true;
       } else {
         console.warn('[SimpleImageService] Failed to pre-cache image, status:', response.status);

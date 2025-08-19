@@ -3714,6 +3714,22 @@ async function imageSearchHandler(req, res) {
       if (imageData) {
           console.log('[ImageSearch] Image found:', imageData);
           
+          // Ensure sourceUrlForCaching is set for all image formats
+          if (!imageData.sourceUrlForCaching && imageData.imageUrl) {
+            // Extract the original URL from the proxied URL
+            const imageUrl = imageData.imageUrl;
+            if (imageUrl.includes('/api/image/fast?url=')) {
+              const encodedUrl = imageUrl.split('/api/image/fast?url=')[1];
+              if (encodedUrl) {
+                try {
+                  imageData.sourceUrlForCaching = decodeURIComponent(encodedUrl);
+                } catch (error) {
+                  console.warn('[ImageSearch] Failed to decode source URL:', error.message);
+                }
+              }
+            }
+          }
+          
           const rawAttribution = imageData.attribution || '';
           const withoutHtml = rawAttribution.replace(/<[^>]*>/g, '');
           let uploader = withoutHtml;
@@ -3733,12 +3749,44 @@ async function imageSearchHandler(req, res) {
               attribution: imageData.attribution
             });
           }
+          
+          // Pre-cache the image if sourceUrlForCaching is available
+          if (imageData.sourceUrlForCaching) {
+            try {
+              // Validate the URL before attempting to pre-cache
+              const sourceUrl = imageData.sourceUrlForCaching;
+              if (sourceUrl && typeof sourceUrl === 'string' && sourceUrl.startsWith('http')) {
+                // Pre-cache in background without blocking the response
+                setImmediate(async () => {
+                  try {
+                    const response = await fetch(sourceUrl, {
+                      method: 'HEAD',
+                      signal: AbortSignal.timeout(5000)
+                    });
+                    if (response.ok) {
+                      console.log('[ImageSearch] Successfully pre-cached image:', sourceUrl.substring(0, 50) + '...');
+                    } else {
+                      console.warn('[ImageSearch] Failed to pre-cache image, status:', response.status);
+                    }
+                  } catch (error) {
+                    console.warn('[ImageSearch] Failed to pre-cache image:', error.message);
+                  }
+                });
+              } else {
+                console.warn('[ImageSearch] Invalid sourceUrlForCaching:', sourceUrl);
+              }
+            } catch (error) {
+              console.warn('[ImageSearch] Error during pre-caching:', error.message);
+            }
+          }
+          
           return res.json({
             url: imageData.imageUrl,
             title: imageData.imageTitle || imageData.title,
             pageURL: imageData.pageURL,
             attribution: imageData.attribution,
             uploader,
+            sourceUrlForCaching: imageData.sourceUrlForCaching || null
           });
       }
 
@@ -3805,15 +3853,24 @@ app.get('/api/image/fast', async (req, res) => {
       return res.status(403).json({ error: 'Forbidden domain' });
     }
 
-    // Validate image format - allow all common image formats
+    // Validate image format - allow all common image formats including SVG
     const validImageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.tiff', '.tif'];
     const hasValidExtension = validImageExtensions.some(ext => 
       parsedUrl.pathname.toLowerCase().includes(ext)
     );
     
-    if (!hasValidExtension) {
+    // Special handling for SVG files - they might have additional parameters
+    const isSvgFile = parsedUrl.pathname.toLowerCase().includes('.svg');
+    const hasValidSvgExtension = isSvgFile || hasValidExtension;
+    
+    if (!hasValidSvgExtension) {
       console.warn(`[FastImageProxy] Invalid image format: ${parsedUrl.pathname}`);
       return res.status(400).json({ error: 'Invalid image format' });
+    }
+
+    // For SVG files, ensure we handle them properly
+    if (isSvgFile) {
+      console.log(`[FastImageProxy] Processing SVG file: ${parsedUrl.pathname}`);
     }
 
     // Check server-side cache first
