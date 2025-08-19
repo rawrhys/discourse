@@ -12,4 +12,16 @@ console.log('🔧 [SUPABASE] Environment variables:', {
   VITE_SUPABASE_ANON_KEY: import.meta.env.VITE_SUPABASE_ANON_KEY ? '***' : 'NOT_SET'
 });
 
+// Validate API key format
+if (import.meta.env.VITE_SUPABASE_ANON_KEY) {
+  const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  if (key.includes('\n') || key.includes(' ')) {
+    console.error('❌ [SUPABASE] API key contains line breaks or spaces - this will cause authentication errors!');
+  } else {
+    console.log('✅ [SUPABASE] API key format looks correct');
+  }
+} else {
+  console.error('❌ [SUPABASE] VITE_SUPABASE_ANON_KEY is not set!');
+}
+
 export default supabase;
