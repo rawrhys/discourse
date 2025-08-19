@@ -1198,48 +1198,23 @@ const LessonView = ({
     };
   }, [propLesson, subject, courseId, courseDescription]);
 
-  // Preload next lesson images for better performance
+  // Preload current lesson image for better performance
   useEffect(() => {
-    if (!propLesson || !course) return;
+    if (!propLesson || !propLesson.image) return;
 
-    const preloadNextImages = async () => {
+    const preloadCurrentImage = async () => {
       try {
-        // Find current module and lesson index
-        const currentModuleIndex = course.modules.findIndex(module => 
-          module.lessons.some(lesson => lesson.id === propLesson.id)
-        );
-
-        if (currentModuleIndex === -1) return;
-
-        const currentModule = course.modules[currentModuleIndex];
-        const currentLessonIndex = currentModule.lessons.findIndex(lesson => lesson.id === propLesson.id);
-
-        if (currentLessonIndex === -1) return;
-
-        // Preload next 3 lessons in the current module
-        await imagePreloadService.preloadModuleImages(
-          currentModule, 
-          currentLessonIndex, 
-          3
-        );
-
-        // Also preload first lesson of next module if available
-        if (currentModuleIndex + 1 < course.modules.length) {
-          const nextModule = course.modules[currentModuleIndex + 1];
-          if (nextModule && nextModule.lessons && nextModule.lessons.length > 0) {
-            await imagePreloadService.preloadLessonImages(nextModule.lessons[0], 7);
-          }
-        }
-
-        console.log('[LessonView] Preloaded next lesson images');
+        // Preload the current lesson's image
+        await imagePreloadService.preloadLessonImages(propLesson, 10);
+        console.log('[LessonView] Preloaded current lesson image');
       } catch (error) {
         console.warn('[LessonView] Image preloading error:', error);
       }
     };
 
     // Run preloading in background
-    preloadNextImages();
-  }, [propLesson?.id, course]);
+    preloadCurrentImage();
+  }, [propLesson?.id, propLesson?.image]);
 
   // Clean up any remaining malformed asterisks after content is rendered
   useEffect(() => {
