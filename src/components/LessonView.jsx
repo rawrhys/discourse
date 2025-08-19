@@ -1168,6 +1168,11 @@ const LessonView = ({
           performanceMonitor.trackImageLoad(result.url, fetchTime, false);
         }
         
+        // Log slow image fetches
+        if (fetchTime > 2000) {
+          console.warn('[LessonView] Slow image fetch detected:', fetchTime + 'ms');
+        }
+        
         if (!ignore && !abortController.signal.aborted) {
           console.log('[LessonView] Setting image data:', result);
           
@@ -1229,9 +1234,10 @@ const LessonView = ({
         console.log('[LessonView] Preloaded current lesson image');
         
         // Track performance
+        const preloadTime = performance.now() - renderStartTime.current;
         performanceMonitor.trackImageLoad(
           propLesson.image.imageUrl || propLesson.image.url,
-          Date.now() - performance.now(),
+          preloadTime,
           true // cache hit
         );
       } catch (error) {

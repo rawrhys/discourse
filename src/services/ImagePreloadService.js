@@ -25,18 +25,15 @@ class ImagePreloadService {
       return this.preloadCache.get(imageUrl);
     }
 
-    // Add to queue with priority
-    this.preloadQueue.push({ url: imageUrl, priority });
-    this.preloadQueue.sort((a, b) => b.priority - a.priority); // Sort by priority
-
-    // Start processing if not already running
-    if (!this.isProcessing) {
-      this.processQueue();
-    }
-
     return new Promise((resolve) => {
-      // Store resolve function to call when preload completes
-      this.preloadQueue.find(item => item.url === imageUrl).resolve = resolve;
+      // Add to queue with priority and resolve function
+      this.preloadQueue.push({ url: imageUrl, priority, resolve });
+      this.preloadQueue.sort((a, b) => b.priority - a.priority); // Sort by priority
+
+      // Start processing if not already running
+      if (!this.isProcessing) {
+        this.processQueue();
+      }
     });
   }
 
