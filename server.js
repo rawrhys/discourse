@@ -46,6 +46,21 @@ dotenv.config();
 // Initialize global CAPTCHA challenges map
 global.captchaChallenges = new Map();
 
+// Initialize global image search cache
+global.imageSearchCache = new Map();
+
+// Clean up old cache entries every 10 minutes
+setInterval(() => {
+  if (global.imageSearchCache) {
+    const now = Date.now();
+    for (const [key, value] of global.imageSearchCache.entries()) {
+      if (now - value.timestamp > 300000) { // 5 minutes
+        global.imageSearchCache.delete(key);
+      }
+    }
+  }
+}, 600000); // 10 minutes
+
 const app = express();
 
 // Import PublicCourseSessionService singleton instance
@@ -1327,7 +1342,7 @@ Context: "${context.substring(0, 1000)}..."`;
 
     try {
         const base = 'https://en.wikipedia.org/w/api.php';
-        const keywords = buildRefinedSearchPhrases(subject, content, options.relaxed ? 12 : 6, options.courseTitle || '');
+        const keywords = buildRefinedSearchPhrases(subject, content, options.relaxed ? 4 : 2, options.courseTitle || '');
         const dynamicNegs = getDynamicExtraNegatives(subject);
         const mainText = extractMainLessonText(content);
         
@@ -1342,7 +1357,7 @@ Context: "${context.substring(0, 1000)}..."`;
             format: 'json',
             generator: 'search',
             gsrsearch: kw,
-            gsrlimit: options.relaxed ? '5' : '3',
+            gsrlimit: options.relaxed ? '3' : '2',
             prop: 'pageimages|pageterms',
             piprop: 'thumbnail',
             pithumbsize: '800',
@@ -1429,14 +1444,14 @@ Context: "${context.substring(0, 1000)}..."`;
       return null;
     }
     try {
-      const queries = buildRefinedSearchPhrases(subject, content, options.relaxed ? 12 : 6);
+      const queries = buildRefinedSearchPhrases(subject, content, options.relaxed ? 4 : 2);
       // Ensure the full subject phrase is first
       if (String(subject || '').trim()) {
         const s = String(subject).trim();
         if (!queries.includes(s)) queries.unshift(s);
       }
 
-      const perPage = options.relaxed ? 80 : 40;
+      const perPage = options.relaxed ? 20 : 10;
       const dynamicNegs = getDynamicExtraNegatives(subject);
       const mainText = extractMainLessonText(content);
 
@@ -1524,10 +1539,43 @@ Context: "${context.substring(0, 1000)}..."`;
 
   // Met Museum image service removed
    
-  // Try Wikipedia first; then Pixabay
+  // Try Wikipedia first; then Pixabay - optimized with parallel execution and caching
   async fetchRelevantImage(subject, content = '', usedImageTitles = [], usedImageUrls = [], options = { relaxed: false }, courseContext = {}) {
-    const wiki = await this.fetchWikipediaImage(subject, content, usedImageTitles, usedImageUrls, { relaxed: !!options.relaxed }, courseContext);
-    const pixa = await this.fetchPixabayImage(subject, content, usedImageTitles, usedImageUrls, { relaxed: !!options.relaxed }, courseContext);
+    // Create cache key for this search
+    const cacheKey = `image_search_${subject}_${options.relaxed ? 'relaxed' : 'strict'}`;
+    
+    // Check if we have a cached result
+    if (global.imageSearchCache && global.imageSearchCache.has(cacheKey)) {
+      const cached = global.imageSearchCache.get(cacheKey);
+      if (Date.now() - cached.timestamp < 300000) { // 5 minute cache
+        console.log(`[AIService] Using cached image search result for "${subject}"`);
+        return cached.result;
+      } else {
+        global.imageSearchCache.delete(cacheKey);
+      }
+    }
+    
+    // Initialize cache if it doesn't exist
+    if (!global.imageSearchCache) {
+      global.imageSearchCache = new Map();
+    }
+    
+    // Execute both searches in parallel with timeout
+    const searchPromises = [
+      this.fetchWikipediaImage(subject, content, usedImageTitles, usedImageUrls, { relaxed: !!options.relaxed }, courseContext),
+      this.fetchPixabayImage(subject, content, usedImageTitles, usedImageUrls, { relaxed: !!options.relaxed }, courseContext)
+    ];
+    
+    // Add timeout to prevent hanging
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Image search timeout')), 10000); // 10 second timeout
+    });
+    
+    try {
+      const [wiki, pixa] = await Promise.race([
+        Promise.all(searchPromises),
+        timeoutPromise
+      ]);
     
     // Check if this is historical/educational content
     const isHistoricalContent = /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(subject) || 
@@ -1560,17 +1608,37 @@ Context: "${context.substring(0, 1000)}..."`;
     }
     
     // If only one service returned results, use that
+    let result = null;
     if (wiki) {
       console.log(`[AIService] Using Wikipedia image only (score ${wiki.score || 0})`);
-      return wiki;
-    }
-    if (pixa) {
+      result = wiki;
+    } else if (pixa) {
       console.log(`[AIService] Using Pixabay image only (score ${pixa.score || 0}) - Wikipedia failed`);
-      return pixa;
+      result = pixa;
+    } else {
+      console.log(`[AIService] No images found from either service`);
+      result = null;
     }
     
-    console.log(`[AIService] No images found from either service`);
-    return null;
+    // Cache the result
+    global.imageSearchCache.set(cacheKey, {
+      result,
+      timestamp: Date.now()
+    });
+    
+    return result;
+    
+    } catch (error) {
+      console.warn(`[AIService] Image search failed for "${subject}":`, error.message);
+      
+      // Cache null result to prevent repeated failures
+      global.imageSearchCache.set(cacheKey, {
+        result: null,
+        timestamp: Date.now()
+      });
+      
+      return null;
+    }
   }
   
   async generateCourse(topic, difficulty, numModules, numLessonsPerModule = 3, generationId = null) {
@@ -3563,11 +3631,20 @@ async function imageSearchHandler(req, res) {
       }
       
       console.log('[ImageSearch] Calling fetchRelevantImage...');
-      let imageData = await global.aiService.fetchRelevantImage(lessonTitle, content, safeUsedTitles, safeUsedUrls, { relaxed: false }, courseContext);
+      
+      // Add timeout to prevent hanging requests
+      const searchTimeout = 15000; // 15 seconds
+      const searchPromise = global.aiService.fetchRelevantImage(lessonTitle, content, safeUsedTitles, safeUsedUrls, { relaxed: false }, courseContext);
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Image search timeout')), searchTimeout);
+      });
+      
+      let imageData = await Promise.race([searchPromise, timeoutPromise]);
       
       if (!imageData) {
           console.log('[ImageSearch] No image found with strict search, trying relaxed...');
-          imageData = await global.aiService.fetchRelevantImage(lessonTitle, content, safeUsedTitles, safeUsedUrls, { relaxed: true }, courseContext);
+          const relaxedPromise = global.aiService.fetchRelevantImage(lessonTitle, content, safeUsedTitles, safeUsedUrls, { relaxed: true }, courseContext);
+          imageData = await Promise.race([relaxedPromise, timeoutPromise]);
       }
       
       if (imageData) {

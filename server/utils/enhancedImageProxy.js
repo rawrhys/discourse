@@ -3,8 +3,8 @@ import sharp from 'sharp';
 
 // Enhanced in-memory cache with better eviction strategy
 const imageCache = new Map();
-const CACHE_TTL = 3600000; // 1 hour
-const MAX_CACHE_SIZE = 200; // Increased cache size
+const CACHE_TTL = 1800000; // 30 minutes - reduced for better memory management
+const MAX_CACHE_SIZE = 100; // Reduced cache size for better performance
 const CACHE_CLEANUP_INTERVAL = 300000; // 5 minutes
 
 // Enhanced image processing configuration
@@ -147,7 +147,7 @@ class EnhancedImageProxy {
       // Fetch original image with timeout
       const response = await fetch(url, {
         headers: { 'User-Agent': 'Enhanced-Image-Proxy/1.0' },
-        timeout: 15000 // Increased timeout
+        timeout: 8000 // Reduced timeout for better performance
       });
 
       if (!response.ok) {

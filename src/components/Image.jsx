@@ -25,8 +25,8 @@ const Image = ({
   // Determine if we should show the image
   const shouldShowImage = isInView || preload;
 
-  // Reduced image sizes for better performance - only 2 sizes instead of 3
-  const imageSizes = useMemo(() => [800, 1200], []);
+  // Optimized image sizes for better performance - single size to reduce complexity
+  const imageSizes = useMemo(() => [800], []);
 
   // Create optimized srcSet for different formats with caching
   const createSrcSet = useCallback((baseUrl, format) => {
@@ -67,8 +67,8 @@ const Image = ({
         }
       },
       { 
-        rootMargin: '50px 0px 200px 0px', // Reduced top margin, increased bottom for better performance
-        threshold: 0.01 // Lower threshold for earlier loading
+        rootMargin: '100px 0px 100px 0px', // Balanced margins for better performance
+        threshold: 0.1 // Higher threshold to reduce unnecessary loads
       }
     );
 

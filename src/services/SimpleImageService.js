@@ -4,7 +4,7 @@ import { API_BASE_URL } from '../config/api.js';
 const SimpleImageService = {
   // Cache for image search results
   imageCache: new Map(),
-  cacheTimeout: 5 * 60 * 1000, // 5 minutes
+  cacheTimeout: 10 * 60 * 1000, // 10 minutes - increased for better performance
 
   // Test server connectivity
   async testServerConnection() {
@@ -105,9 +105,9 @@ const SimpleImageService = {
         disableModeration: true
       };
 
-      // Add timeout to prevent hanging requests - reduced to 8 seconds
+      // Add timeout to prevent hanging requests - reduced to 6 seconds
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 6000); // 6 second timeout
       
       const response = await fetch(searchUrl, {
         method: 'POST',
