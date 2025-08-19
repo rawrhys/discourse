@@ -18,6 +18,8 @@ import api from '../services/api.js';
 import quizPersistenceService from '../services/QuizPersistenceService';
 import markdownService from '../services/MarkdownService';
 import { fixMalformedContent, formatContentForDisplay, cleanContentFormatting, validateContent } from '../utils/contentFormatter';
+import AcademicReferencesFooter from './AcademicReferencesFooter';
+import academicReferencesService from '../services/AcademicReferencesService';
 
 // Import test utilities for development
 if (process.env.NODE_ENV === 'development') {
@@ -317,9 +319,28 @@ const Content = memo(({ content, bibliography, lessonTitle, courseSubject }) => 
           className="markdown-body"
           dangerouslySetInnerHTML={{ __html: parsedBibContent }}
         />
-        <ReferencesFooter references={bibRefs} />
+        {bibRefs && bibRefs.length > 0 && (
+          <AcademicReferencesFooter 
+            references={bibRefs}
+            onCitationClick={(referenceId) => {
+              // Handle citation click if needed
+              console.log('[LessonView] Bibliography citation clicked:', referenceId);
+            }}
+          />
+        )}
       </div>
     );
+  }
+
+  // Create academic references footer
+  let referencesFooter = null;
+  try {
+    if (references && references.length > 0) {
+      referencesFooter = academicReferencesService.createReferencesFooter(references);
+    }
+  } catch (error) {
+    console.warn('[LessonView] Error creating references footer:', error);
+    referencesFooter = null;
   }
 
   // Debug logging for markdown processing
@@ -340,52 +361,20 @@ const Content = memo(({ content, bibliography, lessonTitle, courseSubject }) => 
         className="markdown-body"
         dangerouslySetInnerHTML={{ __html: parsedContent }}
       />
-      {references && references.length > 0 && (
-        <ReferencesFooter references={references} />
+      {referencesFooter && referencesFooter.references && (
+        <AcademicReferencesFooter 
+          references={referencesFooter.references}
+          onCitationClick={(referenceId) => {
+            // Handle citation click if needed
+            console.log('[LessonView] Citation clicked:', referenceId);
+          }}
+        />
       )}
     </div>
   );
 });
 
-// New ReferencesFooter component
-const ReferencesFooter = memo(({ references }) => {
-  if (!references || references.length === 0) return null;
-
-  // Debug logging for references footer
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[ReferencesFooter] Rendering references:', references);
-  }
-
-  return (
-    <footer className="references-footer mt-8 pt-6 border-t border-gray-200">
-      <h2 className="references-header text-xl font-semibold text-gray-900 mb-4">
-        References
-      </h2>
-      <div className="references-list space-y-3">
-        {references.map((ref, index) => {
-          // Parse the citation to handle markdown formatting
-          const parsedCitation = fixMalformedMarkdown(ref.citation);
-          
-          return (
-            <div key={index} className="citation-item p-3 bg-gray-50 border-l-4 border-blue-500 rounded">
-              <span className="font-medium text-blue-600">[{ref.number}]</span>
-              <span className="ml-2" dangerouslySetInnerHTML={{ 
-                __html: parsedCitation 
-              }} />
-            </div>
-          );
-        })}
-      </div>
-    </footer>
-  );
-});
-
-ReferencesFooter.propTypes = {
-  references: PropTypes.arrayOf(PropTypes.shape({
-    number: PropTypes.string.isRequired,
-    citation: PropTypes.string.isRequired
-  }))
-};
+// AcademicReferencesFooter is now imported and used instead of the old ReferencesFooter
 
 Content.propTypes = {
   content: PropTypes.oneOfType([PropTypes.string, PropTypes.object]),
