@@ -946,7 +946,7 @@ const PublicCourseDisplay = () => {
         </header>
 
         <main className="flex-1 overflow-y-auto p-6 bg-gray-50">
-          {showQuiz && currentLesson ? (
+          {(showQuiz || activeTab === 'quiz') && currentLesson ? (
             <Suspense fallback={<div>Loading Quiz...</div>}>
               <QuizView
                 key={currentLesson.id}
@@ -985,6 +985,18 @@ const PublicCourseDisplay = () => {
                           }`}
                         >
                           Flashcards
+                        </button>
+                      )}
+                      {currentLesson.quiz && currentLesson.quiz.length > 0 && (
+                        <button
+                          onClick={() => setActiveTab('quiz')}
+                          className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                            activeTab === 'quiz'
+                              ? 'border-blue-500 text-blue-600'
+                              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                          }`}
+                        >
+                          Quiz
                         </button>
                       )}
                     </nav>
@@ -1127,6 +1139,8 @@ const PublicCourseDisplay = () => {
                         <FlashcardRenderer flashcards={flashcardData} />
                       </div>
                     )}
+
+
                   </div>
 
                   {/* Navigation */}
@@ -1144,14 +1158,6 @@ const PublicCourseDisplay = () => {
                         <span className="text-sm text-gray-500">
                           Lesson {currentLessonIndex + 1} of {totalLessonsInModule}
                         </span>
-                        {currentLesson.quiz && currentLesson.quiz.length > 0 && (
-                          <button
-                            onClick={() => setShowQuiz(true)}
-                            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-                          >
-                            Take Quiz
-                          </button>
-                        )}
                       </div>
                       
                       <button
