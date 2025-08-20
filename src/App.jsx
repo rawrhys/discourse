@@ -12,6 +12,7 @@ import './utils/debug'; // Import debug utilities
 import quizPersistenceService from './services/QuizPersistenceService';
 
 // Lazy load the components
+const Homepage = lazy(() => import('./components/Homepage'));
 const Login = lazy(() => import('./components/auth/Login'));
 const Register = lazy(() => import('./components/auth/Register'));
 const Dashboard = lazy(() => import('./components/Dashboard'));
@@ -310,6 +311,7 @@ function App() {
       <ErrorBoundary>
         <Suspense fallback={<LoadingScreen />}>
           <Routes>
+            <Route path="/" element={<Homepage />} />
             <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
             <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
@@ -322,8 +324,7 @@ function App() {
             <Route path="/captcha/:courseId" element={<CaptchaPage />} />
             <Route path="/public/course/:courseId/*" element={<PublicCourseDisplay />} />
     
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
         

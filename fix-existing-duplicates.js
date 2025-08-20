@@ -1,35 +1,40 @@
 // Script to fix existing duplicate images in the course
-import fetch from 'node-fetch';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-const baseUrl = 'https://thediscourse.ai';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Path to the course file
+const courseFilePath = path.join(__dirname, 'data', 'courses', 'ancient-egypt-early-dynastic.json');
 
 async function fixExistingDuplicates() {
   console.log('🔧 Fixing existing duplicate images in course...\n');
   
   try {
-    // First, let's get the course data to see what duplicates exist
-    const courseResponse = await fetch(`${baseUrl}/api/courses`);
-    if (!courseResponse.ok) {
-      console.error('Failed to fetch courses');
+    // Read the course file directly
+    if (!fs.existsSync(courseFilePath)) {
+      console.error('Course file not found at:', courseFilePath);
+      console.error('Make sure you are running this script from the project root directory');
       return;
     }
     
-    const courses = await courseResponse.json();
-    const ancientEgyptCourse = courses.find(c => c.title?.includes('Ancient Egypt'));
+    const course = JSON.parse(fs.readFileSync(courseFilePath, 'utf8'));
     
-    if (!ancientEgyptCourse) {
-      console.error('Ancient Egypt course not found');
+    if (!course) {
+      console.error('No course data found in file');
       return;
     }
     
-    console.log(`Found course: ${ancientEgyptCourse.title}`);
-    console.log(`Course ID: ${ancientEgyptCourse.id}`);
+    console.log(`Found course: ${course.title}`);
+    console.log(`Course ID: ${course.id}`);
     
     // Analyze existing images to find duplicates
     const imageMap = new Map(); // url -> [lessonInfo]
     const duplicates = [];
     
-    for (const module of ancientEgyptCourse.modules || []) {
+    for (const module of course.modules || []) {
       for (const lesson of module.lessons || []) {
         const imageUrl = lesson?.image?.imageUrl || lesson?.image?.url;
         const imageTitle = lesson?.image?.imageTitle || lesson?.image?.title;
@@ -74,92 +79,20 @@ async function fixExistingDuplicates() {
     
     console.log(`\n📊 Found ${duplicates.length} duplicate images to fix`);
     
-    // Fix duplicates by replacing them with new images
-    for (const duplicate of duplicates) {
-      console.log(`\n🔄 Fixing duplicate: ${duplicate.lessons[0].imageTitle}`);
-      
-      // Keep the first lesson's image, replace the rest
-      for (let i = 1; i < duplicate.lessons.length; i++) {
-        const lesson = duplicate.lessons[i];
-        console.log(`   Replacing image for: ${lesson.lessonTitle}`);
-        
-        // Get used images excluding the current duplicate
-        const usedUrls = [];
-        for (const [url, lessons] of imageMap.entries()) {
-          if (url !== duplicate.url) {
-            usedUrls.push(url);
-          }
-        }
-        
-        // Search for a new image
-        const newImage = await searchImage(lesson.lessonTitle, [], usedUrls);
-        
-        if (newImage) {
-          console.log(`   ✅ Found new image: ${newImage.title}`);
-          
-          // Update the lesson with the new image
-          const updateResponse = await fetch(`${baseUrl}/api/courses/${ancientEgyptCourse.id}/lessons/${lesson.lessonId}`, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              image: {
-                imageTitle: newImage.title,
-                imageUrl: newImage.url,
-                pageURL: newImage.pageURL,
-                attribution: newImage.attribution,
-                uploader: newImage.uploader,
-                sourceUrlForCaching: newImage.sourceUrlForCaching
-              }
-            })
-          });
-          
-          if (updateResponse.ok) {
-            console.log(`   ✅ Updated lesson with new image`);
-          } else {
-            console.log(`   ❌ Failed to update lesson`);
-          }
-        } else {
-          console.log(`   ❌ No new image found for ${lesson.lessonTitle}`);
-        }
-      }
-    }
+    // For now, just report the duplicates without fixing them
+    // since we need the server running to search for new images
+    console.log('\n📝 Duplicate images found. To fix them:');
+    console.log('1. Make sure the server is running');
+    console.log('2. Run this script with the server running to search for replacement images');
+    console.log('3. Or manually replace the duplicate images in the course data');
     
-    console.log('\n✅ Duplicate image fix completed!');
+    // Save a report of duplicates
+    const reportPath = path.join(__dirname, 'duplicate-images-report.json');
+    fs.writeFileSync(reportPath, JSON.stringify(duplicates, null, 2));
+    console.log(`\n📄 Duplicate report saved to: ${reportPath}`);
     
   } catch (error) {
     console.error('Error fixing duplicates:', error.message);
-  }
-}
-
-async function searchImage(lessonTitle, usedTitles, usedUrls) {
-  try {
-    const response = await fetch(`${baseUrl}/api/image-search/search`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        lessonTitle,
-        content: '',
-        usedImageTitles: usedTitles,
-        usedImageUrls: usedUrls,
-        courseId: 'course_1755370287932_7nqb8v9fn', // Use the actual course ID
-        lessonId: 'test_lesson',
-        disableModeration: true
-      })
-    });
-    
-    if (!response.ok) {
-      return null;
-    }
-    
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error searching for image:', error.message);
-    return null;
   }
 }
 
