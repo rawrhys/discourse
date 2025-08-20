@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import axios from 'axios';
 import dotenv from 'dotenv';
+import fileUpload from 'express-fileupload';
 
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -117,6 +118,16 @@ app.use((req, res, next) => {
 
 // Parse JSON bodies
 app.use(express.json());
+
+// File upload middleware
+app.use(fileUpload({
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  abortOnLimit: true,
+  createParentPath: true,
+  useTempFiles: true,
+  tempFileDir: '/tmp/',
+  debug: process.env.NODE_ENV === 'development'
+}));
 
 // Logging flags
 const SHOULD_LOG_AUTH = String(process.env.AUTH_LOG || '').toLowerCase() === 'true';
@@ -7123,23 +7134,87 @@ app.post('/api/image/clear-cache', authenticateToken, async (req, res) => {
 });
 
 // Report problem endpoint
-app.post('/api/report-problem', authenticateToken, async (req, res) => {
+app.post('/api/report-problem', async (req, res) => {
   try {
-    const { message, userEmail, userId, timestamp, userAgent, url } = req.body;
+    // Verify Supabase token
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const token = authHeader.substring(7);
+    let user = null;
+
+    try {
+      const { data: { user: supabaseUser }, error } = await supabase.auth.getUser(token);
+      if (error || !supabaseUser) {
+        return res.status(401).json({ error: 'Invalid authentication token' });
+      }
+      user = supabaseUser;
+    } catch (authError) {
+      console.error('[PROBLEM_REPORT] Supabase auth error:', authError);
+      return res.status(401).json({ error: 'Authentication failed' });
+    }
+
+    // Handle multipart form data for file uploads
+    const message = req.body.message;
+    const userEmail = req.body.userEmail || user.email;
+    const userId = req.body.userId || user.id;
+    const timestamp = req.body.timestamp;
+    const userAgent = req.body.userAgent || req.headers['user-agent'];
+    const url = req.body.url || req.headers.referer || 'Unknown';
     
     if (!message || !message.trim()) {
       return res.status(400).json({ error: 'Message is required' });
+    }
+
+    // Handle file uploads
+    const uploadedImages = [];
+    const imageCount = parseInt(req.body.imageCount) || 0;
+    
+    for (let i = 0; i < imageCount; i++) {
+      const imageFile = req.files?.[`image_${i}`];
+      if (imageFile) {
+        try {
+          // Generate unique filename
+          const fileExtension = imageFile.name.split('.').pop();
+          const fileName = `problem_report_${Date.now()}_${i}.${fileExtension}`;
+          const filePath = `./data/problem_reports/${fileName}`;
+          
+          // Ensure directory exists
+          const fs = require('fs');
+          const path = require('path');
+          const dir = path.dirname(filePath);
+          if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+          }
+          
+          // Save the file
+          await imageFile.mv(filePath);
+          uploadedImages.push({
+            originalName: imageFile.name,
+            savedName: fileName,
+            size: imageFile.size,
+            type: imageFile.mimetype
+          });
+          
+          console.log(`[PROBLEM_REPORT] Image uploaded: ${fileName}`);
+        } catch (uploadError) {
+          console.error(`[PROBLEM_REPORT] Failed to upload image ${i}:`, uploadError);
+        }
+      }
     }
 
     // Create the problem report object
     const problemReport = {
       id: `report_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       message: message.trim(),
-      userEmail: userEmail || req.user.email,
-      userId: userId || req.user.id,
+      userEmail: userEmail,
+      userId: userId,
       timestamp: timestamp || new Date().toISOString(),
-      userAgent: userAgent || req.headers['user-agent'],
-      url: url || req.headers.referer || 'Unknown',
+      userAgent: userAgent,
+      url: url,
+      images: uploadedImages,
       status: 'new',
       createdAt: new Date().toISOString()
     };
@@ -7167,6 +7242,11 @@ User Agent: ${problemReport.userAgent}
 
 Message:
 ${problemReport.message}
+
+${uploadedImages.length > 0 ? `
+Attached Images (${uploadedImages.length}):
+${uploadedImages.map((img, index) => `${index + 1}. ${img.originalName} (${img.size} bytes, ${img.type})`).join('\n')}
+` : 'No images attached'}
 
 ---
 This is an automated notification from The Discourse AI platform.
@@ -7247,59 +7327,5 @@ This is an automated notification from The Discourse AI platform.
   }
 });
 
-// Report problem endpoint
-app.post('/api/report-problem', authenticateToken, async (req, res) => {
-  try {
-    const { message, userEmail, userId, timestamp, userAgent, url } = req.body;
-    
-    if (!message || !message.trim()) {
-      return res.status(400).json({ error: 'Message is required' });
-    }
-    
-    // Create problem report object
-    const problemReport = {
-      id: `report_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      message: message.trim(),
-      userEmail: userEmail || req.user.email,
-      userId: userId || req.user.id,
-      timestamp: timestamp || new Date().toISOString(),
-      userAgent: userAgent || req.headers['user-agent'],
-      url: url || req.headers.referer || 'unknown',
-      status: 'new',
-      createdAt: new Date().toISOString()
-    };
-    
-    // Initialize problem reports array if it doesn't exist
-    if (!db.data.problemReports) {
-      db.data.problemReports = [];
-    }
-    
-    // Add the report to the database
-    db.data.problemReports.push(problemReport);
-    await db.write();
-    
-    // Log the problem report for immediate attention
-    console.log('🚨 [PROBLEM_REPORT] New technical issue reported:', {
-      id: problemReport.id,
-      userEmail: problemReport.userEmail,
-      message: problemReport.message.substring(0, 100) + (problemReport.message.length > 100 ? '...' : ''),
-      timestamp: problemReport.timestamp,
-      url: problemReport.url
-    });
-    
-    // TODO: Send email notification to admin (implement when email service is available)
-    // TODO: Send to Slack/Discord webhook for immediate notification
-    
-    res.json({ 
-      success: true, 
-      message: 'Problem report submitted successfully',
-      reportId: problemReport.id,
-      timestamp: new Date().toISOString()
-    });
-    
-  } catch (error) {
-    console.error('[PROBLEM_REPORT] Error submitting problem report:', error);
-    res.status(500).json({ error: 'Failed to submit problem report' });
-  }
-});
+
 

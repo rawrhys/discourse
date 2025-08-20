@@ -1,12 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../config/supabase';
 
 const ReportProblem = ({ isOpen, onClose, onSuccess }) => {
   const { user } = useAuth();
   const [message, setMessage] = useState('');
+  const [userEmail, setUserEmail] = useState(user?.email || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const fileInputRef = useRef(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -14,25 +18,47 @@ const ReportProblem = ({ isOpen, onClose, onSuccess }) => {
       setError('Please enter a message describing your issue.');
       return;
     }
+    
+    if (!userEmail.trim() || !userEmail.includes('@')) {
+      setError('Please enter a valid email address.');
+      return;
+    }
 
     setIsSubmitting(true);
     setError('');
 
     try {
+      // Get the current Supabase session
+      const { data: { session } } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+
+      if (!accessToken) {
+        setError('Authentication required. Please log in again.');
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('message', message.trim());
+      formData.append('userEmail', userEmail.trim());
+      formData.append('userId', user?.id || '');
+      formData.append('timestamp', new Date().toISOString());
+      formData.append('userAgent', navigator.userAgent);
+      formData.append('url', window.location.href);
+
+      // Add image files if any
+      if (selectedFiles.length > 0) {
+        selectedFiles.forEach((file, index) => {
+          formData.append(`image_${index}`, file);
+        });
+        formData.append('imageCount', selectedFiles.length.toString());
+      }
+
       const response = await fetch('/api/report-problem', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user?.access_token}`,
+          'Authorization': `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({
-          message: message.trim(),
-          userEmail: user?.email,
-          userId: user?.id,
-          timestamp: new Date().toISOString(),
-          userAgent: navigator.userAgent,
-          url: window.location.href,
-        }),
+        body: formData,
       });
 
       if (response.ok) {
@@ -54,11 +80,35 @@ const ReportProblem = ({ isOpen, onClose, onSuccess }) => {
     }
   };
 
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files);
+    const validFiles = files.filter(file => {
+      const isValidType = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.type);
+      const isValidSize = file.size <= 5 * 1024 * 1024; // 5MB limit
+      return isValidType && isValidSize;
+    });
+    
+    if (validFiles.length !== files.length) {
+      setError('Some files were rejected. Only JPEG, PNG, GIF, and WebP images under 5MB are allowed.');
+    }
+    
+    setSelectedFiles(prev => [...prev, ...validFiles].slice(0, 3)); // Max 3 images
+  };
+
+  const removeFile = (index) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleClose = () => {
     if (!isSubmitting) {
       setMessage('');
+      setUserEmail(user?.email || '');
       setError('');
       setSuccess(false);
+      setSelectedFiles([]);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
       onClose();
     }
   };
@@ -114,11 +164,11 @@ const ReportProblem = ({ isOpen, onClose, onSuccess }) => {
                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                   </svg>
                 </div>
-                <div className="bg-green-50 rounded-lg p-3 max-w-xs">
-                  <p className="text-sm text-green-800">
-                    Thank you! Your report has been submitted successfully. We'll get back to you soon.
-                  </p>
-                </div>
+                                 <div className="bg-green-50 rounded-lg p-3 max-w-xs">
+                   <p className="text-sm text-green-800">
+                     Thank you! Your report has been submitted successfully. We'll contact you at {userEmail} to follow up on your issue.
+                   </p>
+                 </div>
               </div>
             )}
 
@@ -138,23 +188,101 @@ const ReportProblem = ({ isOpen, onClose, onSuccess }) => {
           </div>
         </div>
 
-        {/* Input Area */}
-        <div className="p-4 border-t border-gray-200">
-          <form onSubmit={handleSubmit} className="space-y-3">
-            <div className="relative">
-              <textarea
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder="Describe the technical issue you're experiencing..."
-                className="w-full px-4 py-3 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
-                rows="4"
-                disabled={isSubmitting || success}
-                maxLength="1000"
-              />
-              <div className="absolute bottom-2 right-2 text-xs text-gray-400">
-                {message.length}/1000
-              </div>
-            </div>
+                 {/* Input Area */}
+         <div className="p-4 border-t border-gray-200">
+           <form onSubmit={handleSubmit} className="space-y-3">
+             {/* Email Input */}
+             <div>
+               <label className="block text-sm font-medium text-gray-700 mb-1">
+                 Your Email Address *
+               </label>
+               <input
+                 type="email"
+                 value={userEmail}
+                 onChange={(e) => setUserEmail(e.target.value)}
+                 placeholder="Enter your email address"
+                 className="w-full px-4 py-3 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                 disabled={isSubmitting || success}
+                 required
+               />
+             </div>
+
+             {/* Message Input */}
+             <div className="relative">
+               <label className="block text-sm font-medium text-gray-700 mb-1">
+                 Describe the Issue *
+               </label>
+               <textarea
+                 value={message}
+                 onChange={(e) => setMessage(e.target.value)}
+                 placeholder="Please describe the technical issue you're experiencing in detail..."
+                 className="w-full px-4 py-3 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                 rows="4"
+                 disabled={isSubmitting || success}
+                 maxLength="1000"
+                 required
+               />
+               <div className="absolute bottom-2 right-2 text-xs text-gray-400">
+                 {message.length}/1000
+               </div>
+             </div>
+
+             {/* Image Upload Section */}
+             <div className="space-y-2">
+               <label className="block text-sm font-medium text-gray-700">
+                 Attach Images (Optional)
+               </label>
+               <div className="flex items-center space-x-2">
+                 <input
+                   ref={fileInputRef}
+                   type="file"
+                   accept="image/*"
+                   multiple
+                   onChange={handleFileSelect}
+                   disabled={isSubmitting || success || selectedFiles.length >= 3}
+                   className="hidden"
+                 />
+                 <button
+                   type="button"
+                   onClick={() => fileInputRef.current?.click()}
+                   disabled={isSubmitting || success || selectedFiles.length >= 3}
+                   className="inline-flex items-center px-3 py-2 text-sm font-medium text-purple-700 bg-purple-50 border border-purple-300 rounded-md hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-colors disabled:opacity-50"
+                 >
+                   <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                   </svg>
+                   Add Images
+                 </button>
+                 <span className="text-xs text-gray-500">
+                   {selectedFiles.length}/3 images (max 5MB each)
+                 </span>
+               </div>
+
+               {/* Selected Files Preview */}
+               {selectedFiles.length > 0 && (
+                 <div className="grid grid-cols-3 gap-2">
+                   {selectedFiles.map((file, index) => (
+                     <div key={index} className="relative group">
+                       <img
+                         src={URL.createObjectURL(file)}
+                         alt={`Preview ${index + 1}`}
+                         className="w-full h-20 object-cover rounded border border-gray-200"
+                       />
+                       <button
+                         type="button"
+                         onClick={() => removeFile(index)}
+                         className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-red-600 transition-colors"
+                       >
+                         ×
+                       </button>
+                       <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1 truncate">
+                         {file.name}
+                       </div>
+                     </div>
+                   ))}
+                 </div>
+               )}
+             </div>
             
             <div className="flex items-center justify-between">
               <p className="text-xs text-gray-500">
