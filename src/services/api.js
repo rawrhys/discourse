@@ -42,65 +42,6 @@ class AIService {
       return null;
     }
   }
-
-  /**
-   * Generate bibliography for a lesson (frontend fallback)
-   * @param {string} topic - The lesson topic
-   * @param {string} subject - The course subject
-   * @param {number} numReferences - Number of references to generate
-   * @returns {Array} Array of reference objects
-   */
-  generateBibliography(topic, subject, numReferences = 5) {
-    // This is a simplified frontend fallback - the main bibliography generation happens on the server
-    const defaultReferences = [
-      {
-        author: 'Encyclopaedia Britannica',
-        title: 'Academic Edition',
-        year: '2024',
-        publisher: 'Encyclopaedia Britannica, Inc.',
-        type: 'reference',
-        verified: true,
-        citationNumber: 1
-      },
-      {
-        author: 'Oxford University Press',
-        title: 'Oxford Classical Dictionary',
-        year: '2012',
-        publisher: 'Oxford University Press',
-        type: 'reference',
-        verified: true,
-        citationNumber: 2
-      }
-    ];
-    
-    return defaultReferences.slice(0, numReferences);
-  }
-
-  /**
-   * Format bibliography as markdown (frontend fallback)
-   * @param {Array} bibliography - Array of reference objects
-   * @returns {string} Formatted markdown bibliography
-   */
-  formatBibliographyAsMarkdown(bibliography) {
-    if (!bibliography || bibliography.length === 0) {
-      return '';
-    }
-
-    let markdown = '\n\n## References\n\n';
-    
-    bibliography.forEach((ref, index) => {
-      // Ensure proper citation number
-      const citationNumber = ref.citationNumber || (index + 1);
-      
-      // Format citation with proper spacing and punctuation
-      const citation = `[${citationNumber}] ${ref.author}. (${ref.year}). *${ref.title}*. ${ref.publisher}.`;
-      
-      // Add citation with proper line breaks
-      markdown += citation + '\n\n';
-    });
-    
-    return markdown;
-  }
 }
 
 const aiService = new AIService();
@@ -159,8 +100,6 @@ const api = {
     getDefinitionForTerm: aiService.getDefinitionForTerm,
     validateCourseStructure: aiService.validateCourseStructure,
     getUser: aiService.getUser,
-    generateBibliography: aiService.generateBibliography,
-    formatBibliographyAsMarkdown: aiService.formatBibliographyAsMarkdown,
 
     generateCourse: (topic, difficulty, numModules, numLessonsPerModule) => {
         console.log('📡 [API SERVICE] Calling simplified generateCourse API', {
@@ -192,6 +131,9 @@ const api = {
 
     verifyCourse: (courseId) =>
         apiClient(`/api/courses/verify/${courseId}`),
+
+    debugUserCourses: () =>
+        apiClient('/api/debug/user-courses'),
 
     clearCache: (courseId = null, cacheType = null) => {
         const body = {};

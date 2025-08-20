@@ -2328,21 +2328,17 @@ Context: "${context.substring(0, 1000)}..."`;
               lesson.quiz = []; // Continue without quiz
             }
 
-            // Generate bibliography for the lesson
+            // Generate bibliography for the lesson (but don't append to content)
             try {
               const bibliography = this.generateBibliography(lesson.title, courseWithIds.subject || 'history', 5);
-              const bibliographyMarkdown = this.formatBibliographyAsMarkdown(bibliography);
               
               // Clean up any malformed References sections that might exist in the content
               lesson.content.conclusion = this.cleanupMalformedReferences(lesson.content.conclusion);
               
-              // Append bibliography to the conclusion
-              if (bibliographyMarkdown) {
-                lesson.content.conclusion += bibliographyMarkdown;
-              }
-              
-              // Store bibliography data for potential future use
+              // Store bibliography data separately (not in content)
               lesson.bibliography = bibliography;
+              
+              console.log(`[AIService] Bibliography generated for "${lesson.title}": ${bibliography.length} references`);
             } catch (bibliographyError) {
               console.error(`[AIService] Bibliography generation failed for "${lesson.title}":`, bibliographyError.message);
               // Continue without bibliography
@@ -2645,31 +2641,7 @@ Conclusion: ${content.conclusion}`;
     }));
   }
 
-  /**
-   * Format bibliography as markdown to be appended to lesson content
-   * @param {Array} bibliography - Array of reference objects
-   * @returns {string} Formatted markdown bibliography
-   */
-  formatBibliographyAsMarkdown(bibliography) {
-    if (!bibliography || bibliography.length === 0) {
-      return '';
-    }
 
-    let markdown = '\n\n## References\n\n';
-    
-    bibliography.forEach((ref, index) => {
-      // Ensure proper citation number
-      const citationNumber = ref.citationNumber || (index + 1);
-      
-      // Format citation with proper spacing and punctuation
-      const citation = `[${citationNumber}] ${ref.author}. (${ref.year}). *${ref.title}*. ${ref.publisher}.`;
-      
-      // Add citation with proper line breaks
-      markdown += citation + '\n\n';
-    });
-    
-    return markdown;
-  }
 
   /**
    * Shuffle array for variety in reference selection
