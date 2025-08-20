@@ -231,6 +231,12 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
                                /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(courseTitle) ||
                                /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(courseSubject);
 
+    // Check if this is art-related content (art, artist, painting, etc.)
+    const isArtContent = /\b(art|artist|painting|sculpture|drawing|artwork|gallery|museum|canvas|oil|watercolor|acrylic|fresco|mosaic|relief|statue|bust|portrait|landscape|still life|abstract|realistic|impressionist|modern|classical|renaissance|baroque|romantic|neoclassical|medieval|ancient|prehistoric|cave|temple|architecture|design|composition|color|form|line|texture|perspective|lighting|shadow|brush|palette|easel|studio|exhibition|masterpiece|masterwork|iconic|famous|renowned|celebrated|influential|pioneering|revolutionary|innovative|traditional|contemporary|classical|antique|vintage|heritage|cultural|historical|archaeological|anthropological|ethnographic|decorative|ornamental|ceremonial|ritual|religious|sacred|secular|profane|domestic|public|private|monumental|intimate|grand|delicate|bold|subtle|dramatic|peaceful|dynamic|static|flowing|rigid|organic|geometric|naturalistic|stylized|symbolic|narrative|allegorical|mythological|biblical|historical|portrait|landscape|genre|still life|abstract|non-objective|figurative|non-figurative)\b/i.test(subj) || 
+                        /\b(art|artist|painting|sculpture|drawing|artwork|gallery|museum|canvas|oil|watercolor|acrylic|fresco|mosaic|relief|statue|bust|portrait|landscape|still life|abstract|realistic|impressionist|modern|classical|renaissance|baroque|romantic|neoclassical|medieval|ancient|prehistoric|cave|temple|architecture|design|composition|color|form|line|texture|perspective|lighting|shadow|brush|palette|easel|studio|exhibition|masterpiece|masterwork|iconic|famous|renowned|celebrated|influential|pioneering|revolutionary|innovative|traditional|contemporary|classical|antique|vintage|heritage|cultural|historical|archaeological|anthropological|ethnographic|decorative|ornamental|ceremonial|ritual|religious|sacred|secular|profane|domestic|public|private|monumental|intimate|grand|delicate|bold|subtle|dramatic|peaceful|dynamic|static|flowing|rigid|organic|geometric|naturalistic|stylized|symbolic|narrative|allegorical|mythological|biblical|historical|portrait|landscape|genre|still life|abstract|non-objective|figurative|non-figurative)\b/i.test(text) ||
+                        /\b(art|artist|painting|sculpture|drawing|artwork|gallery|museum|canvas|oil|watercolor|acrylic|fresco|mosaic|relief|statue|bust|portrait|landscape|still life|abstract|realistic|impressionist|modern|classical|renaissance|baroque|romantic|neoclassical|medieval|ancient|prehistoric|cave|temple|architecture|design|composition|color|form|line|texture|perspective|lighting|shadow|brush|palette|easel|studio|exhibition|masterpiece|masterwork|iconic|famous|renowned|celebrated|influential|pioneering|revolutionary|innovative|traditional|contemporary|classical|antique|vintage|heritage|cultural|historical|archaeological|anthropological|ethnographic|decorative|ornamental|ceremonial|ritual|religious|sacred|secular|profane|domestic|public|private|monumental|intimate|grand|delicate|bold|subtle|dramatic|peaceful|dynamic|static|flowing|rigid|organic|geometric|naturalistic|stylized|symbolic|narrative|allegorical|mythological|biblical|historical|portrait|landscape|genre|still life|abstract|non-objective|figurative|non-figurative)\b/i.test(courseTitle) ||
+                        /\b(art|artist|painting|sculpture|drawing|artwork|gallery|museum|canvas|oil|watercolor|acrylic|fresco|mosaic|relief|statue|bust|portrait|landscape|still life|abstract|realistic|impressionist|modern|classical|renaissance|baroque|romantic|neoclassical|medieval|ancient|prehistoric|cave|temple|architecture|design|composition|color|form|line|texture|perspective|lighting|shadow|brush|palette|easel|studio|exhibition|masterpiece|masterwork|iconic|famous|renowned|celebrated|influential|pioneering|revolutionary|innovative|traditional|contemporary|classical|antique|vintage|heritage|cultural|historical|archaeological|anthropological|ethnographic|decorative|ornamental|ceremonial|ritual|religious|sacred|secular|profane|domestic|public|private|monumental|intimate|grand|delicate|bold|subtle|dramatic|peaceful|dynamic|static|flowing|rigid|organic|geometric|naturalistic|stylized|symbolic|narrative|allegorical|mythological|biblical|historical|portrait|landscape|genre|still life|abstract|non-objective|figurative|non-figurative)\b/i.test(courseSubject);
+
     // Heavy penalty for completely irrelevant objects in historical content
     if (isHistoricalContent) {
       const irrelevantObjects = [
@@ -269,24 +275,22 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
       
       for (const obj of irrelevantObjects) {
         if (haystack.includes(obj)) {
-          // For art history courses, be more lenient with certain terms that might be art-related
-          if (isArtHistoryCourse && (obj === 'modern' || obj === 'contemporary' || obj === 'animal')) {
-            // Check if the term is used in an art context
-            const artContextTerms = ['art', 'painting', 'sculpture', 'drawing', 'artist', 'artwork', 'gallery', 'museum', 'exhibition', 'masterpiece', 'canvas', 'oil', 'watercolor', 'acrylic', 'fresco', 'mosaic', 'relief', 'statue', 'bust', 'portrait', 'landscape', 'still life', 'abstract', 'realistic', 'impressionist', 'classical', 'renaissance', 'baroque', 'romantic', 'neoclassical', 'medieval', 'ancient', 'prehistoric', 'cave', 'temple', 'architecture', 'design', 'composition', 'color', 'form', 'line', 'texture', 'perspective', 'lighting', 'shadow', 'brush', 'palette', 'easel', 'studio'];
-            const hasArtContext = artContextTerms.some(term => haystack.includes(term));
-            
-            if (hasArtContext) {
-              // If it's used in an art context, don't penalize
-              console.log(`[ImageScoring] No penalty for "${obj}" in art context: ${haystack.substring(0, 100)}`);
-            } else {
-              // Light penalty for non-art context
-              score -= 50;
-              console.log(`[ImageScoring] Light penalty for "${obj}" in non-art context: ${haystack.substring(0, 100)}`);
-            }
-          } else {
-            score -= 500; // Much heavier penalty for irrelevant objects in historical content
-            console.log(`[ImageScoring] Heavy penalty for irrelevant object "${obj}" in historical content`);
-          }
+                // For art history courses, be much more lenient with all terms
+      if (isArtHistoryCourse || isArtContent) {
+        // For art content, only apply very light penalties for completely irrelevant terms
+        const completelyIrrelevantForArt = ['dinosaur', 'toy', 'bellflower', 'crocus', 'flower', 'bud', 'sprout', 'bloom', 'petal', 'bathroom', 'bedroom', 'kitchen', 'car', 'vehicle', 'apartment', 'dawn', 'ocean', 'nature', 'sky', 'sunrise', 'sunset', 'landscape', 'early morning', 'boating', 'intercoastal', 'marsh'];
+        
+        if (completelyIrrelevantForArt.includes(obj)) {
+          score -= 20; // Very light penalty for completely irrelevant terms in art context
+          console.log(`[ImageScoring] Very light penalty for "${obj}" in art context: ${haystack.substring(0, 100)}`);
+        } else {
+          // No penalty for potentially art-related terms
+          console.log(`[ImageScoring] No penalty for "${obj}" in art context: ${haystack.substring(0, 100)}`);
+        }
+      } else {
+        score -= 500; // Much heavier penalty for irrelevant objects in historical content
+        console.log(`[ImageScoring] Heavy penalty for irrelevant object "${obj}" in historical content`);
+      }
         }
       }
     }
@@ -295,8 +299,13 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
     const colonizationTerms = ['colonization', 'colonial', 'colony', 'colonist', 'settler', 'colonialism'];
     for (const term of colonizationTerms) {
       if (haystack.includes(term)) {
-        score -= 100; // Heavy penalty for colonization-related content
-        console.log(`[ImageScoring] Heavy penalty for colonization term "${term}"`);
+        if (isArtContent) {
+          score -= 10; // Light penalty for colonization terms in art content
+          console.log(`[ImageScoring] Light penalty for colonization term "${term}" in art content`);
+        } else {
+          score -= 100; // Heavy penalty for colonization-related content
+          console.log(`[ImageScoring] Heavy penalty for colonization term "${term}"`);
+        }
       }
     }
 
@@ -380,10 +389,13 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
       if (hasCulturalMatch) {
         score += culturalBonus;
         console.log(`[ImageScoring] Cultural match bonus: +${culturalBonus} for ${courseTopic}`);
-      } else if (isSpecificCulturalCourse) {
-        // Only apply penalty for specific cultural courses that don't match
+      } else if (isSpecificCulturalCourse && !isArtContent) {
+        // Only apply penalty for specific cultural courses that don't match (but not for art content)
         score -= 200;
         console.log(`[ImageScoring] Cultural mismatch penalty: -200 for ${courseTopic}`);
+      } else if (isArtContent) {
+        // For art content, no cultural mismatch penalty
+        console.log(`[ImageScoring] No cultural penalty for art content: ${courseTopic}`);
       } else {
         // For general courses (like art history), no penalty for cultural mismatch
         console.log(`[ImageScoring] No cultural penalty for general course: ${courseTopic}`);
@@ -407,6 +419,26 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
       if (subj.includes('medieval') && haystack.includes('medieval')) score += 25;
       if (subj.includes('dynasty') && haystack.includes('dynasty')) score += 25;
       if (subj.includes('empire') && haystack.includes('empire')) score += 25;
+    }
+
+    // Additional bonus for art-related content
+    if (isArtContent) {
+      // Bonus for art terms in the image metadata
+      const artTerms = ['art', 'artist', 'painting', 'sculpture', 'drawing', 'artwork', 'gallery', 'museum', 'canvas', 'oil', 'watercolor', 'acrylic', 'fresco', 'mosaic', 'relief', 'statue', 'bust', 'portrait', 'landscape', 'still life', 'abstract', 'realistic', 'impressionist', 'modern', 'classical', 'renaissance', 'baroque', 'romantic', 'neoclassical', 'medieval', 'ancient', 'prehistoric', 'cave', 'temple', 'architecture', 'design', 'composition', 'color', 'form', 'line', 'texture', 'perspective', 'lighting', 'shadow', 'brush', 'palette', 'easel', 'studio', 'exhibition', 'masterpiece', 'masterwork', 'iconic', 'famous', 'renowned', 'celebrated', 'influential', 'pioneering', 'revolutionary', 'innovative', 'traditional', 'contemporary', 'classical', 'antique', 'vintage', 'heritage', 'cultural', 'historical', 'archaeological', 'anthropological', 'ethnographic', 'decorative', 'ornamental', 'ceremonial', 'ritual', 'religious', 'sacred', 'secular', 'profane', 'domestic', 'public', 'private', 'monumental', 'intimate', 'grand', 'delicate', 'bold', 'subtle', 'dramatic', 'peaceful', 'dynamic', 'static', 'flowing', 'rigid', 'organic', 'geometric', 'naturalistic', 'stylized', 'symbolic', 'narrative', 'allegorical', 'mythological', 'biblical', 'historical', 'portrait', 'landscape', 'genre', 'still life', 'abstract', 'non-objective', 'figurative', 'non-figurative'];
+      for (const term of artTerms) {
+        if (haystack.includes(term)) {
+          score += 20; // Bonus for art relevance
+        }
+      }
+      
+      // Bonus for specific art subjects
+      if (subj.includes('art') && haystack.includes('art')) score += 30;
+      if (subj.includes('artist') && haystack.includes('artist')) score += 30;
+      if (subj.includes('painting') && haystack.includes('painting')) score += 30;
+      if (subj.includes('sculpture') && haystack.includes('sculpture')) score += 30;
+      if (subj.includes('drawing') && haystack.includes('drawing')) score += 30;
+      if (subj.includes('gallery') && haystack.includes('gallery')) score += 30;
+      if (subj.includes('museum') && haystack.includes('museum')) score += 30;
     }
 
     // Check if this is historical/educational content that should be more permissive
@@ -444,6 +476,12 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
     if (isHistoricalContent && page.includes('wikimedia.org')) {
       score += 25; // Bonus for Wikipedia images in historical content
       console.log(`[ImageScoring] Bonus for Wikipedia image in historical content`);
+    }
+
+    // Bonus for Wikipedia images in art contexts
+    if (isArtContent && page.includes('wikimedia.org')) {
+      score += 20; // Bonus for Wikipedia images in art content
+      console.log(`[ImageScoring] Bonus for Wikipedia image in art content`);
     }
 
     return Math.max(0, score);
@@ -484,6 +522,31 @@ function isBannedImageCandidate(candidate, courseId) {
                            subject.toLowerCase().includes('egypt') ||
                            subject.toLowerCase().includes('medieval') ||
                            subject.toLowerCase().includes('renaissance');
+        
+        // Check if this is art-related content that should be very permissive
+        const isArtContent = subject.toLowerCase().includes('art') || 
+                           subject.toLowerCase().includes('artist') || 
+                           subject.toLowerCase().includes('painting') || 
+                           subject.toLowerCase().includes('sculpture') || 
+                           subject.toLowerCase().includes('drawing') ||
+                           subject.toLowerCase().includes('gallery') ||
+                           subject.toLowerCase().includes('museum');
+        
+        // For art content, only ban extremely inappropriate terms
+        if (isArtContent) {
+          const extremeNegatives = [
+            'nazi', 'hitler', 'swastika', 'holocaust', 'genocide',
+            'terrorism', 'extremist', 'radical', 'nsfw', 'porn',
+            'explicit', 'adult content', 'violence', 'gore'
+          ];
+          
+          if (containsAny(haystack, extremeNegatives)) {
+            return true;
+          }
+          
+          // Allow most content for art topics
+          return false;
+        }
         
         // For historical content, only ban extremely inappropriate terms
         if (isHistorical) {
