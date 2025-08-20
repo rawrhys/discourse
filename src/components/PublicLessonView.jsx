@@ -447,13 +447,14 @@ const PublicLessonView = ({
     
     const generateReferences = async () => {
       try {
-        console.log('[PublicLessonView] Generating academic references for:', lesson.title);
+        console.log('[PublicLessonView] Generating authentic academic references for:', lesson.title);
         
-        const references = AcademicReferencesService.generateReferences(
-          deferredContent,
-          subject,
+        // Use AI service to generate authentic academic references
+        const references = await api.generateAuthenticBibliography(
           lesson.title,
-          courseDescription
+          subject,
+          5, // Number of references
+          deferredContent
         );
         
         setAcademicReferences(references);
@@ -466,7 +467,7 @@ const PublicLessonView = ({
         
         setDeferredContent(contentWithInlineCitations);
         
-        console.log('[PublicLessonView] Academic references generated:', references);
+        console.log('[PublicLessonView] Authentic academic references generated:', references);
         
         // Create references footer
         try {
@@ -480,8 +481,28 @@ const PublicLessonView = ({
         }
         
       } catch (error) {
-        console.error('[PublicLessonView] Failed to generate academic references:', error);
-        setAcademicReferences([]);
+        console.error('[PublicLessonView] Failed to generate authentic academic references:', error);
+        // Fallback to static references if AI generation fails
+        try {
+          console.log('[PublicLessonView] Attempting fallback to static references');
+          const fallbackReferences = AcademicReferencesService.generateReferences(
+            deferredContent,
+            subject,
+            lesson.title,
+            courseDescription
+          );
+          setAcademicReferences(fallbackReferences);
+          
+          // Create references footer for fallback references
+          if (fallbackReferences && fallbackReferences.length > 0) {
+            const footer = AcademicReferencesService.createReferencesFooter(fallbackReferences);
+            setReferencesFooter(footer);
+            console.log('[PublicLessonView] Created fallback references footer:', footer);
+          }
+        } catch (fallbackError) {
+          console.error('[PublicLessonView] Fallback reference generation also failed:', fallbackError);
+          setAcademicReferences([]);
+        }
       }
     };
     

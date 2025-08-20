@@ -5,15 +5,32 @@ import markdownService from '../services/MarkdownService';
  * Academic References Footer Component
  * Displays academic references with proper citation formatting and styling in an accordion format
  */
-const AcademicReferencesFooter = memo(({ references, onCitationClick }) => {
+const AcademicReferencesFooter = memo(({ references, onCitationClick, isLoading = false }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
   // Debug logging
   console.log('[AcademicReferencesFooter] Component rendered with:', {
     hasReferences: !!references,
     referencesCount: references?.length || 0,
-    references: references
+    references: references,
+    isLoading: isLoading
   });
+
+  if (isLoading) {
+    return (
+      <footer className="academic-references-footer mt-12 pt-8 border-t-2 border-gray-300 bg-gray-50">
+        <div className="max-w-4xl mx-auto px-4">
+          <div className="academic-references-header w-full text-left text-2xl font-bold text-black mb-6 flex items-center justify-between p-3 rounded-lg">
+            <span style={{ color: '#000000 !important', fontWeight: 'bold' }}>Academic References</span>
+            <div className="flex items-center space-x-2">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+              <span className="text-sm text-gray-600">Generating authentic references...</span>
+            </div>
+          </div>
+        </div>
+      </footer>
+    );
+  }
 
   if (!references || references.length === 0) {
     console.log('[AcademicReferencesFooter] No references provided, returning null');

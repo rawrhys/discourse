@@ -507,42 +507,72 @@ const LessonView = ({
     }
   );
 
-  // Generate academic references using the same service as PublicLessonView
-  const academicReferences = useMemo(() => {
-    if (!propLesson?.content || !propLesson?.title || !subject) return [];
-    
-    try {
-      const lessonContentString = getContentAsString(propLesson.content);
+  // Generate authentic academic references using AI service
+  const [academicReferences, setAcademicReferences] = useState([]);
+  const [isGeneratingReferences, setIsGeneratingReferences] = useState(false);
+
+  useEffect(() => {
+    const generateAuthenticReferences = async () => {
+      if (!propLesson?.content || !propLesson?.title || !subject) {
+        setAcademicReferences([]);
+        return;
+      }
       
-      // Only generate if content is substantial
-      if (lessonContentString.length < 100) return [];
-      
-      console.log('[LessonView] Generating academic references for:', {
-        lessonTitle: propLesson.title,
-        courseSubject: subject,
-        contentLength: lessonContentString?.length || 0
-      });
-      
-      // Generate academic references using the same method as PublicLessonView
-      const references = academicReferencesService.generateReferences(
-        lessonContentString,
-        subject,
-        propLesson.title
-      );
-      
-      console.log('[LessonView] Academic references generated:', {
-        referencesCount: references.length,
-        references: references,
-        lessonContentStringLength: lessonContentString?.length || 0,
-        courseSubject: subject,
-        lessonTitle: propLesson.title
-      });
-      
-      return references;
-    } catch (error) {
-      console.error('[LessonView] Error generating academic references:', error);
-      return [];
-    }
+      try {
+        const lessonContentString = getContentAsString(propLesson.content);
+        
+        // Only generate if content is substantial
+        if (lessonContentString.length < 100) {
+          setAcademicReferences([]);
+          return;
+        }
+        
+        console.log('[LessonView] Generating authentic academic references for:', {
+          lessonTitle: propLesson.title,
+          courseSubject: subject,
+          contentLength: lessonContentString?.length || 0
+        });
+        
+        setIsGeneratingReferences(true);
+        
+        // Use AI service to generate authentic academic references
+        const references = await api.generateAuthenticBibliography(
+          propLesson.title,
+          subject,
+          5, // Number of references
+          lessonContentString
+        );
+        
+        console.log('[LessonView] Authentic academic references generated:', {
+          referencesCount: references.length,
+          references: references,
+          lessonContentStringLength: lessonContentString?.length || 0,
+          courseSubject: subject,
+          lessonTitle: propLesson.title
+        });
+        
+        setAcademicReferences(references);
+      } catch (error) {
+        console.error('[LessonView] Error generating authentic academic references:', error);
+        // Fallback to static references if AI generation fails
+        try {
+          const lessonContentString = getContentAsString(propLesson.content);
+          const fallbackReferences = academicReferencesService.generateReferences(
+            lessonContentString,
+            subject,
+            propLesson.title
+          );
+          setAcademicReferences(fallbackReferences);
+        } catch (fallbackError) {
+          console.error('[LessonView] Fallback reference generation also failed:', fallbackError);
+          setAcademicReferences([]);
+        }
+      } finally {
+        setIsGeneratingReferences(false);
+      }
+    };
+
+    generateAuthenticReferences();
   }, [propLesson?.content, propLesson?.title, subject]);
 
   // Handle citation click
@@ -560,6 +590,14 @@ const LessonView = ({
   // Create academic references footer using the same method as PublicLessonView
   const referencesFooter = useMemo(() => {
     try {
+      if (isGeneratingReferences) {
+        return {
+          title: 'Academic References',
+          references: [],
+          isLoading: true
+        };
+      }
+      
       if (academicReferences && academicReferences.length > 0) {
         const footer = academicReferencesService.createReferencesFooter(academicReferences);
         console.log('[LessonView] Created references footer:', footer);
@@ -572,7 +610,7 @@ const LessonView = ({
       console.warn('[LessonView] Error creating references footer:', error);
       return null;
     }
-  }, [academicReferences]);
+  }, [academicReferences, isGeneratingReferences]);
 
   // Use throttled logger for performance monitoring
   const throttledLog = useThrottledLogger('LessonView', 3);
@@ -1712,11 +1750,12 @@ const LessonView = ({
 
       <footer className="mt-8 pt-6 border-t border-gray-200">
         {/* References Section */}
-        {referencesFooter && referencesFooter.references && (
+        {referencesFooter && (
           <div className="mb-6">
             <AcademicReferencesFooter 
               references={referencesFooter.references}
               onCitationClick={handleCitationClick}
+              isLoading={referencesFooter.isLoading}
             />
           </div>
         )}

@@ -42,6 +42,33 @@ class AIService {
       return null;
     }
   }
+
+  /**
+   * Generate authentic academic references based on lesson content
+   * @param {string} topic - Lesson topic
+   * @param {string} subject - Subject area
+   * @param {number} numReferences - Number of references to generate
+   * @param {string} lessonContent - The actual lesson content to base references on
+   * @returns {Array} Array of authentic reference objects
+   */
+  async generateAuthenticBibliography(topic, subject, numReferences = 5, lessonContent = '') {
+    try {
+      console.log(`[AIService] Generating authentic bibliography for "${topic}" in ${subject}`);
+      
+      const response = await apiClient.post('/api/ai/generate-bibliography', {
+        topic,
+        subject,
+        numReferences,
+        lessonContent: lessonContent.substring(0, 2000) // Limit content size
+      });
+      
+      return response.bibliography || [];
+    } catch (error) {
+      console.error(`[AIService] Error generating authentic bibliography for "${topic}":`, error);
+      // Return empty array as fallback
+      return [];
+    }
+  }
 }
 
 const aiService = new AIService();
