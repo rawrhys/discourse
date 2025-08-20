@@ -139,6 +139,13 @@ const Dashboard = () => {
       // Get the auth token from localStorage or Supabase
       const token = localStorage.getItem('token') || user.access_token;
       
+      logger.debug('🔗 [DASHBOARD] Setting up SSE connection with token:', {
+        hasToken: !!token,
+        tokenLength: token ? token.length : 0,
+        tokenPrefix: token ? token.substring(0, 20) + '...' : 'none',
+        user: user?.id
+      });
+      
       if (token) {
         // Connect to SSE notifications
         courseNotificationService.connect(token);
@@ -268,11 +275,22 @@ const Dashboard = () => {
       setIsGenerating(false);
       setShowNewCourseForm(false);
       
-      // Show success message (SSE will handle the course list update)
+      // Show success message
       setSuccessMessage('Course generation completed! Updating course list...');
       setShowSuccessToast(true);
       
-      // Hide success message after a delay (SSE will handle the actual update)
+      // Force refresh the course list immediately (fallback in case SSE doesn't work)
+      setTimeout(async () => {
+        try {
+          logger.debug('🔄 [DASHBOARD] Force refreshing course list after generation');
+          await fetchSavedCourses(true);
+          logger.info('✅ [DASHBOARD] Course list refreshed after generation');
+        } catch (error) {
+          logger.error('❌ [DASHBOARD] Failed to refresh course list after generation:', error);
+        }
+      }, 2000);
+      
+      // Hide success message after a delay
       setTimeout(() => {
         setShowSuccessToast(false);
       }, 3000);

@@ -3862,27 +3862,47 @@ function sendProgressUpdate(userId, progressData) {
 
 // Helper function to send course generation notifications via SSE
 function sendCourseGenerationNotification(userId, notificationData) {
+  console.log(`[SSE] Attempting to send notification to user ${userId}:`, notificationData);
+  console.log(`[SSE] Active connections:`, Array.from(global.sseConnections.keys()));
+  
   if (global.sseConnections && global.sseConnections.has(userId)) {
     const res = global.sseConnections.get(userId);
-    res.write(`data: ${JSON.stringify(notificationData)}\n\n`);
+    try {
+      res.write(`data: ${JSON.stringify(notificationData)}\n\n`);
+      console.log(`[SSE] Notification sent successfully to user ${userId}`);
+    } catch (error) {
+      console.error(`[SSE] Error sending notification to user ${userId}:`, error);
+      global.sseConnections.delete(userId);
+    }
+  } else {
+    console.log(`[SSE] No active connection found for user ${userId}`);
   }
 }
 
 // SSE endpoint for real-time course generation notifications
-app.get('/api/courses/notifications', (req, res) => {
+app.get('/api/courses/notifications', async (req, res) => {
   // Handle authentication via query parameter for SSE
   const token = req.query.token;
   if (!token) {
     return res.status(401).json({ error: 'No token provided' });
   }
 
-  // For Supabase authentication, we'll use the token directly as user ID
-  // In a production environment, you might want to verify this with Supabase
-  const userId = token;
-  
-  if (!userId) {
-    return res.status(401).json({ error: 'Invalid token' });
-  }
+  try {
+    // Verify token using Supabase to get the actual user ID
+    if (!supabase) {
+      console.error('[SSE] Supabase client not initialized');
+      return res.status(500).json({ error: 'Authentication service not configured' });
+    }
+
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    
+    if (error || !user) {
+      console.error('[SSE] Token verification failed:', error?.message || 'No user data');
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    const userId = user.id;
+    console.log(`[SSE] User authenticated for SSE: ${userId}`);
 
   // Set SSE headers
   res.writeHead(200, {
@@ -3912,6 +3932,10 @@ app.get('/api/courses/notifications', (req, res) => {
   });
 
   console.log(`[SSE] Client connected: ${userId}`);
+  } catch (error) {
+    console.error('[SSE] Error setting up SSE connection:', error);
+    return res.status(500).json({ error: 'Failed to establish SSE connection' });
+  }
 });
 
 // Endpoint to check generation session status
