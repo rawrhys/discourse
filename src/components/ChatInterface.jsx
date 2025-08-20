@@ -3,12 +3,15 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import PropTypes from 'prop-types';
 
-const ChatInterface = ({ onGenerateCourse, isGenerating, onCancel }) => {
+const ChatInterface = ({ onGenerateCourse, isGenerating, onCancel, error: parentError }) => {
   const [prompt, setPrompt] = useState('');
   const [difficultyLevel, setDifficultyLevel] = useState('intermediate');
   const [numModules, setNumModules] = useState(3);
   const [numLessonsPerModule, setNumLessonsPerModule] = useState(3);
   const [error, setError] = useState(null);
+  
+  // Use parent error if available, otherwise use local error
+  const displayError = parentError || error;
   
   // Clear error when generation starts
   useEffect(() => {
@@ -127,9 +130,23 @@ const ChatInterface = ({ onGenerateCourse, isGenerating, onCancel }) => {
             </div>
 
         {/* Error Display */}
-        {error && (
+        {displayError && (
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-            {error}
+            <div className="flex items-center justify-between">
+              <span>{displayError}</span>
+              {displayError.includes('Backend server temporarily unavailable') || 
+               displayError.includes('server may be restarting') || 
+               displayError.includes('try again in a moment') && (
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={isGenerating}
+                  className="ml-3 px-3 py-1 text-xs font-medium text-red-700 bg-red-200 hover:bg-red-300 rounded transition-colors"
+                >
+                  Retry
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -171,7 +188,8 @@ const ChatInterface = ({ onGenerateCourse, isGenerating, onCancel }) => {
 ChatInterface.propTypes = {
   onGenerateCourse: PropTypes.func.isRequired,
   isGenerating: PropTypes.bool.isRequired,
-  onCancel: PropTypes.func
+  onCancel: PropTypes.func,
+  error: PropTypes.string
 };
 
 export default ChatInterface;

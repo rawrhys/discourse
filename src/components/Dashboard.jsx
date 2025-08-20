@@ -179,13 +179,15 @@ const Dashboard = () => {
       
       // Show a more helpful error message
       let errorMessage = error.message || 'Failed to generate course';
+      let shouldKeepModalOpen = false;
       
       if (error.message.includes('Mistral API key is not configured')) {
         errorMessage = 'AI service is not configured. Please contact support to set up the AI service.';
         logger.error('🔌 [COURSE GENERATION] AI service configuration issue');
-      } else if (error.message.includes('Failed to fetch')) {
-        errorMessage = 'Unable to connect to the server. Please check your internet connection and try again.';
-        logger.error('🌐 [COURSE GENERATION] Network connectivity issue');
+      } else if (error.message.includes('Failed to fetch') || error.message.includes('Backend server unavailable') || error.message.includes('NetworkError')) {
+        errorMessage = 'Backend server temporarily unavailable. The server may be restarting. Please wait a moment and try again.';
+        logger.error('🌐 [COURSE GENERATION] Backend connectivity issue - keeping modal open for retry');
+        shouldKeepModalOpen = true;
       } else if (error.message.includes('No course credits left')) {
         errorMessage = 'You have no credits left. Please purchase more credits to generate courses.';
         logger.error('💳 [COURSE GENERATION] Insufficient credits');
@@ -193,12 +195,25 @@ const Dashboard = () => {
         errorMessage = 'The requested topic violates our content policy and cannot be generated. Please try a different topic.';
         logger.error('🚫 [COURSE GENERATION] Content policy violation');
       } else if (error.message.includes('timeout')) {
-        errorMessage = 'The request timed out. Please try again with a simpler topic or fewer modules.';
-        logger.error('⏰ [COURSE GENERATION] Request timeout');
+        errorMessage = 'The request timed out. The server may be busy. Please try again in a moment.';
+        logger.error('⏰ [COURSE GENERATION] Request timeout - keeping modal open for retry');
+        shouldKeepModalOpen = true;
+      } else if (error.message.includes('500') || error.message.includes('Internal Server Error')) {
+        errorMessage = 'Server encountered an error. The backend may be restarting. Please wait a moment and try again.';
+        logger.error('🔧 [COURSE GENERATION] Server error - keeping modal open for retry');
+        shouldKeepModalOpen = true;
       }
       
       setError(errorMessage);
-      setIsGenerating(false);
+      
+      // Only close the modal if it's not a backend connectivity issue
+      if (!shouldKeepModalOpen) {
+        setIsGenerating(false);
+      } else {
+        // For backend issues, keep the modal open but stop the generation state
+        // This allows users to retry when the backend comes back online
+        logger.info('🔄 [COURSE GENERATION] Keeping modal open for backend retry');
+      }
     }
   }, [api, user?.id, fetchSavedCourses]);
 
@@ -1042,6 +1057,7 @@ const Dashboard = () => {
                   onGenerateCourse={handleGenerateCourse}
                   onCancel={() => setShowNewCourseForm(false)}
                   isGenerating={isGenerating}
+                  error={error}
                 />
               </div>
             </div>
