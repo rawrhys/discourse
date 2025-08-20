@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, memo, useRef, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useCallback, memo, useRef, Suspense, lazy, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import PublicLessonView from './PublicLessonView';
 import './CourseDisplay.css';
@@ -361,28 +361,37 @@ const PublicCourseDisplay = () => {
 
 
 
-  // Find the current module - first try by activeModuleId, then fallback to finding module containing current lesson
-  let currentModule = course ? course.modules.find(m => m.id === activeModuleId) : null;
-  let currentLesson = currentModule?.lessons.find(l => l.id === activeLessonId);
-  
-  // If currentModule is null but we have activeLessonId, try to find the module containing this lesson
-  if (!currentModule && activeLessonId && course) {
-    currentModule = course.modules.find(m => m.lessons.some(l => l.id === activeLessonId));
-    if (currentModule) {
-      currentLesson = currentModule.lessons.find(l => l.id === activeLessonId);
-      // Update activeModuleId to match the found module
-      if (activeModuleId !== currentModule.id) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`[PublicCourseDisplay] Updating activeModuleId from ${activeModuleId} to ${currentModule.id}`);
+  // Find the current module and lesson using useMemo to prevent recalculation issues
+  const { currentModule, currentLesson, currentLessonIndex, totalLessonsInModule } = useMemo(() => {
+    let module = course ? course.modules.find(m => m.id === activeModuleId) : null;
+    let lesson = module?.lessons.find(l => l.id === activeLessonId);
+    
+    // If module is null but we have activeLessonId, try to find the module containing this lesson
+    if (!module && activeLessonId && course) {
+      module = course.modules.find(m => m.lessons.some(l => l.id === activeLessonId));
+      if (module) {
+        lesson = module.lessons.find(l => l.id === activeLessonId);
+        // Update activeModuleId to match the found module
+        if (activeModuleId !== module.id) {
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`[PublicCourseDisplay] Updating activeModuleId from ${activeModuleId} to ${module.id}`);
+          }
+          setActiveModuleId(module.id);
         }
-        setActiveModuleId(currentModule.id);
       }
     }
-  }
-  
-  // Calculate lesson index and total lessons for navigation
-  const currentLessonIndex = currentModule?.lessons.findIndex(l => l.id === activeLessonId) ?? 0;
-  const totalLessonsInModule = currentModule?.lessons?.length ?? 0;
+    
+    // Calculate lesson index and total lessons for navigation
+    const lessonIndex = module?.lessons.findIndex(l => l.id === activeLessonId) ?? 0;
+    const totalLessons = module?.lessons?.length ?? 0;
+    
+    return {
+      currentModule: module,
+      currentLesson: lesson,
+      currentLessonIndex: lessonIndex,
+      totalLessonsInModule: totalLessons
+    };
+  }, [course, activeModuleId, activeLessonId]);
   
   // Debug logging to help identify the issue (only log once per render cycle)
   if (process.env.NODE_ENV === 'development') {
