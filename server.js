@@ -583,6 +583,31 @@ function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitl
     contentText = content;
   }
 
+  // Extract key terms from content for better search relevance
+  const extractKeyTermsFromContent = (text) => {
+    const terms = new Set();
+    const raw = String(text || '');
+    
+    // Extract terms wrapped in ** (bold markdown)
+    const boldTerms = [...raw.matchAll(/\*\*([^*]+)\*\*/g)].map(match => match[1]);
+    boldTerms.forEach(term => terms.add(term));
+    
+    // Extract capitalized terms that might be important
+    const capitalizedTerms = [...raw.matchAll(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b/g)].map(match => match[0]);
+    capitalizedTerms.forEach(term => terms.add(term));
+    
+    // Filter out common words and short terms
+    const commonWords = ['the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'this', 'that', 'these', 'those', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'must', 'shall'];
+    const filteredTerms = Array.from(terms).filter(term => 
+      term.length > 3 && 
+      !commonWords.includes(term.toLowerCase()) &&
+      !term.match(/^\d+$/) // Not just numbers
+    );
+    
+    return filteredTerms.slice(0, 10); // Take top 10 terms
+  };
+
+  const contentKeyTerms = extractKeyTermsFromContent(contentText);
   const contentProperPhrases = extractProperNounPhrases(contentText);
   const subjectProperPhrases = extractProperNounPhrases(subjectPhrase);
 
@@ -615,11 +640,34 @@ function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitl
     dedupePush(queries, 'egyptian dynasty');
   }
 
+  // Add content-specific search terms for better relevance
+  for (const term of contentKeyTerms) {
+    // For Egypt courses, combine content terms with Egyptian context
+    if (courseTitle && courseTitle.toLowerCase().includes('egypt')) {
+      dedupePush(queries, `${term} ancient egypt`);
+      dedupePush(queries, `${term} egyptian`);
+      dedupePush(queries, `egyptian ${term}`);
+    } else {
+      dedupePush(queries, term);
+    }
+    if (queries.length >= maxQueries) break;
+  }
+
   // Combine descriptive subject tokens with proper-noun phrases to specialize the query
   const properPhrases = [...subjectProperPhrases, ...contentProperPhrases];
   for (const token of subjectTokens.slice(0, 3)) {
     for (const phrase of properPhrases.slice(0, 8)) {
       const combined = `${token} ${normalize(phrase)}`.trim();
+      dedupePush(queries, combined);
+      if (queries.length >= maxQueries) break;
+    }
+    if (queries.length >= maxQueries) break;
+  }
+
+  // Add content-specific combinations for better search relevance
+  for (const contentTerm of contentKeyTerms.slice(0, 5)) {
+    for (const phrase of properPhrases.slice(0, 3)) {
+      const combined = `${contentTerm} ${normalize(phrase)}`.trim();
       dedupePush(queries, combined);
       if (queries.length >= maxQueries) break;
     }
