@@ -28,6 +28,42 @@ class AcademicReferencesService {
         { id: 1, type: 'book', author: 'Beard', year: '2015', title: 'SPQR: A History of Ancient Rome', publisher: 'Liveright' },
         { id: 2, type: 'book', author: 'Woolf', year: '2012', title: 'Rome: An Empire\'s Story', publisher: 'Oxford University Press' },
         { id: 3, type: 'encyclopedia', author: 'Encyclopaedia Britannica', year: '2024', title: 'Academic Edition', publisher: 'Encyclopaedia Britannica, Inc.' }
+      ],
+      biology: [
+        { id: 1, type: 'book', author: 'Alberts', year: '2022', title: 'Molecular Biology of the Cell', publisher: 'Garland Science' },
+        { id: 2, type: 'book', author: 'Campbell', year: '2021', title: 'Biology: A Global Approach', publisher: 'Pearson' },
+        { id: 3, type: 'book', author: 'Raven', year: '2020', title: 'Biology', publisher: 'McGraw-Hill Education' },
+        { id: 4, type: 'encyclopedia', author: 'Encyclopaedia Britannica', year: '2024', title: 'Academic Edition', publisher: 'Encyclopaedia Britannica, Inc.' }
+      ],
+      plantBiology: [
+        { id: 1, type: 'book', author: 'Taiz', year: '2018', title: 'Plant Physiology and Development', publisher: 'Sinauer Associates' },
+        { id: 2, type: 'book', author: 'Raven', year: '2016', title: 'Biology of Plants', publisher: 'W.H. Freeman' },
+        { id: 3, type: 'book', author: 'Mauseth', year: '2019', title: 'Botany: An Introduction to Plant Biology', publisher: 'Jones & Bartlett Learning' },
+        { id: 4, type: 'encyclopedia', author: 'Encyclopaedia Britannica', year: '2024', title: 'Academic Edition', publisher: 'Encyclopaedia Britannica, Inc.' }
+      ],
+      cellBiology: [
+        { id: 1, type: 'book', author: 'Alberts', year: '2022', title: 'Molecular Biology of the Cell', publisher: 'Garland Science' },
+        { id: 2, type: 'book', author: 'Lodish', year: '2021', title: 'Molecular Cell Biology', publisher: 'W.H. Freeman' },
+        { id: 3, type: 'book', author: 'Cooper', year: '2019', title: 'The Cell: A Molecular Approach', publisher: 'Sinauer Associates' },
+        { id: 4, type: 'encyclopedia', author: 'Encyclopaedia Britannica', year: '2024', title: 'Academic Edition', publisher: 'Encyclopaedia Britannica, Inc.' }
+      ],
+      chemistry: [
+        { id: 1, type: 'book', author: 'Atkins', year: '2022', title: 'Physical Chemistry', publisher: 'Oxford University Press' },
+        { id: 2, type: 'book', author: 'McMurry', year: '2021', title: 'Organic Chemistry', publisher: 'Cengage Learning' },
+        { id: 3, type: 'book', author: 'Brown', year: '2020', title: 'Chemistry: The Central Science', publisher: 'Pearson' },
+        { id: 4, type: 'encyclopedia', author: 'Encyclopaedia Britannica', year: '2024', title: 'Academic Edition', publisher: 'Encyclopaedia Britannica, Inc.' }
+      ],
+      physics: [
+        { id: 1, type: 'book', author: 'Halliday', year: '2021', title: 'Fundamentals of Physics', publisher: 'Wiley' },
+        { id: 2, type: 'book', author: 'Serway', year: '2020', title: 'Physics for Scientists and Engineers', publisher: 'Cengage Learning' },
+        { id: 3, type: 'book', author: 'Young', year: '2022', title: 'University Physics', publisher: 'Pearson' },
+        { id: 4, type: 'encyclopedia', author: 'Encyclopaedia Britannica', year: '2024', title: 'Academic Edition', publisher: 'Encyclopaedia Britannica, Inc.' }
+      ],
+      mathematics: [
+        { id: 1, type: 'book', author: 'Stewart', year: '2021', title: 'Calculus: Early Transcendentals', publisher: 'Cengage Learning' },
+        { id: 2, type: 'book', author: 'Lay', year: '2020', title: 'Linear Algebra and Its Applications', publisher: 'Pearson' },
+        { id: 3, type: 'book', author: 'Rosen', year: '2019', title: 'Discrete Mathematics and Its Applications', publisher: 'McGraw-Hill Education' },
+        { id: 4, type: 'encyclopedia', author: 'Encyclopaedia Britannica', year: '2024', title: 'Academic Edition', publisher: 'Encyclopaedia Britannica, Inc.' }
       ]
     };
   }
@@ -69,6 +105,7 @@ class AcademicReferencesService {
   getReferenceSetBySubject(subject) {
     const subjectLower = subject?.toLowerCase() || '';
     
+    // History subjects
     if (subjectLower.includes('egypt') || subjectLower.includes('ancient egypt')) {
       return this.defaultReferences.ancientEgypt;
     } else if (subjectLower.includes('greece') || subjectLower.includes('ancient greece')) {
@@ -77,7 +114,36 @@ class AcademicReferencesService {
       return this.defaultReferences.ancientRome;
     }
     
-    // Default to ancient Greece if subject is unclear
+    // Biology subjects
+    if (subjectLower.includes('plant') || subjectLower.includes('botany') || subjectLower.includes('flora')) {
+      return this.defaultReferences.plantBiology;
+    } else if (subjectLower.includes('cell') || subjectLower.includes('cellular') || subjectLower.includes('molecular')) {
+      return this.defaultReferences.cellBiology;
+    } else if (subjectLower.includes('biology') || subjectLower.includes('biological') || subjectLower.includes('life science')) {
+      return this.defaultReferences.biology;
+    }
+    
+    // Chemistry subjects
+    if (subjectLower.includes('chemistry') || subjectLower.includes('chemical') || subjectLower.includes('organic') || subjectLower.includes('inorganic')) {
+      return this.defaultReferences.chemistry;
+    }
+    
+    // Physics subjects
+    if (subjectLower.includes('physics') || subjectLower.includes('physical') || subjectLower.includes('mechanics') || subjectLower.includes('thermodynamics')) {
+      return this.defaultReferences.physics;
+    }
+    
+    // Mathematics subjects
+    if (subjectLower.includes('math') || subjectLower.includes('mathematics') || subjectLower.includes('calculus') || subjectLower.includes('algebra') || subjectLower.includes('geometry')) {
+      return this.defaultReferences.mathematics;
+    }
+    
+    // Default to biology for scientific subjects, ancient Greece for unclear subjects
+    if (subjectLower.includes('science') || subjectLower.includes('scientific')) {
+      return this.defaultReferences.biology;
+    }
+    
+    // Default to ancient Greece if subject is completely unclear
     return this.defaultReferences.ancientGreece;
   }
 
@@ -100,6 +166,8 @@ class AcademicReferencesService {
     });
     
     // Add specific references based on content keywords (only if not already present)
+    
+    // History references
     if (contentLower.includes('pyramid') || contentLower.includes('pharaoh')) {
       const newRef = {
         id: contextualRefs.length + 1,
@@ -140,6 +208,106 @@ class AcademicReferencesService {
         year: '1999',
         title: 'The Constitution of the Roman Republic',
         publisher: 'Oxford University Press'
+      };
+      const key = `${newRef.author}-${newRef.year}-${newRef.title}`;
+      if (!existingKeys.has(key)) {
+        contextualRefs.push(newRef);
+        existingKeys.add(key);
+      }
+    }
+    
+    // Biology references
+    if (contentLower.includes('cell') || contentLower.includes('cellular') || contentLower.includes('membrane')) {
+      const newRef = {
+        id: contextualRefs.length + 1,
+        type: 'book',
+        author: 'Alberts',
+        year: '2022',
+        title: 'Molecular Biology of the Cell',
+        publisher: 'Garland Science'
+      };
+      const key = `${newRef.author}-${newRef.year}-${newRef.title}`;
+      if (!existingKeys.has(key)) {
+        contextualRefs.push(newRef);
+        existingKeys.add(key);
+      }
+    }
+    
+    if (contentLower.includes('plant') || contentLower.includes('chloroplast') || contentLower.includes('photosynthesis')) {
+      const newRef = {
+        id: contextualRefs.length + 1,
+        type: 'book',
+        author: 'Taiz',
+        year: '2018',
+        title: 'Plant Physiology and Development',
+        publisher: 'Sinauer Associates'
+      };
+      const key = `${newRef.author}-${newRef.year}-${newRef.title}`;
+      if (!existingKeys.has(key)) {
+        contextualRefs.push(newRef);
+        existingKeys.add(key);
+      }
+    }
+    
+    if (contentLower.includes('dna') || contentLower.includes('gene') || contentLower.includes('genetic')) {
+      const newRef = {
+        id: contextualRefs.length + 1,
+        type: 'book',
+        author: 'Watson',
+        year: '2014',
+        title: 'Molecular Biology of the Gene',
+        publisher: 'Pearson'
+      };
+      const key = `${newRef.author}-${newRef.year}-${newRef.title}`;
+      if (!existingKeys.has(key)) {
+        contextualRefs.push(newRef);
+        existingKeys.add(key);
+      }
+    }
+    
+    // Chemistry references
+    if (contentLower.includes('molecule') || contentLower.includes('chemical') || contentLower.includes('reaction')) {
+      const newRef = {
+        id: contextualRefs.length + 1,
+        type: 'book',
+        author: 'Atkins',
+        year: '2022',
+        title: 'Physical Chemistry',
+        publisher: 'Oxford University Press'
+      };
+      const key = `${newRef.author}-${newRef.year}-${newRef.title}`;
+      if (!existingKeys.has(key)) {
+        contextualRefs.push(newRef);
+        existingKeys.add(key);
+      }
+    }
+    
+    // Physics references
+    if (contentLower.includes('force') || contentLower.includes('energy') || contentLower.includes('motion')) {
+      const newRef = {
+        id: contextualRefs.length + 1,
+        type: 'book',
+        author: 'Halliday',
+        year: '2021',
+        title: 'Fundamentals of Physics',
+        publisher: 'Wiley'
+      };
+      const key = `${newRef.author}-${newRef.year}-${newRef.title}`;
+      if (!existingKeys.has(key)) {
+        contextualRefs.push(newRef);
+        existingKeys.add(key);
+      }
+    }
+    
+    // Mathematics references
+    if (contentLower.includes('equation') || contentLower.includes('formula') || contentLower.includes('calculation')) {
+      const newRef = {
+        id: contextualRefs.length + 1,
+        type: 'book',
+        author: 'Stewart',
+        year: '2021',
+        title: 'Calculus: Early Transcendentals',
+        publisher: 'Cengage Learning'
       };
       const key = `${newRef.author}-${newRef.year}-${newRef.title}`;
       if (!existingKeys.has(key)) {
@@ -203,6 +371,76 @@ class AcademicReferencesService {
         year: '1987',
         title: 'The Roman Empire: Economy, Society and Culture',
         publisher: 'University of California Press'
+      });
+    }
+    
+    // Biology-specific references
+    if (titleLower.includes('cell') || titleLower.includes('cellular') || titleLower.includes('membrane')) {
+      specificRefs.push({
+        id: specificRefs.length + 1,
+        type: 'book',
+        author: 'Alberts',
+        year: '2022',
+        title: 'Molecular Biology of the Cell',
+        publisher: 'Garland Science'
+      });
+    }
+    
+    if (titleLower.includes('plant') || titleLower.includes('botany') || titleLower.includes('photosynthesis')) {
+      specificRefs.push({
+        id: specificRefs.length + 1,
+        type: 'book',
+        author: 'Taiz',
+        year: '2018',
+        title: 'Plant Physiology and Development',
+        publisher: 'Sinauer Associates'
+      });
+    }
+    
+    if (titleLower.includes('dna') || titleLower.includes('gene') || titleLower.includes('genetic')) {
+      specificRefs.push({
+        id: specificRefs.length + 1,
+        type: 'book',
+        author: 'Watson',
+        year: '2014',
+        title: 'Molecular Biology of the Gene',
+        publisher: 'Pearson'
+      });
+    }
+    
+    // Chemistry-specific references
+    if (titleLower.includes('chemistry') || titleLower.includes('chemical') || titleLower.includes('molecule')) {
+      specificRefs.push({
+        id: specificRefs.length + 1,
+        type: 'book',
+        author: 'Atkins',
+        year: '2022',
+        title: 'Physical Chemistry',
+        publisher: 'Oxford University Press'
+      });
+    }
+    
+    // Physics-specific references
+    if (titleLower.includes('physics') || titleLower.includes('force') || titleLower.includes('energy')) {
+      specificRefs.push({
+        id: specificRefs.length + 1,
+        type: 'book',
+        author: 'Halliday',
+        year: '2021',
+        title: 'Fundamentals of Physics',
+        publisher: 'Wiley'
+      });
+    }
+    
+    // Mathematics-specific references
+    if (titleLower.includes('math') || titleLower.includes('calculus') || titleLower.includes('algebra')) {
+      specificRefs.push({
+        id: specificRefs.length + 1,
+        type: 'book',
+        author: 'Stewart',
+        year: '2021',
+        title: 'Calculus: Early Transcendentals',
+        publisher: 'Cengage Learning'
       });
     }
     
