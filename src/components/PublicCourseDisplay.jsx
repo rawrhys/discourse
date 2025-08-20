@@ -330,14 +330,14 @@ const PublicCourseDisplay = () => {
     setShowQuiz(false);
   }, [course, unlockedModules, courseId, navigate, setActiveModuleId, setActiveLessonId]);
 
-  const handleLessonClick = (lessonId) => {
+  const handleLessonClick = useCallback((lessonId) => {
     setActiveLessonId(lessonId);
     navigate(`/public/course/${courseId}/lesson/${lessonId}`, { replace: true });
     setShowQuiz(false);
     if (window.innerWidth < 768) {
       setSidebarOpen(false);
     }
-  };
+  }, [courseId, navigate]);
 
   const handleNextLesson = useCallback(() => {
     const currentModule = course.modules.find(m => m.id === activeModuleId);
