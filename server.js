@@ -243,9 +243,9 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
       
       // Cultural mismatch penalties - heavy penalties for wrong civilizations
       const culturalMismatches = {
-        'egypt': ['mesopotamia', 'sumerian', 'babylonian', 'assyrian', 'akkadian', 'hittite', 'hittites', 'norse', 'viking', 'germanic', 'north germanic', 'scandinavian', 'roman', 'greek', 'hellenistic', 'persian', 'achaemenid', 'sassanid', 'byzantine', 'ottoman', 'arabic', 'islamic', 'medieval europe', 'renaissance', 'feudal', 'crusader'],
-        'rome': ['egyptian', 'pharaoh', 'pyramid', 'nile', 'mesopotamia', 'sumerian', 'babylonian', 'assyrian', 'akkadian', 'hittite', 'hittites', 'norse', 'viking', 'germanic', 'north germanic', 'scandinavian', 'greek', 'hellenistic', 'persian', 'achaemenid', 'sassanid', 'byzantine', 'ottoman', 'arabic', 'islamic', 'medieval europe', 'renaissance', 'feudal', 'crusader'],
-        'greek': ['egyptian', 'pharaoh', 'pyramid', 'nile', 'mesopotamia', 'sumerian', 'babylonian', 'assyrian', 'akkadian', 'hittite', 'hittites', 'norse', 'viking', 'germanic', 'north germanic', 'scandinavian', 'roman', 'persian', 'achaemenid', 'sassanid', 'byzantine', 'ottoman', 'arabic', 'islamic', 'medieval europe', 'renaissance', 'feudal', 'crusader']
+        'egypt': ['mesopotamia', 'sumerian', 'babylonian', 'assyrian', 'akkadian', 'hittite', 'hittites', 'norse', 'viking', 'germanic', 'north germanic', 'scandinavian', 'roman', 'greek', 'hellenistic', 'persian', 'achaemenid', 'sassanid', 'byzantine', 'ottoman', 'arabic', 'islamic', 'medieval europe', 'renaissance', 'feudal', 'crusader', 'thor', 'hammer', 'mjolnir', 'nordic', 'scandinavian', 'germanic', 'north germanic'],
+        'rome': ['egyptian', 'pharaoh', 'pyramid', 'nile', 'mesopotamia', 'sumerian', 'babylonian', 'assyrian', 'akkadian', 'hittite', 'hittites', 'norse', 'viking', 'germanic', 'north germanic', 'scandinavian', 'greek', 'hellenistic', 'persian', 'achaemenid', 'sassanid', 'byzantine', 'ottoman', 'arabic', 'islamic', 'medieval europe', 'renaissance', 'feudal', 'crusader', 'thor', 'hammer', 'mjolnir', 'nordic'],
+        'greek': ['egyptian', 'pharaoh', 'pyramid', 'nile', 'mesopotamia', 'sumerian', 'babylonian', 'assyrian', 'akkadian', 'hittite', 'hittites', 'norse', 'viking', 'germanic', 'north germanic', 'scandinavian', 'roman', 'persian', 'achaemenid', 'sassanid', 'byzantine', 'ottoman', 'arabic', 'islamic', 'medieval europe', 'renaissance', 'feudal', 'crusader', 'thor', 'hammer', 'mjolnir', 'nordic']
       };
       
       // Check for cultural mismatches based on course context
@@ -254,8 +254,8 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
         if (courseTopic.toLowerCase().includes(culture)) {
           for (const mismatch of mismatches) {
             if (haystack.includes(mismatch)) {
-              score -= 500; // Very heavy penalty for cultural mismatches
-              console.log(`[ImageScoring] Heavy cultural mismatch penalty for "${mismatch}" in ${culture} course`);
+              score -= 1000; // Even heavier penalty for cultural mismatches
+              console.log(`[ImageScoring] Very heavy cultural mismatch penalty for "${mismatch}" in ${culture} course`);
             }
           }
         }
@@ -263,7 +263,7 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
       
       for (const obj of irrelevantObjects) {
         if (haystack.includes(obj)) {
-          score -= 300; // Much heavier penalty for irrelevant objects in historical content
+          score -= 500; // Much heavier penalty for irrelevant objects in historical content
           console.log(`[ImageScoring] Heavy penalty for irrelevant object "${obj}" in historical content`);
         }
       }
@@ -625,19 +625,27 @@ function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitl
     const courseContext = courseTitle || '';
     
     if (courseContext.toLowerCase().includes('egypt')) {
-      // Egyptian-specific queries
+      // Egyptian-specific queries with stronger cultural focus
       for (const phrase of properPhrases.slice(0, 4)) {
         dedupePush(queries, `${phrase} ancient egypt`);
         dedupePush(queries, `${phrase} egyptian civilization`);
         dedupePush(queries, `${phrase} egyptian artifact`);
         dedupePush(queries, `${phrase} egyptian archaeology`);
         dedupePush(queries, `${phrase} egyptian history`);
+        dedupePush(queries, `${phrase} egyptian pharaoh`);
+        dedupePush(queries, `${phrase} egyptian temple`);
+        dedupePush(queries, `${phrase} egyptian tomb`);
         if (queries.length >= maxQueries) break;
       }
-      // Add general Egyptian terms
+      // Add general Egyptian terms with cultural specificity
       dedupePush(queries, 'ancient egypt civilization');
       dedupePush(queries, 'egyptian pharaoh dynasty');
       dedupePush(queries, 'egyptian pyramid temple');
+      dedupePush(queries, 'egyptian hieroglyphics');
+      dedupePush(queries, 'egyptian mummy');
+      dedupePush(queries, 'egyptian sphinx');
+      dedupePush(queries, 'egyptian obelisk');
+      dedupePush(queries, 'egyptian papyrus');
     } else if (courseContext.toLowerCase().includes('rome')) {
       // Roman-specific queries
       for (const phrase of properPhrases.slice(0, 4)) {
@@ -714,6 +722,48 @@ function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitl
         if (queries.length >= maxQueries) break;
       }
     }
+  }
+
+  // Filter out culturally inappropriate queries for history courses
+  if (isHistoryCourse) {
+    const courseContext = courseTitle || '';
+    const filteredQueries = [];
+    
+    // Define culturally inappropriate terms for each civilization
+    const inappropriateTerms = {
+      'egypt': ['norse', 'viking', 'germanic', 'scandinavian', 'thor', 'hammer', 'mjolnir', 'nordic', 'roman', 'greek', 'hellenistic', 'persian', 'mesopotamia', 'sumerian', 'babylonian', 'assyrian', 'akkadian', 'hittite', 'hittites', 'byzantine', 'ottoman', 'arabic', 'islamic', 'medieval europe', 'renaissance', 'feudal', 'crusader'],
+      'rome': ['norse', 'viking', 'germanic', 'scandinavian', 'thor', 'hammer', 'mjolnir', 'nordic', 'egyptian', 'pharaoh', 'pyramid', 'nile', 'greek', 'hellenistic', 'persian', 'mesopotamia', 'sumerian', 'babylonian', 'assyrian', 'akkadian', 'hittite', 'hittites', 'byzantine', 'ottoman', 'arabic', 'islamic', 'medieval europe', 'renaissance', 'feudal', 'crusader'],
+      'greek': ['norse', 'viking', 'germanic', 'scandinavian', 'thor', 'hammer', 'mjolnir', 'nordic', 'egyptian', 'pharaoh', 'pyramid', 'nile', 'roman', 'persian', 'mesopotamia', 'sumerian', 'babylonian', 'assyrian', 'akkadian', 'hittite', 'hittites', 'byzantine', 'ottoman', 'arabic', 'islamic', 'medieval europe', 'renaissance', 'feudal', 'crusader']
+    };
+    
+    // Determine which civilization this course is about
+    let civilization = '';
+    if (courseContext.toLowerCase().includes('egypt')) civilization = 'egypt';
+    else if (courseContext.toLowerCase().includes('rome')) civilization = 'rome';
+    else if (courseContext.toLowerCase().includes('greek')) civilization = 'greek';
+    
+    // Filter queries based on civilization
+    for (const query of queries) {
+      const queryLower = query.toLowerCase();
+      let isAppropriate = true;
+      
+      if (civilization && inappropriateTerms[civilization]) {
+        for (const term of inappropriateTerms[civilization]) {
+          if (queryLower.includes(term)) {
+            console.log(`[ImageScoring] Filtering out culturally inappropriate query: "${query}" (contains "${term}")`);
+            isAppropriate = false;
+            break;
+          }
+        }
+      }
+      
+      if (isAppropriate) {
+        filteredQueries.push(query);
+      }
+    }
+    
+    console.log(`[ImageScoring] Filtered queries for ${civilization} course: ${filteredQueries.length}/${queries.length} queries retained`);
+    return filteredQueries.slice(0, maxQueries);
   }
 
   return queries.slice(0, maxQueries);
@@ -1538,11 +1588,23 @@ Context: "${context.substring(0, 1000)}..."`;
         if (candidates.length > 0) {
           candidates.sort((a, b) => b.score - a.score);
           const best = candidates[0];
-          console.log(`[AIService] Selected Wikipedia image for "${subject}" (score ${best.score}): ${best.imageUrl}`);
-          console.log(`[AIService] Wikipedia candidates found: ${candidates.length}, best score: ${best.score}`);
-          const originalUrl = best.imageUrl;
-                  // Return fast proxied URL for maximum speed
-        return { ...best, imageUrl: `/api/image/fast?url=${encodeURIComponent(originalUrl)}`, sourceUrlForCaching: originalUrl };
+          
+          // Apply minimum score threshold for historical content to ensure relevance
+          const isHistoricalContent = /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(subject) || 
+                                     /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(courseContext?.title || '');
+          
+          const minScoreThreshold = isHistoricalContent ? 50 : 0; // Higher threshold for historical content
+          
+          if (best.score >= minScoreThreshold) {
+            console.log(`[AIService] Selected Wikipedia image for "${subject}" (score ${best.score}): ${best.imageUrl}`);
+            console.log(`[AIService] Wikipedia candidates found: ${candidates.length}, best score: ${best.score}`);
+            const originalUrl = best.imageUrl;
+            // Return fast proxied URL for maximum speed
+            return { ...best, imageUrl: `/api/image/fast?url=${encodeURIComponent(originalUrl)}`, sourceUrlForCaching: originalUrl };
+          } else {
+            console.log(`[AIService] Best Wikipedia candidate score ${best.score} below threshold ${minScoreThreshold} for "${subject}", rejecting`);
+            return null;
+          }
         }
 
         console.warn(`[AIService] No Wikipedia image found for "${subject}" after simplified search.`);
@@ -1647,11 +1709,23 @@ Context: "${context.substring(0, 1000)}..."`;
       if (candidates.length > 0) {
         candidates.sort((a, b) => b.score - a.score);
         const best = candidates[0];
-        console.log(`[AIService] Selected Pixabay image for "${subject}" (score ${best.score}): ${best.imageUrl}`);
-        console.log(`[AIService] Pixabay candidates found: ${candidates.length}, best score: ${best.score}`);
-        const originalUrl = best.imageUrl;
-        // Return fast proxied URL for maximum speed
-        return { ...best, imageUrl: `/api/image/fast?url=${encodeURIComponent(originalUrl)}`, sourceUrlForCaching: originalUrl };
+        
+        // Apply minimum score threshold for historical content to ensure relevance
+        const isHistoricalContent = /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(subject) || 
+                                   /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(courseContext?.title || '');
+        
+        const minScoreThreshold = isHistoricalContent ? 50 : 0; // Higher threshold for historical content
+        
+        if (best.score >= minScoreThreshold) {
+          console.log(`[AIService] Selected Pixabay image for "${subject}" (score ${best.score}): ${best.imageUrl}`);
+          console.log(`[AIService] Pixabay candidates found: ${candidates.length}, best score: ${best.score}`);
+          const originalUrl = best.imageUrl;
+          // Return fast proxied URL for maximum speed
+          return { ...best, imageUrl: `/api/image/fast?url=${encodeURIComponent(originalUrl)}`, sourceUrlForCaching: originalUrl };
+        } else {
+          console.log(`[AIService] Best Pixabay candidate score ${best.score} below threshold ${minScoreThreshold} for "${subject}", rejecting`);
+          return null;
+        }
       }
       return null;
     } catch (e) {
