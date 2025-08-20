@@ -3922,22 +3922,29 @@ async function imageSearchHandler(req, res) {
               // Validate the URL before attempting to pre-cache
               const sourceUrl = imageData.sourceUrlForCaching;
               if (sourceUrl && typeof sourceUrl === 'string' && sourceUrl.startsWith('http')) {
-                // Pre-cache in background without blocking the response
-                setImmediate(async () => {
-                  try {
-                    const response = await fetch(sourceUrl, {
-                      method: 'HEAD',
-                      signal: AbortSignal.timeout(5000)
-                    });
-                    if (response.ok) {
-                      console.log('[ImageSearch] Successfully pre-cached image:', sourceUrl.substring(0, 50) + '...');
-                    } else {
-                      console.warn('[ImageSearch] Failed to pre-cache image, status:', response.status);
+                // Validate URL format before pre-caching
+                try {
+                  new URL(sourceUrl); // This will throw if URL is invalid
+                  
+                  // Pre-cache in background without blocking the response
+                  setImmediate(async () => {
+                    try {
+                      const response = await fetch(sourceUrl, {
+                        method: 'HEAD',
+                        signal: AbortSignal.timeout(5000)
+                      });
+                      if (response.ok) {
+                        console.log('[ImageSearch] Successfully pre-cached image:', sourceUrl.substring(0, 50) + '...');
+                      } else {
+                        console.warn('[ImageSearch] Failed to pre-cache image, status:', response.status);
+                      }
+                    } catch (error) {
+                      console.warn('[ImageSearch] Failed to pre-cache image:', error.message);
                     }
-                  } catch (error) {
-                    console.warn('[ImageSearch] Failed to pre-cache image:', error.message);
-                  }
-                });
+                  });
+                } catch (urlValidationError) {
+                  console.warn('[ImageSearch] Invalid URL format for pre-caching:', sourceUrl);
+                }
               } else {
                 console.warn('[ImageSearch] Invalid sourceUrlForCaching:', sourceUrl);
               }
@@ -4006,9 +4013,15 @@ app.get('/api/image/fast', async (req, res) => {
     let parsedUrl;
     let decodedUrl = url;
     
-    // Try to decode the URL if it's encoded
+    // Try to decode the URL if it's encoded (handle multiple levels of encoding)
     try {
       decodedUrl = decodeURIComponent(url);
+      // Try to decode again in case of double encoding
+      try {
+        decodedUrl = decodeURIComponent(decodedUrl);
+      } catch (doubleDecodeError) {
+        // If double decode fails, keep the single decoded version
+      }
     } catch (decodeError) {
       // If decoding fails, use the original URL
       decodedUrl = url;
@@ -4017,8 +4030,13 @@ app.get('/api/image/fast', async (req, res) => {
     try {
       parsedUrl = new URL(decodedUrl);
     } catch (urlError) {
-      console.warn(`[FastImageProxy] Invalid URL format: ${url} (decoded: ${decodedUrl})`);
-      return res.status(400).json({ error: 'Invalid URL format' });
+      // Try with the original URL as a fallback
+      try {
+        parsedUrl = new URL(url);
+      } catch (fallbackError) {
+        console.warn(`[FastImageProxy] Invalid URL format: ${url} (decoded: ${decodedUrl})`);
+        return res.status(400).json({ error: 'Invalid URL format' });
+      }
     }
 
     // Security validation
@@ -4048,9 +4066,19 @@ app.get('/api/image/fast', async (req, res) => {
     
     // Additional validation for Pixabay URLs that might not have extensions in pathname
     const isPixabayUrl = hostname.includes('pixabay.com');
-    const isPixabayImageUrl = isPixabayUrl && (url.includes('_640.jpg') || url.includes('_1280.jpg') || url.includes('_1920.jpg') || url.includes('_1280.png') || url.includes('_1920.png'));
+    const isPixabayImageUrl = isPixabayUrl && (
+      url.includes('_640.jpg') || url.includes('_1280.jpg') || url.includes('_1920.jpg') || 
+      url.includes('_1280.png') || url.includes('_1920.png') || url.includes('_640.png') ||
+      url.includes('_960.jpg') || url.includes('_960.png')
+    );
     
-    if (!hasValidSvgExtension && !isPixabayImageUrl) {
+    // Additional validation for Wikimedia URLs
+    const isWikimediaUrl = hostname.includes('wikimedia.org');
+    const isWikimediaImageUrl = isWikimediaUrl && (
+      hasValidExtension || hasValidExtensionInUrl || isSvgFile
+    );
+    
+    if (!hasValidSvgExtension && !isPixabayImageUrl && !isWikimediaImageUrl) {
       console.warn(`[FastImageProxy] Invalid image format: ${parsedUrl.pathname} (URL: ${url.substring(0, 100)}...)`);
       return res.status(400).json({ error: 'Invalid image format' });
     }
