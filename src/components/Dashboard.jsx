@@ -163,11 +163,16 @@ const Dashboard = () => {
       setIsGenerating(false);
       setShowNewCourseForm(false);
       
-      // Refresh the courses list to show the new course
-      await fetchSavedCourses(true);
+      // Show success message before reload
+      setSuccessMessage('Course generated successfully! Redirecting to dashboard...');
+      setShowSuccessToast(true);
       
-      // Show success message
-      logger.info('🎉 [COURSE GENERATION] Course generated successfully!');
+      // Force a full page reload to show the new course (like backend does)
+      setTimeout(() => {
+        logger.info('🔄 [COURSE GENERATION] Reloading page to show new course');
+        setShowSuccessToast(false); // Hide toast before reload
+        window.location.reload();
+      }, 1500); // Give user time to see success message
       
     } catch (error) {
       logger.error('💥 [COURSE GENERATION] Course generation failed:', {
