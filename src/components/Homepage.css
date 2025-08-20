@@ -37,10 +37,10 @@
 }
 
 .logo-icon-large {
-  width: 80px;
-  height: 80px;
-  border-radius: 12px;
-  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+  width: 120px;
+  height: 120px;
+  border-radius: 16px;
+  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.25));
 }
 
 .logo-text {
@@ -364,8 +364,8 @@
   }
   
   .logo-icon-large {
-    width: 60px;
-    height: 60px;
+    width: 90px;
+    height: 90px;
   }
   
   .hero-section {
@@ -446,8 +446,8 @@
 
 @media (max-width: 480px) {
   .logo-icon-large {
-    width: 50px;
-    height: 50px;
+    width: 70px;
+    height: 70px;
   }
   
   .hero-title {

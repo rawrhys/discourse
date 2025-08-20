@@ -92,38 +92,60 @@ class AcademicReferencesService {
     const contextualRefs = [...baseReferences];
     const contentLower = content.toLowerCase();
     
-    // Add specific references based on content keywords
+    // Create a set of existing reference keys to avoid duplicates
+    const existingKeys = new Set();
+    baseReferences.forEach(ref => {
+      const key = `${ref.author}-${ref.year}-${ref.title}`;
+      existingKeys.add(key);
+    });
+    
+    // Add specific references based on content keywords (only if not already present)
     if (contentLower.includes('pyramid') || contentLower.includes('pharaoh')) {
-      contextualRefs.push({
+      const newRef = {
         id: contextualRefs.length + 1,
         type: 'book',
         author: 'Lehner',
         year: '1997',
         title: 'The Complete Pyramids',
         publisher: 'Thames & Hudson'
-      });
+      };
+      const key = `${newRef.author}-${newRef.year}-${newRef.title}`;
+      if (!existingKeys.has(key)) {
+        contextualRefs.push(newRef);
+        existingKeys.add(key);
+      }
     }
     
     if (contentLower.includes('democracy') || contentLower.includes('athens')) {
-      contextualRefs.push({
+      const newRef = {
         id: contextualRefs.length + 1,
         type: 'book',
         author: 'Ober',
         year: '2015',
         title: 'The Rise and Fall of Classical Greece',
         publisher: 'Princeton University Press'
-      });
+      };
+      const key = `${newRef.author}-${newRef.year}-${newRef.title}`;
+      if (!existingKeys.has(key)) {
+        contextualRefs.push(newRef);
+        existingKeys.add(key);
+      }
     }
     
     if (contentLower.includes('republic') || contentLower.includes('senate')) {
-      contextualRefs.push({
+      const newRef = {
         id: contextualRefs.length + 1,
         type: 'book',
         author: 'Lintott',
         year: '1999',
         title: 'The Constitution of the Roman Republic',
         publisher: 'Oxford University Press'
-      });
+      };
+      const key = `${newRef.author}-${newRef.year}-${newRef.title}`;
+      if (!existingKeys.has(key)) {
+        contextualRefs.push(newRef);
+        existingKeys.add(key);
+      }
     }
     
     return contextualRefs;
@@ -161,6 +183,35 @@ class AcademicReferencesService {
       });
     }
     
+    // Add more specific references based on lesson content
+    if (titleLower.includes('republic') || titleLower.includes('roman republic')) {
+      specificRefs.push({
+        id: specificRefs.length + 1,
+        type: 'book',
+        author: 'Lintott',
+        year: '1999',
+        title: 'The Constitution of the Roman Republic',
+        publisher: 'Oxford University Press'
+      });
+    }
+    
+    if (titleLower.includes('empire') || titleLower.includes('roman empire')) {
+      specificRefs.push({
+        id: specificRefs.length + 1,
+        type: 'book',
+        author: 'Garnsey',
+        year: '1987',
+        title: 'The Roman Empire: Economy, Society and Culture',
+        publisher: 'University of California Press'
+      });
+    }
+    
+    console.log('[AcademicReferencesService] Lesson-specific references:', {
+      lessonTitle,
+      specificRefsCount: specificRefs.length,
+      specificRefs
+    });
+    
     return specificRefs;
   }
 
@@ -168,18 +219,44 @@ class AcademicReferencesService {
    * Combine and deduplicate references
    */
   combineAndDeduplicateReferences(references) {
+    if (!references || !Array.isArray(references)) {
+      return [];
+    }
+    
     const seen = new Set();
     const uniqueRefs = [];
     
     references.forEach(ref => {
-      const key = `${ref.author}-${ref.year}-${ref.title}`;
+      if (!ref || !ref.author || !ref.title) {
+        console.warn('[AcademicReferencesService] Skipping invalid reference:', ref);
+        return;
+      }
+      
+      // Create a more robust key that handles variations in formatting
+      const normalizedAuthor = ref.author.trim().toLowerCase();
+      const normalizedTitle = ref.title.trim().toLowerCase();
+      const year = ref.year || '';
+      const key = `${normalizedAuthor}-${year}-${normalizedTitle}`;
+      
       if (!seen.has(key)) {
         seen.add(key);
         uniqueRefs.push({
           ...ref,
           id: uniqueRefs.length + 1
         });
+      } else {
+        console.log('[AcademicReferencesService] Skipping duplicate reference:', {
+          author: ref.author,
+          title: ref.title,
+          year: ref.year
+        });
       }
+    });
+    
+    console.log('[AcademicReferencesService] Deduplicated references:', {
+      originalCount: references.length,
+      uniqueCount: uniqueRefs.length,
+      duplicatesRemoved: references.length - uniqueRefs.length
     });
     
     return uniqueRefs;
