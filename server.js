@@ -2641,8 +2641,6 @@ Conclusion: ${content.conclusion}`;
     }));
   }
 
-
-
   /**
    * Shuffle array for variety in reference selection
    * @param {Array} array - Array to shuffle
@@ -5854,6 +5852,9 @@ app.get('/api/courses/verify/:courseId', authenticateToken, async (req, res) => 
         published: course.published
       }
     });
+  } catch (error) {
+    console.error('[API] Error verifying course:', error);
+    res.status(500).json({ error: 'Failed to verify course' });
   }
 });
 
@@ -5888,12 +5889,6 @@ app.get('/api/debug/user-courses', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('[DEBUG] Error fetching user courses:', error);
     res.status(500).json({ error: 'Failed to fetch user courses' });
-  }
-});
-    
-  } catch (error) {
-    console.error('[API] Error verifying course:', error);
-    res.status(500).json({ error: 'Failed to verify course' });
   }
 });
 
