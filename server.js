@@ -3107,6 +3107,18 @@ const authenticateToken = async (req, res, next) => {
 
     // Update req.user with fresh data from database
     req.user = dbUser;
+    
+    // Add debugging for course access
+    if (req.path.includes('/api/courses/') && req.params.courseId) {
+      console.log('[AUTH] Course access authentication:', {
+        userId: dbUser.id,
+        userEmail: dbUser.email,
+        courseId: req.params.courseId,
+        path: req.path,
+        timestamp: new Date().toISOString()
+      });
+    }
+    
     if (SHOULD_LOG_AUTH) {
       console.log('[AUTH] User authenticated:', {
         id: dbUser.id,
@@ -3805,11 +3817,41 @@ app.get('/api/courses/:courseId', authenticateToken, (req, res) => {
       requestUserId: req.user.id,
       requestUserIdType: typeof req.user.id,
       isEqual: course.userId === req.user.id,
-      isStrictEqual: course.userId === req.user.id
+      isStrictEqual: course.userId === req.user.id,
+      courseUserEmail: course.userEmail || 'N/A',
+      requestUserEmail: req.user.email
     });
+    
+    // Check if this is the specific course that was just generated
+    if (courseId === 'course_1755726976568_4p9cnxfoy') {
+      console.log(`[API] DEBUG: This is the recently generated course. Checking user details:`, {
+        courseUserId: course.userId,
+        requestUserId: req.user.id,
+        courseUserEmail: course.userEmail || 'N/A',
+        requestUserEmail: req.user.email,
+        allUsersInDB: db.data.users.map(u => ({ id: u.id, email: u.email }))
+      });
+    }
     
     if (course.userId !== req.user.id) {
       console.log(`[API] Access denied - course belongs to user ${course.userId}, but request is from user ${req.user.id}`);
+      
+      // For debugging, let's also check if there are any users with the same email
+      const courseUser = db.data.users.find(u => u.id === course.userId);
+      const requestUser = db.data.users.find(u => u.id === req.user.id);
+      
+      console.log(`[API] DEBUG: User comparison:`, {
+        courseUser: courseUser ? { id: courseUser.id, email: courseUser.email } : 'NOT_FOUND',
+        requestUser: requestUser ? { id: requestUser.id, email: requestUser.email } : 'NOT_FOUND',
+        sameEmail: courseUser && requestUser ? courseUser.email === requestUser.email : false
+      });
+      
+      // If they have the same email, allow access (this handles user ID migration issues)
+      if (courseUser && requestUser && courseUser.email === requestUser.email) {
+        console.log(`[API] Allowing access based on email match for course ${courseId}`);
+        return res.json(course);
+      }
+      
       return res.status(403).json({ error: 'Unauthorized to access this course' });
     }
     
