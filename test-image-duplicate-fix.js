@@ -1,9 +1,9 @@
 // Test script to verify image duplicate fix
 import fetch from 'node-fetch';
 
+const baseUrl = 'https://thediscourse.ai'; // Use the production domain
+
 async function testImageDuplicateFix() {
-  const baseUrl = 'https://thediscourse.ai'; // Use the production domain
-  
   console.log('🧪 Testing Image Duplicate Fix...\n');
   
   // Test 1: Search for the same lesson title with no used images
