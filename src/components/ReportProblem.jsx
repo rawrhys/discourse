@@ -1,9 +1,11 @@
 import React, { useState, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../config/supabase';
+import { useApiWrapper } from '../services/api';
 
 const ReportProblem = ({ isOpen, onClose, onSuccess }) => {
   const { user } = useAuth();
+  const api = useApiWrapper();
   const [message, setMessage] = useState('');
   const [userEmail, setUserEmail] = useState(user?.email || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -53,13 +55,7 @@ const ReportProblem = ({ isOpen, onClose, onSuccess }) => {
         formData.append('imageCount', selectedFiles.length.toString());
       }
 
-      const response = await fetch('/api/report-problem', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-        },
-        body: formData,
-      });
+      const response = await api.reportProblem(formData);
 
       if (response.ok) {
         setSuccess(true);
@@ -70,8 +66,20 @@ const ReportProblem = ({ isOpen, onClose, onSuccess }) => {
           if (onSuccess) onSuccess();
         }, 2000);
       } else {
-        const errorData = await response.json();
-        setError(errorData.error || 'Failed to submit report. Please try again.');
+        const errorText = await response.text();
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch (e) {
+          errorData = { error: errorText };
+        }
+        
+        console.error('[REPORT_PROBLEM] Server error:', {
+          status: response.status,
+          error: errorData,
+          responseText: errorText
+        });
+        setError(errorData.error || `Failed to submit report (${response.status}). Please try again.`);
       }
     } catch (err) {
       setError('Network error. Please check your connection and try again.');

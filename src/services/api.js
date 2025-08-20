@@ -159,8 +159,7 @@ const api = {
     verifyCourse: (courseId) =>
         apiClient(`/api/courses/verify/${courseId}`),
 
-    debugUserCourses: () =>
-        apiClient('/api/debug/user-courses'),
+
 
     clearCache: (courseId = null, cacheType = null) => {
         const body = {};
@@ -196,6 +195,17 @@ const api = {
 
     logout: () =>
         apiClient('/api/auth/logout', { method: 'POST' }),
+
+    reportProblem: (formData) => {
+        console.log('📡 [API SERVICE] Submitting problem report');
+        return fetch(`${API_BASE_URL}/api/report-problem`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            },
+            body: formData,
+        });
+    },
 };
 
 export default api;

@@ -7157,6 +7157,12 @@ app.post('/api/report-problem', async (req, res) => {
     }
 
     // Handle multipart form data for file uploads
+    console.log('[PROBLEM_REPORT] Received form data:', {
+      body: req.body,
+      files: req.files ? Object.keys(req.files) : 'No files',
+      headers: req.headers
+    });
+    
     const message = req.body.message;
     const userEmail = req.body.userEmail || user.email;
     const userId = req.body.userId || user.id;
@@ -7164,7 +7170,17 @@ app.post('/api/report-problem', async (req, res) => {
     const userAgent = req.body.userAgent || req.headers['user-agent'];
     const url = req.body.url || req.headers.referer || 'Unknown';
     
+    console.log('[PROBLEM_REPORT] Parsed data:', {
+      message: message ? 'Present' : 'Missing',
+      userEmail,
+      userId,
+      timestamp,
+      userAgent: userAgent ? 'Present' : 'Missing',
+      url
+    });
+    
     if (!message || !message.trim()) {
+      console.log('[PROBLEM_REPORT] Validation failed: Message is required');
       return res.status(400).json({ error: 'Message is required' });
     }
 

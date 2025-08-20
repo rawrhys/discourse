@@ -7,7 +7,9 @@
   "scripts": {
     "start": "node server.js",
     "dev": "vite",
-    "build": "node node_modules/vite/dist/node/cli.js build && node compress.js",
+    "build": "node --max-old-space-size=4096 node_modules/vite/dist/node/cli.js build && node compress.js",
+    "build:clean": "rm -rf dist node_modules/.vite && npm run build",
+    "build:windows": "node --max-old-space-size=4096 node_modules/vite/dist/node/cli.js build && node compress.js",
     "preview": "vite preview",
     "start:dev": "cross-env NODE_ENV=development node server.js",
     "test": "node server.test.js"
