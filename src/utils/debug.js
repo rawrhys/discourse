@@ -485,4 +485,112 @@ if (process.env.NODE_ENV === 'development') {
   console.log('🔧 [DEBUG TTS] Available functions:', Object.keys(window.debugTTS));
 }
 
+// Add course loading debug functions
+window.debugCourseLoading = {
+  // Debug course loading issues
+  debugCourseLoading: async function(courseId) {
+    if (!courseId) {
+      console.error('❌ [DEBUG] No courseId provided.');
+      return;
+    }
+
+    console.log('🔍 [DEBUG] Debugging course loading for:', courseId);
+
+    try {
+      // Check if course exists in database
+      const response = await fetch(`/api/debug/course/${courseId}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        const debugInfo = await response.json();
+        console.log('📊 [DEBUG] Course debug info:', debugInfo);
+        
+        if (!debugInfo.courseFound) {
+          console.error('❌ [DEBUG] Course not found in database!');
+          console.log('📋 [DEBUG] Available courses:', debugInfo.userCourses);
+        } else {
+          console.log('✅ [DEBUG] Course found in database');
+        }
+      } else {
+        console.error('❌ [DEBUG] Failed to get debug info:', response.status);
+      }
+    } catch (error) {
+      console.error('💥 [DEBUG] Error getting debug info:', error);
+    }
+  },
+
+  // Debug all user courses
+  debugUserCourses: async function() {
+    console.log('🔍 [DEBUG] Debugging all user courses');
+
+    try {
+      const response = await fetch('/api/debug/user-courses', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        const debugInfo = await response.json();
+        console.log('📊 [DEBUG] User courses debug info:', debugInfo);
+      } else {
+        console.error('❌ [DEBUG] Failed to get user courses debug info:', response.status);
+      }
+    } catch (error) {
+      console.error('💥 [DEBUG] Error getting user courses debug info:', error);
+    }
+  },
+
+  // Clean up orphaned courses from dashboard
+  cleanupOrphanedCourses: async function() {
+    console.log('🧹 [DEBUG] Cleaning up orphaned courses from dashboard...');
+
+    try {
+      // Get current courses from dashboard
+      const response = await fetch('/api/courses/saved', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        const dashboardCourses = await response.json();
+        console.log('📋 [DEBUG] Courses in dashboard:', dashboardCourses);
+
+        // Check each course against the database
+        for (const course of dashboardCourses) {
+          const courseResponse = await fetch(`/api/debug/course/${course.id}`, {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+          });
+
+          if (courseResponse.ok) {
+            const debugInfo = await courseResponse.json();
+            if (!debugInfo.courseFound) {
+              console.log(`❌ [DEBUG] Orphaned course found: ${course.id} - ${course.title}`);
+              console.log('💡 [DEBUG] This course exists in dashboard but not in database');
+            }
+          }
+        }
+
+        console.log('✅ [DEBUG] Orphaned course check completed');
+      } else {
+        console.error('❌ [DEBUG] Failed to get dashboard courses:', response.status);
+      }
+    } catch (error) {
+      console.error('💥 [DEBUG] Error cleaning up orphaned courses:', error);
+    }
+  }
+};
+
+// Only log in development
+if (process.env.NODE_ENV === 'development') {
+  console.log('🔧 [DEBUG COURSE LOADING] Course loading debug utilities loaded. Use window.debugCourseLoading to access debug functions.');
+  console.log('🔧 [DEBUG COURSE LOADING] Available functions:', Object.keys(window.debugCourseLoading));
+}
+
 export default window.debugCourseGeneration; 
