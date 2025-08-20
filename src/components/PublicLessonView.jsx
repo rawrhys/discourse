@@ -355,6 +355,20 @@ const PublicLessonView = ({
   courseDescription,
   sessionId // Add sessionId prop
 }) => {
+  // Debug logging to see what props are received
+  console.log('[PublicLessonView] Component rendered with props:', {
+    hasLesson: !!lesson,
+    lessonTitle: lesson?.title,
+    subject,
+    courseId,
+    hasModuleTitle: !!moduleTitle,
+    currentLessonIndex,
+    totalLessonsInModule,
+    hasActiveModule: !!activeModule,
+    hasCourseDescription: !!courseDescription,
+    sessionId
+  });
+
   const [imageData, setImageData] = useState(null);
   const [imageLoading, setImageLoading] = useState(false);
   const [view, setView] = useState('content'); // 'content' or 'flashcards'
@@ -365,6 +379,10 @@ const PublicLessonView = ({
   const [imageTitleCounts, setImageTitleCounts] = useState({});
   const [imageUrlCounts, setImageUrlCounts] = useState({});
   const [imageFallbackTried, setImageFallbackTried] = useState(false);
+  
+  // Academic references state
+  const [academicReferences, setAcademicReferences] = useState([]);
+  const [referencesFooter, setReferencesFooter] = useState(null);
   
   // TTS state management (matching private LessonView)
   const [ttsStatus, setTtsStatus] = useState({
@@ -597,12 +615,15 @@ const PublicLessonView = ({
             
             // Debounce the state update to prevent rapid changes
             ttsStateUpdateTimeoutRef.current = setTimeout(() => {
-              console.log('[PublicLessonView] TTS state changed:', {
-                wasPlaying: ttsStatus.isPlaying,
-                wasPaused: ttsStatus.isPaused,
-                nowPlaying: serviceStatus.isPlaying,
-                nowPaused: serviceStatus.isPaused
-              });
+              // Only log significant changes, not every state update
+              if (process.env.NODE_ENV === 'development' && Math.random() < 0.1) {
+                console.log('[PublicLessonView] TTS state changed:', {
+                  wasPlaying: ttsStatus.isPlaying,
+                  wasPaused: ttsStatus.isPaused,
+                  nowPlaying: serviceStatus.isPlaying,
+                  nowPaused: serviceStatus.isPaused
+                });
+              }
               
               // Only update if the service is actually in a different state
               // This prevents unnecessary re-renders that might trigger other effects
@@ -627,7 +648,7 @@ const PublicLessonView = ({
           isPaused: false 
         }));
       }
-    }, 1000); // Reduced to 1 second for more responsive state updates
+    }, 2000); // Increased interval to reduce frequency
 
     return () => {
       clearInterval(interval);
@@ -1081,9 +1102,12 @@ const PublicLessonView = ({
   // Academic references state (optimized with useMemo)
   const [highlightedCitation, setHighlightedCitation] = useState(null);
 
-  // Memoize academic references to prevent regeneration on every render
-  const academicReferences = useMemo(() => {
-    if (!lesson?.content || !subject || !lesson?.title) return [];
+  // Update academic references when lesson content changes
+  useEffect(() => {
+    if (!lesson?.content || !subject || !lesson?.title) {
+      setAcademicReferences([]);
+      return;
+    }
     
     try {
       console.log('[PublicLessonView] Processing references for:', lesson.title);
@@ -1094,7 +1118,10 @@ const PublicLessonView = ({
         : getContentAsString(lesson.content);
       
       // Only process if content is substantial
-      if (lessonContentString.length < 100) return [];
+      if (lessonContentString.length < 100) {
+        setAcademicReferences([]);
+        return;
+      }
       
       // First, extract references from the content
       const { contentWithoutRefs, references: extractedReferences } = extractReferences(lessonContentString);
@@ -1113,23 +1140,12 @@ const PublicLessonView = ({
           source: 'lesson_content'
         }));
         
-        return formattedReferences;
+        setAcademicReferences(formattedReferences);
+        return;
       }
       
       // If no references found in content, generate academic references
       console.log('[PublicLessonView] No references found in content, generating academic references');
-      
-      // Debug logging - reduced frequency
-      if (process.env.NODE_ENV === 'development' && Math.random() < 0.05) { // Reduced to 5% frequency
-        console.log('[PublicLessonView] Content processing debug:', {
-          originalContentType: typeof lesson.content,
-          originalContentLength: typeof lesson.content === 'string' ? lesson.content.length : 'object',
-          lessonContentStringLength: lessonContentString.length,
-          hasIntroductionKey: lessonContentString.includes('"introduction":'),
-          hasMainContentKey: lessonContentString.includes('"main_content":'),
-          hasConclusionKey: lessonContentString.includes('"conclusion":')
-        });
-      }
       
       // Generate academic references
       const references = AcademicReferencesService.generateReferences(
@@ -1143,10 +1159,10 @@ const PublicLessonView = ({
         hasCitations: !!references.length
       });
       
-      return references;
+      setAcademicReferences(references);
     } catch (error) {
       console.error('[PublicLessonView] Error processing references:', error);
-      return [];
+      setAcademicReferences([]);
     }
   }, [lesson?.content, subject, lesson?.title]);
 
@@ -1585,15 +1601,19 @@ const PublicLessonView = ({
   }
   
   // Create academic references footer
-  let referencesFooter = null;
-  try {
-    if (academicReferences && academicReferences.length > 0) {
-      referencesFooter = AcademicReferencesService.createReferencesFooter(academicReferences);
+  useEffect(() => {
+    try {
+      if (academicReferences && academicReferences.length > 0) {
+        const footer = AcademicReferencesService.createReferencesFooter(academicReferences);
+        setReferencesFooter(footer);
+      } else {
+        setReferencesFooter(null);
+      }
+    } catch (error) {
+      console.warn('[PublicLessonView] Error creating references footer:', error);
+      setReferencesFooter(null);
     }
-  } catch (error) {
-    console.warn('[PublicLessonView] Error creating references footer:', error);
-    referencesFooter = null;
-  }
+  }, [academicReferences]);
 
   return (
     <div className="lesson-view bg-white rounded-lg shadow-sm overflow-hidden">
