@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, Suspense, lazy, useMemo, memo } from 'react';
+import React, { useState, useEffect, useCallback, Suspense, lazy, useMemo, memo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import './CourseDisplay.css';
 import { useApiWrapper } from '../services/api';
@@ -9,6 +9,12 @@ import Flashcard from './Flashcard';
 import Image from './Image';
 import markdownService from '../services/MarkdownService';
 import { fixMalformedContent, formatContentForDisplay, cleanContentFormatting, validateContent, getContentAsString } from '../utils/contentFormatter';
+import SimpleImageService from '../services/SimpleImageService.js';
+import imagePreloadService from '../services/ImagePreloadService';
+import lessonImagePreloader from '../services/LessonImagePreloader';
+import { privateTTSService } from '../services/TTSService.js';
+import performanceMonitor from '../services/PerformanceMonitorService';
+import imagePerformanceMonitor from '../services/ImagePerformanceMonitor';
 
 // Lazy load QuizView
 const QuizView = lazy(() => import('./QuizView'));
@@ -153,9 +159,32 @@ const PublicCourseDisplay = () => {
   const [showUnlockToast, setShowUnlockToast] = useState(false);
   const [unlockedModuleName, setUnlockedModuleName] = useState('');
   const [activeTab, setActiveTab] = useState('content');
-  const [isReading, setIsReading] = useState(false);
+  
+  // TTS state
+  const [ttsStatus, setTtsStatus] = useState({
+    isPlaying: false,
+    isPaused: false,
+    isSupported: privateTTSService.isSupported()
+  });
+
+  // TTS state management
+  const ttsStateUpdateTimeoutRef = useRef(null);
+  const isLessonChanging = useRef(false);
+
+  // Image state
   const [imageData, setImageData] = useState(null);
   const [imageLoading, setImageLoading] = useState(false);
+  const [localUsedImageTitles, setLocalUsedImageTitles] = useState(new Set());
+  const [localUsedImageUrls, setLocalUsedImageUrls] = useState(new Set());
+  const [imageFallbackTried, setImageFallbackTried] = useState(false);
+
+  // Helper function to normalize image URLs
+  const normalizeImageUrl = useCallback((url) => {
+    if (!url) return '';
+    if (url.startsWith('//')) return `https:${url}`;
+    if (url.startsWith('/')) return `https://thediscourse.ai${url}`;
+    return url;
+  }, []);
 
   // Guard clause to ensure all dependencies are available
   console.log('[PublicCourseDisplay] Checking dependencies...');
@@ -280,27 +309,168 @@ const PublicCourseDisplay = () => {
     }
   }, [course, sessionId, courseId, unlockedModules]);
 
-  // Handle read aloud functionality
+  // Advanced TTS functions
+  const handleStartAudio = useCallback(async () => {
+    // Add a small delay to prevent rapid button clicks
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    console.log('[PublicCourseDisplay] handleStartAudio called - manual start only');
+    
+    // Check if TTS service has been stopped - if so, restart it
+    const serviceStatus = privateTTSService.getStatus();
+    if (serviceStatus.isStopped) {
+      console.log('[PublicCourseDisplay] TTS service was stopped, restarting service...');
+      try {
+        const restartSuccess = await privateTTSService.restart();
+        if (!restartSuccess) {
+          console.error('[PublicCourseDisplay] Failed to restart TTS service');
+          return;
+        }
+        console.log('[PublicCourseDisplay] TTS service restarted successfully');
+      } catch (error) {
+        console.error('[PublicCourseDisplay] Failed to restart TTS service:', error);
+        return;
+      }
+    }
+    
+    try {
+      // Check if TTS is already playing
+      if (ttsStatus.isPlaying) {
+        console.log('[PublicCourseDisplay] TTS already playing, stopping first');
+        privateTTSService.stop();
+        setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
+        return;
+      }
+
+      // Check if TTS is paused and can resume
+      if (ttsStatus.isPaused) {
+        console.log('[PublicCourseDisplay] Resuming paused TTS');
+        privateTTSService.resume();
+        setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
+        return;
+      } else {
+        // Start new reading - only read the currently displayed content
+        let contentToRead = '';
+        
+        if (activeTab === 'content') {
+          // Read the full lesson content including introduction and conclusion
+          if (currentLesson?.content && typeof currentLesson.content === 'object') {
+            // For object content, combine introduction, main_content, and conclusion
+            const parts = [];
+            if (currentLesson.content.introduction) {
+              parts.push(currentLesson.content.introduction);
+            }
+            if (currentLesson.content.main_content) {
+              parts.push(currentLesson.content.main_content);
+            } else if (currentLesson.content.content) {
+              parts.push(currentLesson.content.content);
+            }
+            if (currentLesson.content.conclusion) {
+              parts.push(currentLesson.content.conclusion);
+            }
+            contentToRead = parts.join('\n\n');
+          } else if (typeof currentLesson?.content === 'string') {
+            // For string content, use it as is
+            contentToRead = currentLesson.content;
+          }
+        } else if (activeTab === 'flashcards') {
+          // For flashcards view, read the flashcard terms and definitions
+          if (flashcardData && flashcardData.length > 0) {
+            contentToRead = flashcardData.map((fc, index) => 
+              `Flashcard ${index + 1}: ${fc.term || fc.question || 'Unknown Term'}. Definition: ${fc.definition || fc.answer || 'Definition not provided.'}`
+            ).join('. ');
+          }
+        }
+        
+        // Clean the content for TTS
+        if (contentToRead) {
+          contentToRead = contentToRead
+            .replace(/Content generation completed\./g, '')
+            .replace(/\|\|\|---\|\|\|/g, '')
+            .replace(/\|\|\|/g, '')
+            .replace(/<[^>]*>/g, '') // Remove HTML tags
+            .replace(/\*\*/g, '') // Remove markdown bold
+            .replace(/\*/g, '') // Remove markdown italic
+            .trim();
+          
+          if (contentToRead.length > 0) {
+            console.log('[PublicCourseDisplay] Starting TTS with content length:', contentToRead.length);
+            await privateTTSService.speak(contentToRead, currentLesson?.id);
+            setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
+          }
+        }
+      }
+    } catch (error) {
+      console.error('[PublicCourseDisplay] TTS error:', error);
+      setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
+    }
+  }, [ttsStatus.isPlaying, ttsStatus.isPaused, activeTab, currentLesson, flashcardData]);
+
+  const handlePauseResumeAudio = useCallback(() => {
+    try {
+      if (ttsStatus.isPlaying) {
+        privateTTSService.pause();
+        setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: true }));
+      } else if (ttsStatus.isPaused) {
+        privateTTSService.resume();
+        setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
+      }
+    } catch (error) {
+      console.error('[PublicCourseDisplay] TTS pause/resume error:', error);
+    }
+  }, [ttsStatus.isPlaying, ttsStatus.isPaused]);
+
+  const handleStopAudio = useCallback(() => {
+    try {
+      privateTTSService.stop();
+      setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
+    } catch (error) {
+      console.error('[PublicCourseDisplay] TTS stop error:', error);
+    }
+  }, []);
+
+  // TTS cleanup on unmount
+  useEffect(() => {
+    return () => {
+      try {
+        privateTTSService.stop();
+        console.log('[PublicCourseDisplay] Cleaned up TTS service on unmount');
+      } catch (error) {
+        console.warn('[PublicCourseDisplay] Error cleaning up TTS service:', error);
+      }
+
+      if (ttsStateUpdateTimeoutRef.current) {
+        clearTimeout(ttsStateUpdateTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Auto-pause TTS when lesson changes
+  useEffect(() => {
+    if (!currentLesson?.id) return;
+    
+    if (isLessonChanging.current) {
+      isLessonChanging.current = false;
+      return;
+    }
+    
+    if (ttsStatus.isPlaying || ttsStatus.isPaused) {
+      console.log('[PublicCourseDisplay] Lesson changed, stopping TTS');
+      privateTTSService.stop();
+      setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
+    }
+  }, [currentLesson?.id, ttsStatus.isPlaying, ttsStatus.isPaused]);
+
+  // Legacy read aloud function for backward compatibility
   const handleReadAloud = useCallback((lessonContent) => {
     if (!lessonContent) return;
     
-    if (isReading) {
-      // Stop reading
-      if (window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-      }
-      setIsReading(false);
+    if (ttsStatus.isPlaying) {
+      handleStopAudio();
     } else {
-      // Start reading
-      if (window.speechSynthesis) {
-        const utterance = new SpeechSynthesisUtterance(lessonContent);
-        utterance.onend = () => setIsReading(false);
-        utterance.onerror = () => setIsReading(false);
-        window.speechSynthesis.speak(utterance);
-        setIsReading(true);
-      }
+      handleStartAudio();
     }
-  }, [isReading]);
+  }, [ttsStatus.isPlaying, handleStartAudio, handleStopAudio]);
 
   useEffect(() => {
     const fetchCourse = async () => {
@@ -478,24 +648,119 @@ const PublicCourseDisplay = () => {
     return cleanAndCombineContent(currentLesson.content);
   }, [currentLesson?.content]);
 
-  // Handle image display
+  // Advanced image handling effect
   useEffect(() => {
+    let ignore = false;
+    
+    // If image is already present on lesson, use it (optimized check)
     if (currentLesson?.image && (currentLesson.image.imageUrl || currentLesson.image.url)) {
       const imageUrl = currentLesson.image.imageUrl || currentLesson.image.url;
       const imageTitle = currentLesson.image.imageTitle || currentLesson.image.title;
       
-      setImageData({
-        url: imageUrl,
+      const existing = {
+        url: normalizeImageUrl(imageUrl),
         title: imageTitle,
         pageURL: currentLesson.image.pageURL,
         attribution: currentLesson.image.attribution,
-      });
+        uploader: undefined,
+      };
+      
+      setImageData(existing);
       setImageLoading(false);
-    } else {
-      setImageData(null);
-      setImageLoading(false);
+      console.log('[PublicCourseDisplay] Using existing lesson image');
+      return;
     }
-  }, [currentLesson?.image]);
+    
+    setImageLoading(true);
+    setImageData(null);
+    
+    let abortController = new AbortController();
+    
+    // Run in background (non-blocking)
+    (async function fetchImage() {
+      const startTime = performance.now();
+      
+      // Check if we have a preloaded image first
+      const preloadedImage = lessonImagePreloader.getPreloadedImage(currentLesson?.id, currentLesson?.title, course?.subject);
+      if (preloadedImage) {
+        console.log('[PublicCourseDisplay] Using preloaded image data:', preloadedImage.title);
+        if (!ignore && !abortController.signal.aborted) {
+          setImageData(preloadedImage);
+          setImageLoading(false);
+        }
+        return;
+      }
+      
+      try {
+        // Use the simplified approach with better error handling
+        console.log('[PublicCourseDisplay] Fetching new image for lesson:', currentLesson?.title);
+        const result = await SimpleImageService.search(
+          currentLesson?.title,
+          courseId,
+          currentLesson?.id,
+          Array.from(localUsedImageTitles),
+          Array.from(localUsedImageUrls)
+        );
+        
+        // Track image fetch performance
+        const fetchTime = performance.now() - startTime;
+        if (result && result.url) {
+          performanceMonitor.trackImageLoad(result.url, fetchTime, false);
+        }
+        
+        // Log slow image fetches
+        if (fetchTime > 2000) {
+          console.warn('[PublicCourseDisplay] Slow image fetch detected:', fetchTime + 'ms');
+        }
+        
+        if (!ignore && !abortController.signal.aborted) {
+          console.log('[PublicCourseDisplay] Setting image data:', result);
+          
+          // Always set image data - result should never be null due to fallbacks
+          if (result && result.url) {
+            // Only update if the image data has actually changed
+            const newImageData = { ...result, url: normalizeImageUrl(result.url) };
+            setImageData(newImageData);
+            
+            // Update local used image tracking when a new image is found
+            setLocalUsedImageTitles(prev => new Set([...prev, result.title]));
+            setLocalUsedImageUrls(prev => new Set([...prev, result.url]));
+          } else {
+            // Use fallback image if no result
+            const fallbackImage = {
+              url: 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
+              title: 'Educational Content',
+              pageURL: '',
+              attribution: 'Wikimedia Commons',
+              uploader: 'Wikimedia'
+            };
+            setImageData(fallbackImage);
+          }
+          setImageLoading(false);
+        }
+      } catch (error) {
+        if (!ignore && !abortController.signal.aborted) {
+          console.warn('[PublicCourseDisplay] Image fetch error:', error);
+          // Use fallback image on error
+          const fallbackImage = {
+            url: 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
+            title: 'Educational Content',
+            pageURL: '',
+            attribution: 'Wikimedia Commons',
+            uploader: 'Wikimedia'
+          };
+          setImageData(fallbackImage);
+          setImageLoading(false);
+        }
+      }
+    })();
+    
+    // Cleanup function
+    return () => {
+      ignore = true;
+      abortController.abort();
+    };
+  }, [currentLesson?.id, currentLesson?.title, currentLesson?.image, courseId, course?.subject, normalizeImageUrl, localUsedImageTitles, localUsedImageUrls]);
 
   // Handle module ID updates
   useEffect(() => {
@@ -646,14 +911,28 @@ const PublicCourseDisplay = () => {
                       <div>
                         <div className="flex justify-between items-center mb-6">
                           <h2 className="text-3xl font-bold text-gray-900">{currentLesson.title}</h2>
-                          <button
-                            onClick={() => handleReadAloud(processedContent)}
-                            className={`px-4 py-2 rounded-md text-white font-medium ${
-                              isReading ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
-                            }`}
-                          >
-                            {isReading ? 'Stop Reading' : 'Read Aloud'}
-                          </button>
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={ttsStatus.isPlaying ? handlePauseResumeAudio : ttsStatus.isPaused ? handlePauseResumeAudio : handleStartAudio}
+                              className={`px-4 py-2 rounded-md text-white font-medium ${
+                                ttsStatus.isPlaying || ttsStatus.isPaused
+                                  ? 'bg-green-600 hover:bg-green-700'
+                                  : 'bg-blue-600 hover:bg-blue-700'
+                              }`}
+                              title={ttsStatus.isPlaying ? 'Pause reading' : ttsStatus.isPaused ? 'Resume reading' : 'Start reading aloud'}
+                            >
+                              {ttsStatus.isPlaying ? 'Pause' : ttsStatus.isPaused ? 'Resume' : 'Read Aloud'}
+                            </button>
+                            {(ttsStatus.isPlaying || ttsStatus.isPaused) && (
+                              <button
+                                onClick={handleStopAudio}
+                                className="px-4 py-2 rounded-md text-white font-medium bg-red-600 hover:bg-red-700"
+                                title="Stop reading"
+                              >
+                                Stop
+                              </button>
+                            )}
+                          </div>
                         </div>
                         
                         {/* Image Display */}
@@ -719,7 +998,31 @@ const PublicCourseDisplay = () => {
 
                     {activeTab === 'flashcards' && (
                       <div>
-                        <h2 className="text-2xl font-bold text-gray-900 mb-6">Flashcards</h2>
+                        <div className="flex justify-between items-center mb-6">
+                          <h2 className="text-2xl font-bold text-gray-900">Flashcards</h2>
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={ttsStatus.isPlaying ? handlePauseResumeAudio : ttsStatus.isPaused ? handlePauseResumeAudio : handleStartAudio}
+                              className={`px-4 py-2 rounded-md text-white font-medium ${
+                                ttsStatus.isPlaying || ttsStatus.isPaused
+                                  ? 'bg-green-600 hover:bg-green-700'
+                                  : 'bg-blue-600 hover:bg-blue-700'
+                              }`}
+                              title={ttsStatus.isPlaying ? 'Pause reading' : ttsStatus.isPaused ? 'Resume reading' : 'Start reading flashcards aloud'}
+                            >
+                              {ttsStatus.isPlaying ? 'Pause' : ttsStatus.isPaused ? 'Resume' : 'Read Flashcards'}
+                            </button>
+                            {(ttsStatus.isPlaying || ttsStatus.isPaused) && (
+                              <button
+                                onClick={handleStopAudio}
+                                className="px-4 py-2 rounded-md text-white font-medium bg-red-600 hover:bg-red-700"
+                                title="Stop reading"
+                              >
+                                Stop
+                              </button>
+                            )}
+                          </div>
+                        </div>
                         <FlashcardRenderer flashcards={flashcardData} />
                       </div>
                     )}
