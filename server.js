@@ -3808,7 +3808,35 @@ app.get('/api/courses/:courseId', authenticateToken, (req, res) => {
     });
     
     if (!course) {
-      return res.status(404).json({ error: 'Course not found' });
+      // In development mode, if course not found locally, try to fetch from VPS
+      if (process.env.NODE_ENV === 'development' && process.env.VPS_API_URL) {
+        console.log(`[API] Course not found locally, attempting to fetch from VPS: ${courseId}`);
+        try {
+          const vpsResponse = await fetch(`${process.env.VPS_API_URL}/api/courses/${courseId}`, {
+            headers: {
+              'Authorization': req.headers.authorization,
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          if (vpsResponse.ok) {
+            const vpsCourse = await vpsResponse.json();
+            console.log(`[API] Successfully fetched course from VPS: ${courseId}`);
+            return res.json(vpsCourse);
+          } else {
+            console.log(`[API] VPS also returned error for course: ${courseId}`);
+          }
+        } catch (vpsError) {
+          console.log(`[API] Failed to fetch from VPS:`, vpsError.message);
+        }
+      }
+      
+      return res.status(404).json({ 
+        error: 'Course not found',
+        message: process.env.NODE_ENV === 'development' 
+          ? 'Course not found in local database. This course may exist on the VPS server. Deploy to VPS to test with production data.' 
+          : 'Course not found'
+      });
     }
     
     console.log(`[API] Course ownership check:`, {
