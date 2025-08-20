@@ -243,7 +243,7 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
       
       // Cultural mismatch penalties - heavy penalties for wrong civilizations
       const culturalMismatches = {
-        'egypt': ['mesopotamia', 'sumerian', 'babylonian', 'assyrian', 'akkadian', 'hittite', 'hittites', 'norse', 'viking', 'germanic', 'north germanic', 'scandinavian', 'roman', 'greek', 'hellenistic', 'persian', 'achaemenid', 'sassanid', 'byzantine', 'ottoman', 'arabic', 'islamic', 'medieval europe', 'renaissance', 'feudal', 'crusader', 'thor', 'hammer', 'mjolnir', 'nordic', 'scandinavian', 'germanic', 'north germanic'],
+        'egypt': ['mesopotamia', 'sumerian', 'babylonian', 'assyrian', 'akkadian', 'hittite', 'hittites', 'norse', 'viking', 'germanic', 'north germanic', 'scandinavian', 'roman', 'greek', 'hellenistic', 'persian', 'achaemenid', 'sassanid', 'byzantine', 'ottoman', 'arabic', 'islamic', 'medieval europe', 'renaissance', 'feudal', 'crusader', 'thor', 'hammer', 'mjolnir', 'nordic', 'scandinavian', 'germanic', 'north germanic', 'old norse', 'norse religion', 'norse mythology', 'norse gods', 'norse pantheon', 'norse tradition', 'norse culture'],
         'rome': ['egyptian', 'pharaoh', 'pyramid', 'nile', 'mesopotamia', 'sumerian', 'babylonian', 'assyrian', 'akkadian', 'hittite', 'hittites', 'norse', 'viking', 'germanic', 'north germanic', 'scandinavian', 'greek', 'hellenistic', 'persian', 'achaemenid', 'sassanid', 'byzantine', 'ottoman', 'arabic', 'islamic', 'medieval europe', 'renaissance', 'feudal', 'crusader', 'thor', 'hammer', 'mjolnir', 'nordic'],
         'greek': ['egyptian', 'pharaoh', 'pyramid', 'nile', 'mesopotamia', 'sumerian', 'babylonian', 'assyrian', 'akkadian', 'hittite', 'hittites', 'norse', 'viking', 'germanic', 'north germanic', 'scandinavian', 'roman', 'persian', 'achaemenid', 'sassanid', 'byzantine', 'ottoman', 'arabic', 'islamic', 'medieval europe', 'renaissance', 'feudal', 'crusader', 'thor', 'hammer', 'mjolnir', 'nordic']
       };
@@ -276,6 +276,14 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
         score -= 100; // Heavy penalty for colonization-related content
         console.log(`[ImageScoring] Heavy penalty for colonization term "${term}"`);
       }
+    }
+
+    // Immediate rejection for Norse/Thor content in non-Norse courses
+    const norseTerms = ['thor', 'hammer', 'mjolnir', 'norse', 'viking', 'germanic', 'scandinavian', 'nordic'];
+    const isNorseContent = norseTerms.some(term => haystack.includes(term));
+    if (isNorseContent && !courseTitle.toLowerCase().includes('norse') && !courseTitle.toLowerCase().includes('viking')) {
+      score -= 10000; // Immediate rejection for Norse content in non-Norse courses
+      console.log(`[ImageScoring] Immediate rejection for Norse content: "${haystack.substring(0, 100)}"`);
     }
 
     // Strong bonus for exact subject phrase appearing
@@ -1593,7 +1601,7 @@ Context: "${context.substring(0, 1000)}..."`;
           const isHistoricalContent = /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(subject) || 
                                      /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(courseContext?.title || '');
           
-          const minScoreThreshold = isHistoricalContent ? 50 : 0; // Higher threshold for historical content
+          const minScoreThreshold = isHistoricalContent ? 100 : 0; // Much higher threshold for historical content
           
           if (best.score >= minScoreThreshold) {
             console.log(`[AIService] Selected Wikipedia image for "${subject}" (score ${best.score}): ${best.imageUrl}`);
@@ -1714,7 +1722,7 @@ Context: "${context.substring(0, 1000)}..."`;
         const isHistoricalContent = /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(subject) || 
                                    /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(courseContext?.title || '');
         
-        const minScoreThreshold = isHistoricalContent ? 50 : 0; // Higher threshold for historical content
+        const minScoreThreshold = isHistoricalContent ? 100 : 0; // Much higher threshold for historical content
         
         if (best.score >= minScoreThreshold) {
           console.log(`[AIService] Selected Pixabay image for "${subject}" (score ${best.score}): ${best.imageUrl}`);
@@ -3994,12 +4002,22 @@ app.get('/api/image/fast', async (req, res) => {
       return res.status(400).json({ error: 'Missing URL parameter' });
     }
 
-    // Validate URL format
+    // Validate URL format - handle both encoded and decoded URLs
     let parsedUrl;
+    let decodedUrl = url;
+    
+    // Try to decode the URL if it's encoded
     try {
-      parsedUrl = new URL(url);
+      decodedUrl = decodeURIComponent(url);
+    } catch (decodeError) {
+      // If decoding fails, use the original URL
+      decodedUrl = url;
+    }
+    
+    try {
+      parsedUrl = new URL(decodedUrl);
     } catch (urlError) {
-      console.warn(`[FastImageProxy] Invalid URL format: ${url}`);
+      console.warn(`[FastImageProxy] Invalid URL format: ${url} (decoded: ${decodedUrl})`);
       return res.status(400).json({ error: 'Invalid URL format' });
     }
 
