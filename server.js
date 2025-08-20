@@ -7122,3 +7122,184 @@ app.post('/api/image/clear-cache', authenticateToken, async (req, res) => {
   }
 });
 
+// Report problem endpoint
+app.post('/api/report-problem', authenticateToken, async (req, res) => {
+  try {
+    const { message, userEmail, userId, timestamp, userAgent, url } = req.body;
+    
+    if (!message || !message.trim()) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+
+    // Create the problem report object
+    const problemReport = {
+      id: `report_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      message: message.trim(),
+      userEmail: userEmail || req.user.email,
+      userId: userId || req.user.id,
+      timestamp: timestamp || new Date().toISOString(),
+      userAgent: userAgent || req.headers['user-agent'],
+      url: url || req.headers.referer || 'Unknown',
+      status: 'new',
+      createdAt: new Date().toISOString()
+    };
+
+    // Initialize problem reports array if it doesn't exist
+    if (!db.data.problemReports) {
+      db.data.problemReports = [];
+    }
+
+    // Add the report to the database
+    db.data.problemReports.push(problemReport);
+    await db.write();
+
+    // Send email notification to admin
+    try {
+      const emailContent = `
+New Problem Report Received
+
+Report ID: ${problemReport.id}
+User Email: ${problemReport.userEmail}
+User ID: ${problemReport.userId}
+Timestamp: ${new Date(problemReport.timestamp).toLocaleString()}
+URL: ${problemReport.url}
+User Agent: ${problemReport.userAgent}
+
+Message:
+${problemReport.message}
+
+---
+This is an automated notification from The Discourse AI platform.
+      `;
+
+      // Send email notification to admin
+      console.log('📧 [PROBLEM_REPORT] Email notification to admin@thediscourse.ai:');
+      console.log(emailContent);
+      
+      // Simple email sending using fetch to a webhook or email service
+      // You can replace this with your preferred email service
+      try {
+        // Option 1: Send to a webhook (e.g., Zapier, Make.com, etc.)
+        if (process.env.EMAIL_WEBHOOK_URL) {
+          await fetch(process.env.EMAIL_WEBHOOK_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: 'admin@thediscourse.ai',
+              subject: `New Problem Report - ${problemReport.id}`,
+              text: emailContent,
+              from: 'noreply@thediscourse.ai'
+            })
+          });
+          console.log('📧 [PROBLEM_REPORT] Email sent via webhook');
+        }
+        
+        // Option 2: Send to a simple email API service
+        else if (process.env.EMAIL_API_KEY) {
+          const emailResponse = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${process.env.EMAIL_API_KEY}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              from: 'noreply@thediscourse.ai',
+              to: 'admin@thediscourse.ai',
+              subject: `New Problem Report - ${problemReport.id}`,
+              text: emailContent
+            })
+          });
+          
+          if (emailResponse.ok) {
+            console.log('📧 [PROBLEM_REPORT] Email sent via Resend API');
+          } else {
+            console.error('📧 [PROBLEM_REPORT] Failed to send email via Resend API');
+          }
+        }
+        
+        // Option 3: Log to console for development
+        else {
+          console.log('📧 [PROBLEM_REPORT] Email would be sent to admin@thediscourse.ai');
+          console.log('📧 [PROBLEM_REPORT] Subject:', `New Problem Report - ${problemReport.id}`);
+          console.log('📧 [PROBLEM_REPORT] Content:', emailContent);
+        }
+      } catch (emailSendError) {
+        console.error('📧 [PROBLEM_REPORT] Email sending failed:', emailSendError);
+      }
+
+    } catch (emailError) {
+      console.error('[PROBLEM_REPORT] Failed to send email notification:', emailError);
+      // Don't fail the request if email fails
+    }
+
+    console.log(`[PROBLEM_REPORT] New problem report submitted: ${problemReport.id} from ${problemReport.userEmail}`);
+
+    res.json({ 
+      success: true, 
+      message: 'Problem report submitted successfully',
+      reportId: problemReport.id,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('[PROBLEM_REPORT] Error submitting problem report:', error);
+    res.status(500).json({ error: 'Failed to submit problem report' });
+  }
+});
+
+// Report problem endpoint
+app.post('/api/report-problem', authenticateToken, async (req, res) => {
+  try {
+    const { message, userEmail, userId, timestamp, userAgent, url } = req.body;
+    
+    if (!message || !message.trim()) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+    
+    // Create problem report object
+    const problemReport = {
+      id: `report_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      message: message.trim(),
+      userEmail: userEmail || req.user.email,
+      userId: userId || req.user.id,
+      timestamp: timestamp || new Date().toISOString(),
+      userAgent: userAgent || req.headers['user-agent'],
+      url: url || req.headers.referer || 'unknown',
+      status: 'new',
+      createdAt: new Date().toISOString()
+    };
+    
+    // Initialize problem reports array if it doesn't exist
+    if (!db.data.problemReports) {
+      db.data.problemReports = [];
+    }
+    
+    // Add the report to the database
+    db.data.problemReports.push(problemReport);
+    await db.write();
+    
+    // Log the problem report for immediate attention
+    console.log('🚨 [PROBLEM_REPORT] New technical issue reported:', {
+      id: problemReport.id,
+      userEmail: problemReport.userEmail,
+      message: problemReport.message.substring(0, 100) + (problemReport.message.length > 100 ? '...' : ''),
+      timestamp: problemReport.timestamp,
+      url: problemReport.url
+    });
+    
+    // TODO: Send email notification to admin (implement when email service is available)
+    // TODO: Send to Slack/Discord webhook for immediate notification
+    
+    res.json({ 
+      success: true, 
+      message: 'Problem report submitted successfully',
+      reportId: problemReport.id,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('[PROBLEM_REPORT] Error submitting problem report:', error);
+    res.status(500).json({ error: 'Failed to submit problem report' });
+  }
+});
+

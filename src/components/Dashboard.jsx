@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import ChatInterface from './ChatInterface';
+import ReportProblem from './ReportProblem';
 import { useApiWrapper } from '../services/api';
 import { API_BASE_URL, debugApiConfig, testBackendConnection } from '../config/api';
 import LoadingIndicator from './LoadingIndicator';
@@ -36,6 +37,9 @@ const Dashboard = () => {
 
   // State for user profile data from backend
   const [userProfile, setUserProfile] = useState(null);
+  
+  // Report Problem modal state
+  const [showReportProblem, setShowReportProblem] = useState(false);
   
   // Get the user's name from backend profile data, fallback to auth context
   const userName = userProfile?.name || user?.name || user?.email || 'Guest';
@@ -814,8 +818,17 @@ const Dashboard = () => {
             <div className="flex items-center">
               <h1 className="text-xl font-semibold">Course Dashboard</h1>
             </div>
-            <div className="flex items-center">
-              <span className="mr-4">Welcome, {userName}!</span>
+            <div className="flex items-center space-x-4">
+              <span className="text-sm text-gray-600">Welcome, {userName}!</span>
+              <button
+                onClick={() => setShowReportProblem(true)}
+                className="inline-flex items-center px-3 py-2 text-sm font-medium text-purple-700 bg-purple-100 border border-purple-300 rounded-md hover:bg-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-colors"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" />
+                </svg>
+                Report Problem
+              </button>
               <button
                 onClick={handleLogout}
                 className="text-sm text-gray-600 hover:text-gray-900"
@@ -1380,6 +1393,16 @@ const Dashboard = () => {
             </div>
           </div>
         )}
+
+        {/* Report Problem Modal */}
+        <ReportProblem
+          isOpen={showReportProblem}
+          onClose={() => setShowReportProblem(false)}
+          onSuccess={() => {
+            // Optional: Show a success toast or notification
+            console.log('Report submitted successfully');
+          }}
+        />
       </main>
     </div>
   );
