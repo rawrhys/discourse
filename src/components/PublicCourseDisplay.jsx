@@ -188,7 +188,7 @@ const PublicCourseDisplay = () => {
     } catch (error) {
       console.error('[PublicCourseDisplay] Failed to save quiz score:', error);
     }
-  }, [course, sessionId, courseId, unlockedModules, loadSessionQuizScores]);
+  }, [course, sessionId, courseId, unlockedModules]);
 
   useEffect(() => {
     const fetchCourse = async () => {
