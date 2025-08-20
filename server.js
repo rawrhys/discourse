@@ -4013,16 +4013,27 @@ app.get('/api/image/fast', async (req, res) => {
 
     // Validate image format - allow all common image formats including SVG
     const validImageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.tiff', '.tif'];
+    
+    // Check for file extension in pathname
     const hasValidExtension = validImageExtensions.some(ext => 
       parsedUrl.pathname.toLowerCase().includes(ext)
     );
     
-    // Special handling for SVG files - they might have additional parameters
-    const isSvgFile = parsedUrl.pathname.toLowerCase().includes('.svg');
-    const hasValidSvgExtension = isSvgFile || hasValidExtension;
+    // Check for file extension in the full URL (for Pixabay URLs that don't have extensions in pathname)
+    const hasValidExtensionInUrl = validImageExtensions.some(ext => 
+      url.toLowerCase().includes(ext)
+    );
     
-    if (!hasValidSvgExtension) {
-      console.warn(`[FastImageProxy] Invalid image format: ${parsedUrl.pathname}`);
+    // Special handling for SVG files - they might have additional parameters
+    const isSvgFile = parsedUrl.pathname.toLowerCase().includes('.svg') || url.toLowerCase().includes('.svg');
+    const hasValidSvgExtension = isSvgFile || hasValidExtension || hasValidExtensionInUrl;
+    
+    // Additional validation for Pixabay URLs that might not have extensions in pathname
+    const isPixabayUrl = hostname.includes('pixabay.com');
+    const isPixabayImageUrl = isPixabayUrl && (url.includes('_640.jpg') || url.includes('_1280.jpg') || url.includes('_1920.jpg') || url.includes('_1280.png') || url.includes('_1920.png'));
+    
+    if (!hasValidSvgExtension && !isPixabayImageUrl) {
+      console.warn(`[FastImageProxy] Invalid image format: ${parsedUrl.pathname} (URL: ${url.substring(0, 100)}...)`);
       return res.status(400).json({ error: 'Invalid image format' });
     }
 
@@ -6134,6 +6145,37 @@ app.get('*', (req, res, next) => {
       message: 'Failed to serve frontend application',
       timestamp: new Date().toISOString()
     });
+  }
+});
+
+// Image service health check
+app.get('/api/image/health', (req, res) => {
+  const health = enhancedImageProxy.getHealth();
+  res.json(health);
+});
+
+// Clear image cache endpoint
+app.post('/api/image/clear-cache', authenticateToken, async (req, res) => {
+  try {
+    // Clear both caches
+    if (global.imageCache) {
+      global.imageCache.clear();
+      console.log('[ImageCache] Cleared global image cache');
+    }
+    
+    if (enhancedImageProxy && enhancedImageProxy.clearCache) {
+      enhancedImageProxy.clearCache();
+      console.log('[ImageCache] Cleared enhanced image proxy cache');
+    }
+    
+    res.json({ 
+      success: true, 
+      message: 'Image cache cleared successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[ImageCache] Error clearing cache:', error);
+    res.status(500).json({ error: 'Failed to clear image cache' });
   }
 });
 
