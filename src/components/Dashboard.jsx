@@ -240,25 +240,16 @@ const Dashboard = () => {
       // Clear the course to delete state immediately
       setCourseToDelete(null);
       
-      // Show a brief success message
-      setError(null);
-      // You could add a success state here if needed
+      // Show success message before reload
+      setSuccessMessage('Course deleted successfully! Refreshing dashboard...');
+      setShowSuccessToast(true);
       
-      // Force refresh after deletion with a small delay to ensure backend has processed the deletion
-      setTimeout(async () => {
-        try {
-          logger.debug('🔄 [DASHBOARD] Starting post-deletion refresh...');
-          await fetchSavedCourses(true);
-          logger.debug('✅ [DASHBOARD] Post-deletion refresh completed successfully');
-          // Double-check that no error state persists after refresh
-          setError(null);
-        } catch (refreshError) {
-          logger.warn('⚠️ [DASHBOARD] Error during post-deletion refresh:', refreshError);
-          // Don't set error for refresh issues, just ensure courses are cleared
-          setSavedCourses([]);
-          setError(null);
-        }
-      }, 100);
+      // Force a full page reload to show updated course list (like course generation)
+      setTimeout(() => {
+        logger.info('🔄 [DASHBOARD] Reloading page after course deletion');
+        setShowSuccessToast(false); // Hide toast before reload
+        window.location.reload();
+      }, 1500); // Give user time to see success message
       
     } catch (error) {
       logger.error('❌ [DASHBOARD] Error deleting course:', error);
@@ -274,18 +265,11 @@ const Dashboard = () => {
         setError(null);
       }
       
-      // Always refresh the courses list to ensure UI is in sync
-      setTimeout(async () => {
-        try {
-          logger.debug('🔄 [DASHBOARD] Starting error-recovery refresh...');
-          await fetchSavedCourses(true);
-          setError(null);
-        } catch (refreshError) {
-          logger.warn('⚠️ [DASHBOARD] Error during post-deletion refresh:', refreshError);
-          setSavedCourses([]);
-          setError(null);
-        }
-      }, 100);
+      // Force a full page reload to ensure UI is in sync with backend state
+      setTimeout(() => {
+        logger.info('🔄 [DASHBOARD] Reloading page after deletion error');
+        window.location.reload();
+      }, 1000);
     }
   }, [api, fetchSavedCourses]);
 
