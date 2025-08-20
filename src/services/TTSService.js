@@ -146,14 +146,8 @@ class TTSService {
 
   // Enhanced initialization with multiple fallback strategies
   async initSpeech() {
-    // Don't clear the stopped flag when reinitializing - let the calling method handle it
-    // this.isStopped = false; // REMOVED: Don't auto-clear stopped state
-    
-    // If TTS was manually stopped, don't reinitialize
-    if (this.wasManuallyStopped) {
-      console.log(`[${this.serviceType} TTS] TTS was manually stopped, skipping initialization`);
-      return;
-    }
+    // Allow initialization even if TTS was stopped - the calling method will handle restart logic
+    // Don't block initialization based on stopped state
     
     if (this.initializationAttempts >= this.maxInitAttempts) {
       console.warn(`[${this.serviceType} TTS] Max initialization attempts reached (${this.maxInitAttempts}), skipping initialization`);
@@ -652,10 +646,12 @@ class TTSService {
 
   // Start reading the lesson with enhanced error handling
   async readLesson(lesson, lessonId) {
-    // CRITICAL: Check if TTS was stopped - if so, DO NOT restart
+    // If TTS was stopped, allow restarting for new lessons
     if (this.isStopped) {
-      console.log(`[${this.serviceType} TTS] TTS was stopped, BLOCKING readLesson attempt`);
-      return false;
+      console.log(`[${this.serviceType} TTS] TTS was stopped, but allowing restart for new lesson`);
+      // Clear the stopped flags to allow restart
+      this.isStopped = false;
+      this.wasManuallyStopped = false;
     }
     
     if (!this.browserSupport.speechSynthesis) {
@@ -761,21 +757,13 @@ class TTSService {
 
   // PATCH: When starting any new TTS action, always clear the stopped flag
   async speak(text, startPosition = 0) {
-    // CRITICAL: Check if TTS was stopped - if so, DO NOT restart
+    // If TTS was stopped, allow restarting for new speech
     if (this.isStopped) {
-      console.log(`[${this.serviceType} TTS] TTS was stopped, BLOCKING speak attempt`);
-      return;
+      console.log(`[${this.serviceType} TTS] TTS was stopped, but allowing restart for new speech`);
+      // Clear the stopped flags to allow restart
+      this.isStopped = false;
+      this.wasManuallyStopped = false;
     }
-    
-    // Only clear stop flag if we're not in a manually stopped state
-    if (!this.wasManuallyStopped) {
-      this.isStopped = false; // Only clear if not manually stopped
-    } else {
-      console.log(`[${this.serviceType} TTS] TTS was manually stopped, keeping stopped state`);
-      return;
-    }
-    
-    this.wasManuallyStopped = false; // Reset manual stop flag when starting new speech
     
     // Check if service is properly initialized
     if (!this.isInitialized || !this.speech) {
@@ -970,19 +958,12 @@ class TTSService {
 
   // PATCH: For chunked speech, clear isStopped at start of chunked speak
   async speakInChunks(text, chunkSize = 1000) {
-    // CRITICAL: Check if TTS was stopped - if so, DO NOT restart
+    // If TTS was stopped, allow restarting for new chunked speech
     if (this.isStopped) {
-      console.log(`[${this.serviceType} TTS] TTS was stopped, BLOCKING speakInChunks attempt`);
-      return;
-    }
-    
-    this.isStopped = false; // <-- PATCH: clear stop flag at the start
-    this.wasManuallyStopped = false; // Reset manual stop flag when starting new chunked speech
-    
-    // Check if TTS has been stopped - if so, don't start chunked speech
-    if (this.isStopped) {
-      console.log(`[${this.serviceType} TTS] TTS was stopped, not starting chunked speech`);
-      return;
+      console.log(`[${this.serviceType} TTS] TTS was stopped, but allowing restart for new chunked speech`);
+      // Clear the stopped flags to allow restart
+      this.isStopped = false;
+      this.wasManuallyStopped = false;
     }
     
     console.log(`[${this.serviceType} TTS] Starting chunked speech (${text.length} chars in chunks of ${chunkSize})`);
@@ -1232,18 +1213,12 @@ class TTSService {
 
   // PATCH: For speakChunksFrom, clear isStopped at start (for resume)
   async speakChunksFrom(startIndex) {
-    // CRITICAL: Check if TTS was stopped - if so, DO NOT restart
+    // If TTS was stopped, allow restarting for chunked speech
     if (this.isStopped) {
-      console.log(`[${this.serviceType} TTS] TTS was stopped, BLOCKING speakChunksFrom attempt`);
-      return;
-    }
-    
-    // Only clear stop flag if we're resuming from a pause, not from a stop
-    if (!this.wasManuallyStopped) {
-      this.isStopped = false; // Only clear if not manually stopped
-    } else {
-      console.log(`[${this.serviceType} TTS] TTS was manually stopped, keeping stopped state in speakChunksFrom`);
-      return;
+      console.log(`[${this.serviceType} TTS] TTS was stopped, but allowing restart for chunked speech`);
+      // Clear the stopped flags to allow restart
+      this.isStopped = false;
+      this.wasManuallyStopped = false;
     }
     
     console.log(`[${this.serviceType} TTS] Speaking chunks from index ${startIndex}/${this.currentChunks.length}`);
@@ -1604,13 +1579,13 @@ class TTSService {
 
   // PATCH: Resume also clears isStopped so you can start again after stopping
   async resume() {
-    // CRITICAL: Check if TTS was stopped - if so, DO NOT restart
+    // If TTS was stopped, allow restarting for resume
     if (this.isStopped) {
-      console.log(`[${this.serviceType} TTS] TTS was stopped, BLOCKING resume attempt`);
-      return false;
+      console.log(`[${this.serviceType} TTS] TTS was stopped, but allowing restart for resume`);
+      // Clear the stopped flags to allow restart
+      this.isStopped = false;
+      this.wasManuallyStopped = false;
     }
-    
-    this.isStopped = false; // <-- PATCH: clear stop flag at the start of resume
     
     console.log(`[${this.serviceType} TTS] Resume called - current state:`, {
       isPaused: this.isPaused,
