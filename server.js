@@ -5843,6 +5843,88 @@ app.delete('/api/courses/:courseId', authenticateToken, async (req, res) => {
   }
 });
 
+// Course verification endpoint to check if a course exists
+app.get('/api/courses/verify/:courseId', authenticateToken, async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const userId = req.user.id;
+    
+    console.log(`[API] Verifying course ${courseId} for user ${userId}`);
+    
+    // Check if course exists in database
+    const course = db.data.courses.find(c => c.id === courseId);
+    
+    if (!course) {
+      console.log(`[API] Course ${courseId} not found in database`);
+      return res.json({ 
+        exists: false, 
+        message: 'Course not found in database',
+        courseId: courseId
+      });
+    }
+    
+    if (course.userId !== userId) {
+      console.log(`[API] Course ${courseId} belongs to different user`);
+      return res.json({ 
+        exists: false, 
+        message: 'Course belongs to different user',
+        courseId: courseId
+      });
+    }
+    
+    console.log(`[API] Course ${courseId} verified as existing`);
+    return res.json({ 
+      exists: true, 
+      course: {
+        id: course.id,
+        title: course.title,
+        userId: course.userId,
+        published: course.published
+      }
+    });
+  }
+});
+
+// Debug endpoint to show all courses for a user
+app.get('/api/debug/user-courses', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userEmail = req.user.email;
+    
+    console.log(`[DEBUG] Fetching all courses for user ${userId} (${userEmail})`);
+    
+    const userCourses = db.data.courses.filter(c => c.userId === userId);
+    
+    console.log(`[DEBUG] Found ${userCourses.length} courses for user ${userId}:`, 
+      userCourses.map(c => ({ id: c.id, title: c.title, published: c.published }))
+    );
+    
+    res.json({
+      userId: userId,
+      userEmail: userEmail,
+      totalCourses: userCourses.length,
+      courses: userCourses.map(c => ({
+        id: c.id,
+        title: c.title,
+        published: c.published,
+        createdAt: c.createdAt,
+        modulesCount: c.modules?.length || 0,
+        totalLessons: c.modules?.reduce((sum, m) => sum + (m.lessons?.length || 0), 0) || 0
+      }))
+    });
+    
+  } catch (error) {
+    console.error('[DEBUG] Error fetching user courses:', error);
+    res.status(500).json({ error: 'Failed to fetch user courses' });
+  }
+});
+    
+  } catch (error) {
+    console.error('[API] Error verifying course:', error);
+    res.status(500).json({ error: 'Failed to verify course' });
+  }
+});
+
 // Cache clearing endpoint for admin use
 app.post('/api/admin/clear-cache', authenticateToken, async (req, res) => {
   try {

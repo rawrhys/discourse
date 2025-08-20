@@ -190,6 +190,9 @@ const api = {
     deleteCourse: (courseId) =>
         apiClient(`/api/courses/${courseId}`, { method: 'DELETE' }),
 
+    verifyCourse: (courseId) =>
+        apiClient(`/api/courses/verify/${courseId}`),
+
     clearCache: (courseId = null, cacheType = null) => {
         const body = {};
         if (courseId) body.courseId = courseId;

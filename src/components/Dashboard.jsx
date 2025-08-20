@@ -265,18 +265,59 @@ const Dashboard = () => {
         logger.warn('⚠️ [DASHBOARD] Failed to clear browser cache:', cacheError.message);
       }
       
-      // Show success message before reload
-      setSuccessMessage('Course deleted successfully! Refreshing dashboard...');
+      // Show success message
+      setSuccessMessage('Course deleted successfully! Refreshing course list...');
       setShowSuccessToast(true);
       
-      // Force a full page reload to show updated course list (like course generation)
-      setTimeout(() => {
-        logger.info('🔄 [DASHBOARD] Reloading page after course deletion');
-        setShowSuccessToast(false); // Hide toast before reload
+      // Immediately remove the course from local state
+      setSavedCourses(prevCourses => {
+        const updatedCourses = prevCourses.filter(course => course.id !== courseId);
+        logger.info(`🗑️ [DASHBOARD] Removed course from local state. Remaining courses: ${updatedCourses.length}`);
+        return updatedCourses;
+      });
+      
+      // Verify course deletion using dedicated verification endpoint
+      try {
+        logger.info('🔄 [DASHBOARD] Verifying course deletion...');
+        const verificationResult = await api.verifyCourse(courseId);
         
-        // Force a hard refresh to clear all caches
-        window.location.href = window.location.href + '?t=' + Date.now();
-      }, 1500); // Give user time to see success message
+        if (verificationResult.exists) {
+          logger.warn('⚠️ [DASHBOARD] Course still exists after deletion - forcing page reload');
+          // If the course still exists, force a page reload as fallback
+          setTimeout(() => {
+            window.location.reload();
+          }, 2000);
+        } else {
+          logger.info('✅ [DASHBOARD] Course deletion verified - course no longer exists on server');
+          
+          // Also fetch fresh course list to update the UI
+          try {
+            const freshCourses = await api.getSavedCourses();
+            if (Array.isArray(freshCourses)) {
+              setSavedCourses(freshCourses);
+              logger.info(`✅ [DASHBOARD] Updated course list with ${freshCourses.length} courses`);
+            }
+          } catch (fetchError) {
+            logger.warn('⚠️ [DASHBOARD] Failed to fetch fresh course list, but deletion was verified');
+          }
+        }
+      } catch (verificationError) {
+        logger.error('❌ [DASHBOARD] Failed to verify course deletion:', verificationError);
+        // On verification error, fetch fresh course list as fallback
+        try {
+          const freshCourses = await api.getSavedCourses();
+          if (Array.isArray(freshCourses)) {
+            setSavedCourses(freshCourses);
+          }
+        } catch (fetchError) {
+          logger.error('❌ [DASHBOARD] Failed to fetch fresh course list as fallback:', fetchError);
+        }
+      }
+      
+      // Hide success message after a delay
+      setTimeout(() => {
+        setShowSuccessToast(false);
+      }, 3000);
       
     } catch (error) {
       logger.error('❌ [DASHBOARD] Error deleting course:', error);
@@ -288,17 +329,11 @@ const Dashboard = () => {
       if (error.message && !error.message.includes('Course not found')) {
         setError(error.message || 'Failed to delete course');
       } else {
-        // If it's a "Course not found" error, just refresh to show empty state
+        // If it's a "Course not found" error, refresh the course list
         setError(null);
+        logger.info('🔄 [DASHBOARD] Course not found - refreshing course list...');
+        fetchSavedCourses();
       }
-      
-      // Force a full page reload to ensure UI is in sync with backend state
-      setTimeout(() => {
-        logger.info('🔄 [DASHBOARD] Reloading page after deletion error');
-        
-        // Force a hard refresh to clear all caches
-        window.location.href = window.location.href + '?t=' + Date.now();
-      }, 1000);
     }
   }, [api, fetchSavedCourses]);
 
