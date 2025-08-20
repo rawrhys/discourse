@@ -55,54 +55,7 @@ const Dashboard = () => {
     return <div className="text-center mt-10 text-gray-500">Loading user...</div>;
   }
   
-  // Cleanup effect to reset state update flag on unmount
-  useEffect(() => {
-    return () => {
-      setIsUpdatingCourseState(false);
-    };
-  }, []);
-
-  // Setup SSE connection for course generation notifications
-  useEffect(() => {
-    if (user) {
-      // Get the auth token from localStorage or Supabase
-      const token = localStorage.getItem('token') || user.access_token;
-      
-      if (token) {
-        // Connect to SSE notifications
-        courseNotificationService.connect(token);
-        
-        // Add event listener for course generation notifications
-        const handleCourseGenerated = (data) => {
-          logger.info('🎉 [DASHBOARD] Received course generation notification:', data);
-          
-          // Show success message
-          setSuccessMessage(`Course "${data.courseTitle}" generated successfully!`);
-          setShowSuccessToast(true);
-          
-          // Fetch updated course list after a short delay
-          setTimeout(async () => {
-            try {
-              await fetchSavedCourses(true); // Force refresh
-              logger.info('✅ [DASHBOARD] Course list updated after SSE notification');
-            } catch (error) {
-              logger.error('❌ [DASHBOARD] Failed to update course list after SSE notification:', error);
-            }
-          }, 1000);
-        };
-        
-        courseNotificationService.addEventListener('course_generated', handleCourseGenerated);
-        
-        // Cleanup on unmount
-        return () => {
-          courseNotificationService.removeEventListener('course_generated', handleCourseGenerated);
-          courseNotificationService.disconnect();
-        };
-      }
-    }
-  }, [user, fetchSavedCourses]);
-
-  
+  // Define fetchSavedCourses before it's used in useEffect
   const fetchSavedCourses = useCallback(async (force = false) => {
     // Always allow forced refreshes, even if we've attempted before
     if (hasAttemptedFetch.current && !force) {
@@ -172,6 +125,117 @@ const Dashboard = () => {
       setIsLoadingCourses(false);
     }
   }, [api, isUpdatingCourseState]);
+  
+  // Cleanup effect to reset state update flag on unmount
+  useEffect(() => {
+    return () => {
+      setIsUpdatingCourseState(false);
+    };
+  }, []);
+
+  // Setup SSE connection for course generation notifications
+  useEffect(() => {
+    if (user) {
+      // Get the auth token from localStorage or Supabase
+      const token = localStorage.getItem('token') || user.access_token;
+      
+      if (token) {
+        // Connect to SSE notifications
+        courseNotificationService.connect(token);
+        
+        // Add event listener for course generation notifications
+        const handleCourseGenerated = (data) => {
+          logger.info('🎉 [DASHBOARD] Received course generation notification:', data);
+          
+          // Show success message
+          setSuccessMessage(`Course "${data.courseTitle}" generated successfully!`);
+          setShowSuccessToast(true);
+          
+          // Fetch updated course list after a short delay
+          setTimeout(async () => {
+            try {
+              // Use a local function to avoid dependency issues
+              const refreshCourses = async () => {
+                // Always allow forced refreshes, even if we've attempted before
+                if (hasAttemptedFetch.current) {
+                  logger.debug('⏳ [DASHBOARD] Forced refresh after SSE notification');
+                }
+                
+                // Don't override local state updates if we're in the middle of updating
+                if (isUpdatingCourseState) {
+                  logger.debug('🔄 [DASHBOARD] Skipping fetch - course state update in progress');
+                  return;
+                }
+                
+                logger.debug('📚 [DASHBOARD] Fetching saved courses after SSE notification');
+                
+                setIsLoadingCourses(true);
+                
+                try {
+                  // Clear any existing errors before fetching
+                  setError(null);
+                  
+                  // Add timeout to prevent hanging requests
+                  const timeoutPromise = new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error('Request timeout')), 10000); // 10 second timeout
+                  });
+                  
+                  logger.debug('📡 [DASHBOARD] Making API call to getSavedCourses...');
+                  const coursesPromise = api.getSavedCourses();
+                  const courses = await Promise.race([coursesPromise, timeoutPromise]);
+                  
+                  logger.debug('✅ [DASHBOARD] Successfully fetched saved courses', {
+                    coursesCount: Array.isArray(courses) ? courses.length : 0,
+                    courses: Array.isArray(courses) ? courses.map(c => ({ 
+                      id: c.id, 
+                      title: c.title, 
+                      published: c.published,
+                      publishedType: typeof c.published 
+                    })) : [],
+                    timestamp: new Date().toISOString()
+                  });
+                  
+                  // Ensure we always set a valid array
+                  const validCourses = Array.isArray(courses) ? courses : [];
+                  setSavedCourses(validCourses);
+                  
+                  // Clear any errors since we successfully fetched courses
+                  setError(null);
+                  
+                } catch (error) {
+                  logger.error('❌ [DASHBOARD] Error fetching saved courses:', {
+                    error: error.message,
+                    stack: error.stack,
+                    timestamp: new Date().toISOString()
+                  });
+                  
+                  // Set a user-friendly error message
+                  setError('Failed to load courses. Please try refreshing the page.');
+                  
+                  // Don't clear existing courses on error, just show the error
+                } finally {
+                  setIsLoadingCourses(false);
+                }
+              };
+              
+              await refreshCourses();
+              logger.info('✅ [DASHBOARD] Course list updated after SSE notification');
+            } catch (error) {
+              logger.error('❌ [DASHBOARD] Failed to update course list after SSE notification:', error);
+            }
+          }, 1000);
+        };
+        
+        courseNotificationService.addEventListener('course_generated', handleCourseGenerated);
+        
+        // Cleanup on unmount
+        return () => {
+          courseNotificationService.removeEventListener('course_generated', handleCourseGenerated);
+          courseNotificationService.disconnect();
+        };
+      }
+    }
+  }, [user, api, isUpdatingCourseState]);
 
   const handleGenerateCourse = useCallback(async (courseParams) => {
     logger.debug('🎯 [COURSE GENERATION] Starting simplified course generation process', {
@@ -461,7 +525,7 @@ const Dashboard = () => {
         // Don't let errors propagate - just log them
       }
     }
-  }, [user, fetchSavedCourses]); // Added refreshUserData dependency
+  }, [user, fetchSavedCourses]);
 
   const handlePaymentSuccess = async () => {
     try {
