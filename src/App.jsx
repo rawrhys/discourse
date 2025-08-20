@@ -12,7 +12,7 @@ import './utils/debug'; // Import debug utilities
 import quizPersistenceService from './services/QuizPersistenceService';
 
 // Lazy load the components
-const Homepage = lazy(() => import('./components/Homepage'));
+const Homepage = lazy(() => import('./components/HomepageSimple'));
 const Login = lazy(() => import('./components/auth/Login'));
 const Register = lazy(() => import('./components/auth/Register'));
 const Dashboard = lazy(() => import('./components/Dashboard'));
