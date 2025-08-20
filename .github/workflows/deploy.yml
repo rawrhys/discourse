@@ -43,17 +43,20 @@ jobs:
             echo "server.js last modified: $(stat -c %y server.js)"
             echo "TTSService.js last modified: $(stat -c %y src/services/TTSService.js)"
             
-            # Copy updated server.js to the application directory
+            # Copy updated server.js to the application directory (if it exists)
             echo "Copying server.js to application directory..."
-            cp server.js /var/www/discourse/
-            
-            # Verify the file was copied correctly
-            echo "Verifying server.js in application directory..."
-            echo "Application server.js last modified: $(stat -c %y /var/www/discourse/server.js)"
+            if [ -d "/var/www/discourse" ]; then
+              cp server.js /var/www/discourse/
+              echo "Application server.js last modified: $(stat -c %y /var/www/discourse/server.js)"
+            else
+              echo "Warning: /var/www/discourse directory does not exist, skipping copy"
+            fi
             
             # Clear any cached files
             echo "Clearing cache..."
-            rm -rf /var/www/discourse/node_modules/.cache 2>/dev/null || true
+            if [ -d "/var/www/discourse" ]; then
+              rm -rf /root/discourse/node_modules/.cache 2>/dev/null || true
+            fi
             
             # Clear image search cache to ensure duplicate fix takes effect
             echo "Clearing image search cache..."
@@ -61,7 +64,11 @@ jobs:
             
             # Restart PM2 processes (don't wait for server startup)
             echo "Restarting PM2 processes..."
-            cd /var/www/discourse
+            if [ -d "/var/www/discourse" ]; then
+              cd /var/www/discourse
+            else
+              echo "Warning: /var/www/discourse directory does not exist, staying in current directory"
+            fi
             pm2 restart all
             
             # Wait a moment for restart to complete
@@ -75,9 +82,9 @@ jobs:
             echo "PM2 status:"
             pm2 status
             
-            # Show recent logs to verify deployment
+            # Show recent logs to verify deployment (with timeout to prevent hanging)
             echo "Recent application logs:"
-            pm2 logs --lines 10
+            timeout 10s pm2 logs --lines 10 || echo "Log viewing completed or timed out"
             
             echo "=== VPS deployment completed ==="
 
