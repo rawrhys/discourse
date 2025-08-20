@@ -1843,8 +1843,8 @@ Context: "${context.substring(0, 1000)}..."`;
   // Try Wikipedia first; then Pixabay - optimized with parallel execution and caching
   async fetchRelevantImage(subject, content = '', usedImageTitles = [], usedImageUrls = [], options = { relaxed: false }, courseContext = {}) {
     // Create cache key for this search - include used images to prevent duplicates
-    const usedTitlesHash = usedImageTitles.length > 0 ? '_' + usedImageTitles.slice(0, 5).join('_').replace(/[^a-zA-Z0-9]/g, '') : '';
-    const usedUrlsHash = usedImageUrls.length > 0 ? '_' + usedImageUrls.slice(0, 3).map(url => url.split('/').pop()?.split('?')[0] || '').join('_').replace(/[^a-zA-Z0-9]/g, '') : '';
+    const usedTitlesHash = usedImageTitles.length > 0 ? '_usedTitles_' + usedImageTitles.slice(0, 5).join('_').replace(/[^a-zA-Z0-9]/g, '') : '';
+    const usedUrlsHash = usedImageUrls.length > 0 ? '_usedUrls_' + usedImageUrls.slice(0, 3).map(url => url.split('/').pop()?.split('?')[0] || '').join('_').replace(/[^a-zA-Z0-9]/g, '') : '';
     const cacheKey = `image_search_${subject}_${options.relaxed ? 'relaxed' : 'strict'}${usedTitlesHash}${usedUrlsHash}`;
     
     // Check if we have a cached result
@@ -1865,15 +1865,30 @@ Context: "${context.substring(0, 1000)}..."`;
       global.imageSearchCache = new Map();
     }
     
-    // Clear old cache entries that don't include used images (for backward compatibility)
+    // Clear ALL old cache entries that don't include used images (for backward compatibility)
     if (global.imageSearchCache.size > 0) {
       const oldKeys = Array.from(global.imageSearchCache.keys()).filter(key => 
-        !key.includes('_') || key.split('_').length < 4
+        !key.includes('usedTitles') && !key.includes('usedUrls') && key.includes('image_search_')
       );
-      oldKeys.forEach(key => {
-        console.log(`[AIService] Clearing old cache entry: ${key}`);
-        global.imageSearchCache.delete(key);
-      });
+      if (oldKeys.length > 0) {
+        console.log(`[AIService] Clearing ${oldKeys.length} old cache entries for backward compatibility`);
+        oldKeys.forEach(key => {
+          console.log(`[AIService] Clearing old cache entry: ${key}`);
+          global.imageSearchCache.delete(key);
+        });
+      }
+      
+      // Also clear any cache entries that might be causing the duplicate issue
+      const duplicateKeys = Array.from(global.imageSearchCache.keys()).filter(key => 
+        key.includes('sphinx') && key.includes('image_search_')
+      );
+      if (duplicateKeys.length > 0) {
+        console.log(`[AIService] Clearing ${duplicateKeys.length} potential duplicate cache entries`);
+        duplicateKeys.forEach(key => {
+          console.log(`[AIService] Clearing duplicate cache entry: ${key}`);
+          global.imageSearchCache.delete(key);
+        });
+      }
     }
     
     // Execute both searches in parallel with timeout
@@ -3912,18 +3927,29 @@ async function imageSearchHandler(req, res) {
         const urls = new Set(usedImageUrls.map(normalizeUrlForCompare));
         
         // Add all existing images from the course to prevent duplicates
+        console.log(`[ImageSearch] Scanning course for existing images: ${course.modules?.length || 0} modules`);
         for (const mod of course.modules || []) {
+          console.log(`[ImageSearch] Scanning module: ${mod.title} (${mod.lessons?.length || 0} lessons)`);
           for (const lsn of mod.lessons || []) {
             const t = normalizeForCompare(lsn?.image?.imageTitle || lsn?.image?.title);
             const u = normalizeUrlForCompare(lsn?.image?.imageUrl || lsn?.image?.url);
-            if (t) titles.add(t);
-            if (u) urls.add(u);
+            if (t) {
+              titles.add(t);
+              console.log(`[ImageSearch] Found used title: ${t}`);
+            }
+            if (u) {
+              urls.add(u);
+              console.log(`[ImageSearch] Found used URL: ${u.substring(0, 100)}...`);
+            }
             
             // Also add the source URL for better deduplication
             const sourceUrl = lsn?.image?.sourceUrlForCaching;
             if (sourceUrl) {
               const normalizedSourceUrl = normalizeUrlForCompare(sourceUrl);
-              if (normalizedSourceUrl) urls.add(normalizedSourceUrl);
+              if (normalizedSourceUrl) {
+                urls.add(normalizedSourceUrl);
+                console.log(`[ImageSearch] Found used source URL: ${normalizedSourceUrl.substring(0, 100)}...`);
+              }
             }
           }
         }
@@ -4337,6 +4363,18 @@ app.post('/api/image/clear-cache', (req, res) => {
   }
   
   res.json({ message: 'Image cache and image search cache cleared successfully' });
+});
+
+// Force clear image search cache (for debugging duplicate issues)
+app.post('/api/image/clear-search-cache', (req, res) => {
+  if (global.imageSearchCache) {
+    const cacheSize = global.imageSearchCache.size;
+    global.imageSearchCache.clear();
+    console.log(`[ADMIN] Force cleared ${cacheSize} image search cache entries`);
+    res.json({ message: `Force cleared ${cacheSize} image search cache entries` });
+  } else {
+    res.json({ message: 'No image search cache to clear' });
+  }
 });
 
 // Clean up orphaned course files (admin only)
