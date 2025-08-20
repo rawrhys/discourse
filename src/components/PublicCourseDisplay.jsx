@@ -15,6 +15,9 @@ import lessonImagePreloader from '../services/LessonImagePreloader';
 import { privateTTSService } from '../services/TTSService.js';
 import performanceMonitor from '../services/PerformanceMonitorService';
 import imagePerformanceMonitor from '../services/ImagePerformanceMonitor';
+import AcademicReferencesFooter from './AcademicReferencesFooter';
+import AcademicReferencesService from '../services/AcademicReferencesService';
+import publicCourseSessionService from '../services/PublicCourseSessionService';
 
 // Lazy load QuizView
 const QuizView = lazy(() => import('./QuizView'));
@@ -483,7 +486,7 @@ const PublicCourseDisplay = () => {
   }, [ttsStatus.isPlaying, handleStartAudio, handleStopAudio]);
 
   const handleModuleSelect = useCallback((moduleId) => {
-    if (!course?.modules || !courseId) return;
+    if (!course?.modules || !courseId || !sessionId) return;
     const moduleData = course.modules.find(m => m.id === moduleId);
     if (!moduleData || !unlockedModules.has(moduleId)) return;
     
@@ -491,20 +494,24 @@ const PublicCourseDisplay = () => {
     if (moduleData.lessons.length > 0) {
       const firstLessonId = moduleData.lessons[0].id;
       setActiveLessonId(firstLessonId);
-      navigate(`/public/course/${courseId}/lesson/${firstLessonId}`, { replace: true });
+      // Update URL without causing a full navigation/remount
+      const newUrl = `/public/course/${courseId}/lesson/${firstLessonId}?sessionId=${sessionId}`;
+      window.history.replaceState({}, '', newUrl);
     }
     setShowQuiz(false);
-  }, [course, unlockedModules, courseId, navigate]);
+  }, [course, unlockedModules, courseId, sessionId]);
 
   const handleLessonClick = useCallback((lessonId) => {
-    if (!courseId) return;
+    if (!courseId || !sessionId) return;
     setActiveLessonId(lessonId);
-    navigate(`/public/course/${courseId}/lesson/${lessonId}`, { replace: true });
+    // Update URL without causing a full navigation/remount
+    const newUrl = `/public/course/${courseId}/lesson/${lessonId}?sessionId=${sessionId}`;
+    window.history.replaceState({}, '', newUrl);
     setShowQuiz(false);
     if (window.innerWidth < 768) {
       setSidebarOpen(false);
     }
-  }, [courseId, navigate]);
+  }, [courseId, sessionId]);
 
   const handleNextLesson = useCallback(() => {
     if (!course?.modules || !courseId) return;
@@ -614,13 +621,6 @@ const PublicCourseDisplay = () => {
       try {
         setLoading(true);
         
-        const oldSessionKeys = Object.keys(localStorage).filter(key => 
-          key.startsWith('session_') || key.includes('quizScore') || key.includes('courseProgress')
-        );
-        if (oldSessionKeys.length > 0) {
-          oldSessionKeys.forEach(key => localStorage.removeItem(key));
-        }
-        
         const urlParams = new URLSearchParams(window.location.search);
         const existingSessionId = urlParams.get('sessionId');
         
@@ -629,7 +629,17 @@ const PublicCourseDisplay = () => {
         try {
           let courseData;
           
+          // Use the session service to manage session state
           if (!existingSessionId) {
+            // No session ID in URL, redirect to CAPTCHA
+            navigate(`/captcha/${courseId}`);
+            return;
+          }
+          
+          // Check if the session is still valid using the session service
+          const isValidSession = publicCourseSessionService.isSessionAvailable(existingSessionId);
+          if (!isValidSession) {
+            console.log('[PublicCourseDisplay] Session expired or invalid, redirecting to CAPTCHA');
             navigate(`/captcha/${courseId}`);
             return;
           }
@@ -638,6 +648,7 @@ const PublicCourseDisplay = () => {
             courseData = await api.getPublicCourse(courseId, existingSessionId);
           } catch (error) {
             if (error.message && error.message.includes('401')) {
+              console.log('[PublicCourseDisplay] API returned 401, redirecting to CAPTCHA');
               navigate(`/captcha/${courseId}`);
               return;
             }
@@ -645,6 +656,9 @@ const PublicCourseDisplay = () => {
           }
           
           currentSessionId = courseData.sessionId;
+          
+          // Update the session in the session service
+          publicCourseSessionService.updateSession(currentSessionId, courseData);
           
           const newUrl = `${window.location.pathname}?sessionId=${currentSessionId}`;
           window.history.replaceState({}, '', newUrl);
@@ -842,6 +856,10 @@ const PublicCourseDisplay = () => {
       if (ttsStateUpdateTimeoutRef.current) {
         clearTimeout(ttsStateUpdateTimeoutRef.current);
       }
+      
+      // Note: Session cleanup is handled by PublicCourseSessionService
+      // We don't release the session immediately on unmount to allow for navigation
+      // The session service will handle cleanup based on timeout
     };
   }, []);
 

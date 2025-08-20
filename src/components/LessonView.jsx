@@ -414,12 +414,6 @@ const Content = memo(({ content, bibliography, lessonTitle, courseSubject }) => 
         className="markdown-body"
         dangerouslySetInnerHTML={{ __html: parsedContent }}
       />
-      {referencesFooter && referencesFooter.references && (
-        <AcademicReferencesFooter 
-          references={referencesFooter.references}
-          onCitationClick={handleCitationClick}
-        />
-      )}
     </div>
   );
 });
@@ -1697,6 +1691,17 @@ const LessonView = ({
       </div>
 
       <footer className="mt-8 pt-6 border-t border-gray-200">
+        {/* References Section */}
+        {referencesFooter && referencesFooter.references && (
+          <div className="mb-6">
+            <AcademicReferencesFooter 
+              references={referencesFooter.references}
+              onCitationClick={handleCitationClick}
+            />
+          </div>
+        )}
+        
+        {/* Navigation Section */}
         <div className="flex flex-col sm:flex-row items-center space-y-3 sm:space-y-0 sm:justify-between">
           <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-2">
             <button
