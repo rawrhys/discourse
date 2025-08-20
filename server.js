@@ -1842,23 +1842,38 @@ Context: "${context.substring(0, 1000)}..."`;
    
   // Try Wikipedia first; then Pixabay - optimized with parallel execution and caching
   async fetchRelevantImage(subject, content = '', usedImageTitles = [], usedImageUrls = [], options = { relaxed: false }, courseContext = {}) {
-    // Create cache key for this search
-    const cacheKey = `image_search_${subject}_${options.relaxed ? 'relaxed' : 'strict'}`;
+    // Create cache key for this search - include used images to prevent duplicates
+    const usedTitlesHash = usedImageTitles.length > 0 ? '_' + usedImageTitles.slice(0, 5).join('_').replace(/[^a-zA-Z0-9]/g, '') : '';
+    const usedUrlsHash = usedImageUrls.length > 0 ? '_' + usedImageUrls.slice(0, 3).map(url => url.split('/').pop()?.split('?')[0] || '').join('_').replace(/[^a-zA-Z0-9]/g, '') : '';
+    const cacheKey = `image_search_${subject}_${options.relaxed ? 'relaxed' : 'strict'}${usedTitlesHash}${usedUrlsHash}`;
     
     // Check if we have a cached result
     if (global.imageSearchCache && global.imageSearchCache.has(cacheKey)) {
       const cached = global.imageSearchCache.get(cacheKey);
       if (Date.now() - cached.timestamp < 300000) { // 5 minute cache
-        console.log(`[AIService] Using cached image search result for "${subject}"`);
+        console.log(`[AIService] Using cached image search result for "${subject}" (cache key: ${cacheKey})`);
         return cached.result;
       } else {
         global.imageSearchCache.delete(cacheKey);
       }
     }
     
+    console.log(`[AIService] Performing fresh image search for "${subject}" (cache key: ${cacheKey})`);
+    
     // Initialize cache if it doesn't exist
     if (!global.imageSearchCache) {
       global.imageSearchCache = new Map();
+    }
+    
+    // Clear old cache entries that don't include used images (for backward compatibility)
+    if (global.imageSearchCache.size > 0) {
+      const oldKeys = Array.from(global.imageSearchCache.keys()).filter(key => 
+        !key.includes('_') || key.split('_').length < 4
+      );
+      oldKeys.forEach(key => {
+        console.log(`[AIService] Clearing old cache entry: ${key}`);
+        global.imageSearchCache.delete(key);
+      });
     }
     
     // Execute both searches in parallel with timeout
@@ -1892,13 +1907,15 @@ Context: "${context.substring(0, 1000)}..."`;
         const isAlreadyUsed = usedImageUrls.some(url => normalizeUrlForCompare(url) === normalizedSelectedUrl);
         
         if (isAlreadyUsed) {
-          console.log(`[AIService] Selected image is already used, trying alternative for "${subject}"`);
+          console.log(`[AIService] Selected image is already used, trying alternative for "${subject}" (used URLs: ${usedImageUrls.length})`);
           
           // Try the other service if available
           if (wiki && pixa && selectedImage === wiki) {
             selectedImage = pixa;
+            console.log(`[AIService] Switched to Pixabay image to avoid duplicate for "${subject}"`);
           } else if (wiki && pixa && selectedImage === pixa) {
             selectedImage = wiki;
+            console.log(`[AIService] Switched to Wikipedia image to avoid duplicate for "${subject}"`);
           }
           
           // If still the same, try with more relaxed search
@@ -1907,8 +1924,19 @@ Context: "${context.substring(0, 1000)}..."`;
             const relaxedResult = await this.fetchRelevantImage(subject, content, usedImageTitles, usedImageUrls, { relaxed: true }, courseContext);
             if (relaxedResult) {
               selectedImage = relaxedResult;
+              console.log(`[AIService] Found alternative image via relaxed search for "${subject}"`);
             }
           }
+        }
+      }
+      
+      // Log if we had to reject an image due to duplicates
+      if (selectedImage && usedImageUrls.length > 0) {
+        const normalizedSelectedUrl = normalizeUrlForCompare(selectedImage.imageUrl);
+        const isAlreadyUsed = usedImageUrls.some(url => normalizeUrlForCompare(url) === normalizedSelectedUrl);
+        if (isAlreadyUsed) {
+          console.log(`[AIService] WARNING: Could not find alternative image for "${subject}", returning null to prevent duplicate`);
+          selectedImage = null;
         }
       }
     
@@ -4300,7 +4328,15 @@ app.post('/api/image/clear-cache', (req, res) => {
   }
   
   enhancedImageProxy.clearCache();
-  res.json({ message: 'Image cache cleared successfully' });
+  
+  // Also clear the image search cache
+  if (global.imageSearchCache) {
+    const cacheSize = global.imageSearchCache.size;
+    global.imageSearchCache.clear();
+    console.log(`[ADMIN] Cleared ${cacheSize} image search cache entries`);
+  }
+  
+  res.json({ message: 'Image cache and image search cache cleared successfully' });
 });
 
 // Clean up orphaned course files (admin only)
