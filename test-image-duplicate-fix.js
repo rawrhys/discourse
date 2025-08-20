@@ -2,7 +2,7 @@
 import fetch from 'node-fetch';
 
 async function testImageDuplicateFix() {
-  const baseUrl = 'http://localhost:3000'; // Adjust if your server runs on a different port
+  const baseUrl = 'https://thediscourse.ai'; // Use the production domain
   
   console.log('🧪 Testing Image Duplicate Fix...\n');
   

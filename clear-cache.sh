@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Script to clear image cache using curl
-BASE_URL="http://localhost:3000"
+BASE_URL="https://thediscourse.ai"
 
 echo "🧹 Clearing Image Cache..."
 
