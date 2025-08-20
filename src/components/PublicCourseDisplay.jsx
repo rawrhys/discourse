@@ -321,12 +321,24 @@ const PublicCourseDisplay = () => {
       // Start new reading
       let contentToRead = '';
       
-      if (activeTab === 'content' && processedContent) {
+      // Get current lesson content dynamically to avoid dependency issues
+      const currentModule = course ? course.modules.find(m => m.id === activeModuleId) : null;
+      const currentLesson = currentModule?.lessons.find(l => l.id === activeLessonId);
+      
+      if (activeTab === 'content' && currentLesson?.content) {
+        const processedContent = cleanAndCombineContent(currentLesson.content);
         contentToRead = processedContent.replace(/<[^>]*>/g, '').trim();
-      } else if (activeTab === 'flashcards' && flashcardData?.length > 0) {
-        contentToRead = flashcardData.map((fc, index) => 
-          `Flashcard ${index + 1}: ${fc.term || fc.question || 'Unknown Term'}. Definition: ${fc.definition || fc.answer || 'Definition not provided.'}`
-        ).join('. ');
+      } else if (activeTab === 'flashcards' && currentLesson) {
+        const flashcardData = currentLesson?.flashcards || 
+                            currentLesson?.content?.flashcards || 
+                            currentLesson?.cards ||
+                            currentLesson?.studyCards;
+        
+        if (flashcardData?.length > 0) {
+          contentToRead = flashcardData.map((fc, index) => 
+            `Flashcard ${index + 1}: ${fc.term || fc.question || 'Unknown Term'}. Definition: ${fc.definition || fc.answer || 'Definition not provided.'}`
+          ).join('. ');
+        }
       }
       
       if (contentToRead.length > 0) {
@@ -337,7 +349,7 @@ const PublicCourseDisplay = () => {
       console.error('[PublicCourseDisplay] TTS error:', error);
       setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
     }
-  }, [ttsStatus.isPlaying, ttsStatus.isPaused, activeTab, processedContent, flashcardData, currentLesson?.id]);
+  }, [ttsStatus.isPlaying, ttsStatus.isPaused, activeTab, course, activeModuleId, activeLessonId]);
 
   const handlePauseResumeAudio = useCallback(() => {
     try {
