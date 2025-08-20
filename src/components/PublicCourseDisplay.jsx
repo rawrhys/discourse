@@ -800,22 +800,151 @@ const PublicCourseDisplay = () => {
   }, [course, sessionId]);
 
   useEffect(() => {
+    if (!currentLesson?.title || !course?.subject || !courseId) return;
+    
+    console.log('[PublicCourseDisplay] Image loading effect triggered:', {
+      lessonTitle: currentLesson?.title,
+      subject: course?.subject,
+      courseId,
+      hasLessonImage: !!(currentLesson?.image && (currentLesson.image.imageUrl || currentLesson.image.url))
+    });
+    
+    let ignore = false;
+    
+    // If image is already present on lesson, use it (optimized check)
     if (currentLesson?.image && (currentLesson.image.imageUrl || currentLesson.image.url)) {
       const imageUrl = currentLesson.image.imageUrl || currentLesson.image.url;
       const imageTitle = currentLesson.image.imageTitle || currentLesson.image.title;
       
-      setImageData({
+      const existing = {
         url: normalizeImageUrl(imageUrl),
         title: imageTitle,
         pageURL: currentLesson.image.pageURL,
         attribution: currentLesson.image.attribution,
-      });
+        uploader: undefined,
+      };
+      
+      setImageData(existing);
       setImageLoading(false);
-    } else {
-      setImageData(null);
-      setImageLoading(false);
+      console.log('[PublicCourseDisplay] Using existing lesson image');
+      return;
     }
-  }, [currentLesson?.image, normalizeImageUrl]);
+    
+    setImageLoading(true);
+    setImageData(null);
+    
+    let abortController = new AbortController();
+    
+    // Run in background (non-blocking)
+    (async function fetchImage() {
+      const startTime = performance.now();
+      
+      // Check if we have a preloaded image first
+      const preloadedImage = lessonImagePreloader.getPreloadedImage(currentLesson.id, currentLesson.title, course.subject);
+      if (preloadedImage) {
+        console.log('[PublicCourseDisplay] Using preloaded image data:', preloadedImage.title);
+        if (!ignore && !abortController.signal.aborted) {
+          setImageData(preloadedImage);
+          setImageLoading(false);
+        }
+        return;
+      }
+      
+      try {
+        // Use the simplified approach with better error handling
+        console.log('[PublicCourseDisplay] Fetching new image for lesson:', currentLesson.title);
+        const result = await SimpleImageService.search(
+          currentLesson.title,
+          courseId,
+          currentLesson?.id,
+          [], // usedImageTitles - empty for now
+          []  // usedImageUrls - empty for now
+        );
+        
+        // Track image fetch performance
+        const fetchTime = performance.now() - startTime;
+        if (result && result.url) {
+          performanceMonitor.trackImageLoad(result.url, fetchTime, false);
+        }
+        
+        // Log slow image fetches
+        if (fetchTime > 2000) {
+          console.warn('[PublicCourseDisplay] Slow image fetch detected:', fetchTime + 'ms');
+        }
+        
+        if (!ignore && !abortController.signal.aborted) {
+          console.log('[PublicCourseDisplay] Setting image data:', result);
+          
+          // Always set image data - result should never be null due to fallbacks
+          if (result && result.url) {
+            // Only update if the image data has actually changed
+            const newImageData = { ...result, url: normalizeImageUrl(result.url) };
+            setImageData(prevData => {
+              if (prevData?.url === newImageData?.url && prevData?.title === newImageData?.title) {
+                return prevData; // No change needed
+              }
+              return newImageData;
+            });
+          } else {
+            console.warn('[PublicCourseDisplay] No image result, using fallback');
+            // This should never happen due to fallbacks, but just in case
+            const fallbackImage = {
+              url: 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
+              title: 'Educational Content',
+              pageURL: '',
+              attribution: 'Wikimedia Commons',
+              uploader: 'Wikimedia'
+            };
+            setImageData(fallbackImage);
+          }
+        }
+      } catch (e) {
+        if (!ignore && !abortController.signal.aborted) {
+          console.warn('[PublicCourseDisplay] Image fetch error:', e);
+          // Use fallback placeholder on error
+          const fallbackImage = {
+            url: 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
+            title: 'Educational Content',
+            pageURL: '',
+            attribution: 'Wikimedia Commons',
+            uploader: 'Wikimedia'
+          };
+          setImageData(fallbackImage);
+        }
+      } finally {
+        if (!ignore && !abortController.signal.aborted) {
+          setImageLoading(false);
+        }
+      }
+    })();
+    
+    return () => { 
+      ignore = true;
+      // Abort any pending request
+      abortController.abort();
+    };
+  }, [currentLesson?.id, currentLesson?.title, currentLesson?.image, course?.subject, courseId, normalizeImageUrl]);
+
+  // Start preloading lesson image as soon as lesson data is available
+  useEffect(() => {
+    if (!currentLesson || !course?.subject || !courseId) return;
+
+    // Start preloading in background immediately
+    const startPreload = async () => {
+      try {
+        console.log('[PublicCourseDisplay] Starting background image preload for:', currentLesson.title);
+        await lessonImagePreloader.preloadLessonImage(
+          currentLesson,
+          course.subject,
+          courseId
+        );
+      } catch (error) {
+        console.warn('[PublicCourseDisplay] Background preload error:', error);
+      }
+    };
+
+    startPreload();
+  }, [currentLesson?.id, currentLesson?.title, course?.subject, courseId]);
 
   useEffect(() => {
     if (!currentModule && activeLessonId && course?.modules) {
@@ -1150,6 +1279,16 @@ const PublicCourseDisplay = () => {
                               priority={true}
                               preload={true}
                               lazy={false}
+                              onError={() => {
+                                console.log('[PublicCourseDisplay] Image failed to load, using fallback');
+                                setImageData({
+                                  url: 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
+                                  title: 'Educational Content',
+                                  pageURL: '',
+                                  attribution: 'Wikimedia Commons',
+                                  uploader: 'Wikimedia'
+                                });
+                              }}
                             />
                             <figcaption className="image-description" style={{ 
                               textAlign: 'center', 
