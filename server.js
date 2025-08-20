@@ -864,6 +864,59 @@ function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitl
     }
   }
 
+  // Add discipline-specific search phrases for non-history courses
+  const allText = `${subjectPhrase} ${contentText} ${courseTitle || ''}`.toLowerCase();
+  
+  // Art and Design disciplines
+  if (/\b(art|painting|sculpture|drawing|design|architecture|photography|cinema|film|music|dance|theater|drama|fashion|graphic|visual|creative|artist|artwork|gallery|museum|exhibition|masterpiece|canvas|oil|watercolor|acrylic|fresco|mosaic|relief|statue|bust|portrait|landscape|still life|abstract|realistic|impressionist|modern|classical|renaissance|baroque|romantic|neoclassical|medieval|ancient|prehistoric|cave|temple|composition|color|form|line|texture|perspective|lighting|shadow|brush|palette|easel|studio)\b/i.test(allText)) {
+    const artTerms = ['art', 'painting', 'sculpture', 'drawing', 'artwork', 'artist', 'gallery', 'museum', 'masterpiece', 'canvas', 'composition', 'color', 'form', 'line', 'texture', 'perspective'];
+    for (const term of artTerms) {
+      if (allText.includes(term) && queries.length < maxQueries) {
+        dedupePush(queries, `${term} ${subjectPhrase}`);
+      }
+    }
+  }
+  
+  // Science disciplines
+  if (/\b(science|physics|chemistry|biology|mathematics|math|engineering|technology|computer|programming|coding|algorithm|data|research|experiment|laboratory|lab|scientific|discovery|innovation|theory|hypothesis|analysis|calculation|formula|equation|molecule|atom|cell|organism|ecosystem|climate|environment|geology|astronomy|space|universe|galaxy|planet|star|evolution|genetics|dna|microscope|telescope|microscope|beaker|test tube|petri dish|microscope|telescope)\b/i.test(allText)) {
+    const scienceTerms = ['science', 'research', 'experiment', 'laboratory', 'discovery', 'theory', 'analysis', 'data', 'technology'];
+    for (const term of scienceTerms) {
+      if (allText.includes(term) && queries.length < maxQueries) {
+        dedupePush(queries, `${term} ${subjectPhrase}`);
+      }
+    }
+  }
+  
+  // Literature and Language disciplines
+  if (/\b(literature|language|linguistics|philosophy|poetry|novel|story|writing|author|poet|writer|text|book|manuscript|script|dialogue|narrative|metaphor|symbolism|allegory|theme|character|plot|setting|genre|fiction|non-fiction|drama|tragedy|comedy|epic|sonnet|haiku|essay|criticism|analysis|interpretation|translation|grammar|syntax|semantics|rhetoric|logic|ethics|aesthetics|epistemology|ontology|metaphysics)\b/i.test(allText)) {
+    const literatureTerms = ['literature', 'writing', 'author', 'book', 'text', 'story', 'poetry', 'philosophy'];
+    for (const term of literatureTerms) {
+      if (allText.includes(term) && queries.length < maxQueries) {
+        dedupePush(queries, `${term} ${subjectPhrase}`);
+      }
+    }
+  }
+  
+  // Social Sciences disciplines
+  if (/\b(sociology|psychology|anthropology|economics|political|politics|government|society|culture|social|behavior|human|mind|consciousness|perception|cognition|learning|memory|emotion|personality|development|childhood|adolescence|adulthood|aging|family|marriage|divorce|education|school|university|college|classroom|student|teacher|professor|curriculum|pedagogy|assessment|evaluation|research|survey|interview|observation|statistics|data|analysis|demographics|population|migration|urban|rural|community|organization|institution|bureaucracy|democracy|dictatorship|monarchy|republic|constitution|law|legal|justice|court|crime|criminal|punishment|rehabilitation|welfare|health|medicine|medical|doctor|nurse|hospital|clinic|therapy|treatment|diagnosis|symptom|disease|illness|prevention|cure|vaccine|drug|medication|pharmacy)\b/i.test(allText)) {
+    const socialScienceTerms = ['society', 'culture', 'behavior', 'research', 'analysis', 'community', 'education', 'health'];
+    for (const term of socialScienceTerms) {
+      if (allText.includes(term) && queries.length < maxQueries) {
+        dedupePush(queries, `${term} ${subjectPhrase}`);
+      }
+    }
+  }
+  
+  // Business and Economics disciplines
+  if (/\b(business|economics|finance|accounting|management|marketing|advertising|sales|commerce|trade|industry|manufacturing|production|service|retail|wholesale|import|export|market|stock|bond|investment|banking|insurance|real estate|property|entrepreneurship|startup|corporation|company|firm|enterprise|organization|strategy|planning|leadership|administration|human resources|operations|logistics|supply chain|inventory|quality|efficiency|productivity|profit|revenue|cost|expense|budget|financial|monetary|fiscal|tax|tariff|subsidy|regulation|deregulation|privatization|nationalization|globalization|international|multinational|transnational)\b/i.test(allText)) {
+    const businessTerms = ['business', 'economics', 'finance', 'management', 'market', 'industry', 'commerce'];
+    for (const term of businessTerms) {
+      if (allText.includes(term) && queries.length < maxQueries) {
+        dedupePush(queries, `${term} ${subjectPhrase}`);
+      }
+    }
+  }
+
   // Filter out culturally inappropriate queries for history courses
   if (isHistoryCourse) {
     const courseContext = courseTitle || '';
@@ -1121,6 +1174,36 @@ class AIService {
     
     // Initialize bibliography database
     this.initializeBibliographyDatabase();
+  }
+
+  /**
+   * Clear cache for a specific key or all cache
+   */
+  clearCache(cacheKey = null) {
+    try {
+      if (cacheKey) {
+        // Clear specific cache key
+        if (this.imageCache && this.imageCache.has(cacheKey)) {
+          this.imageCache.delete(cacheKey);
+          console.log(`[AIService] Cleared cache key: ${cacheKey}`);
+        }
+      } else {
+        // Clear all cache
+        if (this.imageCache) {
+          this.imageCache.clear();
+          console.log(`[AIService] Cleared all image cache`);
+        }
+      }
+    } catch (error) {
+      console.warn(`[AIService] Cache clearing failed:`, error.message);
+    }
+  }
+
+  /**
+   * Clear all cache entries
+   */
+  clearAllCache() {
+    this.clearCache();
   }
 
   /**
@@ -2163,17 +2246,48 @@ Context: "${context.substring(0, 1000)}..."`;
 
     
             
-            // Optimized image fetching - only fetch if cache exists, otherwise skip for speed
+            // Enhanced image fetching with discipline-aware scoring
             try {
               const cacheKey = buildImageCacheKey(lesson.title, lesson.content);
               const cached = findCachedImageByKey(cacheKey);
               if (cached) {
                 lesson.image = { imageTitle: cached.title, imageUrl: cached.localUrl, pageURL: cached.pageURL, attribution: cached.attribution };
               } else {
-                // Skip image fetching for speed - can be added later via background process
-                lesson.image = null;
+                // Fetch image with enhanced discipline-aware scoring
+                const courseContext = {
+                  title: courseWithIds.title,
+                  subject: courseWithIds.subject || topic.toLowerCase(),
+                  lessonTitles: courseWithIds.modules.flatMap(m => m.lessons.map(l => l.title))
+                };
+                
+                const imageData = await this.fetchRelevantImage(
+                  lesson.title, 
+                  lesson.content ? `${lesson.content.introduction} ${lesson.content.main_content} ${lesson.content.conclusion}` : '',
+                  Array.from(usedImageTitles),
+                  Array.from(usedImageUrls),
+                  { relaxed: false },
+                  courseContext
+                );
+                
+                if (imageData) {
+                  lesson.image = {
+                    imageTitle: imageData.imageTitle,
+                    imageUrl: imageData.imageUrl,
+                    pageURL: imageData.pageURL,
+                    attribution: imageData.attribution
+                  };
+                  
+                  // Track used images to prevent duplicates
+                  if (imageData.imageTitle) usedImageTitles.add(imageData.imageTitle);
+                  if (imageData.imageUrl) usedImageUrls.add(imageData.imageUrl);
+                  
+                  console.log(`[COURSE_GENERATION] Added image for lesson "${lesson.title}": ${imageData.imageTitle}`);
+                } else {
+                  lesson.image = null;
+                }
               }
             } catch (imageErr) {
+              console.warn(`[COURSE_GENERATION] Image fetching failed for lesson "${lesson.title}":`, imageErr.message);
               lesson.image = null;
             }
             
@@ -3640,12 +3754,33 @@ app.post('/api/courses/generate', authenticateToken, async (req, res, next) => {
           modulesCount: course.modules.length
         });
 
+        // Clear any existing cache for this course to ensure fresh data
+        if (global.aiService && global.aiService.clearCache) {
+          try {
+            // Clear any potential cache entries for this course
+            const cacheKeysToClear = [
+              `image_search_${course.id}_strict`,
+              `image_search_${course.id}_relaxed`,
+              `course_context_${course.id}`
+            ];
+            
+            for (const cacheKey of cacheKeysToClear) {
+              global.aiService.clearCache(cacheKey);
+            }
+            
+            console.log(`[COURSE_GENERATION] Cleared cache for new course: ${course.id}`);
+          } catch (cacheError) {
+            console.warn(`[COURSE_GENERATION] Failed to clear cache for course ${course.id}:`, cacheError.message);
+          }
+        }
+
         // Return the generated course
         res.json({
           success: true,
           course: course,
           message: 'Course generated successfully',
-          creditsRemaining: user.courseCredits
+          creditsRemaining: user.courseCredits,
+          courseId: course.id
         });
 
     } catch (error) {
