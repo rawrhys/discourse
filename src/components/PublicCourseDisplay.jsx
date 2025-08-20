@@ -375,22 +375,45 @@ const PublicCourseDisplay = () => {
       
       if (activeTab === 'content' && currentLesson?.content) {
         // Use the lesson content directly for TTS
-        contentToRead = currentLesson.content;
+        console.log('[PublicCourseDisplay] Lesson content structure:', {
+          hasContent: !!currentLesson.content,
+          contentType: typeof currentLesson.content,
+          contentKeys: typeof currentLesson.content === 'object' ? Object.keys(currentLesson.content) : 'N/A'
+        });
+        
+        if (typeof currentLesson.content === 'object') {
+          // Handle structured content
+          const parts = [];
+          if (currentLesson.content.introduction) parts.push(currentLesson.content.introduction);
+          if (currentLesson.content.main_content) parts.push(currentLesson.content.main_content);
+          if (currentLesson.content.conclusion) parts.push(currentLesson.content.conclusion);
+          contentToRead = parts.join('\n\n');
+        } else {
+          contentToRead = currentLesson.content;
+        }
+        
+        console.log('[PublicCourseDisplay] Using lesson content for TTS, length:', contentToRead.length);
       } else if (activeTab === 'flashcards' && flashcardData?.length > 0) {
         contentToRead = flashcardData.map((fc, index) => 
           `Flashcard ${index + 1}: ${fc.term || fc.question || 'Unknown Term'}. Definition: ${fc.definition || fc.answer || 'Definition not provided.'}`
         ).join('. ');
+        console.log('[PublicCourseDisplay] Using flashcard content for TTS, length:', contentToRead.length);
       }
       
       if (contentToRead.length > 0) {
+        console.log('[PublicCourseDisplay] Starting TTS with content length:', contentToRead.length);
         // Use readLesson instead of speak to properly handle lesson content and reset stopped state
         const started = await privateTTSService.readLesson({ ...currentLesson, content: contentToRead }, currentLesson?.id);
+        console.log('[PublicCourseDisplay] TTS readLesson result:', started);
         if (started) {
+          console.log('[PublicCourseDisplay] TTS started successfully, updating state');
           setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
         } else {
           console.warn('[PublicCourseDisplay] TTS failed to start');
           setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
         }
+      } else {
+        console.warn('[PublicCourseDisplay] No content to read for TTS');
       }
     } catch (error) {
       console.error('[PublicCourseDisplay] TTS error:', error);
@@ -768,8 +791,6 @@ const PublicCourseDisplay = () => {
 
           ttsStateUpdateTimeoutRef.current = setTimeout(() => {
             console.log('[PublicCourseDisplay] TTS state changed:', {
-              wasPlaying: ttsStatus.isPlaying,
-              wasPaused: ttsStatus.isPaused,
               newPlaying: serviceStatus.isPlaying,
               newPaused: serviceStatus.isPaused
             });
@@ -805,7 +826,7 @@ const PublicCourseDisplay = () => {
         clearTimeout(ttsStateUpdateTimeoutRef.current);
       }
     };
-  }, [ttsStatus.isPlaying, ttsStatus.isPaused]);
+  }, []); // Remove dependencies to prevent infinite loop
 
   useEffect(() => {
     return () => {
