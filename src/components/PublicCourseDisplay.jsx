@@ -371,13 +371,6 @@ const PublicCourseDisplay = () => {
       module = course.modules.find(m => m.lessons.some(l => l.id === activeLessonId));
       if (module) {
         lesson = module.lessons.find(l => l.id === activeLessonId);
-        // Update activeModuleId to match the found module
-        if (activeModuleId !== module.id) {
-          if (process.env.NODE_ENV === 'development') {
-            console.log(`[PublicCourseDisplay] Updating activeModuleId from ${activeModuleId} to ${module.id}`);
-          }
-          setActiveModuleId(module.id);
-        }
       }
     }
     
@@ -392,6 +385,16 @@ const PublicCourseDisplay = () => {
       totalLessonsInModule: totalLessons
     };
   }, [course, activeModuleId, activeLessonId]);
+
+  // Handle module ID updates when lesson is found in a different module
+  useEffect(() => {
+    if (currentModule && activeModuleId !== currentModule.id) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[PublicCourseDisplay] Updating activeModuleId from ${activeModuleId} to ${currentModule.id}`);
+      }
+      setActiveModuleId(currentModule.id);
+    }
+  }, [currentModule, activeModuleId]);
   
   // Debug logging to help identify the issue (only log once per render cycle)
   if (process.env.NODE_ENV === 'development') {
