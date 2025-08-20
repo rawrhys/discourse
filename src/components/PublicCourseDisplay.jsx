@@ -37,10 +37,6 @@ const PublicCourseDisplay = () => {
         const sessionData = await response.json();
         const quizScores = sessionData.quizScores || {};
         
-        if (process.env.NODE_ENV === 'development') {
-          console.log('[PublicCourseDisplay] Loaded session quiz scores:', quizScores);
-        }
-        
         const updatedCourseData = {
           ...courseData,
           modules: courseData.modules.map(module => ({
@@ -64,10 +60,6 @@ const PublicCourseDisplay = () => {
   // Handle quiz completion
   const handleQuizCompletion = useCallback(async (lessonId, score) => {
     if (!course || !sessionId) return;
-    
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[PublicQuizCompletion] Received score: ${score} for lessonId: ${lessonId}`);
-    }
 
     let moduleOfCompletedQuizId = null;
     const module = course.modules.find(m => m.lessons.some(l => l.id === lessonId));
@@ -90,18 +82,11 @@ const PublicCourseDisplay = () => {
       
       if (response.ok) {
         const result = await response.json();
-        console.log(`[PublicCourseDisplay] Quiz score saved:`, result);
         
         if (result.newSession && result.sessionId) {
-          console.log(`[PublicCourseDisplay] Server created new session due to conflict: ${result.sessionId}`);
           setSessionId(result.sessionId);
-          
           const newUrl = `${window.location.pathname}?sessionId=${result.sessionId}`;
           window.history.replaceState({}, '', newUrl);
-          
-          if (process.env.NODE_ENV === 'development') {
-            console.log('[PublicCourseDisplay] Session changed due to conflict, user now has their own session');
-          }
         }
         
         const updatedCourse = {
@@ -125,25 +110,7 @@ const PublicCourseDisplay = () => {
         const lessonsWithQuizzes = updatedModule?.lessons.filter(l => l.quiz && l.quiz.length > 0) || [];
         const perfectScores = lessonsWithQuizzes.filter(l => l.quizScore === 5);
 
-        if (process.env.NODE_ENV === 'development') {
-          console.log('[PublicQuizCompletion] Module completion check:', {
-            moduleId: moduleOfCompletedQuizId,
-            moduleTitle: updatedModule?.title,
-            totalLessonsWithQuizzes: lessonsWithQuizzes.length,
-            perfectScores: perfectScores.length,
-            lessonScores: updatedModule?.lessons.map(l => ({
-              id: l.id,
-              title: l.title,
-              score: l.quizScore
-            }))
-          });
-        }
-
         if (perfectScores.length === lessonsWithQuizzes.length && lessonsWithQuizzes.length > 0) {
-          if (process.env.NODE_ENV === 'development') {
-            console.log('[PublicQuizCompletion] All quizzes perfect! Unlocking next module.');
-          }
-
           const currentModuleIndex = course.modules.findIndex(m => m.id === moduleOfCompletedQuizId);
           const nextModuleIndex = currentModuleIndex + 1;
 
@@ -173,7 +140,6 @@ const PublicCourseDisplay = () => {
           key.startsWith('session_') || key.includes('quizScore') || key.includes('courseProgress')
         );
         if (oldSessionKeys.length > 0) {
-          console.log('[PublicCourseDisplay] Cleaning up old session data:', oldSessionKeys);
           oldSessionKeys.forEach(key => localStorage.removeItem(key));
         }
         
@@ -186,7 +152,6 @@ const PublicCourseDisplay = () => {
           let courseData;
           
           if (!existingSessionId) {
-            console.log('[PublicCourseDisplay] No session found, redirecting to CAPTCHA page');
             navigate(`/captcha/${courseId}`);
             return;
           }
@@ -194,10 +159,7 @@ const PublicCourseDisplay = () => {
           try {
             courseData = await api.getPublicCourse(courseId, existingSessionId);
           } catch (error) {
-            console.log('[PublicCourseDisplay] API error caught:', error);
-            
             if (error.message && error.message.includes('401')) {
-              console.log('[PublicCourseDisplay] Session invalid, redirecting to CAPTCHA page');
               navigate(`/captcha/${courseId}`);
               return;
             }
@@ -208,14 +170,6 @@ const PublicCourseDisplay = () => {
           
           const newUrl = `${window.location.pathname}?sessionId=${currentSessionId}`;
           window.history.replaceState({}, '', newUrl);
-          
-          if (existingSessionId && existingSessionId !== currentSessionId) {
-            console.log('[PublicCourseDisplay] Session conflict detected, using new session:', currentSessionId);
-          } else if (existingSessionId) {
-            console.log('[PublicCourseDisplay] Using existing session:', currentSessionId);
-          } else {
-            console.log('[PublicCourseDisplay] Created new session:', currentSessionId);
-          }
           
           if (courseData && courseData.modules) {
             courseData.modules = courseData.modules.map(m => Module.fromJSON(m));
@@ -245,7 +199,7 @@ const PublicCourseDisplay = () => {
     fetchCourse();
   }, [courseId, api, navigate, loadSessionQuizScores]);
 
-  // Check mobile view
+  // Handle mobile layout
   useEffect(() => {
     const checkMobile = () => window.innerWidth < 768;
     const isMobile = checkMobile();
@@ -337,13 +291,10 @@ const PublicCourseDisplay = () => {
     if (!currentModule && activeLessonId && course) {
       const foundModule = course.modules.find(m => m.lessons.some(l => l.id === activeLessonId));
       if (foundModule && activeModuleId !== foundModule.id) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`[PublicCourseDisplay] Updating activeModuleId from ${activeModuleId} to ${foundModule.id}`);
-        }
         setActiveModuleId(foundModule.id);
       }
     }
-  }, [course, activeLessonId, activeModuleId]);
+  }, [course, activeLessonId, activeModuleId, currentModule]);
 
   if (loading) return <LoadingState />;
   if (error) return <ErrorState message={error} />;
@@ -440,9 +391,6 @@ const PublicCourseDisplay = () => {
                 key={currentLesson.id}
                 questions={currentLesson.quiz}
                 onComplete={(score) => {
-                  if (process.env.NODE_ENV === 'development') {
-                    console.log(`[PublicCourseDisplay] Quiz completed with score: ${score} for lesson: ${currentLesson.id}`);
-                  }
                   handleQuizCompletion(currentLesson.id, score);
                 }}
                 lessonId={currentLesson.id}
