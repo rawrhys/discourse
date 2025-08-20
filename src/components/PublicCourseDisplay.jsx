@@ -111,7 +111,7 @@ const MemoizedFlashcard = memo(Flashcard);
 
 // Memoized flashcard renderer with proper dependency tracking
 const FlashcardRenderer = memo(({ flashcards }) => {
-  if (!flashcards || flashcards.length === 0) {
+  if (!flashcards || !Array.isArray(flashcards) || flashcards.length === 0) {
     return (
       <div className="text-center p-8">
         <p className="text-gray-600 mb-4">No flashcards available for this lesson.</p>
@@ -140,15 +140,17 @@ const FlashcardRenderer = memo(({ flashcards }) => {
 });
 
 const PublicCourseDisplay = () => {
+  // Get route parameters and hooks
   const { courseId, lessonId: activeLessonIdFromParam } = useParams();
   const navigate = useNavigate();
   const api = useApiWrapper();
   
-  // Guard clause to ensure all dependencies are available - moved to top
+  // Early return if essential dependencies are not available
   if (!courseId || !navigate || !api) {
     return <LoadingState />;
   }
   
+  // State declarations
   const [course, setCourse] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -161,30 +163,54 @@ const PublicCourseDisplay = () => {
   const [showUnlockToast, setShowUnlockToast] = useState(false);
   const [unlockedModuleName, setUnlockedModuleName] = useState('');
   const [activeTab, setActiveTab] = useState('content');
-  
-  // TTS state
   const [ttsStatus, setTtsStatus] = useState({
     isPlaying: false,
     isPaused: false,
     isSupported: false
   });
-
-  // Initialize TTS support after component mounts
-  useEffect(() => {
-    if (privateTTSService?.isSupported) {
-      setTtsStatus(prev => ({ ...prev, isSupported: privateTTSService.isSupported() }));
-    }
-  }, []);
-
-  // TTS state management
-  const ttsStateUpdateTimeoutRef = useRef(null);
-  const isLessonChanging = useRef(false);
-
-  // Image state
   const [imageData, setImageData] = useState(null);
   const [imageLoading, setImageLoading] = useState(false);
 
-  // Helper function to normalize image URLs
+  // Refs
+  const ttsStateUpdateTimeoutRef = useRef(null);
+  const isLessonChanging = useRef(false);
+
+  // Memoized values - computed after state is initialized
+  const currentModule = useMemo(() => {
+    if (!course?.modules || !activeModuleId) return null;
+    return course.modules.find(m => m.id === activeModuleId) || null;
+  }, [course, activeModuleId]);
+
+  const currentLesson = useMemo(() => {
+    if (!currentModule?.lessons || !activeLessonId) return null;
+    return currentModule.lessons.find(l => l.id === activeLessonId) || null;
+  }, [currentModule, activeLessonId]);
+
+  const currentLessonIndex = useMemo(() => {
+    if (!currentModule?.lessons || !activeLessonId) return 0;
+    return currentModule.lessons.findIndex(l => l.id === activeLessonId) ?? 0;
+  }, [currentModule, activeLessonId]);
+
+  const totalLessonsInModule = useMemo(() => {
+    if (!currentModule?.lessons) return 0;
+    return currentModule.lessons.length;
+  }, [currentModule]);
+
+  const flashcardData = useMemo(() => {
+    if (!currentLesson) return null;
+    return currentLesson.flashcards || 
+           currentLesson.content?.flashcards || 
+           currentLesson.cards ||
+           currentLesson.studyCards ||
+           null;
+  }, [currentLesson]);
+
+  const processedContent = useMemo(() => {
+    if (!currentLesson?.content) return '';
+    return cleanAndCombineContent(currentLesson.content);
+  }, [currentLesson]);
+
+  // Callbacks
   const normalizeImageUrl = useCallback((url) => {
     if (!url) return '';
     if (url.startsWith('//')) return `https:${url}`;
@@ -192,7 +218,6 @@ const PublicCourseDisplay = () => {
     return url;
   }, []);
 
-  // Load quiz scores from session
   const loadSessionQuizScores = useCallback(async (courseData, sessionId) => {
     if (!courseData || !sessionId || !courseId) return courseData;
     
@@ -222,7 +247,6 @@ const PublicCourseDisplay = () => {
     return courseData;
   }, [courseId]);
 
-  // Handle quiz completion
   const handleQuizCompletion = useCallback(async (lessonId, score) => {
     if (!course?.modules || !sessionId || !courseId) return;
 
@@ -295,7 +319,6 @@ const PublicCourseDisplay = () => {
     }
   }, [course, sessionId, courseId, unlockedModules]);
 
-  // Simplified TTS functions
   const handleStartAudio = useCallback(async () => {
     if (!privateTTSService?.speak) {
       console.warn('[PublicCourseDisplay] TTS service not available');
@@ -322,24 +345,12 @@ const PublicCourseDisplay = () => {
       // Start new reading
       let contentToRead = '';
       
-      // Get current lesson content dynamically to avoid dependency issues
-      const currentModule = course ? course.modules.find(m => m.id === activeModuleId) : null;
-      const currentLesson = currentModule?.lessons.find(l => l.id === activeLessonId);
-      
-      if (activeTab === 'content' && currentLesson?.content) {
-        const processedContent = cleanAndCombineContent(currentLesson.content);
+      if (activeTab === 'content' && processedContent) {
         contentToRead = processedContent.replace(/<[^>]*>/g, '').trim();
-      } else if (activeTab === 'flashcards' && currentLesson) {
-        const flashcardData = currentLesson?.flashcards || 
-                            currentLesson?.content?.flashcards || 
-                            currentLesson?.cards ||
-                            currentLesson?.studyCards;
-        
-        if (flashcardData?.length > 0) {
-          contentToRead = flashcardData.map((fc, index) => 
-            `Flashcard ${index + 1}: ${fc.term || fc.question || 'Unknown Term'}. Definition: ${fc.definition || fc.answer || 'Definition not provided.'}`
-          ).join('. ');
-        }
+      } else if (activeTab === 'flashcards' && flashcardData?.length > 0) {
+        contentToRead = flashcardData.map((fc, index) => 
+          `Flashcard ${index + 1}: ${fc.term || fc.question || 'Unknown Term'}. Definition: ${fc.definition || fc.answer || 'Definition not provided.'}`
+        ).join('. ');
       }
       
       if (contentToRead.length > 0) {
@@ -350,7 +361,7 @@ const PublicCourseDisplay = () => {
       console.error('[PublicCourseDisplay] TTS error:', error);
       setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
     }
-  }, [ttsStatus.isPlaying, ttsStatus.isPaused, activeTab, course, activeModuleId, activeLessonId]);
+  }, [ttsStatus.isPlaying, ttsStatus.isPaused, activeTab, processedContent, flashcardData, currentLesson?.id]);
 
   const handlePauseResumeAudio = useCallback(() => {
     try {
@@ -386,43 +397,6 @@ const PublicCourseDisplay = () => {
     }
   }, []);
 
-  // TTS cleanup on unmount
-  useEffect(() => {
-    return () => {
-      try {
-        if (privateTTSService?.stop) {
-          privateTTSService.stop();
-          console.log('[PublicCourseDisplay] Cleaned up TTS service on unmount');
-        }
-      } catch (error) {
-        console.warn('[PublicCourseDisplay] Error cleaning up TTS service:', error);
-      }
-
-      if (ttsStateUpdateTimeoutRef.current) {
-        clearTimeout(ttsStateUpdateTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  // Auto-pause TTS when lesson changes
-  useEffect(() => {
-    if (!currentLesson?.id) return;
-    
-    if (isLessonChanging.current) {
-      isLessonChanging.current = false;
-      return;
-    }
-    
-    if (ttsStatus.isPlaying || ttsStatus.isPaused) {
-      console.log('[PublicCourseDisplay] Lesson changed, stopping TTS');
-      if (privateTTSService?.stop) {
-        privateTTSService.stop();
-      }
-      setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
-    }
-  }, [currentLesson?.id, ttsStatus.isPlaying, ttsStatus.isPaused]);
-
-  // Legacy read aloud function for backward compatibility
   const handleReadAloud = useCallback((lessonContent) => {
     if (!lessonContent) return;
     
@@ -432,6 +406,59 @@ const PublicCourseDisplay = () => {
       handleStartAudio();
     }
   }, [ttsStatus.isPlaying, handleStartAudio, handleStopAudio]);
+
+  const handleModuleSelect = useCallback((moduleId) => {
+    if (!course?.modules || !courseId) return;
+    const moduleData = course.modules.find(m => m.id === moduleId);
+    if (!moduleData || !unlockedModules.has(moduleId)) return;
+    
+    setActiveModuleId(moduleId);
+    if (moduleData.lessons.length > 0) {
+      const firstLessonId = moduleData.lessons[0].id;
+      setActiveLessonId(firstLessonId);
+      navigate(`/public/course/${courseId}/lesson/${firstLessonId}`, { replace: true });
+    }
+    setShowQuiz(false);
+  }, [course, unlockedModules, courseId, navigate]);
+
+  const handleLessonClick = useCallback((lessonId) => {
+    if (!courseId) return;
+    setActiveLessonId(lessonId);
+    navigate(`/public/course/${courseId}/lesson/${lessonId}`, { replace: true });
+    setShowQuiz(false);
+    if (window.innerWidth < 768) {
+      setSidebarOpen(false);
+    }
+  }, [courseId, navigate]);
+
+  const handleNextLesson = useCallback(() => {
+    if (!course?.modules || !courseId) return;
+    const currentModule = course.modules.find(m => m.id === activeModuleId);
+    if (!currentModule) return;
+    const currentLessonIndex = currentModule.lessons.findIndex(l => l.id === activeLessonId);
+    if (currentLessonIndex < currentModule.lessons.length - 1) {
+      const nextLesson = currentModule.lessons[currentLessonIndex + 1];
+      handleLessonClick(nextLesson.id);
+    }
+  }, [course, activeModuleId, activeLessonId, handleLessonClick, courseId]);
+
+  const handlePreviousLesson = useCallback(() => {
+    if (!course?.modules || !courseId) return;
+    const currentModule = course.modules.find(m => m.id === activeModuleId);
+    if (!currentModule) return;
+    const currentLessonIndex = currentModule.lessons.findIndex(l => l.id === activeLessonId);
+    if (currentLessonIndex > 0) {
+      const previousLesson = currentModule.lessons[currentLessonIndex - 1];
+      handleLessonClick(previousLesson.id);
+    }
+  }, [course, activeModuleId, activeLessonId, handleLessonClick, courseId]);
+
+  // Effects
+  useEffect(() => {
+    if (privateTTSService?.isSupported) {
+      setTtsStatus(prev => ({ ...prev, isSupported: privateTTSService.isSupported() }));
+    }
+  }, []);
 
   useEffect(() => {
     const fetchCourse = async () => {
@@ -502,7 +529,6 @@ const PublicCourseDisplay = () => {
     fetchCourse();
   }, [courseId, api, navigate, loadSessionQuizScores]);
 
-  // Handle mobile layout
   useEffect(() => {
     const checkMobile = () => window.innerWidth < 768;
     const isMobile = checkMobile();
@@ -512,7 +538,6 @@ const PublicCourseDisplay = () => {
     }
   }, []);
 
-  // Calculate unlocked modules
   useEffect(() => {
     if (course?.modules && sessionId && course.modules.length > 0) {
       const initialUnlocked = new Set();
@@ -548,93 +573,6 @@ const PublicCourseDisplay = () => {
     }
   }, [course, sessionId]);
 
-  // Handle module selection
-  const handleModuleSelect = useCallback((moduleId) => {
-    if (!course?.modules || !courseId) return;
-    const moduleData = course.modules.find(m => m.id === moduleId);
-    if (!moduleData || !unlockedModules.has(moduleId)) return;
-    
-    setActiveModuleId(moduleId);
-    if (moduleData.lessons.length > 0) {
-      const firstLessonId = moduleData.lessons[0].id;
-      setActiveLessonId(firstLessonId);
-      navigate(`/public/course/${courseId}/lesson/${firstLessonId}`, { replace: true });
-    }
-    setShowQuiz(false);
-  }, [course, unlockedModules, courseId, navigate]);
-
-  // Handle lesson click
-  const handleLessonClick = useCallback((lessonId) => {
-    if (!courseId) return;
-    setActiveLessonId(lessonId);
-    navigate(`/public/course/${courseId}/lesson/${lessonId}`, { replace: true });
-    setShowQuiz(false);
-    if (window.innerWidth < 768) {
-      setSidebarOpen(false);
-    }
-  }, [courseId, navigate]);
-
-  // Handle next lesson
-  const handleNextLesson = useCallback(() => {
-    if (!course?.modules || !courseId) return;
-    const currentModule = course.modules.find(m => m.id === activeModuleId);
-    if (!currentModule) return;
-    const currentLessonIndex = currentModule.lessons.findIndex(l => l.id === activeLessonId);
-    if (currentLessonIndex < currentModule.lessons.length - 1) {
-      const nextLesson = currentModule.lessons[currentLessonIndex + 1];
-      handleLessonClick(nextLesson.id);
-    }
-  }, [course, activeModuleId, activeLessonId, handleLessonClick, courseId]);
-
-  // Handle previous lesson
-  const handlePreviousLesson = useCallback(() => {
-    if (!course?.modules || !courseId) return;
-    const currentModule = course.modules.find(m => m.id === activeModuleId);
-    if (!currentModule) return;
-    const currentLessonIndex = currentModule.lessons.findIndex(l => l.id === activeLessonId);
-    if (currentLessonIndex > 0) {
-      const previousLesson = currentModule.lessons[currentLessonIndex - 1];
-      handleLessonClick(previousLesson.id);
-    }
-  }, [course, activeModuleId, activeLessonId, handleLessonClick, courseId]);
-
-  // Find current module and lesson
-  const currentModule = useMemo(() => {
-    return course ? course.modules.find(m => m.id === activeModuleId) : null;
-  }, [course, activeModuleId]);
-
-  const currentLesson = useMemo(() => {
-    return currentModule?.lessons.find(l => l.id === activeLessonId);
-  }, [currentModule, activeLessonId]);
-
-  const currentLessonIndex = useMemo(() => {
-    return currentModule?.lessons.findIndex(l => l.id === activeLessonId) ?? 0;
-  }, [currentModule, activeLessonId]);
-
-  const totalLessonsInModule = useMemo(() => {
-    return currentModule?.lessons?.length ?? 0;
-  }, [currentModule]);
-
-  // Extract and process flashcard data
-  const flashcardData = useMemo(() => {
-    // Check multiple possible locations for flashcard data
-    if (!currentLesson) return null;
-    
-    const flashcards = currentLesson?.flashcards || 
-                      currentLesson?.content?.flashcards || 
-                      currentLesson?.cards ||
-                      currentLesson?.studyCards;
-    
-    return flashcards;
-  }, [currentLesson]);
-
-  // Process lesson content
-  const processedContent = useMemo(() => {
-    if (!currentLesson || !currentLesson.content) return '';
-    return cleanAndCombineContent(currentLesson.content);
-  }, [currentLesson]);
-
-  // Simplified image handling effect
   useEffect(() => {
     if (currentLesson?.image && (currentLesson.image.imageUrl || currentLesson.image.url)) {
       const imageUrl = currentLesson.image.imageUrl || currentLesson.image.url;
@@ -653,7 +591,6 @@ const PublicCourseDisplay = () => {
     }
   }, [currentLesson?.image, normalizeImageUrl]);
 
-  // Handle module ID updates
   useEffect(() => {
     if (!currentModule && activeLessonId && course?.modules) {
       const foundModule = course.modules.find(m => m.lessons.some(l => l.id === activeLessonId));
@@ -663,83 +600,127 @@ const PublicCourseDisplay = () => {
     }
   }, [course, activeLessonId, activeModuleId, currentModule]);
 
+  useEffect(() => {
+    if (!currentLesson?.id) return;
+    
+    if (isLessonChanging.current) {
+      isLessonChanging.current = false;
+      return;
+    }
+    
+    if (ttsStatus.isPlaying || ttsStatus.isPaused) {
+      console.log('[PublicCourseDisplay] Lesson changed, stopping TTS');
+      if (privateTTSService?.stop) {
+        privateTTSService.stop();
+      }
+      setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
+    }
+  }, [currentLesson?.id, ttsStatus.isPlaying, ttsStatus.isPaused]);
+
+  useEffect(() => {
+    return () => {
+      try {
+        if (privateTTSService?.stop) {
+          privateTTSService.stop();
+          console.log('[PublicCourseDisplay] Cleaned up TTS service on unmount');
+        }
+      } catch (error) {
+        console.warn('[PublicCourseDisplay] Error cleaning up TTS service:', error);
+      }
+
+      if (ttsStateUpdateTimeoutRef.current) {
+        clearTimeout(ttsStateUpdateTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Early returns for loading and error states
   if (loading) return <LoadingState />;
   if (error) return <ErrorState message={error} />;
   if (!course) return <LoadingState />;
   if (!currentModule) return <LoadingState />;
   if (!currentLesson) return <LoadingState />;
 
+  // Safe module rendering function
+  const renderModule = (module, moduleIndex) => {
+    if (!module || !module.id) return null;
+    
+    const isLocked = !unlockedModules.has(module.id);
+    const lessonsWithQuizzes = module.lessons?.filter(l => l.quiz && l.quiz.length > 0) || [];
+    const perfectScores = lessonsWithQuizzes.filter(l => l.quizScore === 5);
+    const quizProgress = lessonsWithQuizzes.length > 0 ? `${perfectScores.length}/${lessonsWithQuizzes.length}` : null;
+    
+    return (
+      <div key={module.id}>
+        <h2 
+          onClick={() => handleModuleSelect(module.id)}
+          className={`text-lg font-semibold text-gray-700 cursor-pointer hover:text-blue-600 transition-colors flex items-center justify-between ${isLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
+        >
+          <div className="flex items-center">
+            {isLocked && (
+              <svg className="w-4 h-4 mr-2 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" />
+              </svg>
+            )}
+            {module.title}
+          </div>
+          {quizProgress && (
+            <span className={`text-xs px-2 py-1 rounded-full ${
+              perfectScores.length === lessonsWithQuizzes.length 
+                ? 'bg-green-100 text-green-800' 
+                : 'bg-blue-100 text-blue-800'
+            }`}>
+              {quizProgress}
+            </span>
+          )}
+        </h2>
+        {module.id === activeModuleId && !isLocked && (
+          <ul className="mt-2 pl-4 border-l-2 border-blue-200 space-y-1">
+            {module.lessons?.map(lesson => {
+              if (!lesson || !lesson.id) return null;
+              
+              return (
+                <li key={lesson.id}>
+                  <button
+                    onClick={() => handleLessonClick(lesson.id)}
+                    className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors duration-150 flex items-center justify-between
+                      ${lesson.id === activeLessonId 
+                        ? 'bg-blue-100 text-blue-700 font-medium' 
+                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}
+                    `}
+                  >
+                    <span>{lesson.title}</span>
+                    {lesson.quiz && lesson.quiz.length > 0 && lesson.quizScore === 5 && (
+                      <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                    {lesson.quiz && lesson.quiz.length > 0 && lesson.quizScore !== 5 && (
+                      <svg className="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="flex h-screen bg-gray-100">
       <div className={`fixed inset-y-0 left-0 transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 transition-transform duration-200 ease-in-out bg-white w-80 shadow-lg z-30 flex flex-col`}>
         <div className="p-5 border-b">
           <div className="flex justify-between items-center">
-             <h1 className="text-2xl font-bold text-black leading-tight">{course?.title}</h1>
+             <h1 className="text-2xl font-bold text-black leading-tight">{course.title}</h1>
           </div>
-          <p className="text-sm text-gray-500 mt-1">{course?.subject}</p>
+          <p className="text-sm text-gray-500 mt-1">{course.subject}</p>
         </div>
         <nav className="flex-1 overflow-y-auto p-4 space-y-2">
-          {course?.modules?.map((module, moduleIndex) => {
-            const isLocked = !unlockedModules.has(module?.id);
-            const lessonsWithQuizzes = module?.lessons?.filter(l => l.quiz && l.quiz.length > 0) || [];
-            const perfectScores = lessonsWithQuizzes.filter(l => l.quizScore === 5);
-            const quizProgress = lessonsWithQuizzes.length > 0 ? `${perfectScores.length}/${lessonsWithQuizzes.length}` : null;
-            
-            return (
-              <div key={module.id}>
-                <h2 
-                  onClick={() => handleModuleSelect(module.id)}
-                  className={`text-lg font-semibold text-gray-700 cursor-pointer hover:text-blue-600 transition-colors flex items-center justify-between ${isLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  <div className="flex items-center">
-                    {isLocked && (
-                      <svg className="w-4 h-4 mr-2 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" />
-                      </svg>
-                    )}
-                    {module.title}
-                  </div>
-                  {quizProgress && (
-                    <span className={`text-xs px-2 py-1 rounded-full ${
-                      perfectScores.length === lessonsWithQuizzes.length 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-blue-100 text-blue-800'
-                    }`}>
-                      {quizProgress}
-                    </span>
-                  )}
-                </h2>
-                {module?.id === activeModuleId && !isLocked && (
-                  <ul className="mt-2 pl-4 border-l-2 border-blue-200 space-y-1">
-                    {module?.lessons?.map(lesson => (
-                      <li key={lesson.id}>
-                        <button
-                          onClick={() => handleLessonClick(lesson?.id)}
-                          className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors duration-150 flex items-center justify-between
-                            ${lesson?.id === activeLessonId 
-                              ? 'bg-blue-100 text-blue-700 font-medium' 
-                              : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}
-                          `}
-                        >
-                          <span>{lesson?.title}</span>
-                          {lesson?.quiz && lesson.quiz.length > 0 && lesson.quizScore === 5 && (
-                            <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                          )}
-                          {lesson?.quiz && lesson.quiz.length > 0 && lesson.quizScore !== 5 && (
-                            <svg className="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
-                            </svg>
-                          )}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            );
-          })}
+          {course.modules?.map((module, moduleIndex) => renderModule(module, moduleIndex))}
         </nav>
       </div>
 
@@ -850,7 +831,7 @@ const PublicCourseDisplay = () => {
                           }}>
                             <Image
                               src={imageData.url}
-                              alt={currentLesson?.title || 'Lesson illustration'}
+                              alt={currentLesson.title || 'Lesson illustration'}
                               className="lesson-image"
                               style={{ width: '100%', height: 'auto' }}
                               priority={true}
