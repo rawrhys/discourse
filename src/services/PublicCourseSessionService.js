@@ -24,11 +24,11 @@ class PublicCourseSessionService {
   /**
    * Create a new session for a public course
    */
-  createSession(courseId) {
-    const sessionId = this.generateSessionId();
+  createSession(courseId, sessionId = null) {
+    const finalSessionId = sessionId || this.generateSessionId();
     
     const session = {
-      id: sessionId,
+      id: finalSessionId,
       courseId: courseId,
       createdAt: Date.now(),
       lastActivity: Date.now(),
@@ -38,12 +38,12 @@ class PublicCourseSessionService {
       isActive: true
     };
 
-    this.sessions.set(sessionId, session);
-    this.activeSessions.add(sessionId);
+    this.sessions.set(finalSessionId, session);
+    this.activeSessions.add(finalSessionId);
     
-    console.log(`[PublicCourseSession] Created session ${sessionId} for course ${courseId}`);
+    console.log(`[PublicCourseSession] Created session ${finalSessionId} for course ${courseId}`);
     
-    return sessionId;
+    return finalSessionId;
   }
 
   /**

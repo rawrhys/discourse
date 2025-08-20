@@ -636,13 +636,8 @@ const PublicCourseDisplay = () => {
             return;
           }
           
-          // Check if the session is still valid using the session service
-          const isValidSession = publicCourseSessionService.isSessionAvailable(existingSessionId);
-          if (!isValidSession) {
-            console.log('[PublicCourseDisplay] Session expired or invalid, redirecting to CAPTCHA');
-            navigate(`/captcha/${courseId}`);
-            return;
-          }
+          // Don't validate session with client-side service since server creates the session
+          // Just proceed with the API call and let the server handle session validation
           
           try {
             courseData = await api.getPublicCourse(courseId, existingSessionId);
@@ -657,7 +652,9 @@ const PublicCourseDisplay = () => {
           
           currentSessionId = courseData.sessionId;
           
-          // Update the session in the session service
+          // Create a client-side session entry with the server-provided sessionId
+          // This allows us to track the session locally while trusting the server validation
+          publicCourseSessionService.createSession(courseId, currentSessionId);
           publicCourseSessionService.updateSession(currentSessionId, courseData);
           
           const newUrl = `${window.location.pathname}?sessionId=${currentSessionId}`;
