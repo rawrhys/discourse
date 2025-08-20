@@ -45,30 +45,26 @@ jobs:
             
             # Copy updated server.js to the application directory (if it exists)
             echo "Copying server.js to application directory..."
-            if [ -d "/var/www/discourse" ]; then
-              cp server.js /var/www/discourse/
-              echo "Application server.js last modified: $(stat -c %y /var/www/discourse/server.js)"
+            if [ -d "/root/discourse" ]; then
+              cp server.js /root/discourse/
+              echo "Application server.js last modified: $(stat -c %y /root/discourse/server.js)"
             else
-              echo "Warning: /var/www/discourse directory does not exist, skipping copy"
+              echo "Warning: /root/discourse directory does not exist, skipping copy"
             fi
             
             # Clear any cached files
             echo "Clearing cache..."
-            if [ -d "/var/www/discourse" ]; then
+            if [ -d "/root/discourse" ]; then
               rm -rf /root/discourse/node_modules/.cache 2>/dev/null || true
             fi
             
             # Clear image search cache to ensure duplicate fix takes effect
             echo "Clearing image search cache..."
-            curl -s -X POST http://localhost:4003/api/image/clear-search-cache || echo "Image cache clear failed (server may not be running yet)"
+            curl -s -X POST https://thediscourse.ai/api/image/clear-search-cache || echo "Image cache clear failed (server may not be running yet)"
             
             # Restart PM2 processes (don't wait for server startup)
             echo "Restarting PM2 processes..."
-            if [ -d "/var/www/discourse" ]; then
-              cd /var/www/discourse
-            else
-              echo "Warning: /var/www/discourse directory does not exist, staying in current directory"
-            fi
+            cd /root/discourse
             pm2 restart all
             
             # Wait a moment for restart to complete
@@ -76,7 +72,7 @@ jobs:
             
             # Clear image search cache after restart to ensure duplicate fix takes effect
             echo "Clearing image search cache after restart..."
-            curl -s -X POST http://localhost:4003/api/image/clear-search-cache || echo "Image cache clear failed"
+            curl -s -X POST https://thediscourse.ai/api/image/clear-search-cache || echo "Image cache clear failed"
             
             # Show status
             echo "PM2 status:"
