@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import './CourseDisplay.css';
+import { useApiWrapper } from '../services/api';
 import LoadingState from './LoadingState';
 import ErrorState from './ErrorState';
+import Module from '../models/Module';
 
 const PublicCourseDisplay = () => {
   const { courseId, lessonId: activeLessonIdFromParam } = useParams();
   const navigate = useNavigate();
+  const api = useApiWrapper();
 
   const [course, setCourse] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -17,71 +20,171 @@ const PublicCourseDisplay = () => {
   const [showQuiz, setShowQuiz] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [unlockedModules, setUnlockedModules] = useState(new Set());
+  const [showUnlockToast, setShowUnlockToast] = useState(false);
+  const [unlockedModuleName, setUnlockedModuleName] = useState('');
+
+  // Load quiz scores from session
+  const loadSessionQuizScores = useCallback(async (courseData, sessionId) => {
+    if (!courseData || !sessionId) return courseData;
+    
+    try {
+      const response = await fetch(`/api/public/courses/${courseId}/quiz-scores?sessionId=${sessionId}`);
+      if (response.ok) {
+        const sessionData = await response.json();
+        const quizScores = sessionData.quizScores || {};
+        
+        const updatedCourseData = {
+          ...courseData,
+          modules: courseData.modules.map(module => ({
+            ...module,
+            lessons: module.lessons.map(lesson => ({
+              ...lesson,
+              quizScore: quizScores[lesson.id] || lesson.quizScore
+            }))
+          }))
+        };
+        
+        return updatedCourseData;
+      }
+    } catch (error) {
+      console.warn('[PublicCourseDisplay] Failed to load session quiz scores:', error);
+    }
+    
+    return courseData;
+  }, [courseId]);
+
+  // Handle quiz completion
+  const handleQuizCompletion = useCallback(async (lessonId, score) => {
+    if (!course || !sessionId) return;
+
+    let moduleOfCompletedQuizId = null;
+    const module = course.modules.find(m => m.lessons.some(l => l.id === lessonId));
+    if (module) {
+      moduleOfCompletedQuizId = module.id;
+    }
+
+    try {
+      const response = await fetch(`/api/public/courses/${courseId}/quiz-score`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sessionId,
+          lessonId,
+          score
+        })
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        
+        if (result.newSession && result.sessionId) {
+          setSessionId(result.sessionId);
+          const newUrl = `${window.location.pathname}?sessionId=${result.sessionId}`;
+          window.history.replaceState({}, '', newUrl);
+        }
+        
+        const updatedCourse = {
+          ...course,
+          modules: course.modules.map(m => {
+            if (m.id === moduleOfCompletedQuizId) {
+              return {
+                ...m,
+                lessons: m.lessons.map(l => 
+                  l.id === lessonId ? { ...l, quizScore: score } : l
+                )
+              };
+            }
+            return m;
+          })
+        };
+
+        setCourse(updatedCourse);
+
+        const updatedModule = updatedCourse.modules.find(m => m.id === moduleOfCompletedQuizId);
+        const lessonsWithQuizzes = updatedModule?.lessons.filter(l => l.quiz && l.quiz.length > 0) || [];
+        const perfectScores = lessonsWithQuizzes.filter(l => l.quizScore === 5);
+
+        if (perfectScores.length === lessonsWithQuizzes.length && lessonsWithQuizzes.length > 0) {
+          const currentModuleIndex = course.modules.findIndex(m => m.id === moduleOfCompletedQuizId);
+          const nextModuleIndex = currentModuleIndex + 1;
+
+          const newUnlockedModules = new Set(unlockedModules);
+          if (nextModuleIndex < course.modules.length) {
+            const nextModule = course.modules[nextModuleIndex];
+            newUnlockedModules.add(nextModule.id);
+            setUnlockedModules(newUnlockedModules);
+            setShowUnlockToast(true);
+            setUnlockedModuleName(nextModule.title);
+            setTimeout(() => setShowUnlockToast(false), 5000);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('[PublicCourseDisplay] Failed to save quiz score:', error);
+    }
+  }, [course, sessionId, courseId, unlockedModules]);
 
   useEffect(() => {
     const fetchCourse = async () => {
       try {
         setLoading(true);
         
+        const oldSessionKeys = Object.keys(localStorage).filter(key => 
+          key.startsWith('session_') || key.includes('quizScore') || key.includes('courseProgress')
+        );
+        if (oldSessionKeys.length > 0) {
+          oldSessionKeys.forEach(key => localStorage.removeItem(key));
+        }
+        
         const urlParams = new URLSearchParams(window.location.search);
         const existingSessionId = urlParams.get('sessionId');
         
-        if (!existingSessionId) {
-          navigate(`/captcha/${courseId}`);
-          return;
-        }
+        let currentSessionId = null;
         
-        // For now, create a mock course structure for testing
-        const mockCourse = {
-          id: courseId,
-          title: 'History of Ancient Egypt: An Intermediate Course',
-          subject: 'history of ancient egypt',
-          description: 'This course explores the rich history of Ancient Egypt.',
-          modules: [
-            {
-              id: 'module_1',
-              title: 'Introduction to Ancient Egypt',
-              lessons: [
-                {
-                  id: 'lesson_1',
-                  title: 'The Nile River and Early Settlements',
-                  content: 'The Nile River was the lifeblood of Ancient Egypt...',
-                  quiz: []
-                },
-                {
-                  id: 'lesson_2',
-                  title: 'The First Dynasties',
-                  content: 'The Early Dynastic Period marked the beginning...',
-                  quiz: []
-                }
-              ]
-            },
-            {
-              id: 'module_2',
-              title: 'The Old Kingdom',
-              lessons: [
-                {
-                  id: 'lesson_3',
-                  title: 'Pyramid Building',
-                  content: 'The Old Kingdom is famous for the construction...',
-                  quiz: []
-                }
-              ]
-            }
-          ]
-        };
-        
-        setCourse(mockCourse);
-        setSessionId(existingSessionId);
-        
-        // Set initial module and lesson
-        if (mockCourse.modules.length > 0) {
-          setActiveModuleId(mockCourse.modules[0].id);
-          if (mockCourse.modules[0].lessons.length > 0) {
-            setActiveLessonId(mockCourse.modules[0].lessons[0].id);
+        try {
+          let courseData;
+          
+          if (!existingSessionId) {
+            navigate(`/captcha/${courseId}`);
+            return;
           }
+          
+          try {
+            courseData = await api.getPublicCourse(courseId, existingSessionId);
+          } catch (error) {
+            if (error.message && error.message.includes('401')) {
+              navigate(`/captcha/${courseId}`);
+              return;
+            }
+            throw error;
+          }
+          
+          currentSessionId = courseData.sessionId;
+          
+          const newUrl = `${window.location.pathname}?sessionId=${currentSessionId}`;
+          window.history.replaceState({}, '', newUrl);
+          
+          if (courseData && courseData.modules) {
+            courseData.modules = courseData.modules.map(m => Module.fromJSON(m));
+          }
+
+          const courseDataWithScores = await loadSessionQuizScores(courseData, currentSessionId);
+          setCourse(courseDataWithScores);
+          if (courseData.modules && courseData.modules.length > 0) {
+            const firstModule = courseData.modules[0];
+            setActiveModuleId(firstModule.id);
+            if (firstModule.lessons && firstModule.lessons.length > 0) {
+              setActiveLessonId(firstModule.lessons[0].id);
+            }
+          }
+        } catch (error) {
+          console.error('[PublicCourseDisplay] Error fetching course:', error);
+          setError('Failed to load course.');
         }
         
+        setSessionId(currentSessionId);
       } catch (err) {
         setError('Failed to load course.');
       } finally {
@@ -90,7 +193,7 @@ const PublicCourseDisplay = () => {
     };
     
     fetchCourse();
-  }, [courseId, navigate]);
+  }, [courseId, api, navigate, loadSessionQuizScores]);
 
   // Handle mobile layout
   useEffect(() => {
@@ -107,6 +210,21 @@ const PublicCourseDisplay = () => {
     if (course && sessionId) {
       const initialUnlocked = new Set();
       initialUnlocked.add(course.modules[0]?.id);
+      
+      for (let i = 1; i < course.modules.length; i++) {
+        const previousModule = course.modules[i - 1];
+        const lessonsWithQuizzes = previousModule.lessons.filter(l => l.quiz && l.quiz.length > 0);
+        
+        if (lessonsWithQuizzes.length === 0) {
+          initialUnlocked.add(course.modules[i].id);
+        } else {
+          const perfectScores = lessonsWithQuizzes.filter(l => l.quizScore === 5);
+          if (perfectScores.length === lessonsWithQuizzes.length) {
+            initialUnlocked.add(course.modules[i].id);
+          }
+        }
+      }
+      
       setUnlockedModules(initialUnlocked);
     }
   }, [course, sessionId]);
@@ -164,6 +282,16 @@ const PublicCourseDisplay = () => {
   const currentLessonIndex = currentModule?.lessons.findIndex(l => l.id === activeLessonId) ?? 0;
   const totalLessonsInModule = currentModule?.lessons?.length ?? 0;
 
+  // Handle module ID updates
+  useEffect(() => {
+    if (!currentModule && activeLessonId && course) {
+      const foundModule = course.modules.find(m => m.lessons.some(l => l.id === activeLessonId));
+      if (foundModule && activeModuleId !== foundModule.id) {
+        setActiveModuleId(foundModule.id);
+      }
+    }
+  }, [course, activeLessonId, activeModuleId, currentModule]);
+
   if (loading) return <LoadingState />;
   if (error) return <ErrorState message={error} />;
   if (!course) return <LoadingState />;
@@ -180,6 +308,9 @@ const PublicCourseDisplay = () => {
         <nav className="flex-1 overflow-y-auto p-4 space-y-2">
           {course.modules.map((module, moduleIndex) => {
             const isLocked = !unlockedModules.has(module.id);
+            const lessonsWithQuizzes = module.lessons.filter(l => l.quiz && l.quiz.length > 0);
+            const perfectScores = lessonsWithQuizzes.filter(l => l.quizScore === 5);
+            const quizProgress = lessonsWithQuizzes.length > 0 ? `${perfectScores.length}/${lessonsWithQuizzes.length}` : null;
             
             return (
               <div key={module.id}>
@@ -195,6 +326,15 @@ const PublicCourseDisplay = () => {
                     )}
                     {module.title}
                   </div>
+                  {quizProgress && (
+                    <span className={`text-xs px-2 py-1 rounded-full ${
+                      perfectScores.length === lessonsWithQuizzes.length 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-blue-100 text-blue-800'
+                    }`}>
+                      {quizProgress}
+                    </span>
+                  )}
                 </h2>
                 {module.id === activeModuleId && !isLocked && (
                   <ul className="mt-2 pl-4 border-l-2 border-blue-200 space-y-1">
@@ -209,6 +349,16 @@ const PublicCourseDisplay = () => {
                           `}
                         >
                           <span>{lesson.title}</span>
+                          {lesson.quiz && lesson.quiz.length > 0 && lesson.quizScore === 5 && (
+                            <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          )}
+                          {lesson.quiz && lesson.quiz.length > 0 && lesson.quizScore !== 5 && (
+                            <svg className="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+                            </svg>
+                          )}
                         </button>
                       </li>
                     ))}
@@ -236,7 +386,7 @@ const PublicCourseDisplay = () => {
               <div className="bg-white rounded-lg shadow-sm p-8">
                 <h2 className="text-3xl font-bold text-gray-900 mb-6">{currentLesson.title}</h2>
                 <div className="prose prose-lg max-w-none">
-                  <p className="text-gray-700 leading-relaxed">{currentLesson.content}</p>
+                  <div dangerouslySetInnerHTML={{ __html: currentLesson.content }} />
                 </div>
                 
                 <div className="mt-8 flex justify-between items-center">
@@ -248,9 +398,19 @@ const PublicCourseDisplay = () => {
                     Previous Lesson
                   </button>
                   
-                  <span className="text-sm text-gray-500">
-                    Lesson {currentLessonIndex + 1} of {totalLessonsInModule}
-                  </span>
+                  <div className="flex items-center space-x-4">
+                    <span className="text-sm text-gray-500">
+                      Lesson {currentLessonIndex + 1} of {totalLessonsInModule}
+                    </span>
+                    {currentLesson.quiz && currentLesson.quiz.length > 0 && (
+                      <button
+                        onClick={() => setShowQuiz(true)}
+                        className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                      >
+                        Take Quiz
+                      </button>
+                    )}
+                  </div>
                   
                   <button
                     onClick={handleNextLesson}
@@ -265,6 +425,12 @@ const PublicCourseDisplay = () => {
           ) : (
             <div className="text-center text-gray-500 pt-10">
               <p>Select a lesson to begin.</p>
+            </div>
+          )}
+          {showUnlockToast && (
+            <div className="fixed bottom-5 right-5 bg-green-500 text-white px-4 py-3 rounded-lg shadow-lg z-50">
+              <strong className="font-bold">Module Unlocked!</strong>
+              <span className="block sm:inline"> You can now access {unlockedModuleName}.</span>
             </div>
           )}
         </main>
