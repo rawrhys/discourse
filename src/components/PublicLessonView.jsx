@@ -5,7 +5,73 @@ import lessonImagePreloader from '../services/LessonImagePreloader';
 import performanceMonitor from '../services/ImagePerformanceMonitor';
 import AcademicReferencesService from '../services/AcademicReferencesService';
 import AcademicReferencesFooter from './AcademicReferencesFooter';
+import { getContentAsString } from '../utils/contentFormatter';
 import './LessonView.css';
+
+// Function to extract references from content
+const extractReferences = (content) => {
+  if (!content || typeof content !== 'string') return { contentWithoutRefs: content, references: [] };
+  
+  // Look for References section with various patterns
+  const refPatterns = [
+    /## References\s*([\s\S]*?)(?=\n## |\n# |$)/i,
+    /## References\s*\[(\d+)\]\s*([\s\S]*?)(?=\n## |\n# |$)/i,
+    /References\s*\[(\d+)\]\s*([\s\S]*?)(?=\n## |\n# |$)/i
+  ];
+  
+  let refMatch = null;
+  let referencesText = '';
+  
+  // Try each pattern
+  for (const pattern of refPatterns) {
+    refMatch = content.match(pattern);
+    if (refMatch) {
+      referencesText = refMatch[1] || refMatch[2] || '';
+      break;
+    }
+  }
+  
+  if (!refMatch) return { contentWithoutRefs: content, references: [] };
+  
+  const references = [];
+  
+  // Parse individual references - handle multiple formats
+  const refLines = referencesText.split(/\n+/).filter(line => line.trim());
+  
+  refLines.forEach(line => {
+    const trimmedLine = line.trim();
+    if (trimmedLine) {
+      // Look for numbered references like [1], [2], etc.
+      const numberedMatch = trimmedLine.match(/^\[(\d+)\]\s*(.+)$/);
+      if (numberedMatch) {
+        references.push({
+          number: numberedMatch[1],
+          citation: numberedMatch[2].trim()
+        });
+      } else {
+        // Look for patterns like "## References [1] Encyclopaedia Britannica..."
+        const inlineMatch = trimmedLine.match(/\[(\d+)\]\s*(.+)$/);
+        if (inlineMatch) {
+          references.push({
+            number: inlineMatch[1],
+            citation: inlineMatch[2].trim()
+          });
+        } else {
+          // If no number found, just add the line as a reference
+          references.push({
+            number: (references.length + 1).toString(),
+            citation: trimmedLine
+          });
+        }
+      }
+    }
+  });
+  
+  // Remove the References section from the content
+  const contentWithoutRefs = content.replace(/## References\s*[\s\S]*?(?=\n## |\n# |$)/i, '').trim();
+  
+  return { contentWithoutRefs, references };
+};
 
 // Debounce utility for image search
 const debounce = (fn, delay) => {
@@ -765,15 +831,38 @@ const PublicLessonView = ({
     if (!lesson?.content || !subject || !lesson?.title) return [];
     
     try {
-      console.log('[PublicLessonView] Generating academic references for:', lesson.title);
+      console.log('[PublicLessonView] Processing references for:', lesson.title);
       
       // Ensure lesson.content is a string - use content formatter to strip keys
       const lessonContentString = typeof lesson.content === 'string' 
         ? getContentAsString(lesson.content)
         : getContentAsString(lesson.content);
       
-      // Only generate if content is substantial
+      // Only process if content is substantial
       if (lessonContentString.length < 100) return [];
+      
+      // First, extract references from the content
+      const { contentWithoutRefs, references: extractedReferences } = extractReferences(lessonContentString);
+      
+      // If we found references in the content, use them
+      if (extractedReferences && extractedReferences.length > 0) {
+        console.log('[PublicLessonView] Found references in content:', {
+          referencesCount: extractedReferences.length,
+          references: extractedReferences
+        });
+        
+        // Convert extracted references to the format expected by AcademicReferencesService
+        const formattedReferences = extractedReferences.map(ref => ({
+          id: ref.number,
+          citation: ref.citation,
+          source: 'lesson_content'
+        }));
+        
+        return formattedReferences;
+      }
+      
+      // If no references found in content, generate academic references
+      console.log('[PublicLessonView] No references found in content, generating academic references');
       
       // Debug logging - reduced frequency
       if (process.env.NODE_ENV === 'development' && Math.random() < 0.05) { // Reduced to 5% frequency
@@ -801,7 +890,7 @@ const PublicLessonView = ({
       
       return references;
     } catch (error) {
-      console.error('[PublicLessonView] Error generating academic references:', error);
+      console.error('[PublicLessonView] Error processing references:', error);
       return [];
     }
   }, [lesson?.content, subject, lesson?.title]);
@@ -815,9 +904,15 @@ const PublicLessonView = ({
         ? getContentAsString(lesson.content)
         : getContentAsString(lesson.content);
       
+      // Extract references from content to get content without references
+      const { contentWithoutRefs } = extractReferences(lessonContentString);
+      
+      // Use content without references for citation generation
+      const contentToProcess = contentWithoutRefs || lessonContentString;
+      
       // Generate content with inline citations
       const { content: contentWithInlineCitations } = AcademicReferencesService.generateInlineCitations(
-        lessonContentString,
+        contentToProcess,
         academicReferences
       );
       
