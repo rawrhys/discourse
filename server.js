@@ -294,6 +294,12 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
       console.log(`[ImageScoring] Immediate rejection for Mesopotamia content in Egypt course: "${haystack.substring(0, 100)}"`);
     }
 
+    // Additional immediate rejection for any Norse content in Egypt courses
+    if (isNorseContent && courseTitle.toLowerCase().includes('egypt')) {
+      score -= 10000; // Immediate rejection for Norse content in Egypt courses
+      console.log(`[ImageScoring] Immediate rejection for Norse content in Egypt course: "${haystack.substring(0, 100)}"`);
+    }
+
     // Strong bonus for exact subject phrase appearing
     if (subj && haystack.includes(subj)) score += 50;
 
@@ -602,6 +608,11 @@ function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitl
     dedupePush(queries, 'egyptian tomb');
     dedupePush(queries, 'egyptian artifact');
     dedupePush(queries, 'egyptian archaeology');
+    dedupePush(queries, 'egyptian religion');
+    dedupePush(queries, 'egyptian society');
+    dedupePush(queries, 'egyptian culture');
+    dedupePush(queries, 'egyptian kingdom');
+    dedupePush(queries, 'egyptian dynasty');
   }
 
   // Combine descriptive subject tokens with proper-noun phrases to specialize the query
@@ -629,7 +640,7 @@ function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitl
     if (isGenericStandalone) continue;
     
     // Filter out generic terms that don't add value to image search
-    const genericTerms = ['early', 'period', 'dynasty', 'kingdom', 'empire', 'civilization', 'history', 'ancient', 'old', 'new', 'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'];
+    const genericTerms = ['early', 'period', 'dynasty', 'kingdom', 'empire', 'civilization', 'history', 'ancient', 'old', 'new', 'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth', 'religion', 'society'];
     const isGenericTerm = genericTerms.includes(kw.toLowerCase());
     if (isGenericTerm) continue;
     
