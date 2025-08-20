@@ -1,5 +1,5 @@
 // Test script to verify image duplicate fix
-const fetch = require('node-fetch');
+import fetch from 'node-fetch';
 
 async function testImageDuplicateFix() {
   const baseUrl = 'http://localhost:3000'; // Adjust if your server runs on a different port
