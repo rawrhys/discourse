@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, memo, Suspense, lazy, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import PublicLessonView from './PublicLessonView';
 import './CourseDisplay.css';
@@ -530,4 +530,4 @@ const PublicCourseDisplay = () => {
   );
 };
 
-export default memo(PublicCourseDisplay);
+export default PublicCourseDisplay;
