@@ -23,13 +23,19 @@ jobs:
             
             # Navigate to the git repository
             cd /root/discourse
+            
+            # Handle local changes that might conflict with git pull
+            echo "Checking for local changes..."
+            if [ -n "$(git status --porcelain)" ]; then
+              echo "Local changes detected. Stashing them..."
+              git stash push -m "Auto-stash before deployment $(date)"
+            fi
+            
+            # Remove any untracked files that might conflict
+            echo "Cleaning untracked files..."
+            git clean -fd
+            
             echo "Pulling latest changes from main branch..."
-            
-            # Clean up any untracked files that might cause conflicts
-            echo "Cleaning up untracked files..."
-            git clean -fd || true
-            
-            # Pull latest changes
             git pull origin main
             
             # Verify critical files are updated
@@ -49,14 +55,21 @@ jobs:
             echo "Clearing cache..."
             rm -rf /var/www/discourse/node_modules/.cache 2>/dev/null || true
             
-            # Clear image search cache via API
+            # Clear image search cache to ensure duplicate fix takes effect
             echo "Clearing image search cache..."
-            curl -s -X POST http://localhost:4003/api/image/clear-search-cache || echo "Cache clear failed (server may be down)"
+            curl -s -X POST http://localhost:4003/api/image/clear-search-cache || echo "Image cache clear failed (server may not be running yet)"
             
             # Restart PM2 processes (don't wait for server startup)
             echo "Restarting PM2 processes..."
             cd /var/www/discourse
             pm2 restart all
+            
+            # Wait a moment for restart to complete
+            sleep 3
+            
+            # Clear image search cache after restart to ensure duplicate fix takes effect
+            echo "Clearing image search cache after restart..."
+            curl -s -X POST http://localhost:4003/api/image/clear-search-cache || echo "Image cache clear failed"
             
             # Show status
             echo "PM2 status:"
