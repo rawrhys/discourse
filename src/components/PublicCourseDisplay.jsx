@@ -342,6 +342,15 @@ const PublicCourseDisplay = () => {
         return;
       }
 
+      // Check if TTS service is stopped and needs restart before starting new reading
+      if (privateTTSService?.getStatus) {
+        const status = privateTTSService.getStatus();
+        if (status.isStopped) {
+          console.log('[PublicCourseDisplay] TTS service is stopped, restarting before new reading...');
+          await privateTTSService.restart();
+        }
+      }
+
       // Start new reading
       let contentToRead = '';
       
@@ -397,12 +406,20 @@ const PublicCourseDisplay = () => {
     }
   }, []);
 
-  const handleReadAloud = useCallback((lessonContent) => {
+  const handleReadAloud = useCallback(async (lessonContent) => {
     if (!lessonContent) return;
     
     if (ttsStatus.isPlaying) {
       handleStopAudio();
     } else {
+      // Check if TTS service is stopped and needs restart
+      if (privateTTSService?.getStatus) {
+        const status = privateTTSService.getStatus();
+        if (status.isStopped) {
+          console.log('[PublicCourseDisplay] TTS service is stopped, restarting before read aloud...');
+          await privateTTSService.restart();
+        }
+      }
       handleStartAudio();
     }
   }, [ttsStatus.isPlaying, handleStartAudio, handleStopAudio]);
@@ -455,9 +472,26 @@ const PublicCourseDisplay = () => {
 
   // Effects
   useEffect(() => {
-    if (privateTTSService?.isSupported) {
-      setTtsStatus(prev => ({ ...prev, isSupported: privateTTSService.isSupported() }));
-    }
+    const initializeTTS = async () => {
+      try {
+        // Check if TTS service is stopped and needs restart
+        if (privateTTSService?.getStatus) {
+          const status = privateTTSService.getStatus();
+          if (status.isStopped) {
+            console.log('[PublicCourseDisplay] TTS service is stopped, attempting restart...');
+            await privateTTSService.restart();
+          }
+        }
+        
+        if (privateTTSService?.isSupported) {
+          setTtsStatus(prev => ({ ...prev, isSupported: privateTTSService.isSupported() }));
+        }
+      } catch (error) {
+        console.warn('[PublicCourseDisplay] TTS initialization error:', error);
+      }
+    };
+    
+    initializeTTS();
   }, []);
 
   useEffect(() => {
