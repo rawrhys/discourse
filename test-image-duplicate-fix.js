@@ -6,6 +6,20 @@ const baseUrl = 'https://thediscourse.ai'; // Use the production domain
 async function testImageDuplicateFix() {
   console.log('🧪 Testing Image Duplicate Fix...\n');
   
+  // Test 0: Check if API is accessible
+  console.log('Test 0: Checking API accessibility...');
+  try {
+    const healthCheck = await fetch(`${baseUrl}/api/health`);
+    console.log(`Health check status: ${healthCheck.status}`);
+    if (healthCheck.ok) {
+      const healthData = await healthCheck.json();
+      console.log('Health check response:', healthData);
+    }
+  } catch (error) {
+    console.log('Health check failed:', error.message);
+  }
+  console.log('');
+  
   // Test 1: Search for the same lesson title with no used images
   console.log('Test 1: Searching for "The Ptolemaic Dynasty and Hellenistic Egypt" with no used images');
   const result1 = await searchImage('The Ptolemaic Dynasty and Hellenistic Egypt', [], []);
@@ -37,6 +51,8 @@ async function testImageDuplicateFix() {
 
 async function searchImage(lessonTitle, usedTitles, usedUrls) {
   try {
+    console.log(`🔍 Searching for: "${lessonTitle}" with ${usedUrls.length} used URLs`);
+    
     const response = await fetch(`${baseUrl}/api/image-search/search`, {
       method: 'POST',
       headers: {
@@ -53,12 +69,16 @@ async function searchImage(lessonTitle, usedTitles, usedUrls) {
       })
     });
     
+    console.log(`📡 Response status: ${response.status}`);
+    
     if (!response.ok) {
-      console.error(`HTTP error! status: ${response.status}`);
+      const errorText = await response.text();
+      console.error(`HTTP error! status: ${response.status}, body: ${errorText}`);
       return null;
     }
     
     const data = await response.json();
+    console.log(`📦 Response data:`, JSON.stringify(data, null, 2));
     return data;
   } catch (error) {
     console.error('Error searching for image:', error.message);
