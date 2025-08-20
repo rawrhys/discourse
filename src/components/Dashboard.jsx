@@ -163,15 +163,22 @@ const Dashboard = () => {
       setIsGenerating(false);
       setShowNewCourseForm(false);
       
-      // Show success message before reload
-      setSuccessMessage('Course generated successfully! Redirecting to dashboard...');
+      // Show success message
+      setSuccessMessage('Course generated successfully!');
       setShowSuccessToast(true);
       
-      // Force a full page reload to show the new course (like backend does)
-      setTimeout(() => {
-        logger.info('🔄 [COURSE GENERATION] Reloading page to show new course');
-        setShowSuccessToast(false); // Hide toast before reload
-        window.location.reload();
+      // Fetch updated course list instead of reloading the page
+      setTimeout(async () => {
+        logger.info('🔄 [COURSE GENERATION] Fetching updated course list');
+        setShowSuccessToast(false); // Hide toast
+        try {
+          await fetchSavedCourses();
+          logger.info('✅ [COURSE GENERATION] Course list updated successfully');
+        } catch (error) {
+          logger.error('❌ [COURSE GENERATION] Failed to fetch updated course list:', error);
+          // Fallback to reload if fetch fails
+          window.location.reload();
+        }
       }, 1500); // Give user time to see success message
       
     } catch (error) {
@@ -282,10 +289,17 @@ const Dashboard = () => {
         const verificationResult = await api.verifyCourse(courseId);
         
         if (verificationResult.exists) {
-          logger.warn('⚠️ [DASHBOARD] Course still exists after deletion - forcing page reload');
-          // If the course still exists, force a page reload as fallback
-          setTimeout(() => {
-            window.location.reload();
+          logger.warn('⚠️ [DASHBOARD] Course still exists after deletion - refreshing course list');
+          // If the course still exists, refresh the course list instead of reloading
+          setTimeout(async () => {
+            try {
+              await fetchSavedCourses();
+              logger.info('✅ [DASHBOARD] Course list refreshed after deletion verification');
+            } catch (error) {
+              logger.error('❌ [DASHBOARD] Failed to refresh course list after deletion:', error);
+              // Only reload as absolute last resort
+              window.location.reload();
+            }
           }, 2000);
         } else {
           logger.info('✅ [DASHBOARD] Course deletion verified - course no longer exists on server');
