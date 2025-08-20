@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import PublicLessonView from './PublicLessonView';
 import './CourseDisplay.css';
 import { useApiWrapper } from '../services/api';
 import LoadingState from './LoadingState';
@@ -26,6 +25,8 @@ const PublicCourseDisplay = () => {
   const [unlockedModules, setUnlockedModules] = useState(new Set());
   const [showUnlockToast, setShowUnlockToast] = useState(false);
   const [unlockedModuleName, setUnlockedModuleName] = useState('');
+  const [activeTab, setActiveTab] = useState('content');
+  const [isReading, setIsReading] = useState(false);
 
   // Load quiz scores from session
   const loadSessionQuizScores = useCallback(async (courseData, sessionId) => {
@@ -129,6 +130,28 @@ const PublicCourseDisplay = () => {
       console.error('[PublicCourseDisplay] Failed to save quiz score:', error);
     }
   }, [course, sessionId, courseId, unlockedModules]);
+
+  // Handle read aloud functionality
+  const handleReadAloud = useCallback(() => {
+    if (!currentLesson) return;
+    
+    if (isReading) {
+      // Stop reading
+      if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      setIsReading(false);
+    } else {
+      // Start reading
+      if (window.speechSynthesis) {
+        const utterance = new SpeechSynthesisUtterance(currentLesson.content);
+        utterance.onend = () => setIsReading(false);
+        utterance.onerror = () => setIsReading(false);
+        window.speechSynthesis.speak(utterance);
+        setIsReading(true);
+      }
+    }
+  }, [currentLesson, isReading]);
 
   useEffect(() => {
     const fetchCourse = async () => {
@@ -399,20 +422,114 @@ const PublicCourseDisplay = () => {
             </Suspense>
           ) : (
             currentLesson ? (
-              <PublicLessonView
-                  lesson={currentLesson}
-                  moduleTitle={currentModule?.title}
-                  subject={course.subject}
-                  courseId={courseId}
-                  onNextLesson={handleNextLesson}
-                  onPreviousLesson={handlePreviousLesson}
-                  onTakeQuiz={() => setShowQuiz(true)}
-                  currentLessonIndex={currentLessonIndex}
-                  totalLessonsInModule={totalLessonsInModule}
-                  activeModule={currentModule}
-                  courseDescription={course.description}
-                  sessionId={sessionId}
-              />
+              <div className="max-w-4xl mx-auto">
+                <div className="bg-white rounded-lg shadow-sm">
+                  {/* Tab Navigation */}
+                  <div className="border-b border-gray-200">
+                    <nav className="flex space-x-8 px-6">
+                      <button
+                        onClick={() => setActiveTab('content')}
+                        className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                          activeTab === 'content'
+                            ? 'border-blue-500 text-blue-600'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        }`}
+                      >
+                        Content
+                      </button>
+                      {currentLesson.flashcards && currentLesson.flashcards.length > 0 && (
+                        <button
+                          onClick={() => setActiveTab('flashcards')}
+                          className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                            activeTab === 'flashcards'
+                              ? 'border-blue-500 text-blue-600'
+                              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                          }`}
+                        >
+                          Flashcards
+                        </button>
+                      )}
+                    </nav>
+                  </div>
+
+                  {/* Tab Content */}
+                  <div className="p-8">
+                    {activeTab === 'content' && (
+                      <div>
+                        <div className="flex justify-between items-center mb-6">
+                          <h2 className="text-3xl font-bold text-gray-900">{currentLesson.title}</h2>
+                          <button
+                            onClick={handleReadAloud}
+                            className={`px-4 py-2 rounded-md text-white font-medium ${
+                              isReading ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
+                            }`}
+                          >
+                            {isReading ? 'Stop Reading' : 'Read Aloud'}
+                          </button>
+                        </div>
+                        <div 
+                          className="prose prose-lg max-w-none lesson-content-text"
+                          dangerouslySetInnerHTML={{ __html: currentLesson.content }}
+                          style={{
+                            lineHeight: '1.8',
+                            color: '#374151',
+                            textAlign: 'justify'
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {activeTab === 'flashcards' && currentLesson.flashcards && (
+                      <div>
+                        <h2 className="text-2xl font-bold text-gray-900 mb-6">Flashcards</h2>
+                        <div className="space-y-4">
+                          {currentLesson.flashcards.map((flashcard, index) => (
+                            <div key={index} className="bg-gray-50 p-4 rounded-lg">
+                              <div className="font-medium text-gray-900 mb-2">{flashcard.question}</div>
+                              <div className="text-gray-700">{flashcard.answer}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Navigation */}
+                  <div className="border-t border-gray-200 p-6">
+                    <div className="flex justify-between items-center">
+                      <button
+                        onClick={handlePreviousLesson}
+                        disabled={currentLessonIndex === 0}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Previous Lesson
+                      </button>
+                      
+                      <div className="flex items-center space-x-4">
+                        <span className="text-sm text-gray-500">
+                          Lesson {currentLessonIndex + 1} of {totalLessonsInModule}
+                        </span>
+                        {currentLesson.quiz && currentLesson.quiz.length > 0 && (
+                          <button
+                            onClick={() => setShowQuiz(true)}
+                            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                          >
+                            Take Quiz
+                          </button>
+                        )}
+                      </div>
+                      
+                      <button
+                        onClick={handleNextLesson}
+                        disabled={currentLessonIndex === totalLessonsInModule - 1}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Next Lesson
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             ) : (
               <div className="text-center text-gray-500 pt-10">
                 <p>Select a lesson to begin.</p>
