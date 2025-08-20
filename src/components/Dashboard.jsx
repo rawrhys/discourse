@@ -320,9 +320,13 @@ const Dashboard = () => {
       } else if (error.message.includes('NSFW') || error.message.includes('inappropriate') || error.message.includes('CONTENT_POLICY_BLOCKED')) {
         errorMessage = 'The requested topic violates our content policy and cannot be generated. Please try a different topic.';
         logger.error('🚫 [COURSE GENERATION] Content policy violation');
-      } else if (error.message.includes('timeout')) {
-        errorMessage = 'The request timed out. The server may be busy. Please try again in a moment.';
+      } else if (error.message.includes('timeout') || error.message.includes('aborted')) {
+        errorMessage = 'The request timed out. The AI service is processing your request but it\'s taking longer than expected due to high demand. Please wait a moment and try again.';
         logger.error('⏰ [COURSE GENERATION] Request timeout - keeping modal open for retry');
+        shouldKeepModalOpen = true;
+      } else if (error.message.includes('429') || error.message.includes('rate limit') || error.message.includes('Rate limited')) {
+        errorMessage = 'The AI service is currently busy. Your course is being generated but it\'s taking longer due to high demand. Please wait a moment and try again.';
+        logger.error('🚦 [COURSE GENERATION] Rate limiting detected - keeping modal open for retry');
         shouldKeepModalOpen = true;
       } else if (error.message.includes('500') || error.message.includes('Internal Server Error')) {
         errorMessage = 'Server encountered an error. The backend may be restarting. Please wait a moment and try again.';

@@ -44,7 +44,9 @@ const apiClient = async (url, options = {}) => {
   try {
     // Add timeout to prevent hanging requests
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minute timeout for course generation
+    // 15 minute timeout for course generation (increased for rate limiting scenarios)
+    // The AI service will retry indefinitely on rate limits, so we need a longer timeout
+    const timeoutId = setTimeout(() => controller.abort(), 900000);
     
     const response = await fetch(fullUrl, {
       ...config,
