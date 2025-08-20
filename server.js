@@ -745,6 +745,38 @@ function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitl
     dedupePush(queries, 'egyptian kingdom');
     dedupePush(queries, 'egyptian dynasty');
   }
+  
+  // For Alexander the Great courses, add specific search terms
+  if (courseTitle && courseTitle.toLowerCase().includes('alexander')) {
+    dedupePush(queries, 'alexander the great');
+    dedupePush(queries, 'macedonian empire');
+    dedupePush(queries, 'ancient macedonia');
+    dedupePush(queries, 'hellenistic period');
+    dedupePush(queries, 'ancient greece');
+    dedupePush(queries, 'greek empire');
+    dedupePush(queries, 'ancient warfare');
+    dedupePush(queries, 'ancient military');
+    dedupePush(queries, 'ancient conquest');
+    dedupePush(queries, 'ancient battle');
+    dedupePush(queries, 'ancient army');
+    dedupePush(queries, 'ancient soldier');
+    dedupePush(queries, 'ancient general');
+    dedupePush(queries, 'ancient king');
+    dedupePush(queries, 'ancient ruler');
+    dedupePush(queries, 'ancient leader');
+    dedupePush(queries, 'ancient civilization');
+    dedupePush(queries, 'ancient history');
+    dedupePush(queries, 'ancient art');
+    dedupePush(queries, 'ancient architecture');
+    dedupePush(queries, 'ancient city');
+    dedupePush(queries, 'ancient temple');
+    dedupePush(queries, 'ancient monument');
+    dedupePush(queries, 'ancient statue');
+    dedupePush(queries, 'ancient sculpture');
+    dedupePush(queries, 'ancient painting');
+    dedupePush(queries, 'ancient artifact');
+    dedupePush(queries, 'ancient archaeology');
+  }
 
   // Add content-specific search terms for better relevance
   for (const term of contentKeyTerms) {
@@ -1886,7 +1918,7 @@ Context: "${context.substring(0, 1000)}..."`;
           const isHistoricalContent = /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(subject) || 
                                      /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(courseContext?.title || '');
           
-          const minScoreThreshold = isHistoricalContent ? 25 : 0; // Lower threshold but still high enough to filter bad content
+          const minScoreThreshold = isHistoricalContent ? 10 : 0; // Much lower threshold to allow more relevant images
           
           if (best.score >= minScoreThreshold) {
             console.log(`[AIService] Selected Wikipedia image for "${subject}" (score ${best.score}): ${best.imageUrl}`);
@@ -2007,7 +2039,7 @@ Context: "${context.substring(0, 1000)}..."`;
         const isHistoricalContent = /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(subject) || 
                                    /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(courseContext?.title || '');
         
-        const minScoreThreshold = isHistoricalContent ? 25 : 0; // Lower threshold but still high enough to filter bad content
+        const minScoreThreshold = isHistoricalContent ? 10 : 0; // Much lower threshold to allow more relevant images
         
         if (best.score >= minScoreThreshold) {
           console.log(`[AIService] Selected Pixabay image for "${subject}" (score ${best.score}): ${best.imageUrl}`);
@@ -2032,9 +2064,11 @@ Context: "${context.substring(0, 1000)}..."`;
   // Try Wikipedia first; then Pixabay - optimized with parallel execution and caching
   async fetchRelevantImage(subject, content = '', usedImageTitles = [], usedImageUrls = [], options = { relaxed: false }, courseContext = {}) {
     // Create cache key for this search - include used images to prevent duplicates
-    const usedTitlesHash = usedImageTitles.length > 0 ? '_usedTitles_' + usedImageTitles.slice(0, 5).join('_').replace(/[^a-zA-Z0-9]/g, '') : '';
-    const usedUrlsHash = usedImageUrls.length > 0 ? '_usedUrls_' + usedImageUrls.slice(0, 3).map(url => url.split('/').pop()?.split('?')[0] || '').join('_').replace(/[^a-zA-Z0-9]/g, '') : '';
-    const cacheKey = `image_search_${subject}_${options.relaxed ? 'relaxed' : 'strict'}${usedTitlesHash}${usedUrlsHash}`;
+    // Use a more unique cache key that includes lesson-specific information
+    const lessonId = courseContext?.lessonId || 'unknown';
+    const usedTitlesHash = usedImageTitles.length > 0 ? '_usedTitles_' + usedImageTitles.slice(0, 3).join('_').replace(/[^a-zA-Z0-9]/g, '').substring(0, 50) : '';
+    const usedUrlsHash = usedImageUrls.length > 0 ? '_usedUrls_' + usedImageUrls.slice(0, 2).map(url => url.split('/').pop()?.split('?')[0] || '').join('_').replace(/[^a-zA-Z0-9]/g, '').substring(0, 30) : '';
+    const cacheKey = `image_search_${subject}_${lessonId}_${options.relaxed ? 'relaxed' : 'strict'}${usedTitlesHash}${usedUrlsHash}`;
     
     // Check if we have a cached result
     if (global.imageSearchCache && global.imageSearchCache.has(cacheKey)) {
@@ -2054,30 +2088,10 @@ Context: "${context.substring(0, 1000)}..."`;
       global.imageSearchCache = new Map();
     }
     
-    // Clear ALL old cache entries that don't include used images (for backward compatibility)
+    // Clear ALL old cache entries to force fresh searches and fix the cache collision issue
     if (global.imageSearchCache.size > 0) {
-      const oldKeys = Array.from(global.imageSearchCache.keys()).filter(key => 
-        !key.includes('usedTitles') && !key.includes('usedUrls') && key.includes('image_search_')
-      );
-      if (oldKeys.length > 0) {
-        console.log(`[AIService] Clearing ${oldKeys.length} old cache entries for backward compatibility`);
-        oldKeys.forEach(key => {
-          console.log(`[AIService] Clearing old cache entry: ${key}`);
-          global.imageSearchCache.delete(key);
-        });
-      }
-      
-      // Also clear any cache entries that might be causing the duplicate issue
-      const duplicateKeys = Array.from(global.imageSearchCache.keys()).filter(key => 
-        key.includes('sphinx') && key.includes('image_search_')
-      );
-      if (duplicateKeys.length > 0) {
-        console.log(`[AIService] Clearing ${duplicateKeys.length} potential duplicate cache entries`);
-        duplicateKeys.forEach(key => {
-          console.log(`[AIService] Clearing duplicate cache entry: ${key}`);
-          global.imageSearchCache.delete(key);
-        });
-      }
+      console.log(`[AIService] Clearing all ${global.imageSearchCache.size} cache entries to fix cache collision issue`);
+      global.imageSearchCache.clear();
     }
     
     // Execute both searches in parallel with timeout
