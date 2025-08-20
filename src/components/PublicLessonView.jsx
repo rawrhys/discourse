@@ -823,6 +823,17 @@ const PublicLessonView = ({
 
   // Handle image loading for public courses with enhanced logic (matching private LessonView)
   useEffect(() => {
+    if (!lesson?.title || !subject || !courseId) return;
+    
+    console.log('[PublicLessonView] Image loading effect triggered:', {
+      lessonTitle: lesson?.title,
+      subject,
+      courseId,
+      hasLessonImage: !!(lesson?.image && (lesson.image.imageUrl || lesson.image.url)),
+      imageData: imageData,
+      imageLoading
+    });
+    
     let ignore = false;
     
     // If image is already present on lesson, use it (optimized check)
@@ -948,7 +959,7 @@ const PublicLessonView = ({
       // Abort any pending request
       abortController.abort();
     };
-  }, [lesson, subject, courseId, courseDescription, imageTitleCounts, imageUrlCounts, usedImageTitles, usedImageUrls, normalizeImageUrl]);
+  }, [lesson?.id, lesson?.title, lesson?.image, subject, courseId, courseDescription, imageTitleCounts, imageUrlCounts, usedImageTitles, usedImageUrls, normalizeImageUrl]);
 
   // Start preloading lesson image as soon as lesson data is available
   useEffect(() => {
@@ -1017,15 +1028,12 @@ const PublicLessonView = ({
     const fallbackController = new AbortController();
     
     try {
-      const result = await SimpleImageService.searchWithContext(
+      const result = await SimpleImageService.search(
         lesson?.title,
-        subject, // Pass the course subject here
-        cleanAndCombineContent(lesson?.content),
-        Array.from(usedImageTitles), // Convert Set to Array
-        Array.from(usedImageUrls),   // Convert Set to Array
         courseId,
         lesson?.id,
-        courseDescription
+        Array.from(usedImageTitles), // Convert Set to Array
+        Array.from(usedImageUrls)   // Convert Set to Array
       );
       
       // Check if request was aborted before setting state
