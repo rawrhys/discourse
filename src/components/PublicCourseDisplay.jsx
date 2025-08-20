@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import PublicLessonView from './PublicLessonView';
 import './CourseDisplay.css';
 import LoadingState from './LoadingState';
 import ErrorState from './ErrorState';
@@ -233,20 +232,36 @@ const PublicCourseDisplay = () => {
 
         <main className="flex-1 overflow-y-auto p-6 bg-gray-50">
           {currentLesson ? (
-            <PublicLessonView
-                lesson={currentLesson}
-                moduleTitle={currentModule?.title}
-                subject={course.subject}
-                courseId={courseId}
-                onNextLesson={handleNextLesson}
-                onPreviousLesson={handlePreviousLesson}
-                onTakeQuiz={() => setShowQuiz(true)}
-                currentLessonIndex={currentLessonIndex}
-                totalLessonsInModule={totalLessonsInModule}
-                activeModule={currentModule}
-                courseDescription={course.description}
-                sessionId={sessionId}
-            />
+            <div className="max-w-4xl mx-auto">
+              <div className="bg-white rounded-lg shadow-sm p-8">
+                <h2 className="text-3xl font-bold text-gray-900 mb-6">{currentLesson.title}</h2>
+                <div className="prose prose-lg max-w-none">
+                  <p className="text-gray-700 leading-relaxed">{currentLesson.content}</p>
+                </div>
+                
+                <div className="mt-8 flex justify-between items-center">
+                  <button
+                    onClick={handlePreviousLesson}
+                    disabled={currentLessonIndex === 0}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous Lesson
+                  </button>
+                  
+                  <span className="text-sm text-gray-500">
+                    Lesson {currentLessonIndex + 1} of {totalLessonsInModule}
+                  </span>
+                  
+                  <button
+                    onClick={handleNextLesson}
+                    disabled={currentLessonIndex === totalLessonsInModule - 1}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next Lesson
+                  </button>
+                </div>
+              </div>
+            </div>
           ) : (
             <div className="text-center text-gray-500 pt-10">
               <p>Select a lesson to begin.</p>
