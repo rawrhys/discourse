@@ -10,9 +10,13 @@ import Module from '../models/Module';
 const QuizView = lazy(() => import('./QuizView'));
 
 const PublicCourseDisplay = () => {
+  console.log('[PublicCourseDisplay] Component initializing...');
+  
   const { courseId, lessonId: activeLessonIdFromParam } = useParams();
   const navigate = useNavigate();
   const api = useApiWrapper();
+  
+  console.log('[PublicCourseDisplay] Hooks initialized:', { courseId, activeLessonIdFromParam, navigate: !!navigate, api: !!api });
 
   const [course, setCourse] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -28,9 +32,29 @@ const PublicCourseDisplay = () => {
   const [activeTab, setActiveTab] = useState('content');
   const [isReading, setIsReading] = useState(false);
 
+  // Guard clause to ensure all dependencies are available
+  console.log('[PublicCourseDisplay] Checking dependencies...');
+  
+  if (!courseId) {
+    console.warn('[PublicCourseDisplay] No courseId available');
+    return <LoadingState />;
+  }
+  
+  if (!navigate) {
+    console.warn('[PublicCourseDisplay] No navigate function available');
+    return <LoadingState />;
+  }
+  
+  if (!api) {
+    console.warn('[PublicCourseDisplay] No api available');
+    return <LoadingState />;
+  }
+  
+  console.log('[PublicCourseDisplay] All dependencies available, proceeding...');
+
   // Load quiz scores from session
   const loadSessionQuizScores = useCallback(async (courseData, sessionId) => {
-    if (!courseData || !sessionId) return courseData;
+    if (!courseData || !sessionId || !courseId) return courseData;
     
     try {
       const response = await fetch(`/api/public/courses/${courseId}/quiz-scores?sessionId=${sessionId}`);
@@ -60,7 +84,7 @@ const PublicCourseDisplay = () => {
 
   // Handle quiz completion
   const handleQuizCompletion = useCallback(async (lessonId, score) => {
-    if (!course || !sessionId) return;
+    if (!course?.modules || !sessionId || !courseId) return;
 
     let moduleOfCompletedQuizId = null;
     const module = course.modules.find(m => m.lessons.some(l => l.id === lessonId));
@@ -132,8 +156,8 @@ const PublicCourseDisplay = () => {
   }, [course, sessionId, courseId, unlockedModules]);
 
   // Handle read aloud functionality
-  const handleReadAloud = useCallback(() => {
-    if (!currentLesson) return;
+  const handleReadAloud = useCallback((lessonContent) => {
+    if (!lessonContent) return;
     
     if (isReading) {
       // Stop reading
@@ -144,14 +168,14 @@ const PublicCourseDisplay = () => {
     } else {
       // Start reading
       if (window.speechSynthesis) {
-        const utterance = new SpeechSynthesisUtterance(currentLesson.content);
+        const utterance = new SpeechSynthesisUtterance(lessonContent);
         utterance.onend = () => setIsReading(false);
         utterance.onerror = () => setIsReading(false);
         window.speechSynthesis.speak(utterance);
         setIsReading(true);
       }
     }
-  }, [currentLesson, isReading]);
+  }, [isReading]);
 
   useEffect(() => {
     const fetchCourse = async () => {
@@ -234,7 +258,7 @@ const PublicCourseDisplay = () => {
 
   // Calculate unlocked modules
   useEffect(() => {
-    if (course && sessionId) {
+    if (course?.modules && sessionId) {
       const initialUnlocked = new Set();
       initialUnlocked.add(course.modules[0]?.id);
       
@@ -258,7 +282,7 @@ const PublicCourseDisplay = () => {
 
   // Handle module selection
   const handleModuleSelect = useCallback((moduleId) => {
-    if (!course?.modules) return;
+    if (!course?.modules || !courseId) return;
     const moduleData = course.modules.find(m => m.id === moduleId);
     if (!moduleData || !unlockedModules.has(moduleId)) return;
     
@@ -273,6 +297,7 @@ const PublicCourseDisplay = () => {
 
   // Handle lesson click
   const handleLessonClick = useCallback((lessonId) => {
+    if (!courseId) return;
     setActiveLessonId(lessonId);
     navigate(`/public/course/${courseId}/lesson/${lessonId}`, { replace: true });
     setShowQuiz(false);
@@ -283,6 +308,7 @@ const PublicCourseDisplay = () => {
 
   // Handle next lesson
   const handleNextLesson = useCallback(() => {
+    if (!course?.modules || !courseId) return;
     const currentModule = course.modules.find(m => m.id === activeModuleId);
     if (!currentModule) return;
     const currentLessonIndex = currentModule.lessons.findIndex(l => l.id === activeLessonId);
@@ -290,10 +316,11 @@ const PublicCourseDisplay = () => {
       const nextLesson = currentModule.lessons[currentLessonIndex + 1];
       handleLessonClick(nextLesson.id);
     }
-  }, [course, activeModuleId, activeLessonId, handleLessonClick]);
+  }, [course, activeModuleId, activeLessonId, handleLessonClick, courseId]);
 
   // Handle previous lesson
   const handlePreviousLesson = useCallback(() => {
+    if (!course?.modules || !courseId) return;
     const currentModule = course.modules.find(m => m.id === activeModuleId);
     if (!currentModule) return;
     const currentLessonIndex = currentModule.lessons.findIndex(l => l.id === activeLessonId);
@@ -301,7 +328,7 @@ const PublicCourseDisplay = () => {
       const previousLesson = currentModule.lessons[currentLessonIndex - 1];
       handleLessonClick(previousLesson.id);
     }
-  }, [course, activeModuleId, activeLessonId, handleLessonClick]);
+  }, [course, activeModuleId, activeLessonId, handleLessonClick, courseId]);
 
   // Find current module and lesson
   const currentModule = course ? course.modules.find(m => m.id === activeModuleId) : null;
@@ -311,7 +338,7 @@ const PublicCourseDisplay = () => {
 
   // Handle module ID updates
   useEffect(() => {
-    if (!currentModule && activeLessonId && course) {
+    if (!currentModule && activeLessonId && course?.modules) {
       const foundModule = course.modules.find(m => m.lessons.some(l => l.id === activeLessonId));
       if (foundModule && activeModuleId !== foundModule.id) {
         setActiveModuleId(foundModule.id);
@@ -328,14 +355,14 @@ const PublicCourseDisplay = () => {
       <div className={`fixed inset-y-0 left-0 transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 transition-transform duration-200 ease-in-out bg-white w-80 shadow-lg z-30 flex flex-col`}>
         <div className="p-5 border-b">
           <div className="flex justify-between items-center">
-             <h1 className="text-2xl font-bold text-black leading-tight">{course.title}</h1>
+             <h1 className="text-2xl font-bold text-black leading-tight">{course?.title}</h1>
           </div>
-          <p className="text-sm text-gray-500 mt-1">{course.subject}</p>
+          <p className="text-sm text-gray-500 mt-1">{course?.subject}</p>
         </div>
         <nav className="flex-1 overflow-y-auto p-4 space-y-2">
-          {course.modules.map((module, moduleIndex) => {
-            const isLocked = !unlockedModules.has(module.id);
-            const lessonsWithQuizzes = module.lessons.filter(l => l.quiz && l.quiz.length > 0);
+          {course?.modules?.map((module, moduleIndex) => {
+            const isLocked = !unlockedModules.has(module?.id);
+            const lessonsWithQuizzes = module?.lessons?.filter(l => l.quiz && l.quiz.length > 0) || [];
             const perfectScores = lessonsWithQuizzes.filter(l => l.quizScore === 5);
             const quizProgress = lessonsWithQuizzes.length > 0 ? `${perfectScores.length}/${lessonsWithQuizzes.length}` : null;
             
@@ -363,25 +390,25 @@ const PublicCourseDisplay = () => {
                     </span>
                   )}
                 </h2>
-                {module.id === activeModuleId && !isLocked && (
+                {module?.id === activeModuleId && !isLocked && (
                   <ul className="mt-2 pl-4 border-l-2 border-blue-200 space-y-1">
-                    {module.lessons.map(lesson => (
+                    {module?.lessons?.map(lesson => (
                       <li key={lesson.id}>
                         <button
-                          onClick={() => handleLessonClick(lesson.id)}
+                          onClick={() => handleLessonClick(lesson?.id)}
                           className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors duration-150 flex items-center justify-between
-                            ${lesson.id === activeLessonId 
+                            ${lesson?.id === activeLessonId 
                               ? 'bg-blue-100 text-blue-700 font-medium' 
                               : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}
                           `}
                         >
-                          <span>{lesson.title}</span>
-                          {lesson.quiz && lesson.quiz.length > 0 && lesson.quizScore === 5 && (
+                          <span>{lesson?.title}</span>
+                          {lesson?.quiz && lesson.quiz.length > 0 && lesson.quizScore === 5 && (
                             <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                             </svg>
                           )}
-                          {lesson.quiz && lesson.quiz.length > 0 && lesson.quizScore !== 5 && (
+                          {lesson?.quiz && lesson.quiz.length > 0 && lesson.quizScore !== 5 && (
                             <svg className="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
                             </svg>
@@ -459,7 +486,7 @@ const PublicCourseDisplay = () => {
                         <div className="flex justify-between items-center mb-6">
                           <h2 className="text-3xl font-bold text-gray-900">{currentLesson.title}</h2>
                           <button
-                            onClick={handleReadAloud}
+                            onClick={() => handleReadAloud(currentLesson.content)}
                             className={`px-4 py-2 rounded-md text-white font-medium ${
                               isReading ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
                             }`}
