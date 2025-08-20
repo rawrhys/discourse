@@ -3872,6 +3872,8 @@ async function imageSearchHandler(req, res) {
   const usedImageTitles = Array.isArray(body.usedImageTitles) ? body.usedImageTitles : [];
   const usedImageUrls = Array.isArray(body.usedImageUrls) ? body.usedImageUrls : [];
   const courseId = body.courseId ?? null;
+  const lessonId = body.lessonId ?? null;
+  const moduleId = body.moduleId ?? null;
 
   // Augment used lists with already-used images from the course (server-side guarantee)
   if (courseId && Array.isArray(db?.data?.courses)) {
@@ -3880,17 +3882,29 @@ async function imageSearchHandler(req, res) {
       if (course) {
         const titles = new Set(usedImageTitles.map(normalizeForCompare));
         const urls = new Set(usedImageUrls.map(normalizeUrlForCompare));
+        
+        // Add all existing images from the course to prevent duplicates
         for (const mod of course.modules || []) {
           for (const lsn of mod.lessons || []) {
             const t = normalizeForCompare(lsn?.image?.imageTitle || lsn?.image?.title);
             const u = normalizeUrlForCompare(lsn?.image?.imageUrl || lsn?.image?.url);
             if (t) titles.add(t);
             if (u) urls.add(u);
+            
+            // Also add the source URL for better deduplication
+            const sourceUrl = lsn?.image?.sourceUrlForCaching;
+            if (sourceUrl) {
+              const normalizedSourceUrl = normalizeUrlForCompare(sourceUrl);
+              if (normalizedSourceUrl) urls.add(normalizedSourceUrl);
+            }
           }
         }
+        
         // Re-materialize arrays
         req.body.usedImageTitles = Array.from(titles);
         req.body.usedImageUrls = Array.from(urls);
+        
+        console.log(`[ImageSearch] Deduplication: Found ${titles.size} used titles and ${urls.size} used URLs from course`);
       }
     } catch (e) {
       console.warn('[ImageSearch API] Failed to augment used image lists from course:', e.message);
@@ -4010,6 +4024,33 @@ async function imageSearchHandler(req, res) {
               pageURL: imageData.pageURL,
               attribution: imageData.attribution
             });
+          }
+
+          // Immediately save the selected image to the lesson to prevent duplicates
+          if (courseId && lessonId) {
+            try {
+              const course = db.data.courses.find(c => c.id === courseId);
+              if (course) {
+                const module = course.modules.find(m => m.id === moduleId);
+                if (module) {
+                  const lesson = module.lessons.find(l => l.id === lessonId);
+                  if (lesson) {
+                    lesson.image = {
+                      imageTitle: imageData.imageTitle || imageData.title,
+                      imageUrl: imageData.imageUrl,
+                      pageURL: imageData.pageURL,
+                      attribution: imageData.attribution,
+                      uploader,
+                      sourceUrlForCaching: imageData.sourceUrlForCaching || null
+                    };
+                    await db.write();
+                    console.log(`[ImageSearch] Saved image to lesson ${lessonId} to prevent duplicates`);
+                  }
+                }
+              }
+            } catch (saveError) {
+              console.warn('[ImageSearch] Failed to save image to lesson:', saveError.message);
+            }
           }
           
           // Pre-cache the image if sourceUrlForCaching is available

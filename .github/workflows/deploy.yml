@@ -19,10 +19,10 @@ jobs:
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            cd /root/discourse
             echo "=== Starting VPS deployment ==="
             
-            # Pull the latest changes
+            # Navigate to the git repository
+            cd /root/discourse
             echo "Pulling latest changes from main branch..."
             git pull origin main
             
@@ -31,13 +31,30 @@ jobs:
             echo "server.js last modified: $(stat -c %y server.js)"
             echo "TTSService.js last modified: $(stat -c %y src/services/TTSService.js)"
             
-            # Simply restart all PM2 processes
+            # Copy updated server.js to the application directory
+            echo "Copying server.js to application directory..."
+            cp server.js /var/www/discourse/
+            
+            # Verify the file was copied correctly
+            echo "Verifying server.js in application directory..."
+            echo "Application server.js last modified: $(stat -c %y /var/www/discourse/server.js)"
+            
+            # Clear any cached files
+            echo "Clearing cache..."
+            rm -rf /var/www/discourse/node_modules/.cache 2>/dev/null || true
+            
+            # Restart PM2 processes
             echo "Restarting PM2 processes..."
+            cd /var/www/discourse
             pm2 restart all
             
             # Show status
             echo "PM2 status:"
             pm2 status
+            
+            # Show recent logs to verify deployment
+            echo "Recent application logs:"
+            pm2 logs --lines 10
             
             echo "=== VPS deployment completed ==="
 
