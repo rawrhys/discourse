@@ -5,15 +5,10 @@ import './CourseDisplay.css';
 import { useApiWrapper } from '../services/api';
 import LoadingState from './LoadingState';
 import ErrorState from './ErrorState';
-
 import Module from '../models/Module';
-import publicCourseSessionService from '../services/PublicCourseSessionService';
-
 
 // Lazy load QuizView
 const QuizView = lazy(() => import('./QuizView'));
-
-
 
 const PublicCourseDisplay = () => {
   const { courseId, lessonId: activeLessonIdFromParam } = useParams();
@@ -26,20 +21,17 @@ const PublicCourseDisplay = () => {
   const [activeModuleId, setActiveModuleId] = useState(null);
   const [activeLessonId, setActiveLessonId] = useState(null);
   const [sessionId, setSessionId] = useState(null);
-
   const [showQuiz, setShowQuiz] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [unlockedModules, setUnlockedModules] = useState(new Set());
   const [showUnlockToast, setShowUnlockToast] = useState(false);
   const [unlockedModuleName, setUnlockedModuleName] = useState('');
 
-  
-  // Load quiz scores from session and apply to course data
+  // Load quiz scores from session
   const loadSessionQuizScores = useCallback(async (courseData, sessionId) => {
     if (!courseData || !sessionId) return courseData;
     
     try {
-      // Fetch quiz scores from session
       const response = await fetch(`/api/public/courses/${courseId}/quiz-scores?sessionId=${sessionId}`);
       if (response.ok) {
         const sessionData = await response.json();
@@ -49,7 +41,6 @@ const PublicCourseDisplay = () => {
           console.log('[PublicCourseDisplay] Loaded session quiz scores:', quizScores);
         }
         
-        // Apply quiz scores to course data
         const updatedCourseData = {
           ...courseData,
           modules: courseData.modules.map(module => ({
@@ -70,8 +61,7 @@ const PublicCourseDisplay = () => {
     return courseData;
   }, [courseId]);
 
-
-
+  // Handle quiz completion
   const handleQuizCompletion = useCallback(async (lessonId, score) => {
     if (!course || !sessionId) return;
     
@@ -80,15 +70,12 @@ const PublicCourseDisplay = () => {
     }
 
     let moduleOfCompletedQuizId = null;
-
-    // Find the module containing this lesson
     const module = course.modules.find(m => m.lessons.some(l => l.id === lessonId));
     if (module) {
       moduleOfCompletedQuizId = module.id;
     }
 
     try {
-      // Save quiz score to session
       const response = await fetch(`/api/public/courses/${courseId}/quiz-score`, {
         method: 'POST',
         headers: {
@@ -105,22 +92,18 @@ const PublicCourseDisplay = () => {
         const result = await response.json();
         console.log(`[PublicCourseDisplay] Quiz score saved:`, result);
         
-        // If server created a new session (due to conflict), update our session ID
         if (result.newSession && result.sessionId) {
           console.log(`[PublicCourseDisplay] Server created new session due to conflict: ${result.sessionId}`);
           setSessionId(result.sessionId);
           
-          // Update URL with new session ID
           const newUrl = `${window.location.pathname}?sessionId=${result.sessionId}`;
           window.history.replaceState({}, '', newUrl);
           
-          // Show a brief notification to the user about the session change
           if (process.env.NODE_ENV === 'development') {
             console.log('[PublicCourseDisplay] Session changed due to conflict, user now has their own session');
           }
         }
         
-        // Update the lesson with the quiz score
         const updatedCourse = {
           ...course,
           modules: course.modules.map(m => {
@@ -138,7 +121,6 @@ const PublicCourseDisplay = () => {
 
         setCourse(updatedCourse);
 
-        // Check if all quizzes in the module are perfect
         const updatedModule = updatedCourse.modules.find(m => m.id === moduleOfCompletedQuizId);
         const lessonsWithQuizzes = updatedModule?.lessons.filter(l => l.quiz && l.quiz.length > 0) || [];
         const perfectScores = lessonsWithQuizzes.filter(l => l.quizScore === 5);
@@ -157,17 +139,14 @@ const PublicCourseDisplay = () => {
           });
         }
 
-        // If all quizzes in the module are perfect, unlock the next module
         if (perfectScores.length === lessonsWithQuizzes.length && lessonsWithQuizzes.length > 0) {
           if (process.env.NODE_ENV === 'development') {
             console.log('[PublicQuizCompletion] All quizzes perfect! Unlocking next module.');
           }
 
-          // Find the current module index
           const currentModuleIndex = course.modules.findIndex(m => m.id === moduleOfCompletedQuizId);
           const nextModuleIndex = currentModuleIndex + 1;
 
-          // Update unlocked modules state
           const newUnlockedModules = new Set(unlockedModules);
           if (nextModuleIndex < course.modules.length) {
             const nextModule = course.modules[nextModuleIndex];
@@ -184,12 +163,12 @@ const PublicCourseDisplay = () => {
     }
   }, [course, sessionId, courseId, unlockedModules]);
 
+  // Fetch course data
   useEffect(() => {
     const fetchCourse = async () => {
       try {
         setLoading(true);
         
-        // Clean up any old session data from localStorage
         const oldSessionKeys = Object.keys(localStorage).filter(key => 
           key.startsWith('session_') || key.includes('quizScore') || key.includes('courseProgress')
         );
@@ -198,30 +177,25 @@ const PublicCourseDisplay = () => {
           oldSessionKeys.forEach(key => localStorage.removeItem(key));
         }
         
-        // Check if there's a sessionId in the URL
         const urlParams = new URLSearchParams(window.location.search);
         const existingSessionId = urlParams.get('sessionId');
         
         let currentSessionId = null;
         
-        // Try to use existing session or create new one through backend API
         try {
           let courseData;
           
-          // Check if user has a valid session - if not, redirect to CAPTCHA page
           if (!existingSessionId) {
             console.log('[PublicCourseDisplay] No session found, redirecting to CAPTCHA page');
             navigate(`/captcha/${courseId}`);
             return;
           }
           
-          // Try to get course data with existing session
           try {
             courseData = await api.getPublicCourse(courseId, existingSessionId);
           } catch (error) {
             console.log('[PublicCourseDisplay] API error caught:', error);
             
-            // If session is invalid or expired, redirect to CAPTCHA page
             if (error.message && error.message.includes('401')) {
               console.log('[PublicCourseDisplay] Session invalid, redirecting to CAPTCHA page');
               navigate(`/captcha/${courseId}`);
@@ -230,10 +204,8 @@ const PublicCourseDisplay = () => {
             throw error;
           }
           
-          // The backend will handle session management and return the appropriate sessionId
           currentSessionId = courseData.sessionId;
           
-          // Update URL with the session ID (new or existing)
           const newUrl = `${window.location.pathname}?sessionId=${currentSessionId}`;
           window.history.replaceState({}, '', newUrl);
           
@@ -249,7 +221,6 @@ const PublicCourseDisplay = () => {
             courseData.modules = courseData.modules.map(m => Module.fromJSON(m));
           }
 
-          // Load and apply session quiz scores
           const courseDataWithScores = await loadSessionQuizScores(courseData, currentSessionId);
           setCourse(courseDataWithScores);
           if (courseData.modules && courseData.modules.length > 0) {
@@ -272,8 +243,9 @@ const PublicCourseDisplay = () => {
       }
     };
     fetchCourse();
-  }, [courseId, api]);
+  }, [courseId, api, navigate, loadSessionQuizScores]);
 
+  // Check mobile view
   useEffect(() => {
     const checkMobile = () => window.innerWidth < 768;
     const isMobile = checkMobile();
@@ -283,22 +255,19 @@ const PublicCourseDisplay = () => {
     }
   }, []);
 
-  // Calculate unlocked modules based on quiz completion (similar to original CourseDisplay)
+  // Calculate unlocked modules
   useEffect(() => {
     if (course && sessionId) {
       const initialUnlocked = new Set();
-      initialUnlocked.add(course.modules[0]?.id); // First module is always unlocked
+      initialUnlocked.add(course.modules[0]?.id);
       
-      // Check quiz completion for subsequent modules
       for (let i = 1; i < course.modules.length; i++) {
         const previousModule = course.modules[i - 1];
         const lessonsWithQuizzes = previousModule.lessons.filter(l => l.quiz && l.quiz.length > 0);
         
         if (lessonsWithQuizzes.length === 0) {
-          // If no quizzes, unlock the next module
           initialUnlocked.add(course.modules[i].id);
         } else {
-          // Check if all quizzes have perfect scores
           const perfectScores = lessonsWithQuizzes.filter(l => l.quizScore === 5);
           if (perfectScores.length === lessonsWithQuizzes.length) {
             initialUnlocked.add(course.modules[i].id);
@@ -310,6 +279,7 @@ const PublicCourseDisplay = () => {
     }
   }, [course, sessionId]);
 
+  // Handle module selection
   const handleModuleSelect = useCallback((moduleId) => {
     if (!course?.modules) return;
     const moduleData = course.modules.find(m => m.id === moduleId);
@@ -322,8 +292,9 @@ const PublicCourseDisplay = () => {
       navigate(`/public/course/${courseId}/lesson/${firstLessonId}`, { replace: true });
     }
     setShowQuiz(false);
-  }, [course, unlockedModules, courseId, navigate, setActiveModuleId, setActiveLessonId]);
+  }, [course, unlockedModules, courseId, navigate]);
 
+  // Handle lesson click
   const handleLessonClick = useCallback((lessonId) => {
     setActiveLessonId(lessonId);
     navigate(`/public/course/${courseId}/lesson/${lessonId}`, { replace: true });
@@ -333,6 +304,7 @@ const PublicCourseDisplay = () => {
     }
   }, [courseId, navigate]);
 
+  // Handle next lesson
   const handleNextLesson = useCallback(() => {
     const currentModule = course.modules.find(m => m.id === activeModuleId);
     if (!currentModule) return;
@@ -343,6 +315,7 @@ const PublicCourseDisplay = () => {
     }
   }, [course, activeModuleId, activeLessonId, handleLessonClick]);
 
+  // Handle previous lesson
   const handlePreviousLesson = useCallback(() => {
     const currentModule = course.modules.find(m => m.id === activeModuleId);
     if (!currentModule) return;
@@ -353,15 +326,13 @@ const PublicCourseDisplay = () => {
     }
   }, [course, activeModuleId, activeLessonId, handleLessonClick]);
 
-
-
-  // Find the current module and lesson
+  // Find current module and lesson
   const currentModule = course ? course.modules.find(m => m.id === activeModuleId) : null;
   const currentLesson = currentModule?.lessons.find(l => l.id === activeLessonId);
   const currentLessonIndex = currentModule?.lessons.findIndex(l => l.id === activeLessonId) ?? 0;
   const totalLessonsInModule = currentModule?.lessons?.length ?? 0;
 
-  // Handle module ID updates when lesson is found in a different module
+  // Handle module ID updates
   useEffect(() => {
     if (!currentModule && activeLessonId && course) {
       const foundModule = course.modules.find(m => m.lessons.some(l => l.id === activeLessonId));
@@ -373,26 +344,10 @@ const PublicCourseDisplay = () => {
       }
     }
   }, [course, activeLessonId, activeModuleId]);
-  
-  // Debug logging to help identify the issue (only log once per render cycle)
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[PublicCourseDisplay] Module/Lesson Debug:', {
-      courseId: course?.id,
-      activeModuleId,
-      activeLessonId,
-      currentModule: currentModule ? { id: currentModule.id, title: currentModule.title } : null,
-      currentLesson: currentLesson ? { id: currentLesson.id, title: currentLesson.title } : null,
-      totalModules: course?.modules?.length,
-      currentLessonIndex,
-      totalLessonsInModule
-    });
-  }
-
-
 
   if (loading) return <LoadingState />;
   if (error) return <ErrorState message={error} />;
-  if (!course) return <LoadingState />; // Show loading while course is being created
+  if (!course) return <LoadingState />;
 
   return (
     <div className="flex h-screen bg-gray-100">
@@ -407,7 +362,6 @@ const PublicCourseDisplay = () => {
           {course.modules.map((module, moduleIndex) => {
             const isLocked = !unlockedModules.has(module.id);
             const lessonsWithQuizzes = module.lessons.filter(l => l.quiz && l.quiz.length > 0);
-            // Calculate actual quiz progress for public courses
             const perfectScores = lessonsWithQuizzes.filter(l => l.quizScore === 5);
             const quizProgress = lessonsWithQuizzes.length > 0 ? `${perfectScores.length}/${lessonsWithQuizzes.length}` : null;
             
@@ -490,7 +444,6 @@ const PublicCourseDisplay = () => {
                     console.log(`[PublicCourseDisplay] Quiz completed with score: ${score} for lesson: ${currentLesson.id}`);
                   }
                   handleQuizCompletion(currentLesson.id, score);
-                  // Don't automatically switch back to content - let user choose
                 }}
                 lessonId={currentLesson.id}
                 module={currentModule}
