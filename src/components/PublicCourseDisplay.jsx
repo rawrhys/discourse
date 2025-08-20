@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, memo, useRef, Suspense, lazy, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, memo, Suspense, lazy, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import PublicLessonView from './PublicLessonView';
 import './CourseDisplay.css';
@@ -13,13 +13,7 @@ import publicCourseSessionService from '../services/PublicCourseSessionService';
 // Lazy load QuizView
 const QuizView = lazy(() => import('./QuizView'));
 
-function usePrevious(value) {
-  const ref = useRef();
-  useEffect(() => {
-    ref.current = value;
-  });
-  return ref.current;
-}
+
 
 const PublicCourseDisplay = () => {
   const { courseId, lessonId: activeLessonIdFromParam } = useParams();
