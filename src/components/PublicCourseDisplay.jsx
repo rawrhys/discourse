@@ -1,13 +1,136 @@
-import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useCallback, Suspense, lazy, useMemo, memo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import './CourseDisplay.css';
 import { useApiWrapper } from '../services/api';
 import LoadingState from './LoadingState';
 import ErrorState from './ErrorState';
 import Module from '../models/Module';
+import Flashcard from './Flashcard';
+import Image from './Image';
+import markdownService from '../services/MarkdownService';
+import { fixMalformedContent, formatContentForDisplay, cleanContentFormatting, validateContent, getContentAsString } from '../utils/contentFormatter';
 
 // Lazy load QuizView
 const QuizView = lazy(() => import('./QuizView'));
+
+// Enhanced markdown parsing with resilient error handling using Marked
+const fixMalformedMarkdown = (text) => {
+  if (!text) return text;
+  
+  // Use the efficient MarkdownService with content-specific parsing
+  if (text.includes('The Formation of the Greek City-States') || 
+      (text.includes('Polis') && (text.includes('Acropolis') || text.includes('Agora')))) {
+    return markdownService.parseGreekCityStates(text);
+  }
+  
+  // Try the Archaic Period parser
+  if (text.includes('Archaic Period') && text.includes('Lyric Poetry')) {
+    return markdownService.parseGreekContent(text);
+  }
+  
+  // Fall back to general parsing
+  return markdownService.parse(text);
+};
+
+// Helper function to clean remaining malformed asterisks
+const cleanupRemainingAsterisks = (text) => {
+  if (!text) return text;
+  return text
+    .replace(/\*\*\*\*/g, '**')
+    .replace(/\*\*\*\*\*/g, '**')
+    .replace(/\*\*\*\*\*\*/g, '**');
+};
+
+// Helper function to clean and combine lesson content
+const cleanAndCombineContent = (content) => {
+  if (!content) return '';
+  
+  // Helper function to clean individual content parts
+  const cleanContentPart = (part) => {
+    if (!part) return '';
+    
+    // First, remove all separator patterns before any other processing
+    let cleaned = part
+      .replace(/Content generation completed\./g, '')
+      .replace(/\|\|\|---\|\|\|/g, '') // Remove |||---||| patterns
+      .replace(/\|\|\|/g, '') // Remove all remaining ||| patterns
+      .trim();
+    
+    // Then apply markdown processing
+    cleaned = fixMalformedMarkdown(cleaned);
+    
+    // Final cleanup of any separators that might have been reintroduced
+    cleaned = cleaned
+      .replace(/\|\|\|---\|\|\|/g, '')
+      .replace(/\|\|\|/g, '');
+    
+    return cleaned;
+  };
+  
+  if (typeof content === 'string') {
+    const cleaned = cleanContentPart(content);
+    const result = cleanupRemainingAsterisks(cleaned);
+    
+    // Final separator cleanup after all processing
+    const finalResult = result
+      .replace(/\|\|\|---\|\|\|/g, '')
+      .replace(/\|\|\|/g, '');
+    
+    return finalResult;
+  }
+  
+  const { introduction, main_content, conclusion } = content;
+  
+  const cleanedIntro = introduction 
+    ? cleanupRemainingAsterisks(cleanContentPart(introduction))
+    : '';
+
+  const cleanedMain = main_content ? cleanupRemainingAsterisks(cleanContentPart(main_content)) : '';
+  const cleanedConclusion = conclusion ? cleanupRemainingAsterisks(cleanContentPart(conclusion)) : '';
+  
+  const result = [cleanedIntro, cleanedMain, cleanedConclusion]
+    .filter(Boolean)
+    .join('\n\n')
+    .replace(/\|\|\|---\|\|\|/g, '') // Final cleanup of any remaining patterns
+    .replace(/\|\|\|/g, ''); // Final cleanup of any remaining ||| patterns
+  
+  // Final separator cleanup after all processing
+  return result
+    .replace(/\|\|\|---\|\|\|/g, '')
+    .replace(/\|\|\|/g, '');
+};
+
+// Memoized Flashcard component to prevent unnecessary re-renders
+const MemoizedFlashcard = memo(Flashcard);
+
+// Memoized flashcard renderer with proper dependency tracking
+const FlashcardRenderer = memo(({ flashcards }) => {
+  if (!flashcards || flashcards.length === 0) {
+    return (
+      <div className="text-center p-8">
+        <p className="text-gray-600 mb-4">No flashcards available for this lesson.</p>
+        <p className="text-sm text-gray-500">Flashcard content will be generated automatically for new lessons.</p>
+      </div>
+    );
+  }
+
+  // Deduplicate flashcards based on the term
+  const uniqueFlashcards = useMemo(() => {
+    return Array.from(new Map(flashcards.map(card => [(card.term || card.question || '').toLowerCase(), card])).values());
+  }, [flashcards]);
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
+      {uniqueFlashcards.map((fc, index) => (
+        <MemoizedFlashcard
+          key={`${fc.term || fc.question || 'unknown'}-${index}`}
+          term={fc.term || fc.question || 'Unknown Term'}
+          definition={fc.definition || fc.answer || 'Definition not provided.'}
+        />
+      ))}
+    </div>
+  );
+});
 
 const PublicCourseDisplay = () => {
   console.log('[PublicCourseDisplay] Component initializing...');
@@ -31,6 +154,8 @@ const PublicCourseDisplay = () => {
   const [unlockedModuleName, setUnlockedModuleName] = useState('');
   const [activeTab, setActiveTab] = useState('content');
   const [isReading, setIsReading] = useState(false);
+  const [imageData, setImageData] = useState(null);
+  const [imageLoading, setImageLoading] = useState(false);
 
   // Guard clause to ensure all dependencies are available
   console.log('[PublicCourseDisplay] Checking dependencies...');
@@ -336,6 +461,42 @@ const PublicCourseDisplay = () => {
   const currentLessonIndex = currentModule?.lessons.findIndex(l => l.id === activeLessonId) ?? 0;
   const totalLessonsInModule = currentModule?.lessons?.length ?? 0;
 
+  // Extract and process flashcard data
+  const flashcardData = useMemo(() => {
+    // Check multiple possible locations for flashcard data
+    const flashcards = currentLesson?.flashcards || 
+                      currentLesson?.content?.flashcards || 
+                      currentLesson?.cards ||
+                      currentLesson?.studyCards;
+    
+    return flashcards;
+  }, [currentLesson]);
+
+  // Process lesson content
+  const processedContent = useMemo(() => {
+    if (!currentLesson?.content) return '';
+    return cleanAndCombineContent(currentLesson.content);
+  }, [currentLesson?.content]);
+
+  // Handle image display
+  useEffect(() => {
+    if (currentLesson?.image && (currentLesson.image.imageUrl || currentLesson.image.url)) {
+      const imageUrl = currentLesson.image.imageUrl || currentLesson.image.url;
+      const imageTitle = currentLesson.image.imageTitle || currentLesson.image.title;
+      
+      setImageData({
+        url: imageUrl,
+        title: imageTitle,
+        pageURL: currentLesson.image.pageURL,
+        attribution: currentLesson.image.attribution,
+      });
+      setImageLoading(false);
+    } else {
+      setImageData(null);
+      setImageLoading(false);
+    }
+  }, [currentLesson?.image]);
+
   // Handle module ID updates
   useEffect(() => {
     if (!currentModule && activeLessonId && course?.modules) {
@@ -464,7 +625,7 @@ const PublicCourseDisplay = () => {
                       >
                         Content
                       </button>
-                      {currentLesson.flashcards && currentLesson.flashcards.length > 0 && (
+                      {flashcardData && flashcardData.length > 0 && (
                         <button
                           onClick={() => setActiveTab('flashcards')}
                           className={`py-4 px-1 border-b-2 font-medium text-sm ${
@@ -486,7 +647,7 @@ const PublicCourseDisplay = () => {
                         <div className="flex justify-between items-center mb-6">
                           <h2 className="text-3xl font-bold text-gray-900">{currentLesson.title}</h2>
                           <button
-                            onClick={() => handleReadAloud(currentLesson.content)}
+                            onClick={() => handleReadAloud(processedContent)}
                             className={`px-4 py-2 rounded-md text-white font-medium ${
                               isReading ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
                             }`}
@@ -494,9 +655,59 @@ const PublicCourseDisplay = () => {
                             {isReading ? 'Stop Reading' : 'Read Aloud'}
                           </button>
                         </div>
+                        
+                        {/* Image Display */}
+                        {imageLoading && (
+                          <div className="lesson-image-container loading mb-6" style={{ 
+                            minHeight: '300px', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center',
+                            backgroundColor: '#f3f4f6',
+                            borderRadius: '8px'
+                          }}>
+                            <div className="image-loading">Loading image...</div>
+                          </div>
+                        )}
+                        {imageData && imageData.url && !imageLoading && (
+                          <figure className="lesson-image-container mb-6" style={{ 
+                            maxWidth: 700, 
+                            margin: '0 auto',
+                            minHeight: '300px',
+                            position: 'relative'
+                          }}>
+                            <Image
+                              src={imageData.url}
+                              alt={currentLesson?.title || 'Lesson illustration'}
+                              className="lesson-image"
+                              style={{ width: '100%', height: 'auto' }}
+                              priority={true}
+                              preload={true}
+                              lazy={false}
+                            />
+                            <figcaption className="image-description" style={{ 
+                              textAlign: 'center', 
+                              marginTop: '8px', 
+                              fontSize: '14px', 
+                              color: '#000',
+                              fontStyle: 'italic'
+                            }}>
+                              {imageData.title || ''}
+                              {imageData?.pageURL ? (
+                                <>
+                                  <span style={{ margin: '0 6px' }}>·</span>
+                                  <a href={imageData.pageURL} target="_blank" rel="noopener noreferrer" style={{ color: '#2563eb', fontStyle: 'normal' }}>
+                                    Source
+                                  </a>
+                                </>
+                              ) : null}
+                            </figcaption>
+                          </figure>
+                        )}
+                        
                         <div 
                           className="prose prose-lg max-w-none lesson-content-text"
-                          dangerouslySetInnerHTML={{ __html: currentLesson.content }}
+                          dangerouslySetInnerHTML={{ __html: processedContent }}
                           style={{
                             lineHeight: '1.8',
                             color: '#374151',
@@ -506,17 +717,10 @@ const PublicCourseDisplay = () => {
                       </div>
                     )}
 
-                    {activeTab === 'flashcards' && currentLesson.flashcards && (
+                    {activeTab === 'flashcards' && (
                       <div>
                         <h2 className="text-2xl font-bold text-gray-900 mb-6">Flashcards</h2>
-                        <div className="space-y-4">
-                          {currentLesson.flashcards.map((flashcard, index) => (
-                            <div key={index} className="bg-gray-50 p-4 rounded-lg">
-                              <div className="font-medium text-gray-900 mb-2">{flashcard.question}</div>
-                              <div className="text-gray-700">{flashcard.answer}</div>
-                            </div>
-                          ))}
-                        </div>
+                        <FlashcardRenderer flashcards={flashcardData} />
                       </div>
                     )}
                   </div>
