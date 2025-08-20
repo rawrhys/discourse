@@ -289,29 +289,11 @@ const Dashboard = () => {
           }, 2000);
         } else {
           logger.info('✅ [DASHBOARD] Course deletion verified - course no longer exists on server');
-          
-          // Also fetch fresh course list to update the UI
-          try {
-            const freshCourses = await api.getSavedCourses();
-            if (Array.isArray(freshCourses)) {
-              setSavedCourses(freshCourses);
-              logger.info(`✅ [DASHBOARD] Updated course list with ${freshCourses.length} courses`);
-            }
-          } catch (fetchError) {
-            logger.warn('⚠️ [DASHBOARD] Failed to fetch fresh course list, but deletion was verified');
-          }
+          // Course is already removed from local state, no need to fetch fresh list
         }
       } catch (verificationError) {
         logger.error('❌ [DASHBOARD] Failed to verify course deletion:', verificationError);
-        // On verification error, fetch fresh course list as fallback
-        try {
-          const freshCourses = await api.getSavedCourses();
-          if (Array.isArray(freshCourses)) {
-            setSavedCourses(freshCourses);
-          }
-        } catch (fetchError) {
-          logger.error('❌ [DASHBOARD] Failed to fetch fresh course list as fallback:', fetchError);
-        }
+        // Course is already removed from local state, keep it that way
       }
       
       // Hide success message after a delay
@@ -329,10 +311,9 @@ const Dashboard = () => {
       if (error.message && !error.message.includes('Course not found')) {
         setError(error.message || 'Failed to delete course');
       } else {
-        // If it's a "Course not found" error, refresh the course list
+        // If it's a "Course not found" error, course is already gone
         setError(null);
-        logger.info('🔄 [DASHBOARD] Course not found - refreshing course list...');
-        fetchSavedCourses();
+        logger.info('🔄 [DASHBOARD] Course not found - course already deleted');
       }
     }
   }, [api, fetchSavedCourses]);
