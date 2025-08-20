@@ -1699,48 +1699,56 @@ Context: "${context.substring(0, 1000)}..."`;
         Promise.all(searchPromises),
         timeoutPromise
       ]);
+      
+      // Check if the selected image is already being used
+      let selectedImage = null;
+      if (wiki && pixa) {
+        selectedImage = (Number(pixa.score || 0) > Number(wiki.score || 0)) ? pixa : wiki;
+      } else {
+        selectedImage = wiki || pixa;
+      }
+      
+      // If the selected image is already being used, try to find an alternative
+      if (selectedImage && usedImageUrls.length > 0) {
+        const normalizedSelectedUrl = normalizeUrlForCompare(selectedImage.imageUrl);
+        const isAlreadyUsed = usedImageUrls.some(url => normalizeUrlForCompare(url) === normalizedSelectedUrl);
+        
+        if (isAlreadyUsed) {
+          console.log(`[AIService] Selected image is already used, trying alternative for "${subject}"`);
+          
+          // Try the other service if available
+          if (wiki && pixa && selectedImage === wiki) {
+            selectedImage = pixa;
+          } else if (wiki && pixa && selectedImage === pixa) {
+            selectedImage = wiki;
+          }
+          
+          // If still the same, try with more relaxed search
+          if (selectedImage && !options.relaxed) {
+            console.log(`[AIService] Trying relaxed search for alternative image for "${subject}"`);
+            const relaxedResult = await this.fetchRelevantImage(subject, content, usedImageTitles, usedImageUrls, { relaxed: true }, courseContext);
+            if (relaxedResult) {
+              selectedImage = relaxedResult;
+            }
+          }
+        }
+      }
     
     // Check if this is historical/educational content
     const isHistoricalContent = /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(subject) || 
                                /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(content);
     
-    // More balanced scoring between providers
-    if (wiki && pixa) {
-      const wikiScore = Number(wiki.score || 0);
-      const pixaScore = Number(pixa.score || 0);
-      
-      if (isHistoricalContent) {
-        // For historical content, use a more balanced threshold (5+ points instead of 15+)
-        if (pixaScore > wikiScore + 5) {
-          console.log(`[AIService] Selected Pixabay image (score ${pixaScore}) over Wikipedia (score ${wikiScore}) for historical content - balanced scoring`);
-          return pixa;
-        } else {
-          console.log(`[AIService] Selected Wikipedia image (score ${wikiScore}) over Pixabay (score ${pixaScore}) for historical content - balanced scoring`);
-          return wiki;
-        }
-      } else {
-        // For non-historical content, use an even more balanced threshold (1+ points instead of 2+)
-        if (pixaScore > wikiScore + 1) {
-          console.log(`[AIService] Selected Pixabay image (score ${pixaScore}) over Wikipedia (score ${wikiScore}) due to balanced scoring`);
-          return pixa;
-        } else {
-          console.log(`[AIService] Selected Wikipedia image (score ${wikiScore}) over Pixabay (score ${pixaScore}) - balanced scoring`);
-          return wiki;
-        }
-      }
-    }
+    // Use the selected image (which may have been adjusted for duplicates)
+    let result = selectedImage;
     
-    // If only one service returned results, use that
-    let result = null;
-    if (wiki) {
-      console.log(`[AIService] Using Wikipedia image only (score ${wiki.score || 0})`);
-      result = wiki;
-    } else if (pixa) {
-      console.log(`[AIService] Using Pixabay image only (score ${pixa.score || 0}) - Wikipedia failed`);
-      result = pixa;
+    if (result) {
+      console.log(`[AIService] Final selected image for "${subject}":`, {
+        title: result.imageTitle,
+        score: result.score,
+        source: result.imageUrl.includes('wikimedia') ? 'Wikipedia' : 'Pixabay'
+      });
     } else {
       console.log(`[AIService] No images found from either service`);
-      result = null;
     }
     
     // Cache the result

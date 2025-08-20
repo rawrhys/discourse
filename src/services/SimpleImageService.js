@@ -178,7 +178,7 @@ const SimpleImageService = {
   },
 
   // Enhanced image search with multiple fallbacks
-  async search(lessonTitle, courseId, lessonId) {
+  async search(lessonTitle, courseId, lessonId, usedImageTitles = [], usedImageUrls = []) {
     // Validate inputs
     if (!lessonTitle || !courseId || !lessonId) {
       console.warn('[SimpleImageService] Missing required parameters');
@@ -196,6 +196,10 @@ const SimpleImageService = {
 
     try {
       console.log('[SimpleImageService] Searching for:', lessonTitle);
+      console.log('[SimpleImageService] Excluding used images:', {
+        titles: usedImageTitles.length,
+        urls: usedImageUrls.length
+      });
       
       // Try the main image search API first with enhanced error handling
       const response = await fetch(`${API_BASE_URL}/api/image-search/search`, {
@@ -204,8 +208,8 @@ const SimpleImageService = {
         body: JSON.stringify({
           lessonTitle: lessonTitle.substring(0, 100),
           content: '',
-          usedImageTitles: [],
-          usedImageUrls: [],
+          usedImageTitles: usedImageTitles,
+          usedImageUrls: usedImageUrls,
           courseId,
           lessonId,
           disableModeration: true

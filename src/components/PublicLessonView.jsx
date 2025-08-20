@@ -516,7 +516,9 @@ const PublicLessonView = ({
         const result = await SimpleImageService.search(
           lessonData.title,
           courseId,
-          lessonData.id
+          lessonData.id,
+          Array.from(usedImageTitles),
+          Array.from(usedImageUrls)
         );
         
         // Track image fetch performance

@@ -1275,7 +1275,9 @@ const LessonView = ({
         const result = await SimpleImageService.search(
           propLesson.title,
           courseId,
-          propLesson?.id || lessonId
+          propLesson?.id || lessonId,
+          Array.from(localUsedImageTitles),
+          Array.from(localUsedImageUrls)
         );
         
         // Track image fetch performance
