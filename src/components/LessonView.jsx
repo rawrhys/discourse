@@ -259,59 +259,6 @@ const Content = memo(({ content, bibliography, lessonTitle, courseSubject }) => 
     );
   }
 
-  // Generate academic references using the same service as PublicLessonView
-  const [highlightedCitation, setHighlightedCitation] = useState(null);
-  
-  // Memoize academic references to prevent regeneration on every render
-  const academicReferences = useMemo(() => {
-    if (!content || !lessonTitle || !courseSubject) return [];
-    
-    try {
-      const lessonContentString = getContentAsString(content);
-      
-      // Only generate if content is substantial
-      if (lessonContentString.length < 100) return [];
-      
-      console.log('[LessonView] Generating academic references for:', {
-        lessonTitle,
-        courseSubject,
-        contentLength: lessonContentString?.length || 0
-      });
-      
-      // Generate academic references using the same method as PublicLessonView
-      const references = academicReferencesService.generateReferences(
-        lessonContentString,
-        courseSubject,
-        lessonTitle
-      );
-      
-      console.log('[LessonView] Academic references generated:', {
-        referencesCount: references.length,
-        references: references,
-        lessonContentStringLength: lessonContentString?.length || 0,
-        courseSubject,
-        lessonTitle
-      });
-      
-      return references;
-    } catch (error) {
-      console.error('[LessonView] Error generating academic references:', error);
-      return [];
-    }
-  }, [content, lessonTitle, courseSubject]);
-
-  // Handle citation click
-  const handleCitationClick = useCallback((referenceId) => {
-    setHighlightedCitation(referenceId);
-    
-    // Remove highlight after 3 seconds
-    setTimeout(() => {
-      setHighlightedCitation(null);
-    }, 3000);
-    
-    console.log('[LessonView] Citation clicked:', referenceId);
-  }, []);
-
   // Remove in-text citations first, then apply markdown fix
   let fixedContent = markdownService.removeInTextCitations(contentStr);
   
@@ -337,34 +284,6 @@ const Content = memo(({ content, bibliography, lessonTitle, courseSubject }) => 
       references: references,
       contentWithoutRefsLength: contentWithoutRefs?.length || 0,
       parsedContentLength: parsedContent?.length || 0
-    });
-  }
-
-  // Use academic references instead of old bibliography processing
-
-  // Create academic references footer using the same method as PublicLessonView
-  let referencesFooter = null;
-  try {
-    if (academicReferences && academicReferences.length > 0) {
-      referencesFooter = academicReferencesService.createReferencesFooter(academicReferences);
-      console.log('[LessonView] Created references footer:', referencesFooter);
-    } else {
-      console.log('[LessonView] No academic references available:', academicReferences);
-    }
-  } catch (error) {
-    console.warn('[LessonView] Error creating references footer:', error);
-    referencesFooter = null;
-  }
-
-  // Debug logging for markdown processing
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[LessonView] Content processing:', {
-      original: contentStr?.substring(0, 200) + '...',
-      fixed: fixedContent?.substring(0, 200) + '...',
-      hasAsterisks: contentStr?.includes('**'),
-      hasFixedAsterisks: fixedContent?.includes('**'),
-      bibliographyCount: finalBibliography?.length || 0,
-      referencesCount: references?.length || 0
     });
   }
 
@@ -533,6 +452,9 @@ const LessonView = ({
   const [localUsedImageTitles, setLocalUsedImageTitles] = useState(new Set(usedImageTitles));
   const [localUsedImageUrls, setLocalUsedImageUrls] = useState(new Set(usedImageUrls));
   
+  // Academic references state
+  const [highlightedCitation, setHighlightedCitation] = useState(null);
+  
   // Use the lesson prop as the main lesson data
   const propLesson = lesson;
   
@@ -553,6 +475,73 @@ const LessonView = ({
       );
     }
   );
+
+  // Generate academic references using the same service as PublicLessonView
+  const academicReferences = useMemo(() => {
+    if (!propLesson?.content || !propLesson?.title || !subject) return [];
+    
+    try {
+      const lessonContentString = getContentAsString(propLesson.content);
+      
+      // Only generate if content is substantial
+      if (lessonContentString.length < 100) return [];
+      
+      console.log('[LessonView] Generating academic references for:', {
+        lessonTitle: propLesson.title,
+        courseSubject: subject,
+        contentLength: lessonContentString?.length || 0
+      });
+      
+      // Generate academic references using the same method as PublicLessonView
+      const references = academicReferencesService.generateReferences(
+        lessonContentString,
+        subject,
+        propLesson.title
+      );
+      
+      console.log('[LessonView] Academic references generated:', {
+        referencesCount: references.length,
+        references: references,
+        lessonContentStringLength: lessonContentString?.length || 0,
+        courseSubject: subject,
+        lessonTitle: propLesson.title
+      });
+      
+      return references;
+    } catch (error) {
+      console.error('[LessonView] Error generating academic references:', error);
+      return [];
+    }
+  }, [propLesson?.content, propLesson?.title, subject]);
+
+  // Handle citation click
+  const handleCitationClick = useCallback((referenceId) => {
+    setHighlightedCitation(referenceId);
+    
+    // Remove highlight after 3 seconds
+    setTimeout(() => {
+      setHighlightedCitation(null);
+    }, 3000);
+    
+    console.log('[LessonView] Citation clicked:', referenceId);
+  }, []);
+
+  // Create academic references footer using the same method as PublicLessonView
+  const referencesFooter = useMemo(() => {
+    try {
+      if (academicReferences && academicReferences.length > 0) {
+        const footer = academicReferencesService.createReferencesFooter(academicReferences);
+        console.log('[LessonView] Created references footer:', footer);
+        return footer;
+      } else {
+        console.log('[LessonView] No academic references available:', academicReferences);
+        return null;
+      }
+    } catch (error) {
+      console.warn('[LessonView] Error creating references footer:', error);
+      return null;
+    }
+  }, [academicReferences]);
 
   // Use throttled logger for performance monitoring
   const throttledLog = useThrottledLogger('LessonView', 3);
