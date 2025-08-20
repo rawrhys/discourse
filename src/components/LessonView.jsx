@@ -114,8 +114,19 @@ const extractReferences = (content) => {
     }
   });
   
-  // Remove the References section from the content
-  const contentWithoutRefs = content.replace(/## References\s*[\s\S]*?(?=\n## |\n# |$)/i, '').trim();
+  // Remove ALL References sections from the content (more comprehensive)
+  let contentWithoutRefs = content
+    // Remove ## References sections
+    .replace(/## References\s*[\s\S]*?(?=\n## |\n# |$)/gi, '')
+    // Remove # References sections
+    .replace(/# References\s*[\s\S]*?(?=\n## |\n# |$)/gi, '')
+    // Remove References sections without headers
+    .replace(/\nReferences\s*[\s\S]*?(?=\n## |\n# |$)/gi, '')
+    // Remove any remaining reference-like patterns
+    .replace(/\n\[(\d+)\]\s*[^.\n]*\.\s*[^.\n]*\.\s*[^.\n]*\./gi, '')
+    // Clean up multiple line breaks that might be left
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
   
   return { contentWithoutRefs, references };
 };
@@ -270,7 +281,19 @@ const Content = memo(({ content, bibliography, lessonTitle, courseSubject }) => 
   // Frontend-level fix for malformed References sections
   fixedContent = fixMalformedReferencesAtFrontend(fixedContent);
 
-  // Extract references from the content
+  // Comprehensive cleanup: Remove ALL reference sections before processing
+  fixedContent = fixedContent
+    // Remove any References sections with various patterns
+    .replace(/## References[\s\S]*?(?=\n## |\n# |$)/gi, '')
+    .replace(/# References[\s\S]*?(?=\n## |\n# |$)/gi, '')
+    .replace(/\nReferences[\s\S]*?(?=\n## |\n# |$)/gi, '')
+    // Remove standalone reference citations
+    .replace(/\n\[(\d+)\]\s*[^.\n]*\.\s*[^.\n]*\.\s*[^.\n]*\./gi, '')
+    // Clean up extra whitespace
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  // Extract references from the content (this should now return empty references)
   const { contentWithoutRefs, references } = extractReferences(fixedContent);
 
   // Apply markdown parsing to content without references
@@ -279,12 +302,20 @@ const Content = memo(({ content, bibliography, lessonTitle, courseSubject }) => 
   // Debug logging for references processing
   if (process.env.NODE_ENV === 'development') {
     console.log('[LessonView] References processing:', {
-      hasReferences: contentStr?.includes('## References'),
+      hasReferences: contentStr?.includes('## References') || contentStr?.includes('References'),
       referencesCount: references?.length || 0,
       references: references,
       contentWithoutRefsLength: contentWithoutRefs?.length || 0,
-      parsedContentLength: parsedContent?.length || 0
+      parsedContentLength: parsedContent?.length || 0,
+      contentStrLength: contentStr?.length || 0,
+      fixedContentLength: fixedContent?.length || 0
     });
+    
+    // Additional debug: Check if any reference patterns remain
+    if (contentStr) {
+      const hasRefPatterns = /## References|# References|\nReferences|\[(\d+)\]\s*[^.\n]*\.\s*[^.\n]*\.\s*[^.\n]*\./gi.test(contentStr);
+      console.log('[LessonView] Reference patterns detected in original content:', hasRefPatterns);
+    }
   }
 
   // Add image error handling after content is rendered

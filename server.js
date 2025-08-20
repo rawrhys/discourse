@@ -235,11 +235,17 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
     if (isHistoricalContent) {
       const irrelevantObjects = [
         'dinosaur', 'toy', 'bellflower', 'crocus', 'flower', 'bud', 'sprout', 'bloom', 'petal',
-        'bench', 'chair', 'table', 'furniture', 'modern', 'contemporary', 'office', 'kitchen', 
-        'bathroom', 'bedroom', 'living room', 'garden', 'tree', 'plant', 'animal', 'pet', 
+        'bench', 'chair', 'table', 'furniture', 'office', 'kitchen', 
+        'bathroom', 'bedroom', 'living room', 'garden', 'tree', 'plant', 'pet', 
         'car', 'vehicle', 'building', 'house', 'apartment', 'dawn', 'ocean', 'nature', 'sky', 
         'sunrise', 'sunset', 'landscape', 'early morning', 'boating', 'intercoastal', 'marsh'
       ];
+      
+      // For art history courses, be more lenient with certain terms
+      const isArtHistoryCourse = courseTitle.toLowerCase().includes('art history') || 
+                                courseTitle.toLowerCase().includes('art') ||
+                                courseSubject.toLowerCase().includes('art history') || 
+                                courseSubject.toLowerCase().includes('art');
       
       // Cultural mismatch penalties - heavy penalties for wrong civilizations
       const culturalMismatches = {
@@ -263,8 +269,24 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
       
       for (const obj of irrelevantObjects) {
         if (haystack.includes(obj)) {
-          score -= 500; // Much heavier penalty for irrelevant objects in historical content
-          console.log(`[ImageScoring] Heavy penalty for irrelevant object "${obj}" in historical content`);
+          // For art history courses, be more lenient with certain terms that might be art-related
+          if (isArtHistoryCourse && (obj === 'modern' || obj === 'contemporary' || obj === 'animal')) {
+            // Check if the term is used in an art context
+            const artContextTerms = ['art', 'painting', 'sculpture', 'drawing', 'artist', 'artwork', 'gallery', 'museum', 'exhibition', 'masterpiece', 'canvas', 'oil', 'watercolor', 'acrylic', 'fresco', 'mosaic', 'relief', 'statue', 'bust', 'portrait', 'landscape', 'still life', 'abstract', 'realistic', 'impressionist', 'classical', 'renaissance', 'baroque', 'romantic', 'neoclassical', 'medieval', 'ancient', 'prehistoric', 'cave', 'temple', 'architecture', 'design', 'composition', 'color', 'form', 'line', 'texture', 'perspective', 'lighting', 'shadow', 'brush', 'palette', 'easel', 'studio'];
+            const hasArtContext = artContextTerms.some(term => haystack.includes(term));
+            
+            if (hasArtContext) {
+              // If it's used in an art context, don't penalize
+              console.log(`[ImageScoring] No penalty for "${obj}" in art context: ${haystack.substring(0, 100)}`);
+            } else {
+              // Light penalty for non-art context
+              score -= 50;
+              console.log(`[ImageScoring] Light penalty for "${obj}" in non-art context: ${haystack.substring(0, 100)}`);
+            }
+          } else {
+            score -= 500; // Much heavier penalty for irrelevant objects in historical content
+            console.log(`[ImageScoring] Heavy penalty for irrelevant object "${obj}" in historical content`);
+          }
         }
       }
     }
@@ -322,35 +344,49 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
       // Check for cultural relevance based on course topic
       let hasCulturalMatch = false;
       let culturalBonus = 0;
+      let isSpecificCulturalCourse = false;
       
       if (courseTopic.toLowerCase().includes('egypt')) {
+        isSpecificCulturalCourse = true;
         const egyptianTerms = ['egypt', 'egyptian', 'pharaoh', 'pyramid', 'nile', 'dynasty', 'kingdom', 'ancient egypt', 'egyptian civilization', 'egyptian empire', 'egyptian kingdom', 'egyptian dynasty', 'egyptian pharaoh', 'egyptian pyramid', 'egyptian temple', 'egyptian tomb', 'egyptian artifact', 'egyptian hieroglyph', 'egyptian mummy', 'egyptian sphinx', 'egyptian obelisk', 'egyptian papyrus', 'egyptian scroll', 'egyptian statue', 'egyptian relief', 'egyptian painting', 'egyptian architecture', 'egyptian burial', 'egyptian religion', 'egyptian god', 'egyptian goddess', 'egyptian mythology'];
         hasCulturalMatch = egyptianTerms.some(term => haystack.includes(term));
         if (hasCulturalMatch) {
           culturalBonus = 100; // Heavy bonus for Egyptian content in Egyptian course
         }
       } else if (courseTopic.toLowerCase().includes('rome')) {
+        isSpecificCulturalCourse = true;
         const romanTerms = ['rome', 'roman', 'roman empire', 'roman republic', 'roman civilization', 'roman architecture', 'roman temple', 'roman forum', 'roman colosseum', 'roman aqueduct', 'roman road', 'roman legion', 'roman emperor', 'roman senate', 'roman law', 'roman art', 'roman sculpture', 'roman mosaic', 'roman fresco', 'roman bath', 'roman villa', 'roman city', 'roman province', 'roman conquest', 'roman military', 'roman government'];
         hasCulturalMatch = romanTerms.some(term => haystack.includes(term));
         if (hasCulturalMatch) {
           culturalBonus = 100; // Heavy bonus for Roman content in Roman course
         }
       } else if (courseTopic.toLowerCase().includes('greek')) {
+        isSpecificCulturalCourse = true;
         const greekTerms = ['greek', 'greece', 'greek civilization', 'greek empire', 'greek city-state', 'greek temple', 'greek architecture', 'greek art', 'greek sculpture', 'greek pottery', 'greek mythology', 'greek god', 'greek goddess', 'greek philosophy', 'greek democracy', 'greek theater', 'greek olympics', 'greek warfare', 'greek colony', 'greek trade', 'greek culture', 'greek history', 'greek classical', 'greek hellenistic'];
         hasCulturalMatch = greekTerms.some(term => haystack.includes(term));
         if (hasCulturalMatch) {
           culturalBonus = 100; // Heavy bonus for Greek content in Greek course
         }
+      } else if (courseTopic.toLowerCase().includes('art history') || courseTopic.toLowerCase().includes('art')) {
+        // For art history courses, accept any art-related content
+        const artTerms = ['art', 'painting', 'sculpture', 'drawing', 'artwork', 'artist', 'artistic', 'gallery', 'museum', 'canvas', 'oil', 'watercolor', 'acrylic', 'fresco', 'mosaic', 'relief', 'statue', 'bust', 'portrait', 'landscape', 'still life', 'abstract', 'realistic', 'impressionist', 'modern', 'classical', 'renaissance', 'baroque', 'romantic', 'neoclassical', 'medieval', 'ancient', 'prehistoric', 'cave', 'temple', 'architecture', 'design', 'composition', 'color', 'form', 'line', 'texture', 'perspective', 'lighting', 'shadow', 'brush', 'palette', 'easel', 'studio', 'exhibition', 'masterpiece', 'masterwork', 'iconic', 'famous', 'renowned', 'celebrated', 'influential', 'pioneering', 'revolutionary', 'innovative', 'traditional', 'contemporary', 'classical', 'antique', 'vintage', 'heritage', 'cultural', 'historical', 'archaeological', 'anthropological', 'ethnographic', 'decorative', 'ornamental', 'ceremonial', 'ritual', 'religious', 'sacred', 'secular', 'profane', 'domestic', 'public', 'private', 'monumental', 'intimate', 'grand', 'delicate', 'bold', 'subtle', 'dramatic', 'peaceful', 'dynamic', 'static', 'flowing', 'rigid', 'organic', 'geometric', 'naturalistic', 'stylized', 'symbolic', 'narrative', 'allegorical', 'mythological', 'biblical', 'historical', 'portrait', 'landscape', 'genre', 'still life', 'abstract', 'non-objective', 'figurative', 'non-figurative'];
+        hasCulturalMatch = artTerms.some(term => haystack.includes(term));
+        if (hasCulturalMatch) {
+          culturalBonus = 50; // Bonus for art-related content in art history course
+        }
       }
       
-      // Apply cultural bonus or penalty
+      // Apply cultural bonus or penalty only for specific cultural courses
       if (hasCulturalMatch) {
         score += culturalBonus;
         console.log(`[ImageScoring] Cultural match bonus: +${culturalBonus} for ${courseTopic}`);
-      } else {
-        // Heavy penalty for cultural mismatch
+      } else if (isSpecificCulturalCourse) {
+        // Only apply penalty for specific cultural courses that don't match
         score -= 200;
         console.log(`[ImageScoring] Cultural mismatch penalty: -200 for ${courseTopic}`);
+      } else {
+        // For general courses (like art history), no penalty for cultural mismatch
+        console.log(`[ImageScoring] No cultural penalty for general course: ${courseTopic}`);
       }
     }
 
@@ -5578,12 +5614,40 @@ app.delete('/api/courses/:courseId', authenticateToken, async (req, res) => {
       course = db.data.courses.find(c => String(c.id || '').replace(/_[0-9]{10,}$/, '') === normalizedCourseId);
     }
 
+    // If course is not found in database, it might have been already deleted
+    // or there's a caching issue. Return success to clear client cache.
     if (!course) {
-      console.log(`[API] Delete failed, course not found:`, {
+      console.log(`[API] Course not found in database (may be already deleted):`, {
         requestedId: courseId,
         availableIds: db.data.courses.map(c => c.id)
       });
-      return res.status(404).json({ error: 'Course not found' });
+      
+      // Clear any cached data for this course
+      if (global.aiService && global.aiService.clearCache) {
+        try {
+          // Clear image search cache for this course
+          const cacheKeysToClear = [
+            `image_search_${courseId}_strict`,
+            `image_search_${courseId}_relaxed`,
+            `course_context_${courseId}`
+          ];
+          
+          for (const cacheKey of cacheKeysToClear) {
+            global.aiService.clearCache(cacheKey);
+          }
+          
+          console.log(`[API] Cleared cache for course: ${courseId}`);
+        } catch (cacheError) {
+          console.warn(`[API] Failed to clear cache for course ${courseId}:`, cacheError.message);
+        }
+      }
+      
+      // Return success to force client to refresh
+      return res.json({ 
+        success: true, 
+        message: 'Course not found in database (may be already deleted). Cache cleared.',
+        cacheCleared: true
+      });
     }
 
     if (course.userId !== userId) {
@@ -5593,6 +5657,26 @@ app.delete('/api/courses/:courseId', authenticateToken, async (req, res) => {
     // Remove course from database
     db.data.courses = db.data.courses.filter(c => c !== course);
     await db.write();
+
+    // Clear any cached data for this course
+    if (global.aiService && global.aiService.clearCache) {
+      try {
+        // Clear image search cache for this course
+        const cacheKeysToClear = [
+          `image_search_${course.id}_strict`,
+          `image_search_${course.id}_relaxed`,
+          `course_context_${course.id}`
+        ];
+        
+        for (const cacheKey of cacheKeysToClear) {
+          global.aiService.clearCache(cacheKey);
+        }
+        
+        console.log(`[API] Cleared cache for course: ${course.id}`);
+      } catch (cacheError) {
+        console.warn(`[API] Failed to clear cache for course ${course.id}:`, cacheError.message);
+      }
+    }
 
     // Delete course file from file system
     try {
@@ -5612,10 +5696,66 @@ app.delete('/api/courses/:courseId', authenticateToken, async (req, res) => {
     }
 
     console.log(`[API] Course deleted successfully: ${course.title} (${course.id})`);
-    res.json({ success: true, message: 'Course deleted successfully' });
+    res.json({ 
+      success: true, 
+      message: 'Course deleted successfully',
+      courseId: course.id,
+      cacheCleared: true
+    });
   } catch (error) {
     console.error('[API] Failed to delete course:', error);
     res.status(500).json({ error: 'Failed to delete course' });
+  }
+});
+
+// Cache clearing endpoint for admin use
+app.post('/api/admin/clear-cache', authenticateToken, async (req, res) => {
+  try {
+    const user = req.user;
+    
+    // Check if user is admin
+    if (user.email !== 'rhys.higgs@outlook.com') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    const { courseId, cacheType } = req.body;
+    
+    if (global.aiService && global.aiService.clearCache) {
+      let clearedCount = 0;
+      
+      if (courseId) {
+        // Clear cache for specific course
+        const cacheKeysToClear = [
+          `image_search_${courseId}_strict`,
+          `image_search_${courseId}_relaxed`,
+          `course_context_${courseId}`
+        ];
+        
+        for (const cacheKey of cacheKeysToClear) {
+          global.aiService.clearCache(cacheKey);
+          clearedCount++;
+        }
+        
+        console.log(`[ADMIN] Cleared ${clearedCount} cache entries for course: ${courseId}`);
+      } else if (cacheType === 'all') {
+        // Clear all cache
+        if (global.aiService.clearAllCache) {
+          global.aiService.clearAllCache();
+          console.log(`[ADMIN] Cleared all cache`);
+        }
+      }
+      
+      res.json({ 
+        success: true, 
+        message: `Cache cleared successfully. Cleared ${clearedCount} entries.`,
+        clearedCount
+      });
+    } else {
+      res.status(500).json({ error: 'Cache service not available' });
+    }
+  } catch (error) {
+    console.error('[ADMIN] Failed to clear cache:', error);
+    res.status(500).json({ error: 'Failed to clear cache' });
   }
 });
 

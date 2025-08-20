@@ -240,6 +240,31 @@ const Dashboard = () => {
       // Clear the course to delete state immediately
       setCourseToDelete(null);
       
+      // Clear browser cache and localStorage for this course
+      try {
+        // Clear localStorage cache for this course
+        const courseCacheKeys = Object.keys(localStorage).filter(key => 
+          key.includes(courseId) || key.includes('course') || key.includes('lesson')
+        );
+        courseCacheKeys.forEach(key => {
+          localStorage.removeItem(key);
+          logger.debug(`🗑️ [DASHBOARD] Cleared localStorage key: ${key}`);
+        });
+        
+        // Clear sessionStorage cache
+        const sessionCacheKeys = Object.keys(sessionStorage).filter(key => 
+          key.includes(courseId) || key.includes('course') || key.includes('lesson')
+        );
+        sessionCacheKeys.forEach(key => {
+          sessionStorage.removeItem(key);
+          logger.debug(`🗑️ [DASHBOARD] Cleared sessionStorage key: ${key}`);
+        });
+        
+        logger.info(`🗑️ [DASHBOARD] Cleared ${courseCacheKeys.length + sessionCacheKeys.length} cache entries`);
+      } catch (cacheError) {
+        logger.warn('⚠️ [DASHBOARD] Failed to clear browser cache:', cacheError.message);
+      }
+      
       // Show success message before reload
       setSuccessMessage('Course deleted successfully! Refreshing dashboard...');
       setShowSuccessToast(true);
@@ -248,7 +273,9 @@ const Dashboard = () => {
       setTimeout(() => {
         logger.info('🔄 [DASHBOARD] Reloading page after course deletion');
         setShowSuccessToast(false); // Hide toast before reload
-        window.location.reload();
+        
+        // Force a hard refresh to clear all caches
+        window.location.href = window.location.href + '?t=' + Date.now();
       }, 1500); // Give user time to see success message
       
     } catch (error) {
@@ -268,7 +295,9 @@ const Dashboard = () => {
       // Force a full page reload to ensure UI is in sync with backend state
       setTimeout(() => {
         logger.info('🔄 [DASHBOARD] Reloading page after deletion error');
-        window.location.reload();
+        
+        // Force a hard refresh to clear all caches
+        window.location.href = window.location.href + '?t=' + Date.now();
       }, 1000);
     }
   }, [api, fetchSavedCourses]);
@@ -313,6 +342,26 @@ const Dashboard = () => {
         clearTimeout(window.courseGenerationTimeout);
       }
     };
+  }, []);
+
+  // Effect to clear stale cache on dashboard load
+  useEffect(() => {
+    // Clear any stale course cache on dashboard load
+    try {
+      const staleCacheKeys = Object.keys(localStorage).filter(key => 
+        key.includes('course_') && key.includes('_1755714847591_') // Clear the problematic course cache
+      );
+      
+      if (staleCacheKeys.length > 0) {
+        staleCacheKeys.forEach(key => {
+          localStorage.removeItem(key);
+          logger.debug(`🗑️ [DASHBOARD] Cleared stale cache key: ${key}`);
+        });
+        logger.info(`🗑️ [DASHBOARD] Cleared ${staleCacheKeys.length} stale cache entries on load`);
+      }
+    } catch (cacheError) {
+      logger.warn('⚠️ [DASHBOARD] Failed to clear stale cache on load:', cacheError.message);
+    }
   }, []);
 
   // Effect to handle generation state changes

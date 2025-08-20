@@ -190,6 +190,17 @@ const api = {
     deleteCourse: (courseId) =>
         apiClient(`/api/courses/${courseId}`, { method: 'DELETE' }),
 
+    clearCache: (courseId = null, cacheType = null) => {
+        const body = {};
+        if (courseId) body.courseId = courseId;
+        if (cacheType) body.cacheType = cacheType;
+        
+        return apiClient('/api/admin/clear-cache', {
+            method: 'POST',
+            body: JSON.stringify(body),
+        });
+    },
+
     publishCourse: (courseId) =>
         apiClient(`/api/courses/${courseId}/publish`, { method: 'POST' }),
 
