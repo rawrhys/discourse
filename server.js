@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import axios from 'axios';
 import dotenv from 'dotenv';
+import jwt from 'jsonwebtoken';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
@@ -52,6 +53,10 @@ global.imageSearchCache = new Map();
 // Initialize global image cache for better performance
 global.imageCache = new Map();
 global.imageCacheTimeout = 30 * 60 * 1000; // 30 minutes
+
+// Initialize global SSE connections for real-time updates
+global.sseConnections = new Map();
+global.generationSessions = new Map();
 
 // Clean up old cache entries every 5 minutes
 setInterval(() => {
@@ -3807,6 +3812,15 @@ app.post('/api/courses/generate', authenticateToken, async (req, res, next) => {
           }
         }
 
+        // Send SSE notification to client about new course
+        sendCourseGenerationNotification(user.id, {
+          type: 'course_generated',
+          courseId: course.id,
+          courseTitle: course.title,
+          modulesCount: course.modules.length,
+          timestamp: new Date().toISOString()
+        });
+
         // Return the generated course
         res.json({
           success: true,
@@ -3845,6 +3859,61 @@ function sendProgressUpdate(userId, progressData) {
     res.write(`data: ${JSON.stringify(progressData)}\n\n`);
   }
 }
+
+// Helper function to send course generation notifications via SSE
+function sendCourseGenerationNotification(userId, notificationData) {
+  if (global.sseConnections && global.sseConnections.has(userId)) {
+    const res = global.sseConnections.get(userId);
+    res.write(`data: ${JSON.stringify(notificationData)}\n\n`);
+  }
+}
+
+// SSE endpoint for real-time course generation notifications
+app.get('/api/courses/notifications', (req, res) => {
+  // Handle authentication via query parameter for SSE
+  const token = req.query.token;
+  if (!token) {
+    return res.status(401).json({ error: 'No token provided' });
+  }
+
+  // Verify the token and get user
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.userId;
+    
+    if (!userId) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+  
+  // Set SSE headers
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Cache-Control'
+  });
+
+  // Send initial connection message
+  res.write(`data: ${JSON.stringify({ type: 'connected', userId, timestamp: new Date().toISOString() })}\n\n`);
+
+  // Store the connection
+  global.sseConnections.set(userId, res);
+
+  // Handle client disconnect
+  req.on('close', () => {
+    console.log(`[SSE] Client disconnected: ${userId}`);
+    global.sseConnections.delete(userId);
+  });
+
+  // Handle connection error
+  req.on('error', (error) => {
+    console.error(`[SSE] Connection error for user ${userId}:`, error);
+    global.sseConnections.delete(userId);
+  });
+
+  console.log(`[SSE] Client connected: ${userId}`);
+});
 
 // Endpoint to check generation session status
 app.get('/api/courses/generation-status/:generationId', authenticateToken, async (req, res) => {

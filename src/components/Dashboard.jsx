@@ -8,6 +8,7 @@ import LoadingIndicator from './LoadingIndicator';
 import logger from '../utils/logger';
 import ConfettiAnimation from './ConfettiAnimation';
 import { supabase } from '../config/supabase';
+import courseNotificationService from '../services/CourseNotificationService';
 
 const Dashboard = () => {
   const { user, logout } = useAuth();
@@ -60,6 +61,46 @@ const Dashboard = () => {
       setIsUpdatingCourseState(false);
     };
   }, []);
+
+  // Setup SSE connection for course generation notifications
+  useEffect(() => {
+    if (user) {
+      // Get the auth token from localStorage or Supabase
+      const token = localStorage.getItem('token') || user.access_token;
+      
+      if (token) {
+        // Connect to SSE notifications
+        courseNotificationService.connect(token);
+        
+        // Add event listener for course generation notifications
+        const handleCourseGenerated = (data) => {
+          logger.info('🎉 [DASHBOARD] Received course generation notification:', data);
+          
+          // Show success message
+          setSuccessMessage(`Course "${data.courseTitle}" generated successfully!`);
+          setShowSuccessToast(true);
+          
+          // Fetch updated course list after a short delay
+          setTimeout(async () => {
+            try {
+              await fetchSavedCourses(true); // Force refresh
+              logger.info('✅ [DASHBOARD] Course list updated after SSE notification');
+            } catch (error) {
+              logger.error('❌ [DASHBOARD] Failed to update course list after SSE notification:', error);
+            }
+          }, 1000);
+        };
+        
+        courseNotificationService.addEventListener('course_generated', handleCourseGenerated);
+        
+        // Cleanup on unmount
+        return () => {
+          courseNotificationService.removeEventListener('course_generated', handleCourseGenerated);
+          courseNotificationService.disconnect();
+        };
+      }
+    }
+  }, [user, fetchSavedCourses]);
 
   
   const fetchSavedCourses = useCallback(async (force = false) => {
@@ -163,23 +204,14 @@ const Dashboard = () => {
       setIsGenerating(false);
       setShowNewCourseForm(false);
       
-      // Show success message
-      setSuccessMessage('Course generated successfully!');
+      // Show success message (SSE will handle the course list update)
+      setSuccessMessage('Course generation completed! Updating course list...');
       setShowSuccessToast(true);
       
-      // Fetch updated course list instead of reloading the page
-      setTimeout(async () => {
-        logger.info('🔄 [COURSE GENERATION] Fetching updated course list');
-        setShowSuccessToast(false); // Hide toast
-        try {
-          await fetchSavedCourses();
-          logger.info('✅ [COURSE GENERATION] Course list updated successfully');
-        } catch (error) {
-          logger.error('❌ [COURSE GENERATION] Failed to fetch updated course list:', error);
-          // Fallback to reload if fetch fails
-          window.location.reload();
-        }
-      }, 1500); // Give user time to see success message
+      // Hide success message after a delay (SSE will handle the actual update)
+      setTimeout(() => {
+        setShowSuccessToast(false);
+      }, 3000);
       
     } catch (error) {
       logger.error('💥 [COURSE GENERATION] Course generation failed:', {
