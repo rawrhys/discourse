@@ -320,35 +320,46 @@ const PublicCourseDisplay = () => {
   }, [course, sessionId, courseId, unlockedModules]);
 
   const handleStartAudio = useCallback(async () => {
+    // Add a small delay to prevent rapid button clicks
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     if (!privateTTSService?.speak) {
       console.warn('[PublicCourseDisplay] TTS service not available');
       return;
     }
     
     try {
-      if (ttsStatus.isPlaying) {
-        if (privateTTSService?.stop) {
-          privateTTSService.stop();
+      // Check if TTS service has been stopped - if so, restart it
+      const serviceStatus = privateTTSService.getStatus();
+      if (serviceStatus.isStopped) {
+        console.log('[PublicCourseDisplay] TTS service was stopped, restarting service...');
+        try {
+          const restartSuccess = await privateTTSService.restart();
+          if (!restartSuccess) {
+            console.error('[PublicCourseDisplay] Failed to restart TTS service');
+            return;
+          }
+          console.log('[PublicCourseDisplay] TTS service restarted successfully');
+        } catch (error) {
+          console.error('[PublicCourseDisplay] Failed to restart TTS service:', error);
+          return;
         }
+      }
+      
+      // Check if TTS is already playing
+      if (ttsStatus.isPlaying) {
+        console.log('[PublicCourseDisplay] TTS already playing, stopping first');
+        privateTTSService.stop();
         setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
         return;
       }
 
+      // Check if TTS is paused and can resume
       if (ttsStatus.isPaused) {
-        if (privateTTSService?.resume) {
-          privateTTSService.resume();
-        }
+        console.log('[PublicCourseDisplay] Resuming paused TTS');
+        privateTTSService.resume();
         setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
         return;
-      }
-
-      // Check if TTS service is stopped and needs restart before starting new reading
-      if (privateTTSService?.getStatus) {
-        const status = privateTTSService.getStatus();
-        if (status.isStopped) {
-          console.log('[PublicCourseDisplay] TTS service is stopped, restarting before new reading...');
-          await privateTTSService.restart();
-        }
       }
 
       // Start new reading
@@ -363,8 +374,13 @@ const PublicCourseDisplay = () => {
       }
       
       if (contentToRead.length > 0) {
-        await privateTTSService.speak(contentToRead, currentLesson?.id);
-        setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
+        const started = await privateTTSService.speak(contentToRead, currentLesson?.id);
+        if (started) {
+          setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
+        } else {
+          console.warn('[PublicCourseDisplay] TTS failed to start');
+          setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
+        }
       }
     } catch (error) {
       console.error('[PublicCourseDisplay] TTS error:', error);
@@ -372,38 +388,46 @@ const PublicCourseDisplay = () => {
     }
   }, [ttsStatus.isPlaying, ttsStatus.isPaused, activeTab, processedContent, flashcardData, currentLesson?.id]);
 
-  const handlePauseResumeAudio = useCallback(() => {
+  const handlePauseResumeAudio = useCallback(async () => {
+    // Add a small delay to prevent rapid button clicks
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    console.log('[PublicCourseDisplay] handlePauseResumeAudio called with state:', {
+      isPlaying: ttsStatus.isPlaying,
+      isPaused: ttsStatus.isPaused
+    });
+    
     try {
-      if (!privateTTSService) {
-        console.warn('[PublicCourseDisplay] TTS service not available');
-        return;
-      }
-      
-      if (ttsStatus.isPlaying) {
-        if (privateTTSService?.pause) {
-          privateTTSService.pause();
+      if (ttsStatus.isPaused) {
+        console.log('[PublicCourseDisplay] Attempting to resume TTS');
+        const resumed = await privateTTSService.resume();
+        console.log('[PublicCourseDisplay] Resume result:', resumed);
+        if (resumed) {
+          setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
         }
+      } else if (ttsStatus.isPlaying) {
+        console.log('[PublicCourseDisplay] Attempting to pause TTS');
+        await privateTTSService.pause();
         setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: true }));
-      } else if (ttsStatus.isPaused) {
-        if (privateTTSService?.resume) {
-          privateTTSService.resume();
-        }
-        setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
       }
     } catch (error) {
-      console.error('[PublicCourseDisplay] TTS pause/resume error:', error);
+      console.warn('[PublicCourseDisplay] TTS pause/resume error:', error);
+      // Reset state on error
+      setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
     }
   }, [ttsStatus.isPlaying, ttsStatus.isPaused]);
 
-  const handleStopAudio = useCallback(() => {
+  const handleStopAudio = useCallback(async () => {
+    // Add a small delay to prevent rapid button clicks
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     try {
-      if (privateTTSService?.stop) {
-        privateTTSService.stop();
-      }
-      setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
+      privateTTSService.stop();
     } catch (error) {
-      console.error('[PublicCourseDisplay] TTS stop error:', error);
+      console.warn('[PublicCourseDisplay] TTS stop error:', error);
     }
+    // Always reset state when stopping
+    setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
   }, []);
 
   const handleReadAloud = useCallback(async (lessonContent) => {
@@ -493,6 +517,63 @@ const PublicCourseDisplay = () => {
     
     initializeTTS();
   }, []);
+
+  // Sync TTS state with service state periodically
+  useEffect(() => {
+    const syncTTSState = () => {
+      try {
+        const serviceStatus = privateTTSService.getStableStatus();
+        
+        // Only update if there's an actual change
+        if (
+          serviceStatus.isPlaying !== ttsStatus.isPlaying ||
+          serviceStatus.isPaused !== ttsStatus.isPaused
+        ) {
+          // Debounce state updates to prevent rapid changes
+          if (ttsStateUpdateTimeoutRef.current) {
+            clearTimeout(ttsStateUpdateTimeoutRef.current);
+          }
+
+          ttsStateUpdateTimeoutRef.current = setTimeout(() => {
+            console.log('[PublicCourseDisplay] TTS state changed:', {
+              wasPlaying: ttsStatus.isPlaying,
+              wasPaused: ttsStatus.isPaused,
+              newPlaying: serviceStatus.isPlaying,
+              newPaused: serviceStatus.isPaused
+            });
+
+            // Only update if the service is actually in a different state
+            setTtsStatus(prev => {
+              if (prev.isPlaying === serviceStatus.isPlaying && prev.isPaused === serviceStatus.isPaused) {
+                return prev; // No change needed
+              }
+              return {
+                ...prev,
+                isPlaying: serviceStatus.isPlaying,
+                isPaused: serviceStatus.isPaused,
+                isSupported: serviceStatus.isSupported
+              };
+            });
+          }, 100);
+        }
+      } catch (error) {
+        console.warn('[PublicCourseDisplay] TTS state sync error:', error);
+      }
+    };
+
+    // Sync immediately
+    syncTTSState();
+
+    // Set up interval to sync state periodically
+    const intervalId = setInterval(syncTTSState, 500);
+
+    return () => {
+      clearInterval(intervalId);
+      if (ttsStateUpdateTimeoutRef.current) {
+        clearTimeout(ttsStateUpdateTimeoutRef.current);
+      }
+    };
+  }, [ttsStatus.isPlaying, ttsStatus.isPaused]);
 
   useEffect(() => {
     const fetchCourse = async () => {
