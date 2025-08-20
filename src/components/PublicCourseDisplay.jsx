@@ -143,6 +143,11 @@ const PublicCourseDisplay = () => {
   const navigate = useNavigate();
   const api = useApiWrapper();
   
+  // Guard clause to ensure all dependencies are available - moved to top
+  if (!courseId || !navigate || !api) {
+    return <LoadingState />;
+  }
+  
   const [course, setCourse] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -185,11 +190,6 @@ const PublicCourseDisplay = () => {
     if (url.startsWith('/')) return `https://thediscourse.ai${url}`;
     return url;
   }, []);
-
-  // Guard clause to ensure all dependencies are available
-  if (!courseId || !navigate || !api) {
-    return <LoadingState />;
-  }
 
   // Load quiz scores from session
   const loadSessionQuizScores = useCallback(async (courseData, sessionId) => {
@@ -513,20 +513,32 @@ const PublicCourseDisplay = () => {
 
   // Calculate unlocked modules
   useEffect(() => {
-    if (course?.modules && sessionId) {
+    if (course?.modules && sessionId && course.modules.length > 0) {
       const initialUnlocked = new Set();
-      initialUnlocked.add(course.modules[0]?.id);
       
+      // Safely add the first module
+      if (course.modules[0]?.id) {
+        initialUnlocked.add(course.modules[0].id);
+      }
+      
+      // Process remaining modules with additional safety checks
       for (let i = 1; i < course.modules.length; i++) {
         const previousModule = course.modules[i - 1];
+        const currentModule = course.modules[i];
+        
+        // Ensure both modules exist and have the required properties
+        if (!previousModule?.lessons || !currentModule?.id) {
+          continue;
+        }
+        
         const lessonsWithQuizzes = previousModule.lessons.filter(l => l.quiz && l.quiz.length > 0);
         
         if (lessonsWithQuizzes.length === 0) {
-          initialUnlocked.add(course.modules[i].id);
+          initialUnlocked.add(currentModule.id);
         } else {
           const perfectScores = lessonsWithQuizzes.filter(l => l.quizScore === 5);
           if (perfectScores.length === lessonsWithQuizzes.length) {
-            initialUnlocked.add(course.modules[i].id);
+            initialUnlocked.add(currentModule.id);
           }
         }
       }
@@ -586,10 +598,21 @@ const PublicCourseDisplay = () => {
   }, [course, activeModuleId, activeLessonId, handleLessonClick, courseId]);
 
   // Find current module and lesson
-  const currentModule = course ? course.modules.find(m => m.id === activeModuleId) : null;
-  const currentLesson = currentModule?.lessons.find(l => l.id === activeLessonId);
-  const currentLessonIndex = currentModule?.lessons.findIndex(l => l.id === activeLessonId) ?? 0;
-  const totalLessonsInModule = currentModule?.lessons?.length ?? 0;
+  const currentModule = useMemo(() => {
+    return course ? course.modules.find(m => m.id === activeModuleId) : null;
+  }, [course, activeModuleId]);
+
+  const currentLesson = useMemo(() => {
+    return currentModule?.lessons.find(l => l.id === activeLessonId);
+  }, [currentModule, activeLessonId]);
+
+  const currentLessonIndex = useMemo(() => {
+    return currentModule?.lessons.findIndex(l => l.id === activeLessonId) ?? 0;
+  }, [currentModule, activeLessonId]);
+
+  const totalLessonsInModule = useMemo(() => {
+    return currentModule?.lessons?.length ?? 0;
+  }, [currentModule]);
 
   // Extract and process flashcard data
   const flashcardData = useMemo(() => {
