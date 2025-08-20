@@ -118,6 +118,23 @@ const apiClient = async (url, options = {}) => {
       const errorText = await response.text();
       const errorData = JsonParser.RobustJsonParser.parse(errorText, 'API Error Response') || {};
       const errorMessage = errorData.error || response.statusText;
+      
+      // Special handling for 404 errors on course endpoints
+      if (response.status === 404 && url.includes('/courses/')) {
+        logger.error('❌ [API ERROR] Course not found', {
+          url: fullUrl,
+          originalUrl: url,
+          status: response.status,
+          error: errorData,
+          message: 'Course not found'
+        });
+        const err = new Error('Course not found');
+        err.status = response.status;
+        err.url = url;
+        err.data = errorData;
+        throw err;
+      }
+      
       logger.error('❌ [API ERROR]', {
         url: fullUrl,
         originalUrl: url,

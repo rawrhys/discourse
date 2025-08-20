@@ -612,6 +612,24 @@ const Dashboard = () => {
     }
   }, [savedCourses.length, error]);
 
+  // Effect to clear stale course data from localStorage
+  useEffect(() => {
+    try {
+      // Clear any course data that doesn't match current user's courses
+      const currentCourseId = localStorage.getItem('currentCourseId');
+      if (currentCourseId && savedCourses.length > 0) {
+        const courseExists = savedCourses.some(course => course.id === currentCourseId);
+        if (!courseExists) {
+          logger.debug('🧹 [DASHBOARD] Clearing stale course data from localStorage');
+          localStorage.removeItem('currentCourseId');
+          localStorage.removeItem(`course_${currentCourseId}`);
+        }
+      }
+    } catch (error) {
+      logger.warn('⚠️ [DASHBOARD] Error clearing stale course data:', error);
+    }
+  }, [savedCourses]);
+
   // Fetch saved courses on component mount
   useEffect(() => {
     if (user) {
@@ -820,6 +838,24 @@ const Dashboard = () => {
             </div>
             <div className="flex items-center space-x-4">
               <span className="text-sm text-gray-600">Welcome, {userName}!</span>
+              <button
+                onClick={async () => {
+                  try {
+                    const debugInfo = await api.debugUserCourses();
+                    console.log('🔍 [DEBUG] Available courses:', debugInfo);
+                    alert(`Available courses: ${JSON.stringify(debugInfo, null, 2)}`);
+                  } catch (error) {
+                    console.error('❌ [DEBUG] Error fetching courses:', error);
+                    alert('Error fetching courses: ' + error.message);
+                  }
+                }}
+                className="inline-flex items-center px-3 py-2 text-sm font-medium text-blue-700 bg-blue-100 border border-blue-300 rounded-md hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                Debug Courses
+              </button>
               <button
                 onClick={() => setShowReportProblem(true)}
                 className="inline-flex items-center px-3 py-2 text-sm font-medium text-purple-700 bg-purple-100 border border-purple-300 rounded-md hover:bg-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-colors"

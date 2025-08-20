@@ -101,6 +101,13 @@ const CourseLayout = () => {
       return;
     }
 
+    // Validate courseId format to prevent unnecessary API calls
+    if (!courseId.startsWith('course_')) {
+      console.log('🔄 [COURSE LAYOUT] Invalid course ID format, redirecting to dashboard');
+      navigate('/dashboard', { replace: true });
+      return;
+    }
+
     const fetchCourse = async () => {
       if (process.env.NODE_ENV === 'development') {
         console.log('🎯 [COURSE LAYOUT] Starting to fetch course:', {
@@ -197,6 +204,17 @@ const CourseLayout = () => {
           stack: error.stack,
           timestamp: new Date().toISOString()
         });
+        
+        // Check if it's a 404 error (course not found)
+        if (error.message && (error.message.includes('404') || error.message.includes('Course not found'))) {
+          console.log('🔄 [COURSE LAYOUT] Course not found, redirecting to dashboard');
+          localStorage.removeItem('currentCourseId');
+          // Clear any cached course data
+          localStorage.removeItem(`course_${courseId}`);
+          navigate('/dashboard', { replace: true });
+          return;
+        }
+        
         setError(error.message || 'Failed to load course');
         localStorage.removeItem('currentCourseId');
       } finally {
