@@ -12,7 +12,7 @@ const Image = ({
   preload = false, 
   priority = false,
   placeholder = null,
-  timeout = 3000, // 3 second timeout for fallback
+  timeout = 10000, // 10 second timeout for fallback - increased for better cache handling
   ...props 
 }) => {
   const [isLoaded, setIsLoaded] = useState(false);
@@ -120,6 +120,12 @@ const Image = ({
     setIsError(false);
     setShowFallback(false);
     
+    // Check if image was loaded from cache
+    const wasCached = loadTime < 100; // Very fast loads are likely from cache
+    if (wasCached) {
+      console.log(`[Image] Loaded from cache: ${src} (${loadTime}ms)`);
+    }
+    
     // Track performance metrics asynchronously to avoid blocking
     if ('requestIdleCallback' in window) {
       requestIdleCallback(() => {
@@ -130,7 +136,7 @@ const Image = ({
         if (loadTime > 3000) {
           console.warn(`[Image] Slow image load detected for ${src}: ${loadTime}ms`);
         } else {
-          console.log(`[Image] Loaded ${src} in ${loadTime}ms`);
+          console.log(`[Image] Loaded ${src} in ${loadTime}ms${wasCached ? ' (cached)' : ''}`);
         }
       }, { timeout: 1000 });
     } else {
@@ -142,7 +148,7 @@ const Image = ({
         if (loadTime > 3000) {
           console.warn(`[Image] Slow image load detected for ${src}: ${loadTime}ms`);
         } else {
-          console.log(`[Image] Loaded ${src} in ${loadTime}ms`);
+          console.log(`[Image] Loaded ${src} in ${loadTime}ms${wasCached ? ' (cached)' : ''}`);
         }
       }, 0);
     }
@@ -161,11 +167,17 @@ const Image = ({
     
     // Try fallback to original URL if using proxy
     if (src && src.includes('/api/image/')) {
-      const originalUrl = src.replace(/.*url=/, '').replace(/&.*/, '');
-      if (originalUrl && originalUrl !== src) {
-        console.log(`[Image] Trying fallback: ${originalUrl}`);
-        event.target.src = decodeURIComponent(originalUrl);
-        return;
+      try {
+        // Extract the original URL from the proxy URL
+        const urlMatch = src.match(/url=([^&]+)/);
+        if (urlMatch) {
+          const originalUrl = decodeURIComponent(urlMatch[1]);
+          console.log(`[Image] Trying fallback to original URL: ${originalUrl}`);
+          event.target.src = originalUrl;
+          return;
+        }
+      } catch (error) {
+        console.warn(`[Image] Error extracting original URL from proxy: ${error.message}`);
       }
     }
     
@@ -176,10 +188,13 @@ const Image = ({
   // Set up timeout for slow loading images
   useEffect(() => {
     if (shouldShowImage && src && !isLoaded && !isError) {
+      // Don't start timeout immediately - give a small grace period for cached images
+      const gracePeriod = 500; // 500ms grace period for cached images
+      
       timeoutRef.current = setTimeout(() => {
         console.warn(`[Image] Timeout after ${timeout}ms for: ${src}`);
         setShowFallback(true);
-      }, timeout);
+      }, timeout + gracePeriod);
     }
 
     return () => {

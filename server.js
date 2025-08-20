@@ -3956,7 +3956,7 @@ app.get('/api/image/fast', async (req, res) => {
     if (cachedImage && Date.now() - cachedImage.timestamp < global.imageCacheTimeout) {
       console.log(`[FastImageProxy] Cache HIT for: ${url.substring(0, 50)}...`);
       res.set('Content-Type', cachedImage.contentType);
-      res.set('Cache-Control', 'public, max-age=86400, s-maxage=86400, stale-while-revalidate=3600');
+      res.set('Cache-Control', 'public, max-age=31536000, s-maxage=31536000, immutable'); // Cache for 1 year
       res.set('X-Fast-Path', 'true');
       res.set('X-Cache-Hit', 'true');
       res.set('X-Image-Size', cachedImage.buffer.length.toString());
@@ -3993,7 +3993,7 @@ app.get('/api/image/fast', async (req, res) => {
     
     // Enhanced caching headers for better performance
     res.set('Content-Type', contentType);
-    res.set('Cache-Control', 'public, max-age=86400, s-maxage=86400, stale-while-revalidate=3600');
+    res.set('Cache-Control', 'public, max-age=31536000, s-maxage=31536000, immutable'); // Cache for 1 year
     res.set('X-Fast-Path', 'true');
     res.set('X-Cache-Hit', 'false');
     res.set('X-Image-Size', imageBuffer.length.toString());

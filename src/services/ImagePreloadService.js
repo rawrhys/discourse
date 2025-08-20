@@ -49,14 +49,17 @@ class ImagePreloadService {
   async _preloadSingleImage(imageUrl) {
     return new Promise((resolve) => {
       const img = new Image();
+      const startTime = Date.now();
       const timeout = setTimeout(() => {
         console.warn(`[ImagePreloadService] Timeout: ${imageUrl}`);
         resolve(false);
-      }, 5000); // 5 second timeout
+      }, 8000); // Increased timeout to 8 seconds for better cache handling
 
       img.onload = () => {
         clearTimeout(timeout);
-        console.log(`[ImagePreloadService] Preloaded: ${imageUrl}`);
+        const loadTime = Date.now() - startTime;
+        const wasCached = loadTime < 100;
+        console.log(`[ImagePreloadService] Preloaded: ${imageUrl} (${loadTime}ms${wasCached ? ', cached' : ''})`);
         resolve(true);
       };
 

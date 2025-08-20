@@ -368,9 +368,49 @@ const Content = memo(({ content, bibliography, lessonTitle, courseSubject }) => 
     });
   }
 
+  // Add image error handling after content is rendered
+  const contentRef = useRef(null);
+  
+  useEffect(() => {
+    if (!contentRef.current || !parsedContent) return;
+    
+    // Add error handling for images in the content
+    const imgTags = contentRef.current.querySelectorAll('img');
+    imgTags.forEach((img) => {
+      // Set initial loading state
+      img.style.opacity = '0.7';
+      img.style.transition = 'opacity 0.3s ease-in-out';
+      
+      img.onerror = () => {
+        // Show fallback for failed images
+        img.style.display = 'none';
+        const fallback = document.createElement('div');
+        fallback.className = 'image-fallback';
+        fallback.style.cssText = `
+          background-color: #f3f4f6;
+          border: 2px dashed #d1d5db;
+          border-radius: 8px;
+          padding: 2rem;
+          text-align: center;
+          color: #6b7280;
+          font-size: 14px;
+          margin: 1rem 0;
+        `;
+        fallback.textContent = 'Image unavailable';
+        img.parentNode.insertBefore(fallback, img);
+      };
+      
+      img.onload = () => {
+        img.style.opacity = '1';
+        img.style.transition = 'opacity 0.3s ease-in-out';
+      };
+    });
+  }, [parsedContent]);
+
   return (
     <div className="prose max-w-none lesson-content">
       <div 
+        ref={contentRef}
         className="markdown-body"
         dangerouslySetInnerHTML={{ __html: parsedContent }}
       />
