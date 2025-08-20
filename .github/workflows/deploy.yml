@@ -24,6 +24,12 @@ jobs:
             # Navigate to the git repository
             cd /root/discourse
             echo "Pulling latest changes from main branch..."
+            
+            # Clean up any untracked files that might cause conflicts
+            echo "Cleaning up untracked files..."
+            git clean -fd || true
+            
+            # Pull latest changes
             git pull origin main
             
             # Verify critical files are updated
@@ -43,7 +49,11 @@ jobs:
             echo "Clearing cache..."
             rm -rf /var/www/discourse/node_modules/.cache 2>/dev/null || true
             
-            # Restart PM2 processes
+            # Clear image search cache via API
+            echo "Clearing image search cache..."
+            curl -s -X POST http://localhost:4003/api/image/clear-search-cache || echo "Cache clear failed (server may be down)"
+            
+            # Restart PM2 processes (don't wait for server startup)
             echo "Restarting PM2 processes..."
             cd /var/www/discourse
             pm2 restart all
