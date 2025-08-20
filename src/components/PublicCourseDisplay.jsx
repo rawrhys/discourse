@@ -820,25 +820,33 @@ const PublicCourseDisplay = () => {
                         <div className="flex justify-between items-center mb-6">
                           <h2 className="text-3xl font-bold text-gray-900">{currentLesson.title}</h2>
                           <div className="flex space-x-2">
-                            <button
-                              onClick={ttsStatus.isPlaying ? handlePauseResumeAudio : ttsStatus.isPaused ? handlePauseResumeAudio : handleStartAudio}
-                              className={`px-4 py-2 rounded-md text-white font-medium ${
-                                ttsStatus.isPlaying || ttsStatus.isPaused
-                                  ? 'bg-green-600 hover:bg-green-700'
-                                  : 'bg-blue-600 hover:bg-blue-700'
-                              }`}
-                              title={ttsStatus.isPlaying ? 'Pause reading' : ttsStatus.isPaused ? 'Resume reading' : 'Start reading aloud'}
-                            >
-                              {ttsStatus.isPlaying ? 'Pause' : ttsStatus.isPaused ? 'Resume' : 'Read Aloud'}
-                            </button>
-                            {(ttsStatus.isPlaying || ttsStatus.isPaused) && (
+                            {!ttsStatus.isPlaying && !ttsStatus.isPaused ? (
+                              // Show only Read Aloud button when not playing
                               <button
-                                onClick={handleStopAudio}
-                                className="px-4 py-2 rounded-md text-white font-medium bg-red-600 hover:bg-red-700"
-                                title="Stop reading"
+                                onClick={handleStartAudio}
+                                className="px-4 py-2 rounded-md text-white font-medium bg-blue-600 hover:bg-blue-700"
+                                title="Start reading aloud"
                               >
-                                Stop
+                                Read Aloud
                               </button>
+                            ) : (
+                              // Show Pause/Resume and Stop buttons when playing or paused
+                              <>
+                                <button
+                                  onClick={handlePauseResumeAudio}
+                                  className="px-4 py-2 rounded-md text-white font-medium bg-green-600 hover:bg-green-700"
+                                  title={ttsStatus.isPlaying ? 'Pause reading' : 'Resume reading'}
+                                >
+                                  {ttsStatus.isPlaying ? 'Pause' : 'Resume'}
+                                </button>
+                                <button
+                                  onClick={handleStopAudio}
+                                  className="px-4 py-2 rounded-md text-white font-medium bg-red-600 hover:bg-red-700"
+                                  title="Stop reading"
+                                >
+                                  Stop
+                                </button>
+                              </>
                             )}
                           </div>
                         </div>
@@ -909,25 +917,33 @@ const PublicCourseDisplay = () => {
                         <div className="flex justify-between items-center mb-6">
                           <h2 className="text-2xl font-bold text-gray-900">Flashcards</h2>
                           <div className="flex space-x-2">
-                            <button
-                              onClick={ttsStatus.isPlaying ? handlePauseResumeAudio : ttsStatus.isPaused ? handlePauseResumeAudio : handleStartAudio}
-                              className={`px-4 py-2 rounded-md text-white font-medium ${
-                                ttsStatus.isPlaying || ttsStatus.isPaused
-                                  ? 'bg-green-600 hover:bg-green-700'
-                                  : 'bg-blue-600 hover:bg-blue-700'
-                              }`}
-                              title={ttsStatus.isPlaying ? 'Pause reading' : ttsStatus.isPaused ? 'Resume reading' : 'Start reading flashcards aloud'}
-                            >
-                              {ttsStatus.isPlaying ? 'Pause' : ttsStatus.isPaused ? 'Resume' : 'Read Flashcards'}
-                            </button>
-                            {(ttsStatus.isPlaying || ttsStatus.isPaused) && (
+                            {!ttsStatus.isPlaying && !ttsStatus.isPaused ? (
+                              // Show only Read Flashcards button when not playing
                               <button
-                                onClick={handleStopAudio}
-                                className="px-4 py-2 rounded-md text-white font-medium bg-red-600 hover:bg-red-700"
-                                title="Stop reading"
+                                onClick={handleStartAudio}
+                                className="px-4 py-2 rounded-md text-white font-medium bg-blue-600 hover:bg-blue-700"
+                                title="Start reading flashcards aloud"
                               >
-                                Stop
+                                Read Flashcards
                               </button>
+                            ) : (
+                              // Show Pause/Resume and Stop buttons when playing or paused
+                              <>
+                                <button
+                                  onClick={handlePauseResumeAudio}
+                                  className="px-4 py-2 rounded-md text-white font-medium bg-green-600 hover:bg-green-700"
+                                  title={ttsStatus.isPlaying ? 'Pause reading' : 'Resume reading'}
+                                >
+                                  {ttsStatus.isPlaying ? 'Pause' : 'Resume'}
+                                </button>
+                                <button
+                                  onClick={handleStopAudio}
+                                  className="px-4 py-2 rounded-md text-white font-medium bg-red-600 hover:bg-red-700"
+                                  title="Stop reading"
+                                >
+                                  Stop
+                                </button>
+                              </>
                             )}
                           </div>
                         </div>
