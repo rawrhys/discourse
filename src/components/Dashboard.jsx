@@ -323,7 +323,7 @@ const Dashboard = () => {
         logger.info('🔄 [COURSE GENERATION] Keeping modal open for backend retry');
       }
     }
-  }, [api, user?.id, fetchSavedCourses]);
+  }, [api, user?.id]);
 
   const handleLogout = () => {
     logout();
@@ -426,7 +426,7 @@ const Dashboard = () => {
         logger.info('🔄 [DASHBOARD] Course not found - course already deleted');
       }
     }
-  }, [api, fetchSavedCourses]);
+  }, [api]);
 
   // Connection diagnostic function
   const runConnectionDiagnostic = useCallback(async () => {
@@ -525,7 +525,7 @@ const Dashboard = () => {
         // Don't let errors propagate - just log them
       }
     }
-  }, [user, fetchSavedCourses]);
+  }, [user]);
 
   const handlePaymentSuccess = async () => {
     try {
