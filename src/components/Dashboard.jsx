@@ -33,14 +33,18 @@ const Dashboard = () => {
   const [connectionStatus, setConnectionStatus] = useState(null);
   const [showConnectionDiagnostic, setShowConnectionDiagnostic] = useState(false);
 
-  // Get the user's name from the user object
-  const userName = user?.name || user?.email || 'Guest';
+  // State for user profile data from backend
+  const [userProfile, setUserProfile] = useState(null);
+  
+  // Get the user's name from backend profile data, fallback to auth context
+  const userName = userProfile?.name || user?.name || user?.email || 'Guest';
   
   // Debug log to verify user data
   logger.debug('👤 [DASHBOARD] User data:', {
     user: user,
+    userProfile: userProfile,
     userName: userName,
-    hasName: !!user?.name,
+    hasName: !!userProfile?.name,
     hasEmail: !!user?.email,
     timestamp: new Date().toISOString()
   });
@@ -376,8 +380,8 @@ const Dashboard = () => {
       const data = await response.json();
       logger.debug('✅ [PAYMENT] Payment success processed:', data);
       
-      // Refresh user credits from backend to get the most up-to-date count
-      await fetchUserCredits();
+      // Refresh user profile from backend to get the most up-to-date count
+      await fetchUserProfile();
       
       // Show success message with credit details
       const message = `${data.message}\n\nCredits: ${data.previousCredits} → ${data.courseCredits} (+${data.creditsAdded})`;
@@ -392,7 +396,38 @@ const Dashboard = () => {
     }
   };
 
-  // Fetch user credits from backend
+  // Fetch user profile from backend
+  const fetchUserProfile = useCallback(async () => {
+    try {
+      logger.debug('👤 [DASHBOARD] Fetching user profile from backend...');
+      const userData = await api.getCurrentUser();
+      
+      if (userData) {
+        logger.debug('✅ [DASHBOARD] User profile fetched:', {
+          id: userData.id,
+          name: userData.name,
+          email: userData.email,
+          courseCredits: userData.courseCredits
+        });
+        setUserProfile(userData);
+        
+        // Also update credits from the same response
+        if (userData.courseCredits !== undefined) {
+          setCredits(userData.courseCredits);
+        }
+      } else {
+        logger.warn('⚠️ [DASHBOARD] No user data in response:', userData);
+        setUserProfile(null);
+        setCredits(0);
+      }
+    } catch (error) {
+      logger.error('❌ [DASHBOARD] Error fetching user profile:', error);
+      setUserProfile(null);
+      setCredits(0);
+    }
+  }, [api]);
+
+  // Fetch user credits from backend (deprecated - now handled by fetchUserProfile)
   const fetchUserCredits = useCallback(async () => {
     try {
       logger.debug('💳 [DASHBOARD] Fetching user credits from backend...');
@@ -412,11 +447,11 @@ const Dashboard = () => {
   }, [api]);
 
   useEffect(() => {
-    // Fetch user credits when component mounts or user changes
+    // Fetch user profile when component mounts or user changes
     if (user) {
-      fetchUserCredits();
+      fetchUserProfile();
     }
-  }, [user, fetchUserCredits]);
+  }, [user, fetchUserProfile]);
 
   const handleBuyMore = async () => {
     setIsBuying(true);
@@ -518,9 +553,9 @@ const Dashboard = () => {
               Tokens: <span className={credits === 0 ? 'text-red-500' : 'text-green-600'}>{credits}</span>
             </div>
             <button
-              onClick={fetchUserCredits}
+              onClick={fetchUserProfile}
               className="text-sm text-gray-500 hover:text-gray-700 transition-colors duration-200"
-              title="Refresh token count"
+              title="Refresh user data"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
