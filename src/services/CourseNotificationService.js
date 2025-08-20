@@ -17,13 +17,18 @@ class CourseNotificationService {
       this.disconnect();
     }
 
+    // Store token for reconnection
+    this.lastToken = token;
+
     try {
       // EventSource doesn't support custom headers, so we'll use a query parameter for the token
       const url = `${API_BASE_URL}/api/courses/notifications?token=${encodeURIComponent(token)}`;
+      console.log('[CourseNotificationService] Attempting to connect to SSE:', url);
+      
       this.eventSource = new EventSource(url);
 
       this.eventSource.onopen = () => {
-        console.log('[CourseNotificationService] SSE connection established');
+        console.log('[CourseNotificationService] SSE connection established successfully');
         this.isConnected = true;
         this.reconnectAttempts = 0;
         this.reconnectDelay = 1000;
@@ -41,11 +46,20 @@ class CourseNotificationService {
       this.eventSource.onerror = (error) => {
         console.error('[CourseNotificationService] SSE connection error:', error);
         this.isConnected = false;
-        this.handleReconnect();
+        
+        // Don't reconnect immediately on first error, wait a bit
+        if (this.reconnectAttempts === 0) {
+          console.log('[CourseNotificationService] First SSE error, waiting before reconnection...');
+          setTimeout(() => this.handleReconnect(), 2000);
+        } else {
+          this.handleReconnect();
+        }
       };
 
     } catch (error) {
       console.error('[CourseNotificationService] Error creating SSE connection:', error);
+      // Try to reconnect after a delay
+      setTimeout(() => this.handleReconnect(), 3000);
     }
   }
 
@@ -82,7 +96,12 @@ class CourseNotificationService {
     
     setTimeout(() => {
       if (!this.isConnected) {
-        this.connect();
+        // We need to store the token for reconnection
+        if (this.lastToken) {
+          this.connect(this.lastToken);
+        } else {
+          console.error('[CourseNotificationService] No token available for reconnection');
+        }
       }
     }, delay);
   }

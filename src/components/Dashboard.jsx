@@ -289,6 +289,46 @@ const Dashboard = () => {
           logger.error('❌ [DASHBOARD] Failed to refresh course list after generation:', error);
         }
       }, 2000);
+
+      // Additional fallback: Check for new courses every 5 seconds for up to 2 minutes
+      let checkAttempts = 0;
+      const maxCheckAttempts = 24; // 2 minutes total (24 * 5 seconds)
+      
+      const checkForNewCourse = async () => {
+        if (checkAttempts >= maxCheckAttempts) {
+          logger.warn('⚠️ [DASHBOARD] Max course check attempts reached, stopping fallback checks');
+          return;
+        }
+        
+        try {
+          logger.debug(`🔄 [DASHBOARD] Fallback course check attempt ${checkAttempts + 1}/${maxCheckAttempts}`);
+          const courses = await api.getSavedCourses();
+          
+          // Check if we have a new course that wasn't there before
+          const currentCourseCount = savedCourses.length;
+          if (Array.isArray(courses) && courses.length > currentCourseCount) {
+            logger.info('🎉 [DASHBOARD] New course detected via fallback check!');
+            setSavedCourses(courses);
+            setSuccessMessage('Course generation completed! New course found.');
+            setShowSuccessToast(true);
+            return; // Stop checking
+          }
+          
+          checkAttempts++;
+          if (checkAttempts < maxCheckAttempts) {
+            setTimeout(checkForNewCourse, 5000); // Check again in 5 seconds
+          }
+        } catch (error) {
+          logger.error('❌ [DASHBOARD] Fallback course check failed:', error);
+          checkAttempts++;
+          if (checkAttempts < maxCheckAttempts) {
+            setTimeout(checkForNewCourse, 5000);
+          }
+        }
+      };
+      
+      // Start fallback checks after 10 seconds
+      setTimeout(checkForNewCourse, 10000);
       
       // Hide success message after a delay
       setTimeout(() => {
@@ -321,9 +361,50 @@ const Dashboard = () => {
         errorMessage = 'The requested topic violates our content policy and cannot be generated. Please try a different topic.';
         logger.error('🚫 [COURSE GENERATION] Content policy violation');
       } else if (error.message.includes('timeout') || error.message.includes('aborted')) {
-        errorMessage = 'The request timed out. The AI service is processing your request but it\'s taking longer than expected due to high demand. Please wait a moment and try again.';
-        logger.error('⏰ [COURSE GENERATION] Request timeout - keeping modal open for retry');
-        shouldKeepModalOpen = true;
+        errorMessage = 'The request timed out, but your course may still be generating. Please wait a moment and check your course list.';
+        logger.error('⏰ [COURSE GENERATION] Request timeout - course may still be generating');
+        shouldKeepModalOpen = false; // Close modal but start background checks
+        
+        // Start background checks for the generated course
+        let checkAttempts = 0;
+        const maxCheckAttempts = 30; // 5 minutes total (30 * 10 seconds)
+        
+        const checkForGeneratedCourse = async () => {
+          if (checkAttempts >= maxCheckAttempts) {
+            logger.warn('⚠️ [DASHBOARD] Max timeout recovery check attempts reached');
+            return;
+          }
+          
+          try {
+            logger.debug(`🔄 [DASHBOARD] Timeout recovery check attempt ${checkAttempts + 1}/${maxCheckAttempts}`);
+            const courses = await api.getSavedCourses();
+            
+            // Check if we have a new course that wasn't there before
+            const currentCourseCount = savedCourses.length;
+            if (Array.isArray(courses) && courses.length > currentCourseCount) {
+              logger.info('🎉 [DASHBOARD] Course found after timeout!');
+              setSavedCourses(courses);
+              setSuccessMessage('Course generation completed! Your course is ready.');
+              setShowSuccessToast(true);
+              setError(null); // Clear the error
+              return; // Stop checking
+            }
+            
+            checkAttempts++;
+            if (checkAttempts < maxCheckAttempts) {
+              setTimeout(checkForGeneratedCourse, 10000); // Check again in 10 seconds
+            }
+          } catch (error) {
+            logger.error('❌ [DASHBOARD] Timeout recovery check failed:', error);
+            checkAttempts++;
+            if (checkAttempts < maxCheckAttempts) {
+              setTimeout(checkForGeneratedCourse, 10000);
+            }
+          }
+        };
+        
+        // Start recovery checks after 5 seconds
+        setTimeout(checkForGeneratedCourse, 5000);
       } else if (error.message.includes('429') || error.message.includes('rate limit') || error.message.includes('Rate limited')) {
         errorMessage = 'The AI service is currently busy. Your course is being generated but it\'s taking longer due to high demand. Please wait a moment and try again.';
         logger.error('🚦 [COURSE GENERATION] Rate limiting detected - keeping modal open for retry');
