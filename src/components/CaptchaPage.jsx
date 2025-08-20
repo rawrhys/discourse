@@ -23,8 +23,16 @@ const CaptchaPage = () => {
       
       console.log('[CaptchaPage] Checking access for course:', courseId);
       
-      // Use the dedicated CAPTCHA endpoint
-      const response = await fetch(`/api/captcha/verify/${courseId}`);
+      // Get sessionId from URL if available
+      const urlParams = new URLSearchParams(window.location.search);
+      const sessionId = urlParams.get('sessionId');
+      
+      // Use the dedicated CAPTCHA endpoint with sessionId if available
+      const verifyUrl = sessionId 
+        ? `/api/captcha/verify/${courseId}?sessionId=${encodeURIComponent(sessionId)}`
+        : `/api/captcha/verify/${courseId}`;
+      
+      const response = await fetch(verifyUrl);
       const result = await response.json();
       
       if (result.requiresCaptcha) {

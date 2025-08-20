@@ -4177,7 +4177,7 @@ app.get('/api/captcha/verify/:courseId',
   try {
     
     const { courseId } = req.params;
-    const { challenge, response, challengeKey } = req.query;
+    const { challenge, response, challengeKey, sessionId } = req.query;
     
     // Validate courseId parameter
     if (!courseId || typeof courseId !== 'string' || courseId.trim() === '') {
@@ -4187,6 +4187,20 @@ app.get('/api/captcha/verify/:courseId',
         message: 'Invalid course identifier.',
         requiresCaptcha: true
       });
+    }
+    
+    // Check if user already has a valid session for this course
+    if (sessionId && publicCourseSessionService.isSessionAvailable(sessionId)) {
+      const session = publicCourseSessionService.getSession(sessionId);
+      if (session && session.courseId === courseId) {
+        console.log(`[API] User already has valid session ${sessionId} for course ${courseId}, skipping CAPTCHA`);
+        return res.json({
+          success: true,
+          sessionId: sessionId,
+          redirectUrl: `/public/course/${courseId}?sessionId=${sessionId}`,
+          requiresCaptcha: false
+        });
+      }
     }
     
     // Ensure global.captchaChallenges map exists

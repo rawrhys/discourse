@@ -20,7 +20,7 @@ function shuffleQuestionsAndOptions(questions) {
   });
 }
 
-export default function QuizView({ questions = [], onComplete, lessonId, module }) {
+export default function QuizView({ questions = [], onComplete, lessonId, module, onBack }) {
   if (process.env.NODE_ENV === 'development') {
     console.log('[QuizView] Component rendered with props:', { questionsLength: questions?.length, lessonId, moduleId: module?.id });
   }
@@ -121,6 +121,21 @@ export default function QuizView({ questions = [], onComplete, lessonId, module 
 
   return (
     <div className="quiz-container p-6 bg-white rounded-lg shadow">
+      {/* Back Button */}
+      {onBack && (
+        <div className="mb-6">
+          <button
+            onClick={onBack}
+            className="flex items-center text-blue-600 hover:text-blue-800 font-medium"
+          >
+            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path>
+            </svg>
+            Back to Lesson
+          </button>
+        </div>
+      )}
+      
       <div className="space-y-6">
         {shuffledQuestions.map((question, index) => (
           <div key={index} className={`p-4 rounded-lg ${showResult ? (selectedAnswers[index] === question.answer ? 'bg-green-50' : 'bg-red-50') : 'bg-gray-50'}`}>

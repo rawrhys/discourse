@@ -956,6 +956,7 @@ const PublicCourseDisplay = () => {
                 }}
                 lessonId={currentLesson.id}
                 module={currentModule}
+                onBack={() => setActiveTab('content')}
               />
             </Suspense>
           ) : (
