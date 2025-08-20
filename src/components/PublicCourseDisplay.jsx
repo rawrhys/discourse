@@ -355,40 +355,24 @@ const PublicCourseDisplay = () => {
 
 
 
-  // Find the current module and lesson using useMemo to prevent recalculation issues
-  const { currentModule, currentLesson, currentLessonIndex, totalLessonsInModule } = useMemo(() => {
-    let module = course ? course.modules.find(m => m.id === activeModuleId) : null;
-    let lesson = module?.lessons.find(l => l.id === activeLessonId);
-    
-    // If module is null but we have activeLessonId, try to find the module containing this lesson
-    if (!module && activeLessonId && course) {
-      module = course.modules.find(m => m.lessons.some(l => l.id === activeLessonId));
-      if (module) {
-        lesson = module.lessons.find(l => l.id === activeLessonId);
-      }
-    }
-    
-    // Calculate lesson index and total lessons for navigation
-    const lessonIndex = module?.lessons.findIndex(l => l.id === activeLessonId) ?? 0;
-    const totalLessons = module?.lessons?.length ?? 0;
-    
-    return {
-      currentModule: module,
-      currentLesson: lesson,
-      currentLessonIndex: lessonIndex,
-      totalLessonsInModule: totalLessons
-    };
-  }, [course, activeModuleId, activeLessonId]);
+  // Find the current module and lesson
+  const currentModule = course ? course.modules.find(m => m.id === activeModuleId) : null;
+  const currentLesson = currentModule?.lessons.find(l => l.id === activeLessonId);
+  const currentLessonIndex = currentModule?.lessons.findIndex(l => l.id === activeLessonId) ?? 0;
+  const totalLessonsInModule = currentModule?.lessons?.length ?? 0;
 
   // Handle module ID updates when lesson is found in a different module
   useEffect(() => {
-    if (currentModule && activeModuleId !== currentModule.id) {
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`[PublicCourseDisplay] Updating activeModuleId from ${activeModuleId} to ${currentModule.id}`);
+    if (!currentModule && activeLessonId && course) {
+      const foundModule = course.modules.find(m => m.lessons.some(l => l.id === activeLessonId));
+      if (foundModule && activeModuleId !== foundModule.id) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[PublicCourseDisplay] Updating activeModuleId from ${activeModuleId} to ${foundModule.id}`);
+        }
+        setActiveModuleId(foundModule.id);
       }
-      setActiveModuleId(currentModule.id);
     }
-  }, [currentModule, activeModuleId]);
+  }, [course, activeLessonId, activeModuleId]);
   
   // Debug logging to help identify the issue (only log once per render cycle)
   if (process.env.NODE_ENV === 'development') {
