@@ -122,6 +122,7 @@ const FlashcardRenderer = memo(({ flashcards }) => {
 
   // Deduplicate flashcards based on the term
   const uniqueFlashcards = useMemo(() => {
+    if (!flashcards || !Array.isArray(flashcards)) return [];
     return Array.from(new Map(flashcards.map(card => [(card.term || card.question || '').toLowerCase(), card])).values());
   }, [flashcards]);
 
@@ -617,6 +618,8 @@ const PublicCourseDisplay = () => {
   // Extract and process flashcard data
   const flashcardData = useMemo(() => {
     // Check multiple possible locations for flashcard data
+    if (!currentLesson) return null;
+    
     const flashcards = currentLesson?.flashcards || 
                       currentLesson?.content?.flashcards || 
                       currentLesson?.cards ||
@@ -627,9 +630,9 @@ const PublicCourseDisplay = () => {
 
   // Process lesson content
   const processedContent = useMemo(() => {
-    if (!currentLesson?.content) return '';
+    if (!currentLesson || !currentLesson.content) return '';
     return cleanAndCombineContent(currentLesson.content);
-  }, [currentLesson?.content]);
+  }, [currentLesson]);
 
   // Simplified image handling effect
   useEffect(() => {
@@ -663,6 +666,8 @@ const PublicCourseDisplay = () => {
   if (loading) return <LoadingState />;
   if (error) return <ErrorState message={error} />;
   if (!course) return <LoadingState />;
+  if (!currentModule) return <LoadingState />;
+  if (!currentLesson) return <LoadingState />;
 
   return (
     <div className="flex h-screen bg-gray-100">
