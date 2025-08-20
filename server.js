@@ -243,7 +243,7 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
       
       // Cultural mismatch penalties - heavy penalties for wrong civilizations
       const culturalMismatches = {
-        'egypt': ['mesopotamia', 'sumerian', 'babylonian', 'assyrian', 'akkadian', 'hittite', 'hittites', 'norse', 'viking', 'germanic', 'north germanic', 'scandinavian', 'roman', 'greek', 'hellenistic', 'persian', 'achaemenid', 'sassanid', 'byzantine', 'ottoman', 'arabic', 'islamic', 'medieval europe', 'renaissance', 'feudal', 'crusader', 'thor', 'hammer', 'mjolnir', 'nordic', 'scandinavian', 'germanic', 'north germanic', 'old norse', 'norse religion', 'norse mythology', 'norse gods', 'norse pantheon', 'norse tradition', 'norse culture'],
+        'egypt': ['mesopotamia', 'sumerian', 'babylonian', 'assyrian', 'akkadian', 'hittite', 'hittites', 'norse', 'viking', 'germanic', 'north germanic', 'scandinavian', 'roman', 'greek', 'hellenistic', 'persian', 'achaemenid', 'sassanid', 'byzantine', 'ottoman', 'arabic', 'islamic', 'medieval europe', 'renaissance', 'feudal', 'crusader', 'thor', 'hammer', 'mjolnir', 'nordic', 'scandinavian', 'germanic', 'north germanic', 'old norse', 'norse religion', 'norse mythology', 'norse gods', 'norse pantheon', 'norse tradition', 'norse culture', 'early dynastic period mesopotamia', 'mesopotamian', 'mesopotamian civilization', 'mesopotamian culture'],
         'rome': ['egyptian', 'pharaoh', 'pyramid', 'nile', 'mesopotamia', 'sumerian', 'babylonian', 'assyrian', 'akkadian', 'hittite', 'hittites', 'norse', 'viking', 'germanic', 'north germanic', 'scandinavian', 'greek', 'hellenistic', 'persian', 'achaemenid', 'sassanid', 'byzantine', 'ottoman', 'arabic', 'islamic', 'medieval europe', 'renaissance', 'feudal', 'crusader', 'thor', 'hammer', 'mjolnir', 'nordic'],
         'greek': ['egyptian', 'pharaoh', 'pyramid', 'nile', 'mesopotamia', 'sumerian', 'babylonian', 'assyrian', 'akkadian', 'hittite', 'hittites', 'norse', 'viking', 'germanic', 'north germanic', 'scandinavian', 'roman', 'persian', 'achaemenid', 'sassanid', 'byzantine', 'ottoman', 'arabic', 'islamic', 'medieval europe', 'renaissance', 'feudal', 'crusader', 'thor', 'hammer', 'mjolnir', 'nordic']
       };
@@ -284,6 +284,14 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
     if (isNorseContent && !courseTitle.toLowerCase().includes('norse') && !courseTitle.toLowerCase().includes('viking')) {
       score -= 10000; // Immediate rejection for Norse content in non-Norse courses
       console.log(`[ImageScoring] Immediate rejection for Norse content: "${haystack.substring(0, 100)}"`);
+    }
+
+    // Immediate rejection for Mesopotamia content in Egypt courses
+    const mesopotamiaTerms = ['mesopotamia', 'mesopotamian', 'sumerian', 'babylonian', 'assyrian', 'akkadian'];
+    const isMesopotamiaContent = mesopotamiaTerms.some(term => haystack.includes(term));
+    if (isMesopotamiaContent && courseTitle.toLowerCase().includes('egypt')) {
+      score -= 10000; // Immediate rejection for Mesopotamia content in Egypt courses
+      console.log(`[ImageScoring] Immediate rejection for Mesopotamia content in Egypt course: "${haystack.substring(0, 100)}"`);
     }
 
     // Strong bonus for exact subject phrase appearing
@@ -1601,7 +1609,7 @@ Context: "${context.substring(0, 1000)}..."`;
           const isHistoricalContent = /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(subject) || 
                                      /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(courseContext?.title || '');
           
-          const minScoreThreshold = isHistoricalContent ? 100 : 0; // Much higher threshold for historical content
+          const minScoreThreshold = isHistoricalContent ? 25 : 0; // Lower threshold but still high enough to filter bad content
           
           if (best.score >= minScoreThreshold) {
             console.log(`[AIService] Selected Wikipedia image for "${subject}" (score ${best.score}): ${best.imageUrl}`);
@@ -1722,7 +1730,7 @@ Context: "${context.substring(0, 1000)}..."`;
         const isHistoricalContent = /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(subject) || 
                                    /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(courseContext?.title || '');
         
-        const minScoreThreshold = isHistoricalContent ? 100 : 0; // Much higher threshold for historical content
+        const minScoreThreshold = isHistoricalContent ? 25 : 0; // Lower threshold but still high enough to filter bad content
         
         if (best.score >= minScoreThreshold) {
           console.log(`[AIService] Selected Pixabay image for "${subject}" (score ${best.score}): ${best.imageUrl}`);
@@ -4050,14 +4058,14 @@ app.get('/api/image/fast', async (req, res) => {
     // Validate image format - allow all common image formats including SVG
     const validImageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.tiff', '.tif'];
     
-    // Check for file extension in pathname
+    // Check for file extension in pathname (case insensitive)
     const hasValidExtension = validImageExtensions.some(ext => 
-      parsedUrl.pathname.toLowerCase().includes(ext)
+      parsedUrl.pathname.toLowerCase().includes(ext.toLowerCase())
     );
     
-    // Check for file extension in the full URL (for Pixabay URLs that don't have extensions in pathname)
+    // Check for file extension in the full URL (case insensitive)
     const hasValidExtensionInUrl = validImageExtensions.some(ext => 
-      url.toLowerCase().includes(ext)
+      url.toLowerCase().includes(ext.toLowerCase())
     );
     
     // Special handling for SVG files - they might have additional parameters
