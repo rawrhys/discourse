@@ -4209,7 +4209,9 @@ app.get('/api/captcha/verify/:courseId',
       global.captchaChallenges = new Map();
     }
     
-    console.log(`[API] CAPTCHA verification for course ${courseId}:`, { challenge, response, challengeKey });
+          console.log(`[API] CAPTCHA verification for course ${courseId}:`, { challenge, response, challengeKey });
+      console.log(`[API] Global captchaChallenges map size:`, global.captchaChallenges.size);
+      console.log(`[API] Available challenge keys:`, Array.from(global.captchaChallenges.keys()));
     
     // Verify CAPTCHA response
     if (challenge && response && challengeKey) {
@@ -4219,6 +4221,7 @@ app.get('/api/captcha/verify/:courseId',
       console.log(`[API] Available challenge keys:`, Array.from(global.captchaChallenges.keys()));
       console.log(`[API] Looking for challenge key:`, challengeKey);
       console.log(`[API] Stored challenge found:`, !!storedChallenge);
+      console.log(`[API] Challenge key exists in map:`, global.captchaChallenges.has(challengeKey));
       if (storedChallenge) {
         console.log(`[API] Stored challenge data:`, {
           challenge: storedChallenge.challenge,
