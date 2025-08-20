@@ -79,8 +79,7 @@ const Homepage = () => {
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <img src="/assets/images/discourse-logo.png" alt="Discourse" className="logo-icon" />
-          <span className="logo-text">Discourse</span>
+          <img src="/assets/images/discourse-logo.png" alt="Discourse" className="logo-icon-large" />
         </motion.div>
         
         <motion.button
@@ -292,8 +291,7 @@ const Homepage = () => {
       <footer className="footer">
         <div className="footer-content">
           <div className="footer-logo">
-            <img src="/assets/images/discourse-logo.png" alt="Discourse" className="logo-icon" />
-            <span className="logo-text">Discourse</span>
+            <img src="/assets/images/discourse-logo.png" alt="Discourse" className="logo-icon-large" />
           </div>
           <p className="footer-text">
             © {new Date().getFullYear()} Discourse. All rights reserved.

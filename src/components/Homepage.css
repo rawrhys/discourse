@@ -36,6 +36,13 @@
   border-radius: 8px;
 }
 
+.logo-icon-large {
+  width: 80px;
+  height: 80px;
+  border-radius: 12px;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+}
+
 .logo-text {
   background: linear-gradient(45deg, #fff, #e0e7ff);
   -webkit-background-clip: text;
@@ -356,6 +363,11 @@
     padding: 1rem;
   }
   
+  .logo-icon-large {
+    width: 60px;
+    height: 60px;
+  }
+  
   .hero-section {
     flex-direction: column;
     text-align: center;
@@ -433,6 +445,11 @@
 }
 
 @media (max-width: 480px) {
+  .logo-icon-large {
+    width: 50px;
+    height: 50px;
+  }
+  
   .hero-title {
     font-size: 2rem;
   }

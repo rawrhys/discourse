@@ -55,8 +55,7 @@ const HomepageSimple = () => {
       {/* Navigation */}
       <nav className="navbar">
         <div className="nav-logo animate-fade-in-left">
-          <img src="/assets/images/discourse-logo.png" alt="Discourse" className="logo-icon" />
-          <span className="logo-text">Discourse</span>
+          <img src="/assets/images/discourse-logo.png" alt="Discourse" className="logo-icon-large" />
         </div>
         
         <button
@@ -192,8 +191,7 @@ const HomepageSimple = () => {
       <footer className="footer">
         <div className="footer-content">
           <div className="footer-logo">
-            <img src="/assets/images/discourse-logo.png" alt="Discourse" className="logo-icon" />
-            <span className="logo-text">Discourse</span>
+            <img src="/assets/images/discourse-logo.png" alt="Discourse" className="logo-icon-large" />
           </div>
           <p className="footer-text">
             © {new Date().getFullYear()} Discourse. All rights reserved.
