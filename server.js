@@ -592,6 +592,18 @@ function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitl
     }
   }
 
+  // For Egypt courses, add specific Egyptian search terms to improve relevance
+  if (courseTitle && courseTitle.toLowerCase().includes('egypt')) {
+    dedupePush(queries, 'ancient egypt');
+    dedupePush(queries, 'egyptian civilization');
+    dedupePush(queries, 'egyptian pharaoh');
+    dedupePush(queries, 'egyptian pyramid');
+    dedupePush(queries, 'egyptian temple');
+    dedupePush(queries, 'egyptian tomb');
+    dedupePush(queries, 'egyptian artifact');
+    dedupePush(queries, 'egyptian archaeology');
+  }
+
   // Combine descriptive subject tokens with proper-noun phrases to specialize the query
   const properPhrases = [...subjectProperPhrases, ...contentProperPhrases];
   for (const token of subjectTokens.slice(0, 3)) {
@@ -615,6 +627,12 @@ function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitl
   for (const kw of baseKeywords) {
     const isGenericStandalone = GENERIC_EVENT_WORDS.has(kw.toLowerCase()) && !kw.includes(' ');
     if (isGenericStandalone) continue;
+    
+    // Filter out generic terms that don't add value to image search
+    const genericTerms = ['early', 'period', 'dynasty', 'kingdom', 'empire', 'civilization', 'history', 'ancient', 'old', 'new', 'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'];
+    const isGenericTerm = genericTerms.includes(kw.toLowerCase());
+    if (isGenericTerm) continue;
+    
     dedupePush(queries, kw);
     if (queries.length >= maxQueries) break;
   }
@@ -662,6 +680,17 @@ function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitl
       dedupePush(queries, 'egyptian sphinx');
       dedupePush(queries, 'egyptian obelisk');
       dedupePush(queries, 'egyptian papyrus');
+      dedupePush(queries, 'egyptian pyramid');
+      dedupePush(queries, 'egyptian tomb');
+      dedupePush(queries, 'egyptian statue');
+      dedupePush(queries, 'egyptian relief');
+      dedupePush(queries, 'egyptian painting');
+      dedupePush(queries, 'egyptian architecture');
+      dedupePush(queries, 'egyptian burial');
+      dedupePush(queries, 'egyptian religion');
+      dedupePush(queries, 'egyptian god');
+      dedupePush(queries, 'egyptian goddess');
+      dedupePush(queries, 'egyptian mythology');
     } else if (courseContext.toLowerCase().includes('rome')) {
       // Roman-specific queries
       for (const phrase of properPhrases.slice(0, 4)) {
@@ -1645,7 +1674,7 @@ Context: "${context.substring(0, 1000)}..."`;
       return null;
     }
     try {
-      const queries = buildRefinedSearchPhrases(subject, content, options.relaxed ? 4 : 2);
+      const queries = buildRefinedSearchPhrases(subject, content, options.relaxed ? 4 : 2, courseContext?.title || '');
       // Ensure the full subject phrase is first
       if (String(subject || '').trim()) {
         const s = String(subject).trim();
