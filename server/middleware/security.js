@@ -17,9 +17,11 @@ setInterval(() => {
   const now = Date.now();
   
   // Clean up old CAPTCHA challenges (older than 5 minutes)
-  for (const [key, challengeData] of captchaChallenges.entries()) {
-    if (now - challengeData.timestamp > 5 * 60 * 1000) {
-      captchaChallenges.delete(key);
+  if (global.captchaChallenges) {
+    for (const [key, challengeData] of global.captchaChallenges.entries()) {
+      if (now - challengeData.timestamp > 5 * 60 * 1000) {
+        global.captchaChallenges.delete(key);
+      }
     }
   }
   
@@ -197,12 +199,14 @@ export const captchaChallenge = (req, res, next) => {
     // Generate a unique challenge key even if no sessionId exists yet
     const uniqueId = sessionId || `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const challengeKey = `${uniqueId}_${Date.now()}`;
-    captchaChallenges.set(challengeKey, {
-      challenge: challengeData,
-      expectedResponse: expectedResponse,
-      timestamp: Date.now(),
-      sessionId: sessionId || null
-    });
+    if (global.captchaChallenges) {
+      global.captchaChallenges.set(challengeKey, {
+        challenge: challengeData,
+        expectedResponse: expectedResponse,
+        timestamp: Date.now(),
+        sessionId: sessionId || null
+      });
+    }
     
     console.log('[CAPTCHA] Returning CAPTCHA challenge:', { challengeData, challengeKey });
     return res.status(200).json({
@@ -215,7 +219,7 @@ export const captchaChallenge = (req, res, next) => {
   
   // Verify response using challenge key
   const challengeKey = req.query.challengeKey;
-  const storedChallenge = captchaChallenges.get(challengeKey);
+  const storedChallenge = global.captchaChallenges ? global.captchaChallenges.get(challengeKey) : null;
   if (!storedChallenge) {
     console.log('[CAPTCHA] Invalid challenge key:', challengeKey);
     return res.status(400).json({
@@ -225,9 +229,11 @@ export const captchaChallenge = (req, res, next) => {
   
   // Clean up old challenges (older than 5 minutes)
   const now = Date.now();
-  for (const [key, challengeData] of captchaChallenges.entries()) {
-    if (now - challengeData.timestamp > 5 * 60 * 1000) {
-      captchaChallenges.delete(key);
+  if (global.captchaChallenges) {
+    for (const [key, challengeData] of global.captchaChallenges.entries()) {
+      if (now - challengeData.timestamp > 5 * 60 * 1000) {
+        global.captchaChallenges.delete(key);
+      }
     }
   }
   
@@ -239,7 +245,9 @@ export const captchaChallenge = (req, res, next) => {
   }
   
   // Mark this specific challenge as completed and allow access
-  captchaChallenges.delete(challengeKey);
+  if (global.captchaChallenges) {
+    global.captchaChallenges.delete(challengeKey);
+  }
   
   next();
   } catch (error) {
@@ -272,12 +280,14 @@ export const checkCaptcha = async (req, res, sessionId) => {
       
       // Use the provided session ID for challenge key
       const challengeKey = `${sessionId}_${Date.now()}`;
-      captchaChallenges.set(challengeKey, {
-        challenge: challengeData,
-        expectedResponse: expectedResponse,
-        timestamp: Date.now(),
-        sessionId: sessionId
-      });
+      if (global.captchaChallenges) {
+        global.captchaChallenges.set(challengeKey, {
+          challenge: challengeData,
+          expectedResponse: expectedResponse,
+          timestamp: Date.now(),
+          sessionId: sessionId
+        });
+      }
       
       console.log('[CAPTCHA] Returning CAPTCHA challenge:', { challengeData, challengeKey });
       return {
@@ -290,7 +300,7 @@ export const checkCaptcha = async (req, res, sessionId) => {
     
     // Verify response using challenge key
     const challengeKey = req.query.challengeKey;
-    const storedChallenge = captchaChallenges.get(challengeKey);
+    const storedChallenge = global.captchaChallenges ? global.captchaChallenges.get(challengeKey) : null;
     if (!storedChallenge) {
       console.log('[CAPTCHA] Invalid challenge key:', challengeKey);
       return {
@@ -302,9 +312,11 @@ export const checkCaptcha = async (req, res, sessionId) => {
     
     // Clean up old challenges (older than 5 minutes)
     const now = Date.now();
-    for (const [key, challengeData] of captchaChallenges.entries()) {
-      if (now - challengeData.timestamp > 5 * 60 * 1000) {
-        captchaChallenges.delete(key);
+    if (global.captchaChallenges) {
+      for (const [key, challengeData] of global.captchaChallenges.entries()) {
+        if (now - challengeData.timestamp > 5 * 60 * 1000) {
+          global.captchaChallenges.delete(key);
+        }
       }
     }
     
@@ -317,7 +329,9 @@ export const checkCaptcha = async (req, res, sessionId) => {
     }
     
     // Mark this specific challenge as completed and allow access
-    captchaChallenges.delete(challengeKey);
+    if (global.captchaChallenges) {
+      global.captchaChallenges.delete(challengeKey);
+    }
     
     return { requiresCaptcha: false };
   } catch (error) {

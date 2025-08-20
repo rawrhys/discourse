@@ -3771,7 +3771,7 @@ app.get('/api/courses/saved', authenticateToken, async (req, res) => {
   }
 });
 
-app.get('/api/courses/:courseId', authenticateToken, (req, res) => {
+app.get('/api/courses/:courseId', authenticateToken, async (req, res) => {
   try {
     const { courseId } = req.params;
     
