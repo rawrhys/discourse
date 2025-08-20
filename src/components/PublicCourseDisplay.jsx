@@ -165,6 +165,7 @@ const PublicCourseDisplay = () => {
   const [unlockedModules, setUnlockedModules] = useState(new Set());
   const [showUnlockToast, setShowUnlockToast] = useState(false);
   const [unlockedModuleName, setUnlockedModuleName] = useState('');
+  const [highlightedCitation, setHighlightedCitation] = useState(null);
   const [activeTab, setActiveTab] = useState('content');
   const [ttsStatus, setTtsStatus] = useState({
     isPlaying: false,
@@ -213,6 +214,71 @@ const PublicCourseDisplay = () => {
     if (!currentLesson?.content) return '';
     return cleanAndCombineContent(currentLesson.content);
   }, [currentLesson]);
+
+  // Generate academic references using the same service as private LessonView
+  const academicReferences = useMemo(() => {
+    if (!processedContent || !currentLesson?.title || !course?.subject) return [];
+    
+    try {
+      // Only generate if content is substantial
+      if (processedContent.length < 100) return [];
+      
+      console.log('[PublicCourseDisplay] Generating academic references for:', {
+        lessonTitle: currentLesson.title,
+        courseSubject: course.subject,
+        contentLength: processedContent?.length || 0
+      });
+      
+      // Generate academic references using the same method as private LessonView
+      const references = AcademicReferencesService.generateReferences(
+        processedContent,
+        course.subject,
+        currentLesson.title
+      );
+      
+      console.log('[PublicCourseDisplay] Academic references generated:', {
+        referencesCount: references.length,
+        references: references,
+        contentLength: processedContent?.length || 0,
+        courseSubject: course.subject,
+        lessonTitle: currentLesson.title
+      });
+      
+      return references;
+    } catch (error) {
+      console.error('[PublicCourseDisplay] Error generating academic references:', error);
+      return [];
+    }
+  }, [processedContent, currentLesson?.title, course?.subject]);
+
+  // Handle citation click
+  const handleCitationClick = useCallback((referenceId) => {
+    setHighlightedCitation(referenceId);
+    
+    // Remove highlight after 3 seconds
+    setTimeout(() => {
+      setHighlightedCitation(null);
+    }, 3000);
+    
+    console.log('[PublicCourseDisplay] Citation clicked:', referenceId);
+  }, []);
+
+  // Create academic references footer using the same method as private LessonView
+  const referencesFooter = useMemo(() => {
+    try {
+      if (academicReferences && academicReferences.length > 0) {
+        const footer = AcademicReferencesService.createReferencesFooter(academicReferences);
+        console.log('[PublicCourseDisplay] Created references footer:', footer);
+        return footer;
+      } else {
+        console.log('[PublicCourseDisplay] No academic references available:', academicReferences);
+        return null;
+      }
+    } catch (error) {
+      console.warn('[PublicCourseDisplay] Error creating references footer:', error);
+      return null;
+    }
+  }, [academicReferences]);
 
   // Callbacks
   const normalizeImageUrl = useCallback((url) => {
@@ -1158,6 +1224,16 @@ const PublicCourseDisplay = () => {
 
 
                   </div>
+
+                  {/* References Section */}
+                  {referencesFooter && referencesFooter.references && (
+                    <div className="border-t border-gray-200 p-6">
+                      <AcademicReferencesFooter 
+                        references={referencesFooter.references}
+                        onCitationClick={handleCitationClick}
+                      />
+                    </div>
+                  )}
 
                   {/* Navigation */}
                   <div className="border-t border-gray-200 p-6">
