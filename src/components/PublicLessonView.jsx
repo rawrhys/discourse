@@ -6,6 +6,10 @@ import performanceMonitor from '../services/ImagePerformanceMonitor';
 import AcademicReferencesService from '../services/AcademicReferencesService';
 import AcademicReferencesFooter from './AcademicReferencesFooter';
 import { getContentAsString } from '../utils/contentFormatter';
+import Image from './Image.jsx';
+import { publicTTSService } from '../services/TTSService.js';
+import markdownService from '../services/MarkdownService';
+import quizPersistenceService from '../services/QuizPersistenceService';
 import './LessonView.css';
 
 // Function to extract references from content
@@ -268,6 +272,75 @@ const publicLessonStyles = `
   }
 `;
 
+// Image URL normalization function (matching private LessonView)
+const normalizeImageUrl = (url) => {
+  if (!url || typeof url !== 'string') return url;
+  // Absolute URLs are used as-is
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+
+  let normalized = url;
+
+  // Prevent double-prefixing: if the URL already starts with the API base, leave it unchanged
+  const base = process.env.REACT_APP_API_BASE_URL || '';
+  if (base && normalized.startsWith(base)) {
+    return normalized; // Already has prefix
+  }
+
+  // Ensure leading slash for root-relative paths
+  if (!normalized.startsWith('/')) normalized = `/${normalized}`;
+
+  return `${base}${normalized}`;
+};
+
+// Helper function to clean and combine lesson content (matching private LessonView)
+const cleanAndCombineContent = (content) => {
+  if (!content) return '';
+  
+  // Helper function to clean individual content parts
+  const cleanContentPart = (part) => {
+    if (!part) return '';
+    
+    // First, remove all separator patterns before any other processing
+    let cleaned = part
+      .replace(/Content generation completed\./g, '')
+      .replace(/\|\|\|---\|\|\|/g, '') // Remove |||---||| patterns
+      .replace(/\|\|\|/g, '') // Remove all remaining ||| patterns
+      .trim();
+    
+    // Final cleanup of any separators that might have been reintroduced
+    cleaned = cleaned
+      .replace(/\|\|\|---\|\|\|/g, '')
+      .replace(/\|\|\|/g, '');
+    
+    return cleaned;
+  };
+  
+  if (typeof content === 'string') {
+    const cleaned = cleanContentPart(content);
+    return cleaned;
+  }
+  
+  const { introduction, main_content, conclusion } = content;
+  
+  const cleanedIntro = introduction 
+    ? cleanContentPart(introduction)
+    : '';
+
+  const cleanedMain = main_content ? cleanContentPart(main_content) : '';
+  const cleanedConclusion = conclusion ? cleanContentPart(conclusion) : '';
+  
+  const result = [cleanedIntro, cleanedMain, cleanedConclusion]
+    .filter(Boolean)
+    .join('\n\n')
+    .replace(/\|\|\|---\|\|\|/g, '') // Final cleanup of any remaining patterns
+    .replace(/\|\|\|/g, ''); // Final cleanup of any remaining ||| patterns
+  
+  // Final separator cleanup after all processing
+  return result
+    .replace(/\|\|\|---\|\|\|/g, '')
+    .replace(/\|\|\|/g, '');
+};
+
 const PublicLessonView = ({ 
   lesson, 
   moduleTitle, 
@@ -291,6 +364,7 @@ const PublicLessonView = ({
   const [usedImageUrls, setUsedImageUrls] = useState(new Set());
   const [imageTitleCounts, setImageTitleCounts] = useState({});
   const [imageUrlCounts, setImageUrlCounts] = useState({});
+  const [imageFallbackTried, setImageFallbackTried] = useState(false);
   
   // TTS state management (matching private LessonView)
   const [ttsStatus, setTtsStatus] = useState({
@@ -747,29 +821,134 @@ const PublicLessonView = ({
     };
   }, [ttsStatus.isPlaying, ttsStatus.isPaused]); // Added dependencies back for proper updates
 
-  // Handle image loading for public courses with enhanced debouncing and deferred rendering
+  // Handle image loading for public courses with enhanced logic (matching private LessonView)
   useEffect(() => {
-    if (!lesson?.title || !subject || !courseId || renderPhase !== 'images') return;
-
+    let ignore = false;
+    
+    // If image is already present on lesson, use it (optimized check)
+    if (lesson?.image && (lesson.image.imageUrl || lesson.image.url)) {
+      const imageUrl = lesson.image.imageUrl || lesson.image.url;
+      const imageTitle = lesson.image.imageTitle || lesson.image.title;
+      
+      // Check if this image is already being used too frequently
+      const appearsMoreThanOnce = (imageTitle && imageTitleCounts[imageTitle] > 1) || (imageUrl && imageUrlCounts[imageUrl] > 1);
+      
+      if (!appearsMoreThanOnce) {
+        const existing = {
+          url: normalizeImageUrl(imageUrl),
+          title: imageTitle,
+          pageURL: lesson.image.pageURL,
+          attribution: lesson.image.attribution,
+          uploader: undefined,
+        };
+        
+        setImageData(existing);
+        setImageLoading(false);
+        console.log('[PublicLessonView] Using existing lesson image');
+        return;
+      }
+      // If duplicate, fall through to fetch a replacement
+      console.log('[PublicLessonView] Image appears too frequently, fetching replacement');
+    }
+    
     setImageLoading(true);
     setImageData(null);
     
-    // Defer image loading to idle time to prevent blocking
-    const loadImage = () => {
-      debouncedImageSearch(lesson, subject, courseId);
-    };
+    let abortController = new AbortController();
     
-    if ('requestIdleCallback' in window) {
-      requestIdleCallback(loadImage, { timeout: 1000 });
-    } else {
-      // Fallback for browsers without requestIdleCallback
-      setTimeout(loadImage, 100);
-    }
+    // Run in background (non-blocking)
+    (async function fetchImage() {
+      const startTime = performance.now();
+      
+      // Check if we have a preloaded image first
+      const preloadedImage = lessonImagePreloader.getPreloadedImage(lesson.id, lesson.title, subject);
+      if (preloadedImage) {
+        console.log('[PublicLessonView] Using preloaded image data:', preloadedImage.title);
+        if (!ignore && !abortController.signal.aborted) {
+          setImageData(preloadedImage);
+          setImageLoading(false);
+        }
+        return;
+      }
+      
+      try {
+        // Use the simplified approach with better error handling
+        console.log('[PublicLessonView] Fetching new image for lesson:', lesson.title);
+        const result = await SimpleImageService.search(
+          lesson.title,
+          courseId,
+          lesson?.id,
+          Array.from(usedImageTitles),
+          Array.from(usedImageUrls)
+        );
+        
+        // Track image fetch performance
+        const fetchTime = performance.now() - startTime;
+        if (result && result.url) {
+          performanceMonitor.trackImageLoad(result.url, fetchTime, false);
+        }
+        
+        // Log slow image fetches
+        if (fetchTime > 2000) {
+          console.warn('[PublicLessonView] Slow image fetch detected:', fetchTime + 'ms');
+        }
+        
+        if (!ignore && !abortController.signal.aborted) {
+          console.log('[PublicLessonView] Setting image data:', result);
+          
+          // Always set image data - result should never be null due to fallbacks
+          if (result && result.url) {
+            // Only update if the image data has actually changed
+            const newImageData = { ...result, url: normalizeImageUrl(result.url) };
+            setImageData(prevData => {
+              if (prevData?.url === newImageData?.url && prevData?.title === newImageData?.title) {
+                return prevData; // No change needed
+              }
+              return newImageData;
+            });
+            
+            // Update local used image tracking when a new image is found
+            setUsedImageTitles(prev => new Set([...prev, result.title]));
+            setUsedImageUrls(prev => new Set([...prev, result.url]));
+          } else {
+            console.warn('[PublicLessonView] No image result, using fallback');
+            // This should never happen due to fallbacks, but just in case
+            const fallbackImage = {
+              url: 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
+              title: 'Educational Content',
+              pageURL: '',
+              attribution: 'Wikimedia Commons',
+              uploader: 'Wikimedia'
+            };
+            setImageData(fallbackImage);
+          }
+        }
+      } catch (e) {
+        if (!ignore && !abortController.signal.aborted) {
+          console.warn('[PublicLessonView] Image fetch error:', e);
+          // Use fallback placeholder on error
+          const fallbackImage = {
+            url: 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
+            title: 'Educational Content',
+            pageURL: '',
+            attribution: 'Wikimedia Commons',
+            uploader: 'Wikimedia'
+          };
+          setImageData(fallbackImage);
+        }
+      } finally {
+        if (!ignore && !abortController.signal.aborted) {
+          setImageLoading(false);
+        }
+      }
+    })();
     
-    return () => {
-      // Cleanup is handled by the debounced function
+    return () => { 
+      ignore = true;
+      // Abort any pending request
+      abortController.abort();
     };
-  }, [lesson?.id, lesson?.title, subject, courseId, renderPhase, debouncedImageSearch]); // Include renderPhase in dependencies
+  }, [lesson, subject, courseId, courseDescription, imageTitleCounts, imageUrlCounts, usedImageTitles, usedImageUrls, normalizeImageUrl]);
 
   // Start preloading lesson image as soon as lesson data is available
   useEffect(() => {
@@ -822,6 +1001,74 @@ const PublicLessonView = ({
       console.log('[PublicLessonView] Image already preloaded or loaded, skipping preload');
     }
   }, [lesson?.id, lesson?.image, imageData?.url]);
+
+  // Reset image fallback flag when lesson changes
+  useEffect(() => {
+    setImageFallbackTried(false);
+  }, [lesson?.id]);
+
+  // If the lesson's current image fails to load (e.g., legacy /images/*.jpg that no longer exists),
+  // fetch a fresh remote image and update the lesson.
+  const handleImageError = useCallback(async () => {
+    if (imageFallbackTried) return;
+    setImageFallbackTried(true);
+    
+    // Create AbortController for this fallback request
+    const fallbackController = new AbortController();
+    
+    try {
+      const result = await SimpleImageService.searchWithContext(
+        lesson?.title,
+        subject, // Pass the course subject here
+        cleanAndCombineContent(lesson?.content),
+        Array.from(usedImageTitles), // Convert Set to Array
+        Array.from(usedImageUrls),   // Convert Set to Array
+        courseId,
+        lesson?.id,
+        courseDescription
+      );
+      
+      // Check if request was aborted before setting state
+      if (!fallbackController.signal.aborted && result && result.url) {
+        console.log('[PublicLessonView] Setting fallback image data:', result);
+        setImageData({ ...result, url: normalizeImageUrl(result.url) });
+        
+        // Update local used image tracking when a new image is found
+        if (result) {
+          setUsedImageTitles(prev => new Set([...prev, result.title]));
+          setUsedImageUrls(prev => new Set([...prev, result.url]));
+        }
+      } else if (!fallbackController.signal.aborted) {
+        // If no result, use fallback image
+        console.warn('[PublicLessonView] Fallback search failed, using fallback image');
+        const fallbackImage = {
+          url: 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
+          title: 'Educational Content',
+          pageURL: '',
+          attribution: 'Wikimedia Commons',
+          uploader: 'Wikimedia'
+        };
+        setImageData(fallbackImage);
+      }
+    } catch (e) {
+      // Only handle errors if not aborted
+      if (!fallbackController.signal.aborted) {
+        console.warn('[PublicLessonView] Image fallback error:', e);
+        // Use fallback placeholder on error
+        const fallbackImage = {
+          url: 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
+          title: 'Educational Content',
+          pageURL: '',
+          attribution: 'Wikimedia Commons',
+          uploader: 'Wikimedia'
+        };
+        setImageData(fallbackImage);
+      }
+    }
+    
+    // Cleanup function to abort if component unmounts
+    return () => fallbackController.abort();
+  }, [imageFallbackTried, lesson, usedImageTitles, usedImageUrls, courseId, normalizeImageUrl, subject, courseDescription]);
 
   // Academic references state (optimized with useMemo)
   const [highlightedCitation, setHighlightedCitation] = useState(null);
@@ -960,6 +1207,7 @@ const PublicLessonView = ({
     };
   }, []);
 
+  // TTS handlers (matching private LessonView)
   const handleStartAudio = useCallback(async () => {
     // Add a small delay to prevent rapid button clicks
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -1005,8 +1253,25 @@ const PublicLessonView = ({
         
         if (view === 'content') {
           // Read the full lesson content including introduction and conclusion
-          // Use the new content formatter to handle malformed JSON and strip section keys
-          contentToRead = getContentAsString(lesson.content);
+          if (lesson.content && typeof lesson.content === 'object') {
+            // For object content, combine introduction, main_content, and conclusion
+            const parts = [];
+            if (lesson.content.introduction) {
+              parts.push(lesson.content.introduction);
+            }
+            if (lesson.content.main_content) {
+              parts.push(lesson.content.main_content);
+            } else if (lesson.content.content) {
+              parts.push(lesson.content.content);
+            }
+            if (lesson.content.conclusion) {
+              parts.push(lesson.content.conclusion);
+            }
+            contentToRead = parts.join('\n\n');
+          } else if (typeof lesson.content === 'string') {
+            // For string content, use it as is
+            contentToRead = lesson.content;
+          }
         } else if (view === 'flashcards') {
           // For flashcards view, read the flashcard terms and definitions
           const flashcardData = lesson?.flashcards || lesson?.content?.flashcards || [];
@@ -1060,45 +1325,19 @@ const PublicLessonView = ({
       console.error('[PublicLessonView] TTS error:', error);
       setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
     }
-  }, [view, lesson]); // Removed ttsStatus dependencies to prevent auto-restart
+  }, [view, lesson, ttsStatus.isPlaying, ttsStatus.isPaused]);
 
   const handleStopAudio = useCallback(async () => {
-    console.log('[PublicLessonView] handleStopAudio called');
+    // Add a small delay to prevent rapid button clicks
+    await new Promise(resolve => setTimeout(resolve, 100));
     
     try {
-      // Stop the TTS service
-      await publicTTSService.stop();
-      console.log('[PublicLessonView] TTS stop completed successfully');
-      
-      // Don't call reset() after stop() - this clears the stopped state and allows restarts
-      console.log('[PublicLessonView] TTS service stopped (without reset to preserve stopped state)');
-      
-      // Always reset state when stopping
-      setTtsStatus(prev => ({ 
-        ...prev, 
-        isPlaying: false, 
-        isPaused: false 
-      }));
-      
-      console.log('[PublicLessonView] TTS state reset to stopped');
+      publicTTSService.stop();
     } catch (error) {
       console.warn('[PublicLessonView] TTS stop error:', error);
-      
-      // Only reset if stop fails, but don't clear the stopped state
-      try {
-        publicTTSService.reset();
-        console.log('[PublicLessonView] TTS service reset after stop error');
-      } catch (resetError) {
-        console.warn('[PublicLessonView] TTS reset error:', resetError);
-      }
-      
-      // Always reset state when stopping, even on error
-      setTtsStatus(prev => ({ 
-        ...prev, 
-        isPlaying: false, 
-        isPaused: false 
-      }));
     }
+    // Always reset state when stopping
+    setTtsStatus(prev => ({ ...prev, isPlaying: false, isPaused: false }));
   }, []);
 
   const handlePauseResumeAudio = useCallback(async () => {
@@ -1116,7 +1355,7 @@ const PublicLessonView = ({
         const resumed = await publicTTSService.resume();
         console.log('[PublicLessonView] Resume result:', resumed);
         if (resumed) {
-        setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
+          setTtsStatus(prev => ({ ...prev, isPlaying: true, isPaused: false }));
         }
       } else if (ttsStatus.isPlaying) {
         console.log('[PublicLessonView] Attempting to pause TTS');
@@ -1130,9 +1369,16 @@ const PublicLessonView = ({
     }
   }, [ttsStatus.isPlaying, ttsStatus.isPaused]);
 
+  // Handle tab change
   const handleTabChange = useCallback((newView) => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[PublicLessonView] handleTabChange called with:', newView, 'current view:', view);
+    }
     setView(newView);
-  }, []);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[PublicLessonView] View state updated to:', newView);
+    }
+  }, [view]);
 
   // Memoized flashcard renderer
   const renderFlashcards = useCallback(() => {
@@ -1273,72 +1519,6 @@ const PublicLessonView = ({
     return processedContent;
   };
 
-  // Helper function to clean and combine lesson content (copied from working LessonView)
-  const cleanAndCombineContent = (content) => {
-    if (!content) return '';
-    
-    // Helper function to clean individual content parts (without markdown processing)
-    const cleanContentPart = (part) => {
-      if (!part) return '';
-      
-      // Only clean separator patterns, don't apply markdown processing yet
-      let cleaned = part
-        .replace(/Content generation completed\./g, '')
-        .replace(/\|\|\|---\|\|\|/g, '') // Remove |||---||| patterns
-        .replace(/\|\|\|/g, '') // Remove all remaining ||| patterns
-        .trim();
-      
-      // Clean up remaining asterisks
-      cleaned = cleanupRemainingAsterisks(cleaned);
-      
-      return cleaned;
-    };
-    
-    if (typeof content === 'string') {
-      const cleaned = cleanContentPart(content);
-      
-      // Final separator cleanup after all processing
-      const finalResult = cleaned
-        .replace(/\|\|\|---\|\|\|/g, '')
-        .replace(/\|\|\|/g, '');
-      
-      return finalResult;
-    }
-    
-    const { introduction, main_content, conclusion } = content;
-    
-    const cleanedIntro = introduction 
-      ? cleanContentPart(introduction)
-      : '';
-
-    const cleanedMain = main_content ? cleanContentPart(main_content) : '';
-    const cleanedConclusion = conclusion ? cleanContentPart(conclusion) : '';
-    
-    // Create sections with clear section headers and proper spacing
-    const sections = [];
-    
-    if (cleanedIntro) {
-      sections.push(`## Introduction\n\n${cleanedIntro}`);
-    }
-    
-    if (cleanedMain) {
-      sections.push(`## Main Content\n\n${cleanedMain}`);
-    }
-    
-    if (cleanedConclusion) {
-      sections.push(`## Conclusion\n\n${cleanedConclusion}`);
-    }
-    
-    const result = sections.join('\n\n---\n\n')
-      .replace(/\|\|\|---\|\|\|/g, '') // Final cleanup of any remaining patterns
-      .replace(/\|\|\|/g, ''); // Final cleanup of any remaining ||| patterns
-    
-    // Final separator cleanup after all processing
-    return result
-      .replace(/\|\|\|---\|\|\|/g, '')
-      .replace(/\|\|\|/g, '');
-  };
-
   // Early return if no lesson
   if (!lesson) {
     return (
@@ -1348,231 +1528,53 @@ const PublicLessonView = ({
     );
   }
 
-  // Get lesson content and process with academic references
-  let lessonContent = '';
-  try {
-    // Use the same content processing approach as private LessonView
-    lessonContent = cleanAndCombineContent(lesson.content);
-    
-    // Debug logging for main content processing - reduced frequency
-    if (process.env.NODE_ENV === 'development' && Math.random() < 0.1) { // Only log 10% of the time
-      console.log('[PublicLessonView] Main content processing:', {
-        originalContentType: typeof lesson.content,
-        lessonContentLength: lessonContent.length,
-        hasContent: !!lessonContent,
-        isEmpty: lessonContent.trim() === ''
-      });
-    }
-  } catch (error) {
-    console.error('[PublicLessonView] Error processing lesson content:', error);
-    lessonContent = typeof lesson.content === 'string' ? lesson.content : '';
-  }
-  
-  // Use content with citations if available, otherwise use original content
-  const displayContent = contentWithCitations 
-    ? (contentWithCitations.includes('"introduction":') || contentWithCitations.includes('"main_content":') || contentWithCitations.includes('"conclusion":'))
-      ? cleanAndCombineContent(contentWithCitations)
-      : contentWithCitations
-    : lessonContent;
-  
-  // Debug logging for display content - reduced frequency
-  if (process.env.NODE_ENV === 'development' && Math.random() < 0.1) { // Only log 10% of the time
-    console.log('[PublicLessonView] Display content processing:', {
-      hasContentWithCitations: !!contentWithCitations,
-      contentWithCitationsLength: contentWithCitations ? contentWithCitations.length : 0,
-      lessonContentLength: lessonContent.length,
-      displayContentLength: displayContent.length,
-      hasContent: !!displayContent,
-      isEmpty: displayContent.trim() === ''
-    });
-  }
-  
-  // Apply markdown parsing to the content (same approach as private LessonView)
+  // Process content for display with enhanced markdown parsing
+  let displayContent = '';
   let parsedContent = '';
+  
   try {
-    // Preprocess content for better line breaks and formatting
-    let processedContent = preprocessContentForDisplay(displayContent);
-    
-    // Debug the preprocessing step
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[PublicLessonView] Preprocessing debug:', {
-        originalLength: displayContent.length,
-        processedLength: processedContent.length,
-        hasSectionHeaders: processedContent.includes('## Introduction') || processedContent.includes('## Main Content') || processedContent.includes('## Conclusion'),
-        hasHorizontalRules: processedContent.includes('---'),
-        processedPreview: processedContent.substring(0, 300) + '...'
-      });
-    }
+    // Use the content formatter to clean and combine content
+    displayContent = cleanAndCombineContent(lesson.content);
     
     // Remove in-text citations first, then apply markdown fix
-    let fixedContent = markdownService.removeInTextCitations(processedContent);
+    let fixedContent = markdownService.removeInTextCitations(displayContent);
     
     // Apply markdown fix after citation removal - use bibliography-aware parsing
     fixedContent = fixedContent.includes('## References') 
       ? markdownService.parseWithBibliography(fixedContent)
-      : fixMalformedMarkdown(fixedContent);
+      : markdownService.parse(fixedContent);
 
     // Frontend-level fix for malformed References sections
-    fixedContent = fixMalformedReferencesAtFrontend(fixedContent);
-    
-    // Apply markdown parsing to the fixed content
-    parsedContent = parseWithSectionPreservation(fixedContent);
-    
-          // Enhanced paragraph structure and line break formatting
-      if (parsedContent) {
-        // Force paragraph breaks for better readability
-        parsedContent = parsedContent
-          // Ensure proper spacing between paragraphs
-          .replace(/<\/p>\s*<p>/g, '</p>\n\n<p>')
-          .replace(/<\/p>\s*<h/g, '</p>\n\n<h')
-          .replace(/<\/h[1-6]>\s*<p>/g, '</h$1>\n\n<p>')
-          // Ensure proper spacing around horizontal rules
-          .replace(/<\/p>\s*<hr[^>]*>\s*<p>/g, '</p>\n\n<hr>\n\n<p>')
-          // FORCE REMOVE line breaks after circa abbreviations
-          .replace(/c\.\s*<br[^>]*>\s*(\d{4})/g, 'c. $1') // Remove <br> after c.
-          .replace(/c\.\s*<br[^>]*>\s*<br[^>]*>\s*(\d{4})/g, 'c. $1') // Remove double <br> after c.
-          .replace(/c\.\s*<br[^>]*>\s*(\d{4})\s*–\s*(\d{4})/g, 'c. $1–$2') // Remove <br> in date ranges
-          .replace(/c\.\s*<br[^>]*>\s*(\d{4})\s*-\s*(\d{4})/g, 'c. $1-$2') // Remove <br> in date ranges (hyphen)
-          .replace(/c\.\s*<br[^>]*>\s*(\d{4})\s+BCE/g, 'c. $1 BCE') // Remove <br> before BCE
-          .replace(/c\.\s*<br[^>]*>\s*(\d{4})\s+CE/g, 'c. $1 CE') // Remove <br> before CE
-          .replace(/c\.\s*<br[^>]*>\s*(\d{4})\s+BC/g, 'c. $1 BC') // Remove <br> before BC
-          .replace(/c\.\s*<br[^>]*>\s*(\d{4})\s+AD/g, 'c. $1 AD') // Remove <br> before AD
-          // Clean up excessive whitespace
-          .replace(/\n{3,}/g, '\n\n');
-      
-      // If the content doesn't have paragraph tags, add them
-      if (!parsedContent.includes('<p>')) {
-        // Split by double newlines and wrap each section in <p> tags
-        const paragraphs = parsedContent.split(/\n\n+/).filter(p => p.trim());
-        parsedContent = paragraphs.map(p => {
-          // Add line breaks within paragraphs for better readability
-          const formattedParagraph = p.trim()
-            .replace(/\n/g, '<br>') // Convert single newlines to <br> tags
-            .replace(/([.!?])\s+/g, '$1<br><br>') // Add double line breaks after sentences
-            .replace(/<br><br><br>/g, '<br><br>'); // Clean up excessive breaks
-          return `<p>${formattedParagraph}</p>`;
-        }).join('\n\n');
-      } else {
-              // If it already has paragraph tags, enhance the formatting
-      parsedContent = parsedContent
-        // Add line breaks within existing paragraphs for better readability
-        .replace(/(<p[^>]*>)([^<]+)(<\/p>)/g, (match, openTag, content, closeTag) => {
-          const formattedContent = content
-            .replace(/\n/g, '<br>') // Convert single newlines to <br> tags
-            // First, temporarily protect circa abbreviations from line break insertion
-            .replace(/\bc\.\s+(\d{4})/g, 'CIRCA_YEAR_$1')
-            .replace(/\bc\.\s+(\d{4})\s*–\s*(\d{4})/g, 'CIRCA_RANGE_$1_$2')
-            .replace(/\bc\.\s+(\d{4})\s*-\s*(\d{4})/g, 'CIRCA_RANGE_$1_$2')
-            .replace(/\bc\.\s+(\d{4})\s+BCE/g, 'CIRCA_BCE_$1')
-            .replace(/\bc\.\s+(\d{4})\s+CE/g, 'CIRCA_CE_$1')
-            .replace(/\bc\.\s+(\d{4})\s+BC/g, 'CIRCA_BC_$1')
-            .replace(/\bc\.\s+(\d{4})\s+AD/g, 'CIRCA_AD_$1')
-            // Add line breaks after sentences (but not after circa)
-            .replace(/([.!?])\s+/g, '$1<br><br>') // Add double line breaks after sentences
-            .replace(/<br><br><br>/g, '<br><br>') // Clean up excessive breaks
-            // Restore circa abbreviations
-            .replace(/CIRCA_YEAR_(\d{4})/g, 'c. $1')
-            .replace(/CIRCA_RANGE_(\d{4})_(\d{4})/g, 'c. $1–$2')
-            .replace(/CIRCA_BCE_(\d{4})/g, 'c. $1 BCE')
-            .replace(/CIRCA_CE_(\d{4})/g, 'c. $1 CE')
-            .replace(/CIRCA_BC_(\d{4})/g, 'c. $1 BC')
-            .replace(/CIRCA_AD_(\d{4})/g, 'c. $1 AD');
-          return `${openTag}${formattedContent}${closeTag}`;
-        });
-      }
-      
-      // Additional formatting improvements
-      parsedContent = parsedContent
-        // Ensure proper spacing around headers
-        .replace(/(<h[1-6][^>]*>)/g, '\n\n$1')
-        .replace(/(<\/h[1-6]>)/g, '$1\n\n')
-        // Ensure proper spacing around horizontal rules
-        .replace(/(<hr[^>]*>)/g, '\n\n$1\n\n')
-        // FINAL FORCE REMOVE any remaining line breaks after circa
-        .replace(/c\.\s*<br[^>]*>\s*(\d{4})/g, 'c. $1') // Remove <br> after c.
-        .replace(/c\.\s*<br[^>]*>\s*<br[^>]*>\s*(\d{4})/g, 'c. $1') // Remove double <br> after c.
-        .replace(/c\.\s*<br[^>]*>\s*(\d{4})\s*–\s*(\d{4})/g, 'c. $1–$2') // Remove <br> in date ranges
-        .replace(/c\.\s*<br[^>]*>\s*(\d{4})\s*-\s*(\d{4})/g, 'c. $1-$2') // Remove <br> in date ranges (hyphen)
-        .replace(/c\.\s*<br[^>]*>\s*(\d{4})\s+BCE/g, 'c. $1 BCE') // Remove <br> before BCE
-        .replace(/c\.\s*<br[^>]*>\s*(\d{4})\s+CE/g, 'c. $1 CE') // Remove <br> before CE
-        .replace(/c\.\s*<br[^>]*>\s*(\d{4})\s+BC/g, 'c. $1 BC') // Remove <br> before BC
-        .replace(/c\.\s*<br[^>]*>\s*(\d{4})\s+AD/g, 'c. $1 AD') // Remove <br> before AD
-        // Clean up excessive whitespace
-        .replace(/\n{3,}/g, '\n\n')
-        .trim();
-    }
-    
-    // FALLBACK: If still no paragraph tags, force create them from the raw content
-    if (!parsedContent.includes('<p>') && displayContent) {
-      console.log('[PublicLessonView] No paragraph tags found, forcing paragraph creation from raw content');
-      
-      // Split the raw content into sentences and create paragraphs
-      const sentences = displayContent
-        .replace(/\n/g, ' ') // Replace newlines with spaces
-        .replace(/([.!?])\s+/g, '$1|') // Mark sentence endings
-        .split('|')
-        .filter(s => s.trim().length > 10); // Filter out very short fragments
-      
-      parsedContent = sentences.map(sentence => {
-        const trimmed = sentence.trim();
-        if (trimmed.length === 0) return '';
-        
-        // Add line breaks after sentences for better readability, but preserve circa abbreviations
-        const formattedSentence = trimmed
-          // First, temporarily protect circa abbreviations from line break insertion
-          .replace(/\bc\.\s+(\d{4})/g, 'CIRCA_YEAR_$1')
-          .replace(/\bc\.\s+(\d{4})\s*–\s*(\d{4})/g, 'CIRCA_RANGE_$1_$2')
-          .replace(/\bc\.\s+(\d{4})\s*-\s*(\d{4})/g, 'CIRCA_RANGE_$1_$2')
-          .replace(/\bc\.\s+(\d{4})\s+BCE/g, 'CIRCA_BCE_$1')
-          .replace(/\bc\.\s+(\d{4})\s+CE/g, 'CIRCA_CE_$1')
-          .replace(/\bc\.\s+(\d{4})\s+BC/g, 'CIRCA_BC_$1')
-          .replace(/\bc\.\s+(\d{4})\s+AD/g, 'CIRCA_AD_$1')
-          // Add line breaks after sentences (but not after circa)
-          .replace(/([.!?])\s+/g, '$1<br><br>') // Add double line breaks after sentences
-          .replace(/<br><br><br>/g, '<br><br>') // Clean up excessive breaks
-          // Restore circa abbreviations
-          .replace(/CIRCA_YEAR_(\d{4})/g, 'c. $1')
-          .replace(/CIRCA_RANGE_(\d{4})_(\d{4})/g, 'c. $1–$2')
-          .replace(/CIRCA_BCE_(\d{4})/g, 'c. $1 BCE')
-          .replace(/CIRCA_CE_(\d{4})/g, 'c. $1 CE')
-          .replace(/CIRCA_BC_(\d{4})/g, 'c. $1 BC')
-          .replace(/CIRCA_AD_(\d{4})/g, 'c. $1 AD');
-        
-        return `<p>${formattedSentence}</p>`;
-      }).join('\n\n');
-      
-      console.log('[PublicLessonView] Forced paragraph creation result:', {
-        sentenceCount: sentences.length,
-        paragraphCount: (parsedContent.match(/<p>/g) || []).length,
-        contentPreview: parsedContent.substring(0, 300) + '...'
-      });
-    }
-    
-    // Debug log to check if JSON keys are still present
+    fixedContent = fixedContent
+      // Fix the specific problematic pattern: "## References [1] ... [2] ..."
+      .replace(/## References\s*\[(\d+)\]/g, '\n## References\n\n[$1]')
+      // Ensure each citation is on its own line
+      .replace(/\]\s*\[(\d+)\]/g, '.\n\n[$1]')
+      // Add proper line breaks between citations
+      .replace(/\.\s*\[(\d+)\]/g, '.\n\n[$1]')
+      // Clean up any remaining issues
+      .replace(/\n{3,}/g, '\n\n'); // Normalize multiple line breaks
+
+    // Extract references from the content
+    const { contentWithoutRefs, references } = extractReferences(fixedContent);
+
+    // Apply markdown parsing to content without references
+    parsedContent = markdownService.parse(contentWithoutRefs);
+
+    // Debug logging for references processing
     if (process.env.NODE_ENV === 'development') {
-      console.log('[PublicLessonView] Content processing debug:', {
-        hasIntroductionKey: displayContent.includes('"introduction":'),
-        hasMainContentKey: displayContent.includes('"main_content":'),
-        hasConclusionKey: displayContent.includes('"conclusion":'),
-        displayContentLength: displayContent.length,
-        parsedContentLength: parsedContent.length,
-        hasParagraphTags: parsedContent.includes('<p>'),
-        hasSectionHeaders: parsedContent.includes('<h2>'),
-        hasHorizontalRules: parsedContent.includes('<hr>'),
-        hasCustomSectionHeaders: parsedContent.includes('section-header'),
-        hasCustomDividers: parsedContent.includes('section-divider'),
-        contentPreview: parsedContent.substring(0, 500) + '...',
-        rawContentPreview: displayContent.substring(0, 200) + '...',
-        paragraphCount: (parsedContent.match(/<p>/g) || []).length,
-        lineBreakCount: (parsedContent.match(/<br>/g) || []).length
+      console.log('[PublicLessonView] References processing:', {
+        hasReferences: displayContent?.includes('## References'),
+        referencesCount: references?.length || 0,
+        references: references,
+        contentWithoutRefsLength: contentWithoutRefs?.length || 0,
+        parsedContentLength: parsedContent?.length || 0
       });
     }
   } catch (error) {
-    console.error('[PublicLessonView] Error parsing markdown:', error);
+    console.error('[PublicLessonView] Error processing markdown:', error);
     parsedContent = displayContent || '';
   }
-  
-
   
   // Create academic references footer
   let referencesFooter = null;
@@ -1720,13 +1722,12 @@ const PublicLessonView = ({
                  src={imageData.url}
                  alt={lesson?.title || 'Lesson illustration'}
                  className="lesson-image"
+                 style={{ width: '100%', height: 'auto' }}
                  priority={true}
                  preload={true}
                  lazy={false}
                  sizes="(max-width: 768px) 100vw, 700px"
-                 onError={(e) => {
-                   e.target.style.display = 'none';
-                 }}
+                 onError={handleImageError}
                />
                <figcaption className="image-description" style={{ 
                  textAlign: 'center', 
