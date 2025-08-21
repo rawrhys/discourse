@@ -261,40 +261,39 @@ const ReportProblem = ({ isOpen, onClose, onSuccess }) => {
         {/* Chat-like Interface */}
         <div className="flex-1 p-4 overflow-y-auto">
           <div className="space-y-4">
-            {/* Bot Message */}
-            <div className="flex items-start space-x-3">
-              <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
-                <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="bg-purple-50 rounded-lg p-4 max-w-lg border border-purple-200">
-                <h4 className="font-semibold text-purple-800 mb-2">👋 How can we help you?</h4>
-                <p className="text-sm text-gray-700">
-                  Please describe the technical issue you're experiencing. Include as much detail as possible to help us resolve it quickly. We'll get back to you within 24-48 hours.
-                </p>
-              </div>
-            </div>
+                         {/* Bot Message */}
+             <div className="flex items-start space-x-3">
+               <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
+                 <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                   <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                 </svg>
+               </div>
+               <div className="bg-purple-50 rounded-lg p-3 max-w-md border border-purple-200">
+                 <p className="text-sm text-gray-700">
+                   👋 Please describe the technical issue you're experiencing. Include as much detail as possible to help us resolve it quickly.
+                 </p>
+               </div>
+             </div>
 
-            {/* Success Message */}
-            {success && (
-              <div className="flex items-start space-x-3">
-                <div className="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center flex-shrink-0">
-                  <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="bg-green-50 rounded-lg p-4 max-w-lg border border-green-200">
-                  <h4 className="font-semibold text-green-800 mb-2">✅ Report Submitted Successfully!</h4>
-                  <p className="text-sm text-green-700 mb-2">
-                    Thank you for reporting this issue. We've received your message and will investigate it promptly.
-                  </p>
-                  <p className="text-sm text-green-700">
-                    We'll contact you at <span className="font-medium">{userEmail}</span> within 24-48 hours to provide updates and resolve your issue.
-                  </p>
-                </div>
-              </div>
-            )}
+                         {/* Success Message */}
+             {success && (
+               <div className="flex items-start space-x-3">
+                 <div className="w-12 h-12 bg-green-600 rounded-full flex items-center justify-center flex-shrink-0">
+                   <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 20 20">
+                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                   </svg>
+                 </div>
+                 <div className="bg-green-50 rounded-lg p-5 max-w-xl border-2 border-green-300 shadow-sm">
+                   <h4 className="text-lg font-bold text-green-800 mb-3">✅ Report Submitted Successfully!</h4>
+                   <p className="text-base text-green-700 mb-3">
+                     Thank you for reporting this issue. We've received your message and will investigate it promptly.
+                   </p>
+                   <p className="text-base text-green-700 font-medium">
+                     We'll contact you at <span className="font-bold">{userEmail}</span> within 24-48 hours to provide updates and resolve your issue.
+                   </p>
+                 </div>
+               </div>
+             )}
 
             {/* Error Message */}
             {error && (
