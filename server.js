@@ -7327,7 +7327,7 @@ This is an automated notification from The Discourse AI platform.
         if (process.env.SMTP_HOST && process.env.SMTP_PORT && process.env.SMTP_USER && process.env.SMTP_PASS) {
           console.log('📧 [PROBLEM_REPORT] Attempting to send email via SMTP...');
           
-          const transporter = nodemailer.createTransporter({
+          const transporter = nodemailer.createTransport({
             host: process.env.SMTP_HOST,
             port: process.env.SMTP_PORT,
             secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports

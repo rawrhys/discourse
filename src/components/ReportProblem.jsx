@@ -236,7 +236,7 @@ const ReportProblem = ({ isOpen, onClose, onSuccess }) => {
 
   return (
     <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] flex flex-col">
+      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[95vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
           <div className="flex items-center space-x-3">
@@ -263,14 +263,15 @@ const ReportProblem = ({ isOpen, onClose, onSuccess }) => {
           <div className="space-y-4">
             {/* Bot Message */}
             <div className="flex items-start space-x-3">
-              <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
-                <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+              <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
+                <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                 </svg>
               </div>
-              <div className="bg-purple-50 rounded-lg p-3 max-w-xs">
-                <p className="text-sm text-gray-800">
-                  Hi there! 👋 Please describe the technical issue you're experiencing. Include as much detail as possible to help us resolve it quickly.
+              <div className="bg-purple-50 rounded-lg p-4 max-w-lg border border-purple-200">
+                <h4 className="font-semibold text-purple-800 mb-2">👋 How can we help you?</h4>
+                <p className="text-sm text-gray-700">
+                  Please describe the technical issue you're experiencing. Include as much detail as possible to help us resolve it quickly. We'll get back to you within 24-48 hours.
                 </p>
               </div>
             </div>
@@ -278,16 +279,20 @@ const ReportProblem = ({ isOpen, onClose, onSuccess }) => {
             {/* Success Message */}
             {success && (
               <div className="flex items-start space-x-3">
-                <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center flex-shrink-0">
-                  <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                <div className="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center flex-shrink-0">
+                  <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                   </svg>
                 </div>
-                                 <div className="bg-green-50 rounded-lg p-3 max-w-xs">
-                   <p className="text-sm text-green-800">
-                     Thank you! Your report has been submitted successfully. We'll contact you at {userEmail} to follow up on your issue.
-                   </p>
-                 </div>
+                <div className="bg-green-50 rounded-lg p-4 max-w-lg border border-green-200">
+                  <h4 className="font-semibold text-green-800 mb-2">✅ Report Submitted Successfully!</h4>
+                  <p className="text-sm text-green-700 mb-2">
+                    Thank you for reporting this issue. We've received your message and will investigate it promptly.
+                  </p>
+                  <p className="text-sm text-green-700">
+                    We'll contact you at <span className="font-medium">{userEmail}</span> within 24-48 hours to provide updates and resolve your issue.
+                  </p>
+                </div>
               </div>
             )}
 
