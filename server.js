@@ -118,6 +118,7 @@ app.use((req, res, next) => {
 
 // Parse JSON bodies
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // File upload middleware
 app.use(fileUpload({
@@ -7175,11 +7176,30 @@ app.post('/api/report-problem', async (req, res) => {
     // Handle multipart form data for file uploads
     console.log('[PROBLEM_REPORT] Received form data:', {
       body: req.body,
+      bodyKeys: req.body ? Object.keys(req.body) : 'No body keys',
+      bodyValues: req.body ? Object.values(req.body) : 'No body values',
       files: req.files ? Object.keys(req.files) : 'No files',
-      headers: req.headers
+      contentType: req.headers['content-type'],
+      contentLength: req.headers['content-length']
     });
     
-    const message = req.body.message;
+    // Try to get message from different possible sources
+    let message = req.body.message;
+    if (!message && req.body && typeof req.body === 'object') {
+      // Try to find message in the body object
+      const bodyKeys = Object.keys(req.body);
+      console.log('[PROBLEM_REPORT] Available body keys:', bodyKeys);
+      
+      // Check if message might be nested or have a different key
+      for (const key of bodyKeys) {
+        if (key.toLowerCase().includes('message') || key.toLowerCase().includes('content')) {
+          console.log(`[PROBLEM_REPORT] Found potential message in key '${key}':`, req.body[key]);
+          message = req.body[key];
+          break;
+        }
+      }
+    }
+    
     const userEmail = req.body.userEmail || user.email;
     const userId = req.body.userId || user.id;
     const timestamp = req.body.timestamp;
