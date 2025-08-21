@@ -7309,11 +7309,48 @@ This is an automated notification from The Discourse AI platform.
       console.log('📧 [PROBLEM_REPORT] Email notification to admin@thediscourse.ai:');
       console.log(emailContent);
       
+      // Debug: Check environment variables
+      console.log('📧 [PROBLEM_REPORT] Environment variables check:');
+      console.log('📧 [PROBLEM_REPORT] SMTP_HOST:', process.env.SMTP_HOST ? 'SET' : 'NOT SET');
+      console.log('📧 [PROBLEM_REPORT] SMTP_PORT:', process.env.SMTP_PORT ? 'SET' : 'NOT SET');
+      console.log('📧 [PROBLEM_REPORT] SMTP_USER:', process.env.SMTP_USER ? 'SET' : 'NOT SET');
+      console.log('📧 [PROBLEM_REPORT] SMTP_PASS:', process.env.SMTP_PASS ? 'SET' : 'NOT SET');
+      console.log('📧 [PROBLEM_REPORT] EMAIL_WEBHOOK_URL:', process.env.EMAIL_WEBHOOK_URL ? 'SET' : 'NOT SET');
+      console.log('📧 [PROBLEM_REPORT] EMAIL_API_KEY:', process.env.EMAIL_API_KEY ? 'SET' : 'NOT SET');
+      console.log('📧 [PROBLEM_REPORT] EMAILJS_SERVICE_ID:', process.env.EMAILJS_SERVICE_ID ? 'SET' : 'NOT SET');
+      
       // Simple email sending using fetch to a webhook or email service
       // You can replace this with your preferred email service
       try {
-        // Option 1: Send to a webhook (e.g., Zapier, Make.com, etc.)
-        if (process.env.EMAIL_WEBHOOK_URL) {
+        // Option 1: Send via SMTP server
+        if (process.env.SMTP_HOST && process.env.SMTP_PORT && process.env.SMTP_USER && process.env.SMTP_PASS) {
+          console.log('📧 [PROBLEM_REPORT] Attempting to send email via SMTP...');
+          const nodemailer = require('nodemailer');
+          
+          const transporter = nodemailer.createTransporter({
+            host: process.env.SMTP_HOST,
+            port: process.env.SMTP_PORT,
+            secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
+            auth: {
+              user: process.env.SMTP_USER,
+              pass: process.env.SMTP_PASS
+            }
+          });
+          
+          const mailOptions = {
+            from: process.env.SMTP_FROM || process.env.SMTP_USER,
+            to: 'admin@thediscourse.ai',
+            subject: `New Problem Report - ${problemReport.id}`,
+            text: emailContent,
+            html: emailContent.replace(/\n/g, '<br>')
+          };
+          
+          const info = await transporter.sendMail(mailOptions);
+          console.log('📧 [PROBLEM_REPORT] Email sent via SMTP:', info.messageId);
+        }
+        
+        // Option 2: Send to a webhook (e.g., Zapier, Make.com, etc.)
+        else if (process.env.EMAIL_WEBHOOK_URL) {
           await fetch(process.env.EMAIL_WEBHOOK_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -7327,7 +7364,7 @@ This is an automated notification from The Discourse AI platform.
           console.log('📧 [PROBLEM_REPORT] Email sent via webhook');
         }
         
-        // Option 2: Send to a simple email API service
+        // Option 3: Send to a simple email API service
         else if (process.env.EMAIL_API_KEY) {
           const emailResponse = await fetch('https://api.resend.com/emails', {
             method: 'POST',
@@ -7350,11 +7387,42 @@ This is an automated notification from The Discourse AI platform.
           }
         }
         
-        // Option 3: Log to console for development
+        // Option 4: Try using a free email service (EmailJS or similar)
+        else if (process.env.EMAILJS_SERVICE_ID && process.env.EMAILJS_TEMPLATE_ID && process.env.EMAILJS_USER_ID) {
+          const emailResponse = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              service_id: process.env.EMAILJS_SERVICE_ID,
+              template_id: process.env.EMAILJS_TEMPLATE_ID,
+              user_id: process.env.EMAILJS_USER_ID,
+              template_params: {
+                to_email: 'admin@thediscourse.ai',
+                subject: `New Problem Report - ${problemReport.id}`,
+                message: emailContent,
+                user_email: problemReport.userEmail,
+                report_id: problemReport.id
+              }
+            })
+          });
+          
+          if (emailResponse.ok) {
+            console.log('📧 [PROBLEM_REPORT] Email sent via EmailJS');
+          } else {
+            console.error('📧 [PROBLEM_REPORT] Failed to send email via EmailJS');
+          }
+        }
+        
+        // Option 5: Log to console for development (current fallback)
         else {
           console.log('📧 [PROBLEM_REPORT] Email would be sent to admin@thediscourse.ai');
           console.log('📧 [PROBLEM_REPORT] Subject:', `New Problem Report - ${problemReport.id}`);
           console.log('📧 [PROBLEM_REPORT] Content:', emailContent);
+          console.log('📧 [PROBLEM_REPORT] To enable email sending, set one of these environment variables:');
+          console.log('📧 [PROBLEM_REPORT] - SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS (for SMTP server)');
+          console.log('📧 [PROBLEM_REPORT] - EMAIL_WEBHOOK_URL (for webhook-based email services)');
+          console.log('📧 [PROBLEM_REPORT] - EMAIL_API_KEY (for Resend API)');
+          console.log('📧 [PROBLEM_REPORT] - EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_USER_ID (for EmailJS)');
         }
       } catch (emailSendError) {
         console.error('📧 [PROBLEM_REPORT] Email sending failed:', emailSendError);
