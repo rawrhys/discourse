@@ -679,24 +679,69 @@ function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitl
 
   const subjectPhrase = String(subject || '').trim();
   const subjectTokens = tokenize(subjectPhrase);
-    const courseTitle = String(courseContext?.title || '').toLowerCase();
-    const courseSubject = String(courseContext?.subject || '').toLowerCase();
-    const allLessonTitles = Array.isArray(courseContext?.lessonTitles) 
-      ? courseContext.lessonTitles.map(t => String(t || '').toLowerCase())
-      : [];
 
-    let score = 0;
+  // Extract proper-noun-like phrases from raw text (e.g., "Roman Republic", "Ancient Egypt")
+  const extractProperNounPhrases = (text) => {
+    const phrases = new Set();
+    const raw = String(text || '');
+    // Multi-capitalized sequences
+    for (const m of raw.matchAll(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b/g)) {
+      phrases.add(m[0]);
+    }
+    // Single proper nouns that are likely subjects (avoid very short/common words)
+    for (const m of raw.matchAll(/\b[A-Z][a-z]{3,}\b/g)) {
+      phrases.add(m[0]);
+    }
+    return Array.from(phrases);
+  };
 
-    const haystack = `${title} ${desc} ${page} ${uploader}`;
+  // Consolidate content text (prefer the main body if available)
+  let contentText = '';
+  if (content && typeof content === 'object') {
+    contentText = content.main_content || `${content.introduction || ''} ${content.conclusion || ''}`;
+  } else if (typeof content === 'string') {
+    contentText = content;
+  }
+
+  // Extract key terms from content for better search relevance
+  const extractKeyTermsFromContent = (text) => {
+    const terms = new Set();
+    const raw = String(text || '');
     
-    // Create comprehensive context text for better relevance scoring
-    const contextText = `${subj} ${text} ${courseTitle} ${courseSubject} ${allLessonTitles.join(' ')}`.toLowerCase();
+    // Extract terms wrapped in ** (bold markdown)
+    const boldTerms = [...raw.matchAll(/\*\*([^*]+)\*\*/g)].map(match => match[1]);
+    boldTerms.forEach(term => terms.add(term));
+    
+    // Extract capitalized terms that might be important
+    const capitalizedTerms = [...raw.matchAll(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b/g)].map(match => match[0]);
+    capitalizedTerms.forEach(term => terms.add(term));
+    
+    // Filter out common words and short terms
+    const commonWords = ['the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'this', 'that', 'these', 'those', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'must', 'shall'];
+    const filteredTerms = Array.from(terms).filter(term => 
+      term.length > 3 && 
+      !commonWords.includes(term.toLowerCase()) &&
+      !term.match(/^\d+$/) // Not just numbers
+    );
+    
+    return filteredTerms.slice(0, 10); // Take top 10 terms
+  };
 
-    // Check if this is historical/educational content
-    const isHistoricalContent = /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(subj) || 
-                               /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(text) ||
-                               /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(courseTitle) ||
-                               /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(courseSubject);
+  const contentKeyTerms = extractKeyTermsFromContent(contentText);
+  const contentProperPhrases = extractProperNounPhrases(contentText);
+  const subjectProperPhrases = extractProperNounPhrases(subjectPhrase);
+
+  // Start building queries with the most specific content first
+  const queries = [];
+
+  // Always include the full subject phrase as-is and normalized
+  if (subjectPhrase) {
+    dedupePush(queries, subjectPhrase);
+    const normalizedSubject = normalize(subjectPhrase);
+    if (normalizedSubject && normalizedSubject !== subjectPhrase.toLowerCase()) {
+      dedupePush(queries, normalizedSubject);
+    }
+  }
 
     // Check if this is art-related content (art, artist, painting, etc.)
     const isArtContent = /\b(art|artist|painting|sculpture|drawing|artwork|gallery|museum|canvas|oil|watercolor|acrylic|fresco|mosaic|relief|statue|bust|portrait|landscape|still life|abstract|realistic|impressionist|modern|classical|renaissance|baroque|romantic|neoclassical|medieval|ancient|prehistoric|cave|temple|architecture|design|composition|color|form|line|texture|perspective|lighting|shadow|brush|palette|easel|studio|exhibition|masterpiece|masterwork|iconic|famous|renowned|celebrated|influential|pioneering|revolutionary|innovative|traditional|contemporary|classical|antique|vintage|heritage|cultural|historical|archaeological|anthropological|ethnographic|decorative|ornamental|ceremonial|ritual|religious|sacred|secular|profane|domestic|public|private|monumental|intimate|grand|delicate|bold|subtle|dramatic|peaceful|dynamic|static|flowing|rigid|organic|geometric|naturalistic|stylized|symbolic|narrative|allegorical|mythological|biblical|historical|portrait|landscape|genre|still life|abstract|non-objective|figurative|non-figurative)\b/i.test(subj) || 
