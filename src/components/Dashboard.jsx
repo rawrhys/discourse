@@ -73,54 +73,55 @@ const Dashboard = () => {
     setIsLoadingCourses(true);
     setError(null);
     
-    // Add timeout to prevent hanging requests
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Request timeout')), 10000); // 10 second timeout
-    });
-    
-    logger.debug('📡 [DASHBOARD] Making API call to getSavedCourses...');
-    const coursesPromise = api.getSavedCourses();
-    const courses = await Promise.race([coursesPromise, timeoutPromise]);
-    
-    logger.debug('✅ [DASHBOARD] Successfully fetched saved courses', {
-      coursesCount: Array.isArray(courses) ? courses.length : 0,
-      courses: Array.isArray(courses) ? courses.map(c => ({ 
-        id: c.id, 
-        title: c.title, 
-        published: c.published,
-        publishedType: typeof c.published 
-      })) : [],
-      timestamp: new Date().toISOString()
-    });
-    
-    // Ensure we always set a valid array
-    const validCourses = Array.isArray(courses) ? courses : [];
-    setSavedCourses(validCourses);
-    
-    // Clear any errors since we successfully fetched courses
-    setError(null);
-    
-    // Check if we have any very recent courses (created in the last 5 minutes)
-    // This helps catch courses that were generated but the user didn't see the success notification
-    const recentCourses = validCourses.filter(course => {
-      if (!course.createdAt) return false;
-      const courseDate = new Date(course.createdAt);
-      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-      return courseDate > fiveMinutesAgo;
-    });
-    
-    if (recentCourses.length > 0) {
-      logger.info('🎉 [DASHBOARD] Found recent courses, showing success message:', recentCourses.map(c => c.title));
-      setSuccessMessage(`Found ${recentCourses.length} recently generated course${recentCourses.length > 1 ? 's' : ''}!`);
-      setShowSuccessToast(true);
+    try {
+      // Add timeout to prevent hanging requests
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Request timeout')), 10000); // 10 second timeout
+      });
       
-      // Hide success message after a delay
-      setTimeout(() => {
-        setShowSuccessToast(false);
-      }, 3000);
-    }
-    
-  } catch (error) {
+      logger.debug('📡 [DASHBOARD] Making API call to getSavedCourses...');
+      const coursesPromise = api.getSavedCourses();
+      const courses = await Promise.race([coursesPromise, timeoutPromise]);
+      
+      logger.debug('✅ [DASHBOARD] Successfully fetched saved courses', {
+        coursesCount: Array.isArray(courses) ? courses.length : 0,
+        courses: Array.isArray(courses) ? courses.map(c => ({ 
+          id: c.id, 
+          title: c.title, 
+          published: c.published,
+          publishedType: typeof c.published 
+        })) : [],
+        timestamp: new Date().toISOString()
+      });
+      
+      // Ensure we always set a valid array
+      const validCourses = Array.isArray(courses) ? courses : [];
+      setSavedCourses(validCourses);
+      
+      // Clear any errors since we successfully fetched courses
+      setError(null);
+      
+      // Check if we have any very recent courses (created in the last 5 minutes)
+      // This helps catch courses that were generated but the user didn't see the success notification
+      const recentCourses = validCourses.filter(course => {
+        if (!course.createdAt) return false;
+        const courseDate = new Date(course.createdAt);
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+        return courseDate > fiveMinutesAgo;
+      });
+      
+      if (recentCourses.length > 0) {
+        logger.info('🎉 [DASHBOARD] Found recent courses, showing success message:', recentCourses.map(c => c.title));
+        setSuccessMessage(`Found ${recentCourses.length} recently generated course${recentCourses.length > 1 ? 's' : ''}!`);
+        setShowSuccessToast(true);
+        
+        // Hide success message after a delay
+        setTimeout(() => {
+          setShowSuccessToast(false);
+        }, 3000);
+      }
+      
+    } catch (error) {
     logger.error('❌ [DASHBOARD] Error fetching saved courses:', {
       error: error.message,
       stack: error.stack,
