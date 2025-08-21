@@ -46,48 +46,95 @@ const ReportProblem = ({ isOpen, onClose, onSuccess }) => {
         return;
       }
 
-      const formData = new FormData();
-      formData.append('message', message.trim());
-      formData.append('userEmail', userEmail.trim());
-      formData.append('userId', user?.id || '');
-      formData.append('timestamp', new Date().toISOString());
-      formData.append('userAgent', navigator.userAgent);
-      formData.append('url', window.location.href);
+      // If no files are selected, send as JSON instead of FormData
+      if (selectedFiles.length === 0) {
+        console.log('[REPORT_PROBLEM] No files selected, sending as JSON');
+        const jsonData = {
+          message: message.trim(),
+          userEmail: userEmail.trim(),
+          userId: user?.id || '',
+          timestamp: new Date().toISOString(),
+          userAgent: navigator.userAgent,
+          url: window.location.href
+        };
+        
+        const response = await fetch('/api/report-problem', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(jsonData),
+        });
+        
+        if (response.ok) {
+          setSuccess(true);
+          setMessage('');
+          setTimeout(() => {
+            onClose();
+            setSuccess(false);
+            if (onSuccess) onSuccess();
+          }, 2000);
+        } else {
+          const errorText = await response.text();
+          let errorData;
+          try {
+            errorData = JSON.parse(errorText);
+          } catch (e) {
+            errorData = { error: errorText };
+          }
+          
+          console.error('[REPORT_PROBLEM] Server error:', {
+            status: response.status,
+            error: errorData,
+            responseText: errorText
+          });
+          setError(errorData.error || `Failed to submit report (${response.status}). Please try again.`);
+        }
+      } else {
+        // Use FormData for file uploads
+        console.log('[REPORT_PROBLEM] Files selected, sending as FormData');
+        const formData = new FormData();
+        formData.append('message', message.trim());
+        formData.append('userEmail', userEmail.trim());
+        formData.append('userId', user?.id || '');
+        formData.append('timestamp', new Date().toISOString());
+        formData.append('userAgent', navigator.userAgent);
+        formData.append('url', window.location.href);
 
-      // Add image files if any
-      if (selectedFiles.length > 0) {
+        // Add image files
         selectedFiles.forEach((file, index) => {
           formData.append(`image_${index}`, file);
         });
         formData.append('imageCount', selectedFiles.length.toString());
-      }
 
-      const response = await api.reportProblem(formData);
-
-      if (response.ok) {
-        setSuccess(true);
-        setMessage('');
-        setTimeout(() => {
-          onClose();
-          setSuccess(false);
-          if (onSuccess) onSuccess();
-        }, 2000);
-      } else {
-        const errorText = await response.text();
-        let errorData;
-        try {
-          errorData = JSON.parse(errorText);
-        } catch (e) {
-          errorData = { error: errorText };
-        }
+        const response = await api.reportProblem(formData);
         
-        console.error('[REPORT_PROBLEM] Server error:', {
-          status: response.status,
-          error: errorData,
-          responseText: errorText
-        });
-        setError(errorData.error || `Failed to submit report (${response.status}). Please try again.`);
-      }
+        if (response.ok) {
+          setSuccess(true);
+          setMessage('');
+          setTimeout(() => {
+            onClose();
+            setSuccess(false);
+            if (onSuccess) onSuccess();
+          }, 2000);
+        } else {
+          const errorText = await response.text();
+          let errorData;
+          try {
+            errorData = JSON.parse(errorText);
+          } catch (e) {
+            errorData = { error: errorText };
+          }
+          
+          console.error('[REPORT_PROBLEM] Server error:', {
+            status: response.status,
+            error: errorData,
+            responseText: errorText
+          });
+          setError(errorData.error || `Failed to submit report (${response.status}). Please try again.`);
+        }
+      
     } catch (err) {
       setError('Network error. Please check your connection and try again.');
     } finally {
