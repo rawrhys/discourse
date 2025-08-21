@@ -60,75 +60,81 @@ const Dashboard = () => {
   }
   
   // Define fetchSavedCourses before it's used in useEffect
-  const fetchSavedCourses = useCallback(async (force = false) => {
-    // Always allow forced refreshes, even if we've attempted before
-    if (hasAttemptedFetch.current && !force) {
-      logger.debug('⏳ [DASHBOARD] Skipping fetch - already attempted and not forced');
+  const fetchSavedCourses = useCallback(async (forceRefresh = false) => {
+    // Prevent multiple simultaneous fetches unless forced
+    if (isLoadingCourses && !forceRefresh) {
+      logger.debug('🔄 [DASHBOARD] Skipping fetch - already loading courses');
       return;
     }
     
-    // Don't override local state updates if we're in the middle of updating
-    if (isUpdatingCourseState && !force) {
-      logger.debug('🔄 [DASHBOARD] Skipping fetch - course state update in progress');
-      return;
-    }
+    // Track if we've attempted to fetch courses
+    hasAttemptedFetch.current = true;
     
-    logger.debug('📚 [DASHBOARD] Fetching saved courses', {
-      force: force,
-      hasAttemptedFetch: hasAttemptedFetch.current,
-      isUpdatingCourseState: isUpdatingCourseState,
+    setIsLoadingCourses(true);
+    setError(null);
+    
+    // Add timeout to prevent hanging requests
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Request timeout')), 10000); // 10 second timeout
+    });
+    
+    logger.debug('📡 [DASHBOARD] Making API call to getSavedCourses...');
+    const coursesPromise = api.getSavedCourses();
+    const courses = await Promise.race([coursesPromise, timeoutPromise]);
+    
+    logger.debug('✅ [DASHBOARD] Successfully fetched saved courses', {
+      coursesCount: Array.isArray(courses) ? courses.length : 0,
+      courses: Array.isArray(courses) ? courses.map(c => ({ 
+        id: c.id, 
+        title: c.title, 
+        published: c.published,
+        publishedType: typeof c.published 
+      })) : [],
       timestamp: new Date().toISOString()
     });
     
-    setIsLoadingCourses(true);
-    hasAttemptedFetch.current = true;
+    // Ensure we always set a valid array
+    const validCourses = Array.isArray(courses) ? courses : [];
+    setSavedCourses(validCourses);
     
-    try {
-      // Clear any existing errors before fetching
-      setError(null);
+    // Clear any errors since we successfully fetched courses
+    setError(null);
+    
+    // Check if we have any very recent courses (created in the last 5 minutes)
+    // This helps catch courses that were generated but the user didn't see the success notification
+    const recentCourses = validCourses.filter(course => {
+      if (!course.createdAt) return false;
+      const courseDate = new Date(course.createdAt);
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+      return courseDate > fiveMinutesAgo;
+    });
+    
+    if (recentCourses.length > 0) {
+      logger.info('🎉 [DASHBOARD] Found recent courses, showing success message:', recentCourses.map(c => c.title));
+      setSuccessMessage(`Found ${recentCourses.length} recently generated course${recentCourses.length > 1 ? 's' : ''}!`);
+      setShowSuccessToast(true);
       
-      // Add timeout to prevent hanging requests
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Request timeout')), 10000); // 10 second timeout
-      });
-      
-      logger.debug('📡 [DASHBOARD] Making API call to getSavedCourses...');
-      const coursesPromise = api.getSavedCourses();
-      const courses = await Promise.race([coursesPromise, timeoutPromise]);
-      
-      logger.debug('✅ [DASHBOARD] Successfully fetched saved courses', {
-        coursesCount: Array.isArray(courses) ? courses.length : 0,
-        courses: Array.isArray(courses) ? courses.map(c => ({ 
-          id: c.id, 
-          title: c.title, 
-          published: c.published,
-          publishedType: typeof c.published 
-        })) : [],
-        timestamp: new Date().toISOString()
-      });
-      
-      // Ensure we always set a valid array
-      const validCourses = Array.isArray(courses) ? courses : [];
-      setSavedCourses(validCourses);
-      
-      // Clear any errors since we successfully fetched courses
-      setError(null);
-      
-    } catch (error) {
-      logger.error('❌ [DASHBOARD] Error fetching saved courses:', {
-        error: error.message,
-        stack: error.stack,
-        timestamp: new Date().toISOString()
-      });
-      
-      // Set a user-friendly error message
-      setError('Failed to load courses. Please try refreshing the page.');
-      
-      // Don't clear existing courses on error, just show the error
-    } finally {
-      setIsLoadingCourses(false);
+      // Hide success message after a delay
+      setTimeout(() => {
+        setShowSuccessToast(false);
+      }, 3000);
     }
-  }, [api, isUpdatingCourseState]);
+    
+  } catch (error) {
+    logger.error('❌ [DASHBOARD] Error fetching saved courses:', {
+      error: error.message,
+      stack: error.stack,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Set a user-friendly error message
+    setError('Failed to load courses. Please try refreshing the page.');
+    
+    // Don't clear existing courses on error, just show the error
+  } finally {
+    setIsLoadingCourses(false);
+  }
+}, [api, isUpdatingCourseState]);
   
   // Cleanup effect to reset state update flag on unmount
   useEffect(() => {
@@ -158,9 +164,16 @@ const Dashboard = () => {
         const handleCourseGenerated = (data) => {
           logger.info('🎉 [DASHBOARD] Received course generation notification:', data);
           
+          // Clear any existing errors since we got a success notification
+          setError(null);
+          
           // Show success message
           setSuccessMessage(`Course "${data.courseTitle}" generated successfully!`);
           setShowSuccessToast(true);
+          
+          // Close the generation form
+          setShowNewCourseForm(false);
+          setIsGenerating(false);
           
           // Fetch updated course list after a short delay
           setTimeout(async () => {
@@ -180,59 +193,41 @@ const Dashboard = () => {
                 
                 logger.debug('📚 [DASHBOARD] Fetching saved courses after SSE notification');
                 
-                setIsLoadingCourses(true);
+                // Add timeout to prevent hanging requests
+                const timeoutPromise = new Promise((_, reject) => {
+                  setTimeout(() => reject(new Error('Request timeout')), 10000); // 10 second timeout
+                });
                 
-                try {
-                  // Clear any existing errors before fetching
-                  setError(null);
-                  
-                  // Add timeout to prevent hanging requests
-                  const timeoutPromise = new Promise((_, reject) => {
-                    setTimeout(() => reject(new Error('Request timeout')), 10000); // 10 second timeout
-                  });
-                  
-                  logger.debug('📡 [DASHBOARD] Making API call to getSavedCourses...');
-                  const coursesPromise = api.getSavedCourses();
-                  const courses = await Promise.race([coursesPromise, timeoutPromise]);
-                  
-                  logger.debug('✅ [DASHBOARD] Successfully fetched saved courses', {
-                    coursesCount: Array.isArray(courses) ? courses.length : 0,
-                    courses: Array.isArray(courses) ? courses.map(c => ({ 
-                      id: c.id, 
-                      title: c.title, 
-                      published: c.published,
-                      publishedType: typeof c.published 
-                    })) : [],
-                    timestamp: new Date().toISOString()
-                  });
-                  
-                  // Ensure we always set a valid array
-                  const validCourses = Array.isArray(courses) ? courses : [];
-                  setSavedCourses(validCourses);
-                  
-                  // Clear any errors since we successfully fetched courses
-                  setError(null);
-                  
-                } catch (error) {
-                  logger.error('❌ [DASHBOARD] Error fetching saved courses:', {
-                    error: error.message,
-                    stack: error.stack,
-                    timestamp: new Date().toISOString()
-                  });
-                  
-                  // Set a user-friendly error message
-                  setError('Failed to load courses. Please try refreshing the page.');
-                  
-                  // Don't clear existing courses on error, just show the error
-                } finally {
-                  setIsLoadingCourses(false);
-                }
+                const coursesPromise = api.getSavedCourses();
+                const courses = await Promise.race([coursesPromise, timeoutPromise]);
+                
+                logger.debug('✅ [DASHBOARD] Successfully fetched saved courses after SSE notification', {
+                  coursesCount: Array.isArray(courses) ? courses.length : 0,
+                  courses: Array.isArray(courses) ? courses.map(c => ({ 
+                    id: c.id, 
+                    title: c.title, 
+                    published: c.published,
+                    publishedType: typeof c.published 
+                  })) : [],
+                  timestamp: new Date().toISOString()
+                });
+                
+                // Ensure we always set a valid array
+                const validCourses = Array.isArray(courses) ? courses : [];
+                setSavedCourses(validCourses);
+                
+                // Clear any errors since we successfully fetched courses
+                setError(null);
+                
               };
               
               await refreshCourses();
               logger.info('✅ [DASHBOARD] Course list updated after SSE notification');
             } catch (error) {
               logger.error('❌ [DASHBOARD] Failed to update course list after SSE notification:', error);
+              // Even if the fetch fails, we know the course was generated, so show a success message
+              setSuccessMessage('Course generated successfully! You can find it in your course list.');
+              setShowSuccessToast(true);
             }
           }, 1000);
         };
@@ -247,6 +242,88 @@ const Dashboard = () => {
       }
     }
   }, [user, api, isUpdatingCourseState]);
+
+  // Add a global course generation monitoring system
+  useEffect(() => {
+    let monitoringInterval = null;
+    
+    // Start monitoring if we're currently generating a course
+    if (isGenerating) {
+      logger.info('🔍 [DASHBOARD] Starting global course generation monitoring');
+      
+      const startTime = Date.now();
+      const maxMonitoringTime = 10 * 60 * 1000; // 10 minutes
+      
+      monitoringInterval = setInterval(async () => {
+        try {
+          // Check if we've been monitoring for too long
+          if (Date.now() - startTime > maxMonitoringTime) {
+            logger.warn('⚠️ [DASHBOARD] Max monitoring time reached, stopping course generation monitoring');
+            clearInterval(monitoringInterval);
+            return;
+          }
+          
+          // Check if we're still generating
+          if (!isGenerating) {
+            logger.info('✅ [DASHBOARD] Course generation completed, stopping monitoring');
+            clearInterval(monitoringInterval);
+            return;
+          }
+          
+          logger.debug('🔍 [DASHBOARD] Checking for new courses during generation...');
+          const courses = await api.getSavedCourses();
+          
+          // Check if we have a new course that wasn't there before
+          const currentCourseCount = savedCourses.length;
+          if (Array.isArray(courses) && courses.length > currentCourseCount) {
+            logger.info('🎉 [DASHBOARD] New course detected during monitoring!');
+            setSavedCourses(courses);
+            setSuccessMessage('Course generation completed! New course found.');
+            setShowSuccessToast(true);
+            setError(null); // Clear any errors
+            setIsGenerating(false); // Stop generation state
+            setShowNewCourseForm(false); // Close the form
+            clearInterval(monitoringInterval);
+          }
+        } catch (error) {
+          logger.error('❌ [DASHBOARD] Error during course generation monitoring:', error);
+          // Don't stop monitoring on error, just log it
+        }
+      }, 5000); // Check every 5 seconds
+    }
+    
+    // Cleanup function
+    return () => {
+      if (monitoringInterval) {
+        clearInterval(monitoringInterval);
+        logger.info('🛑 [DASHBOARD] Stopped course generation monitoring');
+      }
+    };
+  }, [isGenerating, api, savedCourses.length]);
+
+  // Check for recently generated courses when dashboard loads
+  useEffect(() => {
+    if (user && savedCourses.length > 0) {
+      // Check if any courses were created in the last 10 minutes
+      const recentCourses = savedCourses.filter(course => {
+        if (!course.createdAt) return false;
+        const courseDate = new Date(course.createdAt);
+        const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+        return courseDate > tenMinutesAgo;
+      });
+      
+      if (recentCourses.length > 0 && !showSuccessToast) {
+        logger.info('🎉 [DASHBOARD] Found recently generated courses on dashboard load:', recentCourses.map(c => c.title));
+        setSuccessMessage(`Welcome back! You have ${recentCourses.length} recently generated course${recentCourses.length > 1 ? 's' : ''} available.`);
+        setShowSuccessToast(true);
+        
+        // Hide success message after a delay
+        setTimeout(() => {
+          setShowSuccessToast(false);
+        }, 5000);
+      }
+    }
+  }, [user, savedCourses, showSuccessToast]);
 
   const handleGenerateCourse = useCallback(async (courseParams) => {
     logger.debug('🎯 [COURSE GENERATION] Starting simplified course generation process', {
@@ -347,6 +424,10 @@ const Dashboard = () => {
         timestamp: new Date().toISOString()
       });
       
+      // Check if this might be a false negative - the course might have been generated successfully
+      // even though we got an error response (e.g., timeout after generation completed)
+      let shouldCheckForGeneratedCourse = false;
+      
       // Show a more helpful error message
       let errorMessage = error.message || 'Failed to generate course';
       let shouldKeepModalOpen = false;
@@ -358,6 +439,7 @@ const Dashboard = () => {
         errorMessage = 'Backend server temporarily unavailable. The server may be restarting. Please wait a moment and try again.';
         logger.error('🌐 [COURSE GENERATION] Backend connectivity issue - keeping modal open for retry');
         shouldKeepModalOpen = true;
+        shouldCheckForGeneratedCourse = true; // Check if course was generated despite the error
       } else if (error.message.includes('No course credits left')) {
         errorMessage = 'You have no credits left. Please purchase more credits to generate courses.';
         logger.error('💳 [COURSE GENERATION] Insufficient credits');
@@ -368,6 +450,7 @@ const Dashboard = () => {
         errorMessage = 'The request timed out, but your course may still be generating. Please wait a moment and check your course list.';
         logger.error('⏰ [COURSE GENERATION] Request timeout - course may still be generating');
         shouldKeepModalOpen = false; // Close modal but start background checks
+        shouldCheckForGeneratedCourse = true; // Definitely check for generated course on timeout
         
         // Start background checks for the generated course
         let checkAttempts = 0;
@@ -413,10 +496,62 @@ const Dashboard = () => {
         errorMessage = 'The AI service is currently busy. Your course is being generated but it\'s taking longer due to high demand. Please wait a moment and try again.';
         logger.error('🚦 [COURSE GENERATION] Rate limiting detected - keeping modal open for retry');
         shouldKeepModalOpen = true;
+        shouldCheckForGeneratedCourse = true; // Check if course was generated despite rate limiting
       } else if (error.message.includes('500') || error.message.includes('Internal Server Error')) {
         errorMessage = 'Server encountered an error. The backend may be restarting. Please wait a moment and try again.';
         logger.error('🔧 [COURSE GENERATION] Server error - keeping modal open for retry');
         shouldKeepModalOpen = true;
+        shouldCheckForGeneratedCourse = true; // Check if course was generated despite server error
+      } else {
+        // For any other error, also check if the course was generated
+        shouldCheckForGeneratedCourse = true;
+      }
+      
+      // If we should check for generated course, start background monitoring
+      if (shouldCheckForGeneratedCourse) {
+        logger.info('🔍 [DASHBOARD] Starting background course generation monitoring due to error');
+        
+        let checkAttempts = 0;
+        const maxCheckAttempts = 36; // 6 minutes total (36 * 10 seconds)
+        
+        const monitorForGeneratedCourse = async () => {
+          if (checkAttempts >= maxCheckAttempts) {
+            logger.warn('⚠️ [DASHBOARD] Max background monitoring attempts reached');
+            return;
+          }
+          
+          try {
+            logger.debug(`🔍 [DASHBOARD] Background monitoring check ${checkAttempts + 1}/${maxCheckAttempts}`);
+            const courses = await api.getSavedCourses();
+            
+            // Check if we have a new course that wasn't there before
+            const currentCourseCount = savedCourses.length;
+            if (Array.isArray(courses) && courses.length > currentCourseCount) {
+              logger.info('🎉 [DASHBOARD] Course found during background monitoring!');
+              setSavedCourses(courses);
+              setSuccessMessage('Course generation completed! Your course is ready.');
+              setShowSuccessToast(true);
+              setError(null); // Clear the error
+              setIsGenerating(false); // Ensure generation state is cleared
+              setShowNewCourseForm(false); // Close the form
+              return; // Stop checking
+            }
+            
+            checkAttempts++;
+            if (checkAttempts < maxCheckAttempts) {
+              setTimeout(monitorForGeneratedCourse, 10000); // Check again in 10 seconds
+            }
+          } catch (error) {
+            logger.error('❌ [DASHBOARD] Background monitoring check failed:', error);
+            checkAttempts++;
+            if (checkAttempts < maxCheckAttempts) {
+              setTimeout(monitorForGeneratedCourse, 10000);
+            }
+          }
+        };
+        
+        // Start monitoring after 5 seconds
+        setTimeout(monitorForGeneratedCourse, 5000);
       }
       
       setError(errorMessage);
@@ -430,7 +565,7 @@ const Dashboard = () => {
         logger.info('🔄 [COURSE GENERATION] Keeping modal open for backend retry');
       }
     }
-  }, [api, user?.id]);
+  }, [api, user?.id, savedCourses.length]);
 
   const handleLogout = () => {
     logout();

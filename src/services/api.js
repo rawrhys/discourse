@@ -138,10 +138,28 @@ const api = {
             timestamp: new Date().toISOString()
         });
         
-        return apiClient('/api/courses/generate', {
+        const result = apiClient('/api/courses/generate', {
             method: 'POST',
             body: JSON.stringify({ topic, difficulty, numModules, numLessonsPerModule }),
         });
+        
+        // Add additional logging for the result
+        result.then(response => {
+            console.log('✅ [API SERVICE] Course generation API call succeeded:', {
+                success: response?.success,
+                courseId: response?.courseId,
+                courseTitle: response?.course?.title,
+                message: response?.message,
+                timestamp: new Date().toISOString()
+            });
+        }).catch(error => {
+            console.error('❌ [API SERVICE] Course generation API call failed:', {
+                error: error.message,
+                timestamp: new Date().toISOString()
+            });
+        });
+        
+        return result;
     },
     
     getSavedCourses: () => {
