@@ -117,10 +117,7 @@ app.use((req, res, next) => {
 });
 
 // Parse JSON bodies
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// File upload middleware
+// File upload middleware - must come BEFORE express.json() for FormData
 app.use(fileUpload({
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
   abortOnLimit: true,
@@ -129,6 +126,10 @@ app.use(fileUpload({
   tempFileDir: '/tmp/',
   debug: process.env.NODE_ENV === 'development'
 }));
+
+// JSON and URL-encoded middleware - must come AFTER fileUpload
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Logging flags
 const SHOULD_LOG_AUTH = String(process.env.AUTH_LOG || '').toLowerCase() === 'true';
