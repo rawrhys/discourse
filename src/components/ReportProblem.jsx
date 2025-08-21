@@ -34,6 +34,13 @@ const ReportProblem = ({ isOpen, onClose, onSuccess }) => {
       const { data: { session } } = await supabase.auth.getSession();
       const accessToken = session?.access_token;
 
+      console.log('[REPORT_PROBLEM] Authentication check:', {
+        hasSession: !!session,
+        hasAccessToken: !!accessToken,
+        userId: user?.id,
+        userEmail: user?.email
+      });
+
       if (!accessToken) {
         setError('Authentication required. Please log in again.');
         return;

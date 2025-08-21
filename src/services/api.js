@@ -1,5 +1,6 @@
 import apiClient from './apiClient';
 import { API_BASE_URL } from '../config/api.js';
+import { supabase } from '../config/supabase';
 
 class AIService {
   async getDefinitionForTerm(term, lessonContext, lessonTitle) {
@@ -196,12 +197,21 @@ const api = {
     logout: () =>
         apiClient('/api/auth/logout', { method: 'POST' }),
 
-    reportProblem: (formData) => {
+    reportProblem: async (formData) => {
         console.log('📡 [API SERVICE] Submitting problem report');
+        
+        // Get the current Supabase session
+        const { data: { session } } = await supabase.auth.getSession();
+        const accessToken = session?.access_token;
+        
+        if (!accessToken) {
+            throw new Error('Authentication required. Please log in again.');
+        }
+        
         return fetch(`${API_BASE_URL}/api/report-problem`, {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                'Authorization': `Bearer ${accessToken}`,
             },
             body: formData,
         });
