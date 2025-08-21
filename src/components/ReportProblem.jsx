@@ -190,7 +190,8 @@ const ReportProblem = ({ isOpen, onClose, onSuccess }) => {
           });
           setError(errorData.error || `Failed to submit report (${response.status}). Please try again.`);
         }
-      
+      }
+    */
     } catch (err) {
       setError('Network error. Please check your connection and try again.');
     } finally {
