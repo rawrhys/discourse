@@ -46,9 +46,63 @@ const ReportProblem = ({ isOpen, onClose, onSuccess }) => {
         return;
       }
 
-      // If no files are selected, send as JSON instead of FormData
+      // Force JSON for testing - always send as JSON for now
+      console.log('[REPORT_PROBLEM] Force sending as JSON for testing');
+      console.log('[REPORT_PROBLEM] Message length:', message.trim().length);
+      console.log('[REPORT_PROBLEM] Message content:', message.trim());
+      
+      const jsonData = {
+        message: message.trim(),
+        userEmail: userEmail.trim(),
+        userId: user?.id || '',
+        timestamp: new Date().toISOString(),
+        userAgent: navigator.userAgent,
+        url: window.location.href
+      };
+      
+      console.log('[REPORT_PROBLEM] JSON data being sent:', jsonData);
+      
+      const response = await fetch('/api/report-problem', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(jsonData),
+      });
+      
+      if (response.ok) {
+        setSuccess(true);
+        setMessage('');
+        setTimeout(() => {
+          onClose();
+          setSuccess(false);
+          if (onSuccess) onSuccess();
+        }, 2000);
+      } else {
+        const errorText = await response.text();
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch (e) {
+          errorData = { error: errorText };
+        }
+        
+        console.error('[REPORT_PROBLEM] Server error:', {
+          status: response.status,
+          error: errorData,
+          responseText: errorText
+        });
+        setError(errorData.error || `Failed to submit report (${response.status}). Please try again.`);
+      }
+      
+      // Comment out the FormData section for now
+      /*
       if (selectedFiles.length === 0) {
         console.log('[REPORT_PROBLEM] No files selected, sending as JSON');
+        console.log('[REPORT_PROBLEM] Message length:', message.trim().length);
+        console.log('[REPORT_PROBLEM] Message content:', message.trim());
+        
         const jsonData = {
           message: message.trim(),
           userEmail: userEmail.trim(),
@@ -57,6 +111,8 @@ const ReportProblem = ({ isOpen, onClose, onSuccess }) => {
           userAgent: navigator.userAgent,
           url: window.location.href
         };
+        
+        console.log('[REPORT_PROBLEM] JSON data being sent:', jsonData);
         
         const response = await fetch('/api/report-problem', {
           method: 'POST',
