@@ -208,10 +208,16 @@ const api = {
             throw new Error('Authentication required. Please log in again.');
         }
         
-        return fetch(`${API_BASE_URL}/api/report-problem`, {
+        // For FormData, we need to handle it differently than JSON requests
+        const fullUrl = API_BASE_URL ? `${API_BASE_URL}/api/report-problem` : '/api/report-problem';
+        
+        console.log('📡 [API SERVICE] Report problem URL:', fullUrl);
+        
+        return fetch(fullUrl, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${accessToken}`,
+                // Don't set Content-Type for FormData - let the browser set it with boundary
             },
             body: formData,
         });

@@ -7136,21 +7136,37 @@ app.post('/api/image/clear-cache', authenticateToken, async (req, res) => {
 // Report problem endpoint
 app.post('/api/report-problem', async (req, res) => {
   try {
+    console.log('[PROBLEM_REPORT] Request received:', {
+      method: req.method,
+      url: req.url,
+      headers: {
+        authorization: req.headers.authorization ? 'Present' : 'Missing',
+        'content-type': req.headers['content-type'],
+        'user-agent': req.headers['user-agent']
+      },
+      body: req.body ? 'Present' : 'Missing'
+    });
+    
     // Verify Supabase token
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('[PROBLEM_REPORT] Authentication failed: No Bearer token');
       return res.status(401).json({ error: 'Authentication required' });
     }
 
     const token = authHeader.substring(7);
+    console.log('[PROBLEM_REPORT] Token extracted:', token ? 'Present' : 'Missing');
     let user = null;
 
     try {
+      console.log('[PROBLEM_REPORT] Verifying token with Supabase...');
       const { data: { user: supabaseUser }, error } = await supabase.auth.getUser(token);
       if (error || !supabaseUser) {
+        console.log('[PROBLEM_REPORT] Supabase auth failed:', error);
         return res.status(401).json({ error: 'Invalid authentication token' });
       }
       user = supabaseUser;
+      console.log('[PROBLEM_REPORT] Authentication successful for user:', user.id);
     } catch (authError) {
       console.error('[PROBLEM_REPORT] Supabase auth error:', authError);
       return res.status(401).json({ error: 'Authentication failed' });
