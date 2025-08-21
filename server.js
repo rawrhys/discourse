@@ -17,6 +17,7 @@ import { JSONFile } from 'lowdb/node';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import fetch from 'node-fetch';
+import nodemailer from 'nodemailer';
 import ApiError from './src/utils/ApiError.js';
 // import { execSync } from 'child_process';
 import { createServer as createHttpsServer } from 'https';
@@ -7325,7 +7326,6 @@ This is an automated notification from The Discourse AI platform.
         // Option 1: Send via SMTP server
         if (process.env.SMTP_HOST && process.env.SMTP_PORT && process.env.SMTP_USER && process.env.SMTP_PASS) {
           console.log('📧 [PROBLEM_REPORT] Attempting to send email via SMTP...');
-          const nodemailer = require('nodemailer');
           
           const transporter = nodemailer.createTransporter({
             host: process.env.SMTP_HOST,
