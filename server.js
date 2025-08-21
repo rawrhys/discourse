@@ -354,7 +354,7 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
     if (subj && haystack.includes(subj)) score += 50;
 
     // Enhanced token-based matching using full course context
-    const subjectTokens = extractSearchKeywords(subj, null, 6);
+
     const contentTokens = extractSearchKeywords(text, null, 6);
     const courseTokens = extractSearchKeywords(courseTitle + ' ' + courseSubject, null, 6);
     const allTokens = [...new Set([...subjectTokens, ...contentTokens, ...courseTokens])];
@@ -612,7 +612,7 @@ function isBannedImageCandidate(candidate, courseId) {
   }
 }
 
-// Single-keyword extraction for image search
+
 function extractSearchKeywords(subject, content, maxKeywords = 4) {
   const simpleNormalize = (str) => (String(str || '')
     .toLowerCase()
@@ -847,7 +847,7 @@ function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitl
     if (subj && haystack.includes(subj)) score += 50;
 
     // Enhanced token-based matching using full course context
-    const subjectTokens = extractSearchKeywords(subj, null, 6);
+
     const contentTokens = extractSearchKeywords(text, null, 6);
     const courseTokens = extractSearchKeywords(courseTitle + ' ' + courseSubject, null, 6);
     const allTokens = [...new Set([...subjectTokens, ...contentTokens, ...courseTokens])];
@@ -1105,7 +1105,7 @@ function isBannedImageCandidate(candidate, courseId) {
   }
 }
 
-// Single-keyword extraction for image search
+
 function extractSearchKeywords(subject, content, maxKeywords = 4) {
   const simpleNormalize = (str) => (String(str || '')
     .toLowerCase()
