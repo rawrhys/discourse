@@ -662,48 +662,23 @@ function extractSearchKeywords(subject, content, maxKeywords = 4) {
 }
 
 // Build refined multi-word search phrases from extracted keywords and content without hardcoding subjects
+function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitle = '') {
+  const normalize = (str) => (String(str || '')
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim());
+  const STOPWORDS = new Set(['the','a','an','and','or','of','in','on','to','for','by','with','at','from','as','is','are','was','were','be','being','been','this','that','these','those','it','its','into','about','over','under','between','through','during','before','after','above','below','up','down','out','off','than','introduction','overview','lesson','chapter','era','modern','course','explores','rich','covering','political','cultural','religious']);
+  const GENERIC_EVENT_WORDS = new Set(['fall','collapse','decline','rise','war','battle','revolution','crisis','empire','dynasty','state','society']);
+  const tokenize = (str) => normalize(str).split(/\s+/).filter(t => t && t.length > 2 && !STOPWORDS.has(t));
 
-function getDynamicExtraNegatives(subject) {
-  const subj = (subject || '').toLowerCase();
-  return EXTRA_NEGATIVE_TERMS.filter(term => !subj.includes(term));
-}
+  const dedupePush = (arr, value) => {
+    if (value && !arr.includes(value)) arr.push(value);
+  };
 
-async function fetchWithTimeout(resource, options = {}, timeoutMs = FETCH_TIMEOUT_MS) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(resource, { ...options, signal: controller.signal });
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-// Extract the main text from lesson content
-function extractMainLessonText(content) {
-  try {
-    if (!content) return '';
-    if (typeof content === 'string') return content;
-    const parts = [content.introduction, content.main_content, content.conclusion]
-      .filter(Boolean)
-      .map((s) => String(s))
-      .join(' ');
-    return parts;
-  } catch {
-    return '';
-  }
-}
-
-// Enhanced heuristic to score image candidates for relevance with full course context
-function computeImageRelevanceScore(subject, mainText, meta, courseContext = {}) {
-  try {
-    const subj = String(subject || '').toLowerCase();
-    const text = String(mainText || '').toLowerCase();
-    const title = String(meta?.title || '').toLowerCase();
-    const desc = String(meta?.description || '').toLowerCase();
-    const page = String(meta?.pageURL || '').toLowerCase();
-    const uploader = String(meta?.uploader || '').toLowerCase();
-
-    // Extract course context information
+  const subjectPhrase = String(subject || '').trim();
+  const subjectTokens = tokenize(subjectPhrase);
     const courseTitle = String(courseContext?.title || '').toLowerCase();
     const courseSubject = String(courseContext?.subject || '').toLowerCase();
     const allLessonTitles = Array.isArray(courseContext?.lessonTitles) 
