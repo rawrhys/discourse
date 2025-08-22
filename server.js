@@ -677,6 +677,18 @@ function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitl
   };
 
   const subjectPhrase = String(subject || '').trim();
+  const courseTitlePhrase = String(courseTitle || '').trim();
+  
+  // --- NEW: Music Context Detection ---
+  const MUSIC_KEYWORDS = ['music', 'song', 'album', 'band', 'artist', 'concert', 'musician', 'songwriter', 'opera', 'symphony', 'beatles', 'mozart', 'beethoven'];
+  const isMusicTopic = MUSIC_KEYWORDS.some(kw => 
+    normalize(courseTitlePhrase).includes(kw) || normalize(subjectPhrase).includes(kw)
+  );
+  // --- END NEW ---
+
+  // Combine course title and subject for primary context
+  const primaryContext = courseTitlePhrase ? `${courseTitlePhrase} ${subjectPhrase}` : subjectPhrase;
+
   const subjectTokens = tokenize(subjectPhrase);
 
   // Extract proper-noun-like phrases from raw text (e.g., "Roman Republic", "Ancient Egypt")
@@ -732,6 +744,30 @@ function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitl
 
   // Start building queries with the most specific content first
   const queries = [];
+
+  // Highest priority: Course title + Subject
+  if (courseTitlePhrase) {
+    dedupePush(queries, normalize(primaryContext));
+  }
+  
+  // --- NEW: Inject Music Keywords ---
+  if (isMusicTopic) {
+    if (courseTitlePhrase) {
+      dedupePush(queries, `${normalize(courseTitlePhrase)} album art`);
+      dedupePush(queries, `${normalize(primaryContext)} live performance`);
+    }
+    dedupePush(queries, `${normalize(subjectPhrase)} concert`);
+  }
+  // --- END NEW ---
+  
+  // Next priority: Course title + proper nouns from content
+  if (courseTitlePhrase) {
+    for (const phrase of contentProperPhrases.slice(0, 3)) {
+      const combined = `${normalize(courseTitlePhrase)} ${normalize(phrase)}`.trim();
+      dedupePush(queries, combined);
+      if (queries.length >= maxQueries) break;
+    }
+  }
 
   // Always include the full subject phrase as-is and normalized
   if (subjectPhrase) {
@@ -4050,7 +4086,6 @@ function sendCourseGenerationNotification(userId, notificationData) {
     console.log(`[SSE] No active connection found for user ${userId}`);
   }
 }
-
 // SSE endpoint for real-time course generation notifications
 app.get('/api/courses/notifications', async (req, res) => {
   // Handle authentication via query parameter for SSE
@@ -4843,7 +4878,6 @@ app.post('/api/image/clear-search-cache', (req, res) => {
     res.json({ message: 'No image search cache to clear' });
   }
 });
-
 // Clean up orphaned course files (admin only)
 app.post('/api/admin/cleanup-courses', authenticateToken, async (req, res) => {
   try {
@@ -5601,7 +5635,6 @@ Complete this lesson to unlock more content and continue your learning journey.`
     res.status(500).json({ error: 'Failed to fetch public course' });
   }
 });
-
 // Save quiz score for public course session
 app.post('/api/public/courses/:courseId/quiz-score', 
   securityHeaders,
@@ -6383,7 +6416,6 @@ function findCachedImageByKey(cacheKey) {
   const rec = (db.data.imageCache || []).find(r => r.key === cacheKey);
   return rec || null;
 }
-
 async function downloadAndCacheImage(cacheKey, imageData) {
   try {
     if (!imageData || !imageData.sourceUrlForCaching) return null;
@@ -7080,7 +7112,6 @@ app.post('/api/image/clear-cache', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to clear image cache' });
   }
 });
-
 // Report problem endpoint
 app.post('/api/report-problem', async (req, res) => {
   try {
