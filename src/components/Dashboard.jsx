@@ -578,218 +578,36 @@ const Dashboard = () => {
 
   const handleDeleteCourse = useCallback(async (courseId) => {
     try {
-      // Clear any existing errors first, especially "Course not found" errors
+      // Clear any existing errors first
       setError(null);
       
       logger.debug('🗑️ [DASHBOARD] Deleting course:', courseId);
       
-      const deleteResult = await api.deleteCourse(courseId);
-      logger.debug('✅ [DASHBOARD] Course deletion API call completed:', deleteResult);
+      await api.deleteCourse(courseId);
+      logger.debug('✅ [DASHBOARD] Course deletion API call completed');
       
-      // Clear the course to delete state immediately
       setCourseToDelete(null);
-      
-      // Clear browser cache and localStorage for this course
-      try {
-        // Clear localStorage cache for this course
-        const courseCacheKeys = Object.keys(localStorage).filter(key => 
-          key.includes(courseId) || key.includes('course') || key.includes('lesson')
-        );
-        courseCacheKeys.forEach(key => {
-          localStorage.removeItem(key);
-          logger.debug(`🗑️ [DASHBOARD] Cleared localStorage key: ${key}`);
-        });
-        
-        // Clear sessionStorage cache
-        const sessionCacheKeys = Object.keys(sessionStorage).filter(key => 
-          key.includes(courseId) || key.includes('course') || key.includes('lesson')
-        );
-        sessionCacheKeys.forEach(key => {
-          sessionStorage.removeItem(key);
-          logger.debug(`🗑️ [DASHBOARD] Cleared sessionStorage key: ${key}`);
-        });
-        
-        logger.info(`🗑️ [DASHBOARD] Cleared ${courseCacheKeys.length + sessionCacheKeys.length} cache entries`);
-      } catch (cacheError) {
-        logger.warn('⚠️ [DASHBOARD] Failed to clear browser cache:', cacheError.message);
-      }
       
       // Show success message
       setSuccessMessage('Course deleted successfully! Refreshing course list...');
       setShowSuccessToast(true);
-      
-      // Immediately remove the course from local state
-      setSavedCourses(prevCourses => {
-        const updatedCourses = prevCourses.filter(course => course.id !== courseId);
-        logger.info(`🗑️ [DASHBOARD] Removed course from local state. Remaining courses: ${updatedCourses.length}`);
-        return updatedCourses;
-      });
-      
-      // Verify course deletion using dedicated verification endpoint
-      try {
-        logger.info('🔄 [DASHBOARD] Verifying course deletion...');
-        const verificationResult = await api.verifyCourse(courseId);
-        
-        if (verificationResult.exists) {
-          logger.warn('⚠️ [DASHBOARD] Course still exists after deletion - refreshing course list');
-          // If the course still exists, refresh the course list instead of reloading
-          setTimeout(async () => {
-            try {
-              await fetchSavedCourses();
-              logger.info('✅ [DASHBOARD] Course list refreshed after deletion verification');
-            } catch (error) {
-              logger.error('❌ [DASHBOARD] Failed to refresh course list after deletion:', error);
-              // Only reload as absolute last resort
-              window.location.reload();
-            }
-          }, 2000);
-        } else {
-          logger.info('✅ [DASHBOARD] Course deletion verified - course no longer exists on server');
-          // Course is already removed from local state, no need to fetch fresh list
-        }
-      } catch (verificationError) {
-        logger.error('❌ [DASHBOARD] Failed to verify course deletion:', verificationError);
-        // Course is already removed from local state, keep it that way
-      }
-      
-      // Hide success message after a delay
-      setTimeout(() => {
-        setShowSuccessToast(false);
-      }, 3000);
+      setTimeout(() => setShowSuccessToast(false), 3000);
+
+      // --- NEW: Force a refresh of the course list ---
+      await fetchSavedCourses(true); // `true` forces a refetch
       
     } catch (error) {
       logger.error('❌ [DASHBOARD] Error deleting course:', error);
-      
-      // Clear the course to delete state even on error
       setCourseToDelete(null);
       
-      // Only set error for actual deletion failures, not for "course not found"
       if (error.message && !error.message.includes('Course not found')) {
         setError(error.message || 'Failed to delete course');
       } else {
-        // If it's a "Course not found" error, course is already gone
-        setError(null);
-        logger.info('🔄 [DASHBOARD] Course not found - course already deleted');
+        // If course was already not found, just refresh the list to sync up
+        fetchSavedCourses(true);
       }
     }
-  }, [api]);
-
-  // Connection diagnostic function
-  const runConnectionDiagnostic = useCallback(async () => {
-    setShowConnectionDiagnostic(true);
-    setConnectionStatus({ status: 'testing', message: 'Testing backend connection...' });
-    
-    try {
-      const result = await testBackendConnection();
-      
-      if (result.success) {
-        setConnectionStatus({ 
-          status: 'success', 
-          message: 'Backend connection successful!',
-          details: `Server responded with status ${result.status}`
-        });
-      } else {
-        setConnectionStatus({ 
-          status: 'error', 
-          message: 'Backend connection failed',
-          details: result.error,
-          suggestion: result.suggestion
-        });
-      }
-    } catch (error) {
-      setConnectionStatus({ 
-        status: 'error', 
-        message: 'Connection test failed',
-        details: error.message
-      });
-    }
-  }, []);
-
-  // Cleanup effect for streaming callbacks and timeouts
-  useEffect(() => {
-    // Return a cleanup function
-    return () => {
-      // Clear the timeout when the component unmounts or the effect re-runs
-      if (window.courseGenerationTimeout) {
-        clearTimeout(window.courseGenerationTimeout);
-      }
-    };
-  }, []);
-
-  // Effect to clear stale cache on dashboard load
-  useEffect(() => {
-    // Clear any stale course cache on dashboard load
-    try {
-      const staleCacheKeys = Object.keys(localStorage).filter(key => 
-        key.includes('course_') && key.includes('_1755714847591_') // Clear the problematic course cache
-      );
-      
-      if (staleCacheKeys.length > 0) {
-        staleCacheKeys.forEach(key => {
-          localStorage.removeItem(key);
-          logger.debug(`🗑️ [DASHBOARD] Cleared stale cache key: ${key}`);
-        });
-        logger.info(`🗑️ [DASHBOARD] Cleared ${staleCacheKeys.length} stale cache entries on load`);
-      }
-    } catch (cacheError) {
-      logger.warn('⚠️ [DASHBOARD] Failed to clear stale cache on load:', cacheError.message);
-    }
-  }, []);
-
-  // Effect to handle generation state changes
-  useEffect(() => {
-    if (!isGenerating) {
-      logger.debug('🔄 [DASHBOARD] Generation stopped, clearing any pending operations');
-    }
-  }, [isGenerating]);
-
-  // Effect to automatically clear "Course not found" errors when courses list is empty
-  useEffect(() => {
-    if (savedCourses.length === 0 && error && error.includes('Course not found')) {
-      logger.debug('🧹 [DASHBOARD] Clearing "Course not found" error since courses list is empty');
-      setError(null);
-    }
-  }, [savedCourses.length, error]);
-
-  // Effect to clear stale course data from localStorage
-  useEffect(() => {
-    try {
-      // Clear any course data that doesn't match current user's courses
-      const currentCourseId = localStorage.getItem('currentCourseId');
-      if (currentCourseId && savedCourses.length > 0) {
-        const courseExists = savedCourses.some(course => course.id === currentCourseId);
-        if (!courseExists) {
-          logger.debug('🧹 [DASHBOARD] Clearing stale course data from localStorage');
-          localStorage.removeItem('currentCourseId');
-          localStorage.removeItem(`course_${currentCourseId}`);
-        }
-      }
-    } catch (error) {
-      logger.warn('⚠️ [DASHBOARD] Error clearing stale course data:', error);
-    }
-  }, [savedCourses]);
-
-  // Fetch saved courses on component mount
-  useEffect(() => {
-    if (user) {
-      try {
-        // Clear any existing errors when component mounts
-        setError(null);
-        
-        // Automatically fetch saved courses for existing users
-        fetchSavedCourses();
-        
-        // If returning from Stripe payment, refresh user info
-        if (urlParams.get('payment') === 'success') {
-          handlePaymentSuccess();
-        }
-        
-      } catch (error) {
-        logger.error('❌ [DASHBOARD] Error in initial data fetch:', error);
-        // Don't let errors propagate - just log them
-      }
-    }
-  }, [user]);
+  }, [api, fetchSavedCourses]);
 
   const handlePaymentSuccess = async () => {
     try {
