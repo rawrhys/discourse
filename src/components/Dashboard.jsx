@@ -17,6 +17,7 @@ const Dashboard = () => {
   const [savedCourses, setSavedCourses] = useState([]);
   const [showNewCourseForm, setShowNewCourseForm] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isMonitoring, setIsMonitoring] = useState(false);
   const [error, setError] = useState(null);
   const [courseToDelete, setCourseToDelete] = useState(null);
   const [hoveredCourseId, setHoveredCourseId] = useState(null);
@@ -249,7 +250,7 @@ const Dashboard = () => {
     let monitoringInterval = null;
     
     // Start monitoring if we're currently generating a course
-    if (isGenerating) {
+    if (isMonitoring) {
       logger.info('🔍 [DASHBOARD] Starting global course generation monitoring');
       
       const startTime = Date.now();
@@ -260,12 +261,13 @@ const Dashboard = () => {
           // Check if we've been monitoring for too long
           if (Date.now() - startTime > maxMonitoringTime) {
             logger.warn('⚠️ [DASHBOARD] Max monitoring time reached, stopping course generation monitoring');
+            setIsMonitoring(false);
             clearInterval(monitoringInterval);
             return;
           }
           
           // Check if we're still generating
-          if (!isGenerating) {
+          if (!isMonitoring) {
             logger.info('✅ [DASHBOARD] Course generation completed, stopping monitoring');
             clearInterval(monitoringInterval);
             return;
@@ -282,7 +284,8 @@ const Dashboard = () => {
             setSuccessMessage('Course generation completed! New course found.');
             setShowSuccessToast(true);
             setError(null); // Clear any errors
-            setIsGenerating(false); // Stop generation state
+            setIsGenerating(false); // Stop generation state just in case
+            setIsMonitoring(false); // Stop monitoring
             setShowNewCourseForm(false); // Close the form
             clearInterval(monitoringInterval);
           }
@@ -300,7 +303,7 @@ const Dashboard = () => {
         logger.info('🛑 [DASHBOARD] Stopped course generation monitoring');
       }
     };
-  }, [isGenerating, api, savedCourses.length]);
+  }, [isMonitoring, api, savedCourses.length]);
 
   // Check for recently generated courses when dashboard loads
   useEffect(() => {
@@ -332,243 +335,37 @@ const Dashboard = () => {
       timestamp: new Date().toISOString(),
       user: user?.id
     });
-    
+
     setIsGenerating(true);
     setError(null);
     
-    try {
-      logger.debug('📋 [COURSE GENERATION] Processing course parameters:', courseParams);
-      
-      const { prompt, ...rest } = courseParams;
-      logger.debug('🔤 [COURSE GENERATION] Extracted prompt:', prompt);
-      logger.debug('⚙️ [COURSE GENERATION] Additional parameters:', rest);
-      
-      logger.debug('📡 [COURSE GENERATION] Making API call to generate course...');
-      const result = await api.generateCourse(
-        prompt, 
-        rest.difficultyLevel || 'intermediate',
-        rest.numModules || 3,
-        rest.numLessonsPerModule || 3
-      );
-      
-      logger.debug('✅ [COURSE GENERATION] Course generation completed:', result);
+    // Fire and forget the API call
+    api.generateCourse(
+      courseParams.prompt, 
+      courseParams.difficultyLevel || 'intermediate',
+      courseParams.numModules || 3,
+      courseParams.numLessonsPerModule || 3
+    ).then(result => {
+      logger.debug('✅ [COURSE GENERATION] API call returned a result (this might be rare for long generations):', result);
+      // We don't need to do anything here because the monitor will pick it up
+    }).catch(error => {
+      // This will likely be called on a timeout, which is expected.
+      // We can ignore it because our UI has already moved on.
+      logger.error('💥 [COURSE GENERATION] API call failed or timed out (expected for long generations):', error.message);
+    });
+    
+    // Immediately update the UI to reflect that the course is being generated in the background
+    setShowNewCourseForm(false);
+    setIsGenerating(false);
+    setIsMonitoring(true); // Start the background polling
+    setSuccessMessage(`Course generation for "${courseParams.prompt}" has started. It will appear on your dashboard shortly.`);
+    setShowSuccessToast(true);
 
-      // Force a full page reload to ensure the new course is displayed
-      window.location.reload();
-
-      // Course generation completed successfully
-      setIsGenerating(false);
-      setShowNewCourseForm(false);
+    // Hide success message after a longer delay
+    setTimeout(() => {
+      setShowSuccessToast(false);
+    }, 8000);
       
-      // Show success message
-      setSuccessMessage('Course generation completed! Updating course list...');
-      setShowSuccessToast(true);
-      
-      // Force refresh the course list immediately (fallback in case SSE doesn't work)
-      setTimeout(async () => {
-        try {
-          logger.debug('🔄 [DASHBOARD] Force refreshing course list after generation');
-          await fetchSavedCourses(true);
-          logger.info('✅ [DASHBOARD] Course list refreshed after generation');
-        } catch (error) {
-          logger.error('❌ [DASHBOARD] Failed to refresh course list after generation:', error);
-        }
-      }, 2000);
-
-      // Additional fallback: Check for new courses every 5 seconds for up to 2 minutes
-      let checkAttempts = 0;
-      const maxCheckAttempts = 24; // 2 minutes total (24 * 5 seconds)
-      
-      const checkForNewCourse = async () => {
-        if (checkAttempts >= maxCheckAttempts) {
-          logger.warn('⚠️ [DASHBOARD] Max course check attempts reached, stopping fallback checks');
-          return;
-        }
-        
-        try {
-          logger.debug(`🔄 [DASHBOARD] Fallback course check attempt ${checkAttempts + 1}/${maxCheckAttempts}`);
-          const courses = await api.getSavedCourses();
-          
-          // Check if we have a new course that wasn't there before
-          const currentCourseCount = savedCourses.length;
-          if (Array.isArray(courses) && courses.length > currentCourseCount) {
-            logger.info('🎉 [DASHBOARD] New course detected via fallback check!');
-            setSavedCourses(courses);
-            setSuccessMessage('Course generation completed! New course found.');
-            setShowSuccessToast(true);
-            return; // Stop checking
-          }
-          
-          checkAttempts++;
-          if (checkAttempts < maxCheckAttempts) {
-            setTimeout(checkForNewCourse, 5000); // Check again in 5 seconds
-          }
-        } catch (error) {
-          logger.error('❌ [DASHBOARD] Fallback course check failed:', error);
-          checkAttempts++;
-          if (checkAttempts < maxCheckAttempts) {
-            setTimeout(checkForNewCourse, 5000);
-          }
-        }
-      };
-      
-      // Start fallback checks after 10 seconds
-      setTimeout(checkForNewCourse, 10000);
-      
-      // Hide success message after a delay
-      setTimeout(() => {
-        setShowSuccessToast(false);
-      }, 3000);
-      
-    } catch (error) {
-      logger.error('💥 [COURSE GENERATION] Course generation failed:', {
-        error: error.message,
-        stack: error.stack,
-        params: courseParams,
-        timestamp: new Date().toISOString()
-      });
-      
-      // Check if this might be a false negative - the course might have been generated successfully
-      // even though we got an error response (e.g., timeout after generation completed)
-      let shouldCheckForGeneratedCourse = false;
-      
-      // Show a more helpful error message
-      let errorMessage = error.message || 'Failed to generate course';
-      let shouldKeepModalOpen = false;
-      
-      if (error.message.includes('Mistral API key is not configured')) {
-        errorMessage = 'AI service is not configured. Please contact support to set up the AI service.';
-        logger.error('🔌 [COURSE GENERATION] AI service configuration issue');
-      } else if (error.message.includes('Failed to fetch') || error.message.includes('Backend server unavailable') || error.message.includes('NetworkError')) {
-        errorMessage = 'Backend server temporarily unavailable. The server may be restarting. Please wait a moment and try again.';
-        logger.error('🌐 [COURSE GENERATION] Backend connectivity issue - keeping modal open for retry');
-        shouldKeepModalOpen = true;
-        shouldCheckForGeneratedCourse = true; // Check if course was generated despite the error
-      } else if (error.message.includes('No course credits left')) {
-        errorMessage = 'You have no credits left. Please purchase more credits to generate courses.';
-        logger.error('💳 [COURSE GENERATION] Insufficient credits');
-      } else if (error.message.includes('NSFW') || error.message.includes('inappropriate') || error.message.includes('CONTENT_POLICY_BLOCKED')) {
-        errorMessage = 'The requested topic violates our content policy and cannot be generated. Please try a different topic.';
-        logger.error('🚫 [COURSE GENERATION] Content policy violation');
-      } else if (error.message.includes('timeout') || error.message.includes('aborted')) {
-        errorMessage = 'The request timed out, but your course may still be generating. Please wait a moment and check your course list.';
-        logger.error('⏰ [COURSE GENERATION] Request timeout - course may still be generating');
-        shouldKeepModalOpen = false; // Close modal but start background checks
-        shouldCheckForGeneratedCourse = true; // Definitely check for generated course on timeout
-        
-        // Start background checks for the generated course
-        let checkAttempts = 0;
-        const maxCheckAttempts = 30; // 5 minutes total (30 * 10 seconds)
-        
-        const checkForGeneratedCourse = async () => {
-          if (checkAttempts >= maxCheckAttempts) {
-            logger.warn('⚠️ [DASHBOARD] Max timeout recovery check attempts reached');
-            return;
-          }
-          
-          try {
-            logger.debug(`🔄 [DASHBOARD] Timeout recovery check attempt ${checkAttempts + 1}/${maxCheckAttempts}`);
-            const courses = await api.getSavedCourses();
-            
-            // Check if we have a new course that wasn't there before
-            const currentCourseCount = savedCourses.length;
-            if (Array.isArray(courses) && courses.length > currentCourseCount) {
-              logger.info('🎉 [DASHBOARD] Course found after timeout!');
-              setSavedCourses(courses);
-              setSuccessMessage('Course generation completed! Your course is ready.');
-              setShowSuccessToast(true);
-              setError(null); // Clear the error
-              return; // Stop checking
-            }
-            
-            checkAttempts++;
-            if (checkAttempts < maxCheckAttempts) {
-              setTimeout(checkForGeneratedCourse, 10000); // Check again in 10 seconds
-            }
-          } catch (error) {
-            logger.error('❌ [DASHBOARD] Timeout recovery check failed:', error);
-            checkAttempts++;
-            if (checkAttempts < maxCheckAttempts) {
-              setTimeout(checkForGeneratedCourse, 10000);
-            }
-          }
-        };
-        
-        // Start recovery checks after 5 seconds
-        setTimeout(checkForGeneratedCourse, 5000);
-      } else if (error.message.includes('429') || error.message.includes('rate limit') || error.message.includes('Rate limited')) {
-        errorMessage = 'The AI service is currently busy. Your course is being generated but it\'s taking longer due to high demand. Please wait a moment and try again.';
-        logger.error('🚦 [COURSE GENERATION] Rate limiting detected - keeping modal open for retry');
-        shouldKeepModalOpen = true;
-        shouldCheckForGeneratedCourse = true; // Check if course was generated despite rate limiting
-      } else if (error.message.includes('500') || error.message.includes('Internal Server Error')) {
-        errorMessage = 'Server encountered an error. The backend may be restarting. Please wait a moment and try again.';
-        logger.error('🔧 [COURSE GENERATION] Server error - keeping modal open for retry');
-        shouldKeepModalOpen = true;
-        shouldCheckForGeneratedCourse = true; // Check if course was generated despite server error
-      } else {
-        // For any other error, also check if the course was generated
-        shouldCheckForGeneratedCourse = true;
-      }
-      
-      // If we should check for generated course, start background monitoring
-      if (shouldCheckForGeneratedCourse) {
-        logger.info('🔍 [DASHBOARD] Starting background course generation monitoring due to error');
-        
-        let checkAttempts = 0;
-        const maxCheckAttempts = 36; // 6 minutes total (36 * 10 seconds)
-        
-        const monitorForGeneratedCourse = async () => {
-          if (checkAttempts >= maxCheckAttempts) {
-            logger.warn('⚠️ [DASHBOARD] Max background monitoring attempts reached');
-            return;
-          }
-          
-          try {
-            logger.debug(`🔍 [DASHBOARD] Background monitoring check ${checkAttempts + 1}/${maxCheckAttempts}`);
-            const courses = await api.getSavedCourses();
-            
-            // Check if we have a new course that wasn't there before
-            const currentCourseCount = savedCourses.length;
-            if (Array.isArray(courses) && courses.length > currentCourseCount) {
-              logger.info('🎉 [DASHBOARD] Course found during background monitoring!');
-              setSavedCourses(courses);
-              setSuccessMessage('Course generation completed! Your course is ready.');
-              setShowSuccessToast(true);
-              setError(null); // Clear the error
-              setIsGenerating(false); // Ensure generation state is cleared
-              setShowNewCourseForm(false); // Close the form
-              return; // Stop checking
-            }
-            
-            checkAttempts++;
-            if (checkAttempts < maxCheckAttempts) {
-              setTimeout(monitorForGeneratedCourse, 10000); // Check again in 10 seconds
-            }
-          } catch (error) {
-            logger.error('❌ [DASHBOARD] Background monitoring check failed:', error);
-            checkAttempts++;
-            if (checkAttempts < maxCheckAttempts) {
-              setTimeout(monitorForGeneratedCourse, 10000);
-            }
-          }
-        };
-        
-        // Start monitoring after 5 seconds
-        setTimeout(monitorForGeneratedCourse, 5000);
-      }
-      
-      setError(errorMessage);
-      
-      // Only close the modal if it's not a backend connectivity issue
-      if (!shouldKeepModalOpen) {
-        setIsGenerating(false);
-      } else {
-        // For backend issues, keep the modal open but stop the generation state
-        // This allows users to retry when the backend comes back online
-        logger.info('🔄 [COURSE GENERATION] Keeping modal open for backend retry');
-      }
-    }
   }, [api, user?.id, savedCourses.length]);
 
   const handleLogout = () => {
