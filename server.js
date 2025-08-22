@@ -998,11 +998,11 @@ function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitl
       console.log(`[ImageScoring] Bonus for Wikipedia image in art content`);
     }
 
-    return Math.max(0, score);
-  } catch {
-    return 0;
-  }
-}
+    try {
+      return Math.max(0, score);
+    } catch (err) {
+      return 0;
+    }
 
 // Ban candidates that are known-bad or contextually inappropriate
 function isBannedImageCandidate(candidate, courseId) {
@@ -7952,4 +7952,8 @@ This is an automated notification from The Discourse AI platform.
 });
 
 
+// There is an unexpected end of input because the file is missing a closing brace for the main module or function.
+// Add the missing closing brace to properly terminate the file.
+
+}
 

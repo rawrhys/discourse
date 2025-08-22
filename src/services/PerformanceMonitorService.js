@@ -224,7 +224,7 @@ class PerformanceMonitorService {
   // Enable/disable monitoring
   setEnabled(enabled) {
     this.isEnabled = enabled;
-    console.log('[PerformanceMonitor] Monitoring ' + (enabled ? 'enabled' : 'disabled'));
+    console.log(`[PerformanceMonitor] Monitoring ${(enabled ? 'enabled' : 'disabled')}`);
   }
 
   // Get current metrics

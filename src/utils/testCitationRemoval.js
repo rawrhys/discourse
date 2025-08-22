@@ -18,11 +18,11 @@ export function testCitationRemoval() {
   console.log('=== Testing Citation Removal ===');
   
   console.log('\n--- Original Content (first 200 chars) ---');
-  console.log(testContent.substring(0, 200) + '...');
+  console.log(`${testContent.substring(0, 200)}...`);
   
   console.log('\n--- After Citation Removal ---');
   const cleanedContent = markdownService.removeInTextCitations(testContent);
-  console.log(cleanedContent.substring(0, 200) + '...');
+  console.log(`${cleanedContent.substring(0, 200)}...`);
   
   console.log('\n--- Checking for Remaining Citations ---');
   const remainingCitations = (cleanedContent.match(/\[(\d+)\]/g) || []);
@@ -38,7 +38,7 @@ export function testCitationRemoval() {
   
   console.log('\n--- Final Parsed Content (first 300 chars) ---');
   const finalContent = markdownService.parseWithBibliography(cleanedContent);
-  console.log(finalContent.substring(0, 300) + '...');
+  console.log(`${finalContent.substring(0, 300)}...`);
   
   return {
     original: testContent,
