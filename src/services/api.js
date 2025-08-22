@@ -164,7 +164,11 @@ const api = {
     
     getSavedCourses: () => {
         console.log('📡 [API SERVICE] Fetching saved courses');
-        return apiClient('/api/courses/saved');
+        const cacheBuster = `t=${Date.now()}`;
+        const path = `/api/courses/saved?${cacheBuster}`;
+        return apiClient(path, {
+            headers: { 'Cache-Control': 'no-store' }
+        });
     },
     
     getUserCredits: () => {

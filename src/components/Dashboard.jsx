@@ -412,9 +412,17 @@ const Dashboard = () => {
       
       logger.debug('🗑️ [DASHBOARD] Deleting course:', courseId);
       
-      await api.deleteCourse(courseId);
-      logger.debug('✅ [DASHBOARD] Course deletion API call completed');
+      const deleteResult = await api.deleteCourse(courseId);
+      logger.debug('✅ [DASHBOARD] Course deletion API call completed:', deleteResult);
       
+      // Immediately refresh from server to ensure UI sync
+      try {
+        await fetchSavedCourses(true);
+      } catch (e) {
+        logger.warn('⚠️ [DASHBOARD] Immediate post-delete refresh failed:', e?.message);
+      }
+      
+      // Clear the course to delete state immediately
       setCourseToDelete(null);
       
       // Show success message
@@ -423,7 +431,7 @@ const Dashboard = () => {
       setTimeout(() => setShowSuccessToast(false), 3000);
 
       // --- NEW: Force a refresh of the course list ---
-      await fetchSavedCourses(true); // `true` forces a refetch
+      // await fetchSavedCourses(true); // `true` forces a refetch
       
     } catch (error) {
       logger.error('❌ [DASHBOARD] Error deleting course:', error);
