@@ -16,6 +16,12 @@ export const AuthProvider = ({ children }) => {
           console.error('Error getting session:', error);
         } else if (session) {
           setUser(session.user);
+          // Store token for downstream services (e.g., SSE)
+          if (session.access_token) {
+            try { localStorage.setItem('token', session.access_token); } catch {}
+          }
+        } else {
+          try { localStorage.removeItem('token'); } catch {}
         }
       } catch (error) {
         console.error('Failed to get initial session:', error);
@@ -33,8 +39,13 @@ export const AuthProvider = ({ children }) => {
         
         if (session) {
           setUser(session.user);
+          // Persist token for clients that need it (SSE)
+          if (session.access_token) {
+            try { localStorage.setItem('token', session.access_token); } catch {}
+          }
         } else {
           setUser(null);
+          try { localStorage.removeItem('token'); } catch {}
         }
         setLoading(false);
       }
@@ -57,6 +68,10 @@ export const AuthProvider = ({ children }) => {
 
       if (data.user) {
         setUser(data.user);
+        // Store token from fresh login session if available
+        if (data.session?.access_token) {
+          try { localStorage.setItem('token', data.session.access_token); } catch {}
+        }
         return { user: data.user, session: data.session };
       } else {
         throw new Error('No user data returned');
@@ -106,6 +121,7 @@ export const AuthProvider = ({ children }) => {
         console.error('Logout error:', error);
       }
       setUser(null);
+      try { localStorage.removeItem('token'); } catch {}
     } catch (error) {
       console.error('Logout error:', error);
     }

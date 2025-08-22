@@ -511,6 +511,33 @@ const Dashboard = () => {
     }
   }, [user, fetchUserProfile]);
 
+  // Fetch saved courses on component mount
+  useEffect(() => {
+    if (user) {
+      try {
+        // Clear any existing errors when component mounts
+        setError(null);
+        
+        // Force a fresh fetch immediately after login to avoid stale cache
+        const token = localStorage.getItem('token');
+        if (token) {
+          fetchSavedCourses(true);
+        } else {
+          fetchSavedCourses();
+        }
+        
+        // If returning from Stripe payment, refresh user info
+        if (urlParams.get('payment') === 'success') {
+          handlePaymentSuccess();
+        }
+        
+      } catch (error) {
+        logger.error('❌ [DASHBOARD] Error in initial data fetch:', error);
+        // Don't let errors propagate - just log them
+      }
+    }
+  }, [user]);
+
   const handleBuyMore = async () => {
     setIsBuying(true);
     try {
