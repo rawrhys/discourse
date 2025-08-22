@@ -660,7 +660,6 @@ function extractSearchKeywords(subject, content, maxKeywords = 4) {
 
   return keywords.slice(0, maxKeywords);
 }
-
 // Build refined multi-word search phrases from extracted keywords and content without hardcoding subjects
 function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitle = '') {
   const normalize = (str) => (String(str || '')
@@ -1274,7 +1273,6 @@ class RobustJsonParser {
     return fixed;
   }
 }
-
 class AIService {
   constructor(apiKey) {
     // Do not throw if missing here; image search methods do not require Mistral
@@ -2462,9 +2460,7 @@ Context: "${context.substring(0, 1000)}..."`;
                     // Extract key terms from lesson content using AI
                     const contentText = `${lesson.content.introduction} ${lesson.content.main_content} ${lesson.content.conclusion}`;
                     const flashcardPrompt = `Based on this lesson content, generate 5-8 key terms with definitions that would be important for students to learn. Return as JSON array with objects containing "term" and "definition" fields.
-
 Lesson content: ${contentText.substring(0, 2000)}
-
 Return only the JSON array, no other text.`;
                     
                     const generatedFlashcards = await this._makeApiRequest(flashcardPrompt, 'flashcard', true);
@@ -3257,7 +3253,6 @@ app.get('/api/test-stripe', (req, res) => {
     hasWebhookSecret: !!process.env.STRIPE_WEBHOOK_SECRET
   });
 });
-
 // Test endpoint for checkout session (without authentication)
 app.get('/api/test-checkout', (req, res) => {
   res.json({ 
@@ -3266,7 +3261,6 @@ app.get('/api/test-checkout', (req, res) => {
     timestamp: new Date().toISOString()
   });
 });
-
 app.post('/api/ai/generate', authenticateToken, async (req, res, next) => {
     if (!global.aiService) {
         return next(new ApiError(503, 'AI service is not configured.'));
@@ -3917,7 +3911,6 @@ app.get('/api/courses/:courseId', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch course' });
   }
 });
-
 app.post('/api/courses/generate', authenticateToken, async (req, res, next) => {
     if (!global.aiService) {
         return next(new ApiError(503, 'Course generation is currently disabled.'));
@@ -4708,7 +4701,6 @@ app.get('/api/test', (req, res) => {
 app.get('/api/image/proxy', (req, res) => {
   enhancedImageProxy.serveImage(req, res);
 });
-
 // Fast image proxy with caching - direct serving without processing
 app.get('/api/image/fast', async (req, res) => {
   try {
@@ -5491,9 +5483,7 @@ app.get('/api/public/courses',
                 id: `lesson_${Date.now()}_1`,
                 title: 'Welcome to Discourse AI',
                 content: `# Welcome to Discourse AI
-
 This is your first lesson in our AI-powered learning platform. Here you'll discover:
-
 ## What You'll Learn
 - How to navigate the platform
 - Understanding the course structure
@@ -6267,7 +6257,6 @@ app.get('/api/debug/user-courses', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch user courses' });
   }
 });
-
 // Cache clearing endpoint for admin use
 app.post('/api/admin/clear-cache', authenticateToken, async (req, res) => {
   try {
@@ -7066,7 +7055,6 @@ try {
   console.error('[SERVER] Failed to initialize AI service:', e.message);
   global.aiService = new AIService('');
 }
-
 // Start the server only when not running under tests
 if (process.env.NODE_ENV !== 'test') {
   startServer();
@@ -7447,6 +7435,3 @@ This is an automated notification from The Discourse AI platform.
     res.status(500).json({ error: 'Failed to submit problem report' });
   }
 });
-
-
-

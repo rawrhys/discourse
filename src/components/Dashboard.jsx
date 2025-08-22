@@ -352,7 +352,10 @@ const Dashboard = () => {
       );
       
       logger.debug('✅ [COURSE GENERATION] Course generation completed:', result);
-      
+
+      // Force a full page reload to ensure the new course is displayed
+      window.location.reload();
+
       // Course generation completed successfully
       setIsGenerating(false);
       setShowNewCourseForm(false);
