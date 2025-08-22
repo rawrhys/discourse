@@ -329,6 +329,40 @@ const Dashboard = () => {
     }
   }, [user, savedCourses, showSuccessToast]);
 
+  // Auto-refresh courses periodically and on focus/visibility change
+  useEffect(() => {
+    if (!user) return;
+
+    const refresh = () => {
+      try {
+        logger.debug('🪄 [DASHBOARD] Auto-refreshing course list');
+        fetchSavedCourses(true);
+      } catch (e) {
+        logger.warn('⚠️ [DASHBOARD] Auto-refresh failed:', e?.message);
+      }
+    };
+
+    // Interval refresh every 20 seconds
+    const intervalId = setInterval(refresh, 20000);
+
+    // Refresh on window focus
+    const onFocus = () => refresh();
+    window.addEventListener('focus', onFocus);
+
+    // Refresh when tab becomes visible
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    // Cleanup
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [user, fetchSavedCourses]);
+
   const handleGenerateCourse = useCallback(async (courseParams) => {
     logger.debug('🎯 [COURSE GENERATION] Starting simplified course generation process', {
       params: courseParams,
@@ -338,7 +372,10 @@ const Dashboard = () => {
 
     setIsGenerating(true);
     setError(null);
-    
+
+    // Proactively refresh the list before starting generation
+    try { await fetchSavedCourses(true); } catch {}
+
     // Fire and forget the API call
     api.generateCourse(
       courseParams.prompt, 
@@ -347,26 +384,21 @@ const Dashboard = () => {
       courseParams.numLessonsPerModule || 3
     ).then(result => {
       logger.debug('✅ [COURSE GENERATION] API call returned a result (this might be rare for long generations):', result);
-      // We don't need to do anything here because the monitor will pick it up
+      // No-op; monitor will pick it up
     }).catch(error => {
-      // This will likely be called on a timeout, which is expected.
-      // We can ignore it because our UI has already moved on.
       logger.error('💥 [COURSE GENERATION] API call failed or timed out (expected for long generations):', error.message);
     });
-    
-    // Immediately update the UI to reflect that the course is being generated in the background
+
+    // Immediately update UI and start monitoring
     setShowNewCourseForm(false);
     setIsGenerating(false);
-    setIsMonitoring(true); // Start the background polling
+    setIsMonitoring(true);
     setSuccessMessage(`Course generation for "${courseParams.prompt}" has started. It will appear on your dashboard shortly.`);
     setShowSuccessToast(true);
 
-    // Hide success message after a longer delay
-    setTimeout(() => {
-      setShowSuccessToast(false);
-    }, 8000);
-      
-  }, [api, user?.id, savedCourses.length]);
+    setTimeout(() => setShowSuccessToast(false), 8000);
+
+  }, [api, user?.id, savedCourses.length, fetchSavedCourses]);
 
   const handleLogout = () => {
     logout();
