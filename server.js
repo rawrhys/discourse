@@ -3736,60 +3736,18 @@ app.post('/api/debug/add-credits', async (req, res) => {
 });
 
 app.get('/api/courses/saved', authenticateToken, async (req, res) => {
+  // Prevent browser caching for this endpoint
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+
   try {
-    const userId = req.user.id;
-    const userEmail = req.user.email;
-    
-    console.log(`[API] Fetching saved courses for user ${userId} (${userEmail})`);
-    
-    // First, try to find courses with the current user ID
-    let userCourses = db.data.courses.filter(c => c.userId === userId);
-    
-    // If no courses found, check if there are courses with the same email but different user ID
-    // This handles the migration from old user ID format to Supabase UUID
-    if (userCourses.length === 0) {
-      console.log(`[API] No courses found for user ID ${userId}, checking for email-based migration`);
-      
-      // Find the existing user in the database with the same email
-      const existingUser = db.data.users.find(u => u.email === userEmail);
-      
-      if (existingUser && existingUser.id !== userId) {
-        console.log(`[API] Found existing user with same email: ${existingUser.id} vs current: ${userId}`);
-        
-        // Find courses that belong to the existing user
-        const existingUserCourses = db.data.courses.filter(c => c.userId === existingUser.id);
-        
-        if (existingUserCourses.length > 0) {
-          console.log(`[API] Found ${existingUserCourses.length} courses to migrate from user ${existingUser.id} to ${userId}`);
-          
-          // Update these courses to belong to the current user
-          for (const course of existingUserCourses) {
-            console.log(`[API] Migrating course ${course.id} from user ${course.userId} to user ${userId}`);
-            course.userId = userId;
-          }
-          
-          // Also update the existing user record to use the new ID
-          existingUser.id = userId;
-          
-          // Save the updated database
-          await db.write();
-          console.log(`[API] Successfully migrated ${existingUserCourses.length} courses and user record to user ${userId}`);
-          
-          // Now get the migrated courses
-          userCourses = db.data.courses.filter(c => c.userId === userId);
-        }
-      } else {
-        console.log(`[API] No existing user found with email ${userEmail} or user ID already matches`);
-      }
-    }
-    
-    console.log(`[API] Returning ${userCourses.length} courses for user ${userId}`);
-    console.log(`[API] All courses in database:`, db.data.courses.map(c => ({ id: c.id, userId: c.userId, title: c.title })));
-    console.log(`[API] User courses found:`, userCourses.map(c => ({ id: c.id, userId: c.userId, title: c.title })));
-    res.json(userCourses);
+      await db.read();
+      const userCourses = db.data.courses.filter(course => course.userId === req.user.id);
+      res.json(userCourses);
   } catch (error) {
-    console.error(`[API_ERROR] Failed to fetch saved courses for user ${req.user.id}:`, error);
-    res.status(500).json({ error: 'Failed to fetch saved courses' });
+      console.error('Error fetching saved courses:', error);
+      res.status(500).json({ error: 'Failed to fetch saved courses' });
   }
 });
 
@@ -5488,7 +5446,6 @@ This is your first lesson in our AI-powered learning platform. Here you'll disco
 - How to navigate the platform
 - Understanding the course structure
 - Making the most of your learning experience
-
 ## Getting Started
 Take your time to explore the interface and get comfortable with the learning environment.
 
