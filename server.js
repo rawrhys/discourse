@@ -1608,7 +1608,8 @@ class AIService {
 
         if (!response.ok) {
           if (response.status === 429) {
-            const delay = 1500 * Math.pow(2, attempt);
+            // Reduced rate limiting delays - much faster retry
+            const delay = Math.min(200 * Math.pow(1.5, attempt), 1000); // Max 1 second delay
             console.warn(`[AIService] Rate limited on attempt ${attempt + 1}. Retrying in ${delay}ms...`);
             await new Promise(resolve => setTimeout(resolve, delay));
             attempt++;
@@ -1617,7 +1618,8 @@ class AIService {
           const errorText = await response.text();
           console.error(`[AIService] API request failed with status ${response.status}: ${errorText}`);
   
-          await new Promise(resolve => setTimeout(resolve, 3000));
+          // Reduced error retry delays
+          await new Promise(resolve => setTimeout(resolve, 500)); // Only 500ms instead of 3000ms
           attempt++;
           continue;
         }
@@ -1641,18 +1643,18 @@ class AIService {
               parseAttempt++;
               
               if (parseAttempt < maxParseRetries) {
-                // Wait before retrying parsing
-                await new Promise(resolve => setTimeout(resolve, 1000 * parseAttempt));
+                // Reduced parsing retry delays
+                await new Promise(resolve => setTimeout(resolve, 100 * parseAttempt));
               }
             }
           } catch (parseError) {
             console.error(`[AIService] JSON parsing error on attempt ${parseAttempt + 1}:`, parseError.message);
             parseAttempt++;
             
-            if (parseAttempt < maxParseRetries) {
-              // Wait before retrying parsing
-              await new Promise(resolve => setTimeout(resolve, 1000 * parseAttempt));
-            }
+                          if (parseAttempt < maxParseRetries) {
+                // Reduced parsing retry delays
+                await new Promise(resolve => setTimeout(resolve, 100 * parseAttempt));
+              }
           }
         }
         
@@ -1664,8 +1666,8 @@ class AIService {
           console.log(`[AIService] Retrying entire API request due to parsing failure...`);
           attempt++;
           
-          // Exponential backoff for parsing failures
-          const delay = Math.min(2000 * Math.pow(2, attempt), 30000);
+          // Reduced exponential backoff for parsing failures
+          const delay = Math.min(500 * Math.pow(1.5, attempt), 5000); // Max 5 seconds instead of 30
           console.log(`[AIService] Waiting ${delay}ms before retrying API request...`);
           await new Promise(resolve => setTimeout(resolve, delay));
           continue;
