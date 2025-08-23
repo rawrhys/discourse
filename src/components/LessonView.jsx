@@ -533,6 +533,13 @@ const LessonView = ({
           contentLength: lessonContentString?.length || 0
         });
         
+        console.log('[LessonView] Lesson content for references:', {
+          contentLength: lessonContentString?.length || 0,
+          contentPreview: lessonContentString?.substring(0, 200) + '...',
+          subject: subject,
+          lessonTitle: propLesson.title
+        });
+        
         setIsGeneratingReferences(true);
         
         // Use AI service to generate authentic academic references
@@ -554,6 +561,12 @@ const LessonView = ({
         setAcademicReferences(references);
       } catch (error) {
         console.error('[LessonView] Error generating authentic academic references:', error);
+        console.log('[LessonView] Error details:', {
+          errorMessage: error.message,
+          errorStack: error.stack,
+          errorType: error.constructor.name
+        });
+        
         // Fallback to static references if AI generation fails
         try {
           const lessonContentString = getContentAsString(propLesson.content);
@@ -604,7 +617,13 @@ const LessonView = ({
         return footer;
       } else {
         console.log('[LessonView] No academic references available:', academicReferences);
-        return null;
+        // For debugging: always show a footer even if no references
+        return {
+          title: 'Academic References',
+          references: [],
+          isLoading: false,
+          debug: true
+        };
       }
     } catch (error) {
       console.warn('[LessonView] Error creating references footer:', error);
@@ -1756,6 +1775,17 @@ const LessonView = ({
               references={referencesFooter.references}
               onCitationClick={handleCitationClick}
               isLoading={referencesFooter.isLoading}
+            />
+          </div>
+        )}
+        
+        {/* Debug: Always show references footer for testing */}
+        {!referencesFooter && (
+          <div className="mb-6">
+            <AcademicReferencesFooter 
+              references={[]}
+              onCitationClick={handleCitationClick}
+              isLoading={false}
             />
           </div>
         )}

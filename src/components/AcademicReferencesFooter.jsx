@@ -33,8 +33,41 @@ const AcademicReferencesFooter = memo(({ references, onCitationClick, isLoading 
   }
 
   if (!references || references.length === 0) {
-    console.log('[AcademicReferencesFooter] No references provided, returning null');
-    return null;
+    console.log('[AcademicReferencesFooter] No references provided, showing debug message');
+    return (
+      <footer className="academic-references-footer mt-12 pt-8 border-t-2 border-gray-300 bg-gray-50">
+        <div className="max-w-4xl mx-auto px-4">
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="academic-references-header w-full text-left text-2xl font-bold text-black mb-6 flex items-center justify-between hover:bg-gray-100 p-3 rounded-lg transition-colors duration-200"
+            style={{ color: '#000000 !important' }}
+          >
+            <span style={{ color: '#000000 !important', fontWeight: 'bold' }}>Academic References</span>
+            <svg
+              className={`w-6 h-6 transform transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              style={{ color: '#000000' }}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          
+          <div className={`academic-references-list space-y-4 transition-all duration-300 ease-in-out overflow-hidden ${
+            isExpanded ? 'max-h-screen opacity-100' : 'max-h-0 opacity-0'
+          }`}>
+            <div className="citation-item bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+              <div className="text-center text-gray-600">
+                <p>No academic references available for this lesson.</p>
+                <p className="text-sm mt-2">References are generated dynamically based on lesson content.</p>
+                <p className="text-sm">If you're seeing this message, the AI reference generation may need to be configured.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </footer>
+    );
   }
 
   const handleCitationClick = (referenceId) => {
