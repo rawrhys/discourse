@@ -4194,54 +4194,71 @@ app.get('/api/courses/notifications', async (req, res) => {
   // Handle authentication via query parameter for SSE
   const token = req.query.token;
   if (!token) {
+    console.error('[SSE] No token provided for SSE connection');
     return res.status(401).json({ error: 'No token provided' });
   }
 
   try {
-    // Verify token using Supabase to get the actual user ID
-    if (!supabase) {
-      console.error('[SSE] Supabase client not initialized');
+    console.log('[SSE] Attempting to authenticate SSE connection with token:', {
+      hasToken: !!token,
+      tokenLength: token ? token.length : 0,
+      tokenPrefix: token ? token.substring(0, 20) + '...' : 'none'
+    });
+
+    // Dev-mode fallback: accept tokens like "dev:<userId>" when Supabase is not configured
+    let userId;
+    if (!supabase && token.startsWith('dev:')) {
+      userId = token.slice(4);
+      const dbUser = db.data.users.find(u => u.id === userId);
+      if (!dbUser) {
+        console.error('[SSE] Dev token user not found in local database:', userId);
+        return res.status(401).json({ error: 'User not found in local database' });
+      }
+      console.log(`[SSE] Dev mode authentication successful for user: ${userId}`);
+    } else if (supabase) {
+      // Verify token using Supabase to get the actual user ID
+      const { data: { user }, error } = await supabase.auth.getUser(token);
+      
+      if (error || !user) {
+        console.error('[SSE] Supabase token verification failed:', error?.message || 'No user data');
+        return res.status(401).json({ error: 'Invalid token' });
+      }
+      
+      userId = user.id;
+      console.log(`[SSE] Supabase authentication successful for user: ${userId}`);
+    } else {
+      console.error('[SSE] Neither Supabase nor dev mode available for authentication');
       return res.status(500).json({ error: 'Authentication service not configured' });
     }
 
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    
-    if (error || !user) {
-      console.error('[SSE] Token verification failed:', error?.message || 'No user data');
-      return res.status(401).json({ error: 'Invalid token' });
-    }
+    // Set SSE headers
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'Cache-Control'
+    });
 
-    const userId = user.id;
-    console.log(`[SSE] User authenticated for SSE: ${userId}`);
+    // Send initial connection message
+    res.write(`data: ${JSON.stringify({ type: 'connected', userId, timestamp: new Date().toISOString() })}\n\n`);
 
-  // Set SSE headers
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    'Connection': 'keep-alive',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Cache-Control'
-  });
+    // Store the connection
+    global.sseConnections.set(userId, res);
 
-  // Send initial connection message
-  res.write(`data: ${JSON.stringify({ type: 'connected', userId, timestamp: new Date().toISOString() })}\n\n`);
+    // Handle client disconnect
+    req.on('close', () => {
+      console.log(`[SSE] Client disconnected: ${userId}`);
+      global.sseConnections.delete(userId);
+    });
 
-  // Store the connection
-  global.sseConnections.set(userId, res);
+    // Handle connection error
+    req.on('error', (error) => {
+      console.error(`[SSE] Connection error for user ${userId}:`, error);
+      global.sseConnections.delete(userId);
+    });
 
-  // Handle client disconnect
-  req.on('close', () => {
-    console.log(`[SSE] Client disconnected: ${userId}`);
-    global.sseConnections.delete(userId);
-  });
-
-  // Handle connection error
-  req.on('error', (error) => {
-    console.error(`[SSE] Connection error for user ${userId}:`, error);
-    global.sseConnections.delete(userId);
-  });
-
-  console.log(`[SSE] Client connected: ${userId}`);
+    console.log(`[SSE] Client connected successfully: ${userId}`);
   } catch (error) {
     console.error('[SSE] Error setting up SSE connection:', error);
     return res.status(500).json({ error: 'Failed to establish SSE connection' });

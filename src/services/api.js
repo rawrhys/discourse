@@ -131,6 +131,7 @@ const api = {
     getDefinitionForTerm: aiService.getDefinitionForTerm,
     validateCourseStructure: aiService.validateCourseStructure,
     getUser: aiService.getUser,
+    generateAuthenticBibliography: aiService.generateAuthenticBibliography,
 
     generateCourse: (topic, difficulty, numModules, numLessonsPerModule) => {
         console.log('📡 [API SERVICE] Calling simplified generateCourse API', {
