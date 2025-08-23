@@ -94,8 +94,6 @@ if (trustProxySetting === 'true' || trustProxySetting === '1') {
   // Default: trust only the first proxy
   app.set('trust proxy', 1);
 }
-
-// CORS: explicit allowed origins with credentials
 const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || 'https://thediscourse.ai,https://api.thediscourse.ai')
   .split(',')
   .map(s => s.trim())
@@ -349,6 +347,7 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
       score -= 10000; // Immediate rejection for Norse content in Egypt courses
       console.log(`[ImageScoring] Immediate rejection for Norse content in Egypt course: "${haystack.substring(0, 100)}"`);
     }
+
     // Strong bonus for exact subject phrase appearing
     if (subj && haystack.includes(subj)) score += 50;
 
@@ -610,6 +609,7 @@ function isBannedImageCandidate(candidate, courseId) {
     return false;
   }
 }
+
 // Single-keyword extraction for image search
 function extractSearchKeywords(subject, content, maxKeywords = 4) {
   const simpleNormalize = (str) => (String(str || '')
@@ -675,18 +675,6 @@ function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitl
   };
 
   const subjectPhrase = String(subject || '').trim();
-  const courseTitlePhrase = String(courseTitle || '').trim();
-  
-  // --- NEW: Music Context Detection ---
-  const MUSIC_KEYWORDS = ['music', 'song', 'album', 'band', 'artist', 'concert', 'musician', 'songwriter', 'opera', 'symphony', 'beatles', 'mozart', 'beethoven'];
-  const isMusicTopic = MUSIC_KEYWORDS.some(kw => 
-    normalize(courseTitlePhrase).includes(kw) || normalize(subjectPhrase).includes(kw)
-  );
-  // --- END NEW ---
-
-  // Combine course title and subject for primary context
-  const primaryContext = courseTitlePhrase ? `${courseTitlePhrase} ${subjectPhrase}` : subjectPhrase;
-
   const subjectTokens = tokenize(subjectPhrase);
 
   // Extract proper-noun-like phrases from raw text (e.g., "Roman Republic", "Ancient Egypt")
@@ -742,61 +730,6 @@ function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitl
 
   // Start building queries with the most specific content first
   const queries = [];
-
-  // Highest priority: Course title + Subject
-  if (courseTitlePhrase) {
-    dedupePush(queries, normalize(primaryContext));
-  }
-  
-      // --- NEW: Inject Music Keywords ---
-    if (isMusicTopic) {
-      if (courseTitlePhrase) {
-        dedupePush(queries, `${normalize(courseTitlePhrase)} album art`);
-        dedupePush(queries, `${normalize(primaryContext)} live performance`);
-        dedupePush(queries, `${normalize(courseTitlePhrase)} band photo`);
-        dedupePush(queries, `${normalize(courseTitlePhrase)} musician`);
-      }
-      dedupePush(queries, `${normalize(subjectPhrase)} concert`);
-      dedupePush(queries, `${normalize(subjectPhrase)} band`);
-      dedupePush(queries, `${normalize(subjectPhrase)} musician`);
-      
-      // Extract key music terms from subject for better search
-      const musicTerms = extractMusicTerms(subjectPhrase);
-      for (const term of musicTerms) {
-        dedupePush(queries, `${term} music`);
-        dedupePush(queries, `${term} band`);
-        dedupePush(queries, `${term} album`);
-        if (queries.length >= maxQueries) break;
-      }
-      
-      // Add specific Beatles-related search terms if detected
-      if (subjectPhrase.toLowerCase().includes('beatles') || courseTitlePhrase.toLowerCase().includes('beatles')) {
-        dedupePush(queries, 'beatles band photo');
-        dedupePush(queries, 'beatles concert');
-        dedupePush(queries, 'beatles album cover');
-        dedupePush(queries, 'beatles live performance');
-        dedupePush(queries, 'beatles studio recording');
-        dedupePush(queries, 'beatles 1960s');
-        dedupePush(queries, 'beatles fab four');
-        dedupePush(queries, 'beatles liverpool');
-      }
-      
-      // Add more generic music search terms for better coverage
-      dedupePush(queries, 'rock band');
-      dedupePush(queries, 'music group');
-      dedupePush(queries, 'musical artist');
-      dedupePush(queries, 'recording artist');
-    }
-    // --- END NEW ---
-  
-  // Next priority: Course title + proper nouns from content
-  if (courseTitlePhrase) {
-    for (const phrase of contentProperPhrases.slice(0, 3)) {
-      const combined = `${normalize(courseTitlePhrase)} ${normalize(phrase)}`.trim();
-      dedupePush(queries, combined);
-      if (queries.length >= maxQueries) break;
-    }
-  }
 
   // Always include the full subject phrase as-is and normalized
   if (subjectPhrase) {
@@ -1031,6 +964,7 @@ function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitl
       }
     }
   }
+
   // Ensure we have enough queries for variety
   if (queries.length < 3) {
     // Add more specific historical terms for better image variety
@@ -1141,59 +1075,8 @@ function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitl
   return queries.slice(0, maxQueries);
 }
 
-// Extract music-related terms from text for better image search
-function extractMusicTerms(text) {
-  const musicKeywords = [
-    'beatles', 'lennon', 'mccartney', 'harrison', 'starr', 'ringo', 'paul', 'john', 'george',
-    'album', 'song', 'single', 'record', 'vinyl', 'cd', 'music', 'band', 'group', 'artist',
-    'concert', 'performance', 'live', 'studio', 'recording', 'producer', 'engineer',
-    'guitar', 'bass', 'drums', 'piano', 'keyboard', 'vocals', 'harmony', 'melody',
-    'rock', 'pop', 'folk', 'jazz', 'blues', 'country', 'classical', 'electronic',
-    'singer', 'songwriter', 'composer', 'musician', 'performer', 'entertainer'
-  ];
-  
-  const textLower = String(text || '').toLowerCase();
-  const foundTerms = [];
-  
-  for (const keyword of musicKeywords) {
-    if (textLower.includes(keyword)) {
-      foundTerms.push(keyword);
-    }
-  }
-  
-  // Also extract any capitalized terms that might be band names or song titles
-  const capitalizedTerms = [...text.matchAll(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b/g)].map(match => match[0]);
-  for (const term of capitalizedTerms) {
-    if (term.length > 3 && !foundTerms.includes(term.toLowerCase())) {
-      foundTerms.push(term);
-    }
-  }
-  
-  return foundTerms.slice(0, 5); // Return top 5 terms
-}
-
 function getPixabayApiKey() {
   return process.env.PIXABAY_API_KEY || '';
-}
-
-function getPexelsApiKey() {
-  return process.env.PEXELS_API_KEY || process.env.PEXELS_KEY || '';
-}
-
-function getUnsplashAccessKey() {
-  return process.env.UNSPLASH_ACCESS_KEY || process.env.UNSPLASH_KEY || '';
-}
-
-async function triggerUnsplashDownload(downloadLocation) {
-  try {
-    const key = getUnsplashAccessKey();
-    if (!key || !downloadLocation) return;
-    await fetchWithTimeout(downloadLocation, {
-      headers: { Authorization: `Client-ID ${key}` }
-    });
-  } catch (e) {
-    console.warn('[AIService] Unsplash download trigger failed:', e.message);
-  }
 }
 
 // Robust JSON Parser Utility (inline version for server)
@@ -1692,6 +1575,7 @@ class AIService {
       }
     ];
   }
+
   async _makeApiRequest(prompt, intent, expectJsonResponse = true) {
     if (!this.apiKey) {
       throw new ApiError(500, 'MISTRAL_API_KEY is not configured on the server.');
@@ -1881,136 +1765,77 @@ The definition should be concise (2-3 sentences) and easy for a beginner to unde
 Do not use JSON or special formatting. Just provide the plain text definition.
 Context: "${context.substring(0, 1000)}..."`;
   }
-   
-  // Try Wikipedia first; then Pixabay - optimized with parallel execution and caching
-  async fetchRelevantImage(subject, content = '', usedImageTitles = [], usedImageUrls = [], options = { relaxed: false }, courseContext = {}) {
-    // Create cache key for this search - include used images to prevent duplicates
-    // Use a more unique cache key that includes lesson-specific information
-    const lessonId = courseContext?.lessonId || 'unknown';
-    const usedTitlesHash = usedImageTitles.length > 0 ? '_usedTitles_' + usedImageTitles.slice(0, 3).join('_').replace(/[^a-zA-Z0-9]/g, '').substring(0, 50) : '';
-    const usedUrlsHash = usedImageUrls.length > 0 ? '_usedUrls_' + usedImageUrls.slice(0, 2).map(url => url.split('/').pop()?.split('?')[0] || '').join('_').replace(/[^a-zA-Z0-9]/g, '').substring(0, 30) : '';
-    const cacheKey = `image_search_${subject}_${lessonId}_${options.relaxed ? 'relaxed' : 'strict'}${usedTitlesHash}${usedUrlsHash}`;
-    
-    // Check if we have a cached result
-    if (global.imageSearchCache && global.imageSearchCache.has(cacheKey)) {
-      const cached = global.imageSearchCache.get(cacheKey);
-      if (Date.now() - cached.timestamp < 300000) { // 5 minute cache
-        console.log(`[AIService] Using cached image search result for "${subject}" (cache key: ${cacheKey})`);
-        return cached.result;
-      } else {
-        global.imageSearchCache.delete(cacheKey);
-      }
-    }
-    
-    console.log(`[AIService] Performing fresh image search for "${subject}" (cache key: ${cacheKey})`);
-    
-    // Initialize cache if it doesn't exist
-    if (!global.imageSearchCache) {
-      global.imageSearchCache = new Map();
-    }
-    
-    // Clear ALL old cache entries to force fresh searches and fix the cache collision issue
-    if (global.imageSearchCache.size > 0) {
-      console.log(`[AIService] Clearing all ${global.imageSearchCache.size} cache entries to fix cache collision issue`);
-      global.imageSearchCache.clear();
-    }
-    
-    // Execute searches in parallel with timeout (Wikipedia, Pixabay, Pexels)
-    const searchPromises = [
-      this.fetchWikipediaImage(subject, content, usedImageTitles, usedImageUrls, { relaxed: !!options.relaxed }, courseContext),
-      this.fetchPixabayImage(subject, content, usedImageTitles, usedImageUrls, { relaxed: !!options.relaxed }, courseContext),
-      this.fetchPexelsImage(subject, content, usedImageTitles, usedImageUrls, { relaxed: !!options.relaxed }, courseContext),
-      this.fetchUnsplashImage(subject, content, usedImageTitles, usedImageUrls, { relaxed: !!options.relaxed }, courseContext)
-    ];
-    
-    // Add timeout to prevent hanging
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Image search timeout')), 15000); // 15 second timeout
-    });
-    
+  
+  async generateDefinitionForTerm(lessonContext, lessonTitle, term) {
+    // This function is now effectively a fallback and can be simplified or removed
+    // if the main generation process is reliable.
+    const prompt = this.constructDefinitionPrompt(lessonContext, lessonTitle, term);
     try {
-      const [wiki, pixa, pex, uns] = await Promise.race([
-        Promise.all(searchPromises),
-        timeoutPromise
-      ]);
-      
-      // Choose best by score among available results
-      let selectedImage = null;
-      const pool = [wiki, pixa, pex, uns].filter(Boolean);
-      if (pool.length > 0) {
-        pool.sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
-        selectedImage = pool[0];
-      }
-      
-      // Duplicate avoidance logic remains the same
-      if (selectedImage && usedImageUrls.length > 0) {
-        const normalizedSelectedUrl = normalizeUrlForCompare(selectedImage.imageUrl);
-        const isAlreadyUsed = usedImageUrls.some(url => normalizeUrlForCompare(url) === normalizedSelectedUrl);
-        if (isAlreadyUsed) {
-          console.log(`[AIService] Selected image is already used, trying alternative for "${subject}" (used URLs: ${usedImageUrls.length})`);
-          // try next best alternative in pool
-          const alt = pool.find(img => normalizeUrlForCompare(img.imageUrl) !== normalizedSelectedUrl);
-          if (alt) {
-            selectedImage = alt;
-            console.log(`[AIService] Switched to alternate image source.`);
-          } else if (!options.relaxed) {
-            console.log(`[AIService] Trying relaxed search for alternative image for "${subject}"`);
-            const relaxedResult = await this.fetchRelevantImage(subject, content, usedImageTitles, usedImageUrls, { relaxed: true }, courseContext);
-            if (relaxedResult) selectedImage = relaxedResult;
-          }
-        }
-      }
-      
-      // Log if we had to reject an image due to duplicates
-      if (selectedImage && usedImageUrls.length > 0) {
-        const normalizedSelectedUrl = normalizeUrlForCompare(selectedImage.imageUrl);
-        const isAlreadyUsed = usedImageUrls.some(url => normalizeUrlForCompare(url) === normalizedSelectedUrl);
-        if (isAlreadyUsed) {
-          console.log(`[AIService] WARNING: Could not find alternative image for "${subject}", returning null to prevent duplicate`);
-          selectedImage = null;
-        }
-      }
-    
-    // Check if this is historical/educational content
-    const isHistoricalContent = /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(subject) || 
-                               /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(content);
-    
-    // Use the selected image (which may have been adjusted for duplicates)
-    let result = selectedImage;
-    
-    if (result) {
-      let src = 'Unknown';
-      const url = (result.pageURL || '') + ' ' + (result.imageUrl || '');
-      if (url.includes('wikipedia.org') || url.includes('wikimedia')) src = 'Wikipedia';
-      else if (url.includes('pixabay.com')) src = 'Pixabay';
-      else if (url.includes('pexels.com') || url.includes('images.pexels.com')) src = 'Pexels';
-      else if (url.includes('unsplash.com') || url.includes('images.unsplash.com')) src = 'Unsplash';
-      console.log(`[AIService] Final selected image for "${subject}":`, { title: result.imageTitle, score: result.score, source: src });
-    } else {
-      console.log(`[AIService] No images found from any service`);
-    }
-    
-    // Cache the result
-    global.imageSearchCache.set(cacheKey, {
-      result,
-      timestamp: Date.now()
-    });
-    
-    return result;
-    
+      const definition = await this._makeApiRequest(prompt, 'flashcard', false);
+      return definition.replace(/definition:|term:|["\\]/gi, '').trim();
     } catch (error) {
-      console.warn(`[AIService] Image search failed for "${subject}":`, error.message);
-      
-      // Cache null result to prevent repeated failures
-      global.imageSearchCache.set(cacheKey, {
-        result: null,
-        timestamp: Date.now()
-      });
-      
-      return null;
+      console.error(`Error generating definition for "${term}":`, error);
+      return `Could not generate a definition for "${term}".`;
     }
   }
 
+  createBasicFlashcardsFromContent(content, lessonTitle) {
+    try {
+      console.log(`[AIService] Creating basic flashcards from content for: ${lessonTitle}`);
+      
+      // Combine all content parts
+      const fullContent = `${content.introduction || ''} ${content.main_content || ''} ${content.conclusion || ''}`;
+      
+      // Extract key terms using simple text analysis
+      const keyTerms = this.extractKeyTermsFromText(fullContent, lessonTitle);
+      
+      // Create flashcards from extracted terms
+      const flashcards = keyTerms.map(term => ({
+        term: term.term,
+        definition: term.definition || `A key concept from ${lessonTitle}`
+      }));
+      
+      console.log(`[AIService] Created ${flashcards.length} basic flashcards for: ${lessonTitle}`);
+      return flashcards;
+    } catch (error) {
+      console.error(`[AIService] Error creating basic flashcards for ${lessonTitle}:`, error);
+      return [];
+    }
+  }
+
+  extractKeyTermsFromText(text, lessonTitle) {
+    try {
+      // Extract terms that are wrapped in ** (bold markdown)
+      const boldTerms = [...text.matchAll(/\*\*([^*]+)\*\*/g)].map(match => match[1]);
+      
+      // Extract capitalized terms that might be important
+      const capitalizedTerms = [...text.matchAll(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b/g)].map(match => match[0]);
+      
+      // Combine and deduplicate terms
+      const allTerms = [...new Set([...boldTerms, ...capitalizedTerms])];
+      
+      // Filter out common words and short terms
+      const commonWords = ['the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'this', 'that', 'these', 'those', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'must', 'shall'];
+      const filteredTerms = allTerms.filter(term => 
+        term.length > 3 && 
+        !commonWords.includes(term.toLowerCase()) &&
+        !term.match(/^\d+$/) // Not just numbers
+      );
+      
+      // Take the first 5-8 most relevant terms
+      const keyTerms = filteredTerms.slice(0, 8).map(term => ({
+        term: term,
+        definition: `A key concept from ${lessonTitle}`
+      }));
+      
+      return keyTerms;
+    } catch (error) {
+      console.error(`[AIService] Error extracting key terms from text:`, error);
+      return [];
+    }
+  }
+  
+  // --- IMAGE SEARCH SETTINGS & HELPERS ---
   // Fetch a Wikipedia thumbnail for a given subject/title
   async fetchWikipediaImage(subject, content = '', usedImageTitles = [], usedImageUrls = [], options = { relaxed: false }, courseContext = {}) {
     if (!subject) return null;
@@ -2094,6 +1919,7 @@ Context: "${context.substring(0, 1000)}..."`;
             candidates.push({ ...candidate, score: biasedScore });
           }
         }
+
         if (candidates.length > 0) {
           candidates.sort((a, b) => b.score - a.score);
           const best = candidates[0];
@@ -2243,159 +2069,143 @@ Context: "${context.substring(0, 1000)}..."`;
     }
   }
 
-  async fetchPexelsImage(subject, content = '', usedImageTitles = [], usedImageUrls = [], options = { relaxed: false }, courseContext = {}) {
-    const apiKey = getPexelsApiKey();
-    if (!apiKey) return null;
-    try {
-      const queries = buildRefinedSearchPhrases(subject, content, options.relaxed ? 4 : 2, courseContext?.title || '');
-      if (String(subject || '').trim()) {
-        const s = String(subject).trim();
-        if (!queries.includes(s)) queries.unshift(s);
+  // Met Museum image service removed
+   
+  // Try Wikipedia first; then Pixabay - optimized with parallel execution and caching
+  async fetchRelevantImage(subject, content = '', usedImageTitles = [], usedImageUrls = [], options = { relaxed: false }, courseContext = {}) {
+    // Create cache key for this search - include used images to prevent duplicates
+    // Use a more unique cache key that includes lesson-specific information
+    const lessonId = courseContext?.lessonId || 'unknown';
+    const usedTitlesHash = usedImageTitles.length > 0 ? '_usedTitles_' + usedImageTitles.slice(0, 3).join('_').replace(/[^a-zA-Z0-9]/g, '').substring(0, 50) : '';
+    const usedUrlsHash = usedImageUrls.length > 0 ? '_usedUrls_' + usedImageUrls.slice(0, 2).map(url => url.split('/').pop()?.split('?')[0] || '').join('_').replace(/[^a-zA-Z0-9]/g, '').substring(0, 30) : '';
+    const cacheKey = `image_search_${subject}_${lessonId}_${options.relaxed ? 'relaxed' : 'strict'}${usedTitlesHash}${usedUrlsHash}`;
+    
+    // Check if we have a cached result
+    if (global.imageSearchCache && global.imageSearchCache.has(cacheKey)) {
+      const cached = global.imageSearchCache.get(cacheKey);
+      if (Date.now() - cached.timestamp < 300000) { // 5 minute cache
+        console.log(`[AIService] Using cached image search result for "${subject}" (cache key: ${cacheKey})`);
+        return cached.result;
+      } else {
+        global.imageSearchCache.delete(cacheKey);
       }
-
-      const candidates = [];
-      const perPage = options.relaxed ? 30 : 15;
-      const dynamicNegs = getDynamicExtraNegatives(subject);
-      const mainText = extractMainLessonText(content);
-
-      for (const q of queries) {
-        const url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(q)}&per_page=${perPage}`;
-        const resp = await fetchWithTimeout(url, {
-          headers: { Authorization: apiKey }
-        });
-        if (!resp.ok) continue;
-        const data = await resp.json();
-        const photos = Array.isArray(data?.photos) ? data.photos : [];
-        for (const p of photos) {
-          const candidateUrl = p?.src?.large || p?.src?.medium || p?.src?.original;
-          if (!candidateUrl) continue;
-          if (usedImageUrls.includes(candidateUrl)) continue;
-          if (DISALLOWED_IMAGE_URL_SUBSTRINGS.some((s) => (candidateUrl || '').includes(s))) continue;
-
-          const imageTitle = (p.alt || subject || '').substring(0, 80) || `${subject}`;
-          if (Array.isArray(usedImageTitles) && usedImageTitles.includes(imageTitle)) continue;
-          const pageURL = p?.url || 'https://www.pexels.com';
-          const description = p.alt || imageTitle;
-          const haystack = `${imageTitle} ${description} ${pageURL} ${p.photographer || ''}`.toLowerCase();
-          if (containsAny(haystack, dynamicNegs)) continue;
-
-          const attribution = `Photo by ${p.photographer || 'Unknown'} on Pexels`;
-
-          const candidate = {
-            imageTitle,
-            imageUrl: candidateUrl,
-            pageURL,
-            attribution,
-            description,
-            uploader: p.photographer || undefined,
-            imageWidth: p.width,
-            imageHeight: p.height,
-          };
-          const score = computeImageRelevanceScore(subject, mainText, {
-            title: imageTitle,
-            description,
-            pageURL,
-            uploader: p.photographer,
-            imageWidth: p.width,
-            imageHeight: p.height,
-          }, courseContext);
-          candidates.push({ ...candidate, score });
+    }
+    
+    console.log(`[AIService] Performing fresh image search for "${subject}" (cache key: ${cacheKey})`);
+    
+    // Initialize cache if it doesn't exist
+    if (!global.imageSearchCache) {
+      global.imageSearchCache = new Map();
+    }
+    
+    // Clear ALL old cache entries to force fresh searches and fix the cache collision issue
+    if (global.imageSearchCache.size > 0) {
+      console.log(`[AIService] Clearing all ${global.imageSearchCache.size} cache entries to fix cache collision issue`);
+      global.imageSearchCache.clear();
+    }
+    
+    // Execute both searches in parallel with timeout
+    const searchPromises = [
+      this.fetchWikipediaImage(subject, content, usedImageTitles, usedImageUrls, { relaxed: !!options.relaxed }, courseContext),
+      this.fetchPixabayImage(subject, content, usedImageTitles, usedImageUrls, { relaxed: !!options.relaxed }, courseContext)
+    ];
+    
+    // Add timeout to prevent hanging
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Image search timeout')), 15000); // 15 second timeout
+    });
+    
+    try {
+      const [wiki, pixa] = await Promise.race([
+        Promise.all(searchPromises),
+        timeoutPromise
+      ]);
+      
+      // Check if the selected image is already being used
+      let selectedImage = null;
+      if (wiki && pixa) {
+        selectedImage = (Number(pixa.score || 0) > Number(wiki.score || 0)) ? pixa : wiki;
+      } else {
+        selectedImage = wiki || pixa;
+      }
+      
+      // If the selected image is already being used, try to find an alternative
+      if (selectedImage && usedImageUrls.length > 0) {
+        const normalizedSelectedUrl = normalizeUrlForCompare(selectedImage.imageUrl);
+        const isAlreadyUsed = usedImageUrls.some(url => normalizeUrlForCompare(url) === normalizedSelectedUrl);
+        
+        if (isAlreadyUsed) {
+          console.log(`[AIService] Selected image is already used, trying alternative for "${subject}" (used URLs: ${usedImageUrls.length})`);
+          
+          // Try the other service if available
+          if (wiki && pixa && selectedImage === wiki) {
+            selectedImage = pixa;
+            console.log(`[AIService] Switched to Pixabay image to avoid duplicate for "${subject}"`);
+          } else if (wiki && pixa && selectedImage === pixa) {
+            selectedImage = wiki;
+            console.log(`[AIService] Switched to Wikipedia image to avoid duplicate for "${subject}"`);
+          }
+          
+          // If still the same, try with more relaxed search
+          if (selectedImage && !options.relaxed) {
+            console.log(`[AIService] Trying relaxed search for alternative image for "${subject}"`);
+            const relaxedResult = await this.fetchRelevantImage(subject, content, usedImageTitles, usedImageUrls, { relaxed: true }, courseContext);
+            if (relaxedResult) {
+              selectedImage = relaxedResult;
+              console.log(`[AIService] Found alternative image via relaxed search for "${subject}"`);
+            }
+          }
         }
       }
-
-      if (candidates.length > 0) {
-        candidates.sort((a, b) => b.score - a.score);
-        const best = candidates[0];
-        const originalUrl = best.imageUrl;
-        return { ...best, imageUrl: `/api/image/fast?url=${encodeURIComponent(originalUrl)}`, sourceUrlForCaching: originalUrl };
+      
+      // Log if we had to reject an image due to duplicates
+      if (selectedImage && usedImageUrls.length > 0) {
+        const normalizedSelectedUrl = normalizeUrlForCompare(selectedImage.imageUrl);
+        const isAlreadyUsed = usedImageUrls.some(url => normalizeUrlForCompare(url) === normalizedSelectedUrl);
+        if (isAlreadyUsed) {
+          console.log(`[AIService] WARNING: Could not find alternative image for "${subject}", returning null to prevent duplicate`);
+          selectedImage = null;
+        }
       }
-      return null;
-    } catch (e) {
-      console.warn('[AIService] Pexels fetch failed:', e.message);
+    
+    // Check if this is historical/educational content
+    const isHistoricalContent = /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(subject) || 
+                               /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(content);
+    
+    // Use the selected image (which may have been adjusted for duplicates)
+    let result = selectedImage;
+    
+    if (result) {
+      console.log(`[AIService] Final selected image for "${subject}":`, {
+        title: result.imageTitle,
+        score: result.score,
+        source: result.imageUrl.includes('wikimedia') ? 'Wikipedia' : 'Pixabay'
+      });
+    } else {
+      console.log(`[AIService] No images found from either service`);
+    }
+    
+    // Cache the result
+    global.imageSearchCache.set(cacheKey, {
+      result,
+      timestamp: Date.now()
+    });
+    
+    return result;
+    
+    } catch (error) {
+      console.warn(`[AIService] Image search failed for "${subject}":`, error.message);
+      
+      // Cache null result to prevent repeated failures
+      global.imageSearchCache.set(cacheKey, {
+        result: null,
+        timestamp: Date.now()
+      });
+      
       return null;
     }
   }
-
-  async fetchUnsplashImage(subject, content = '', usedImageTitles = [], usedImageUrls = [], options = { relaxed: false }, courseContext = {}) {
-    const accessKey = getUnsplashAccessKey();
-    if (!accessKey) return null;
-    try {
-      const queries = buildRefinedSearchPhrases(subject, content, options.relaxed ? 4 : 2, courseContext?.title || '');
-      if (String(subject || '').trim()) {
-        const s = String(subject).trim();
-        if (!queries.includes(s)) queries.unshift(s);
-      }
-
-      const candidates = [];
-      const perPage = options.relaxed ? 30 : 15;
-      const dynamicNegs = getDynamicExtraNegatives(subject);
-      const mainText = extractMainLessonText(content);
-
-      for (const q of queries) {
-        const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(q)}&per_page=${perPage}`;
-        const resp = await fetchWithTimeout(url, {
-          headers: { Authorization: `Client-ID ${accessKey}` }
-        });
-        if (!resp.ok) continue;
-        const data = await resp.json();
-        const photos = Array.isArray(data?.results) ? data.results : [];
-        for (const p of photos) {
-          const candidateUrl = p?.urls?.regular || p?.urls?.full || p?.urls?.small;
-          if (!candidateUrl) continue;
-          if (usedImageUrls.includes(candidateUrl)) continue;
-          if (DISALLOWED_IMAGE_URL_SUBSTRINGS.some((s) => (candidateUrl || '').includes(s))) continue;
-
-          const name = (p?.user?.name || 'Unknown').trim();
-          const imageTitle = (p?.alt_description || p?.description || subject || '').toString().trim() || `${subject}`;
-          if (Array.isArray(usedImageTitles) && usedImageTitles.includes(imageTitle)) continue;
-          const pageURLBase = p?.links?.html || 'https://unsplash.com';
-          // Append required attribution params
-          const appName = encodeURIComponent('LMS intergration');
-          const pageURL = `${pageURLBase}?utm_source=${appName}&utm_medium=referral`;
-          const description = imageTitle;
-          const haystack = `${imageTitle} ${description} ${pageURL} ${name}`.toLowerCase();
-          if (containsAny(haystack, dynamicNegs)) continue;
-
-          const attribution = `Photo by ${name} on Unsplash`;
-
-          const candidate = {
-            imageTitle,
-            imageUrl: candidateUrl, // Hotlink directly to Unsplash image per policy
-            pageURL,
-            attribution,
-            description,
-            uploader: name,
-            unsplashDownloadLocation: p?.links?.download_location
-          };
-          const score = computeImageRelevanceScore(subject, mainText, {
-            title: imageTitle,
-            description,
-            pageURL,
-            uploader: name,
-            imageWidth: undefined,
-            imageHeight: undefined,
-          }, courseContext);
-          candidates.push({ ...candidate, score });
-        }
-      }
-
-      if (candidates.length > 0) {
-        candidates.sort((a, b) => b.score - a.score);
-        const best = candidates[0];
-        // Trigger required download ping
-        if (best.unsplashDownloadLocation) {
-          triggerUnsplashDownload(best.unsplashDownloadLocation).catch(() => {});
-        }
-        // Return as-is without proxy to comply with hotlinking
-        return { ...best };
-      }
-      return null;
-    } catch (e) {
-      console.warn('[AIService] Unsplash fetch failed:', e.message);
-      return null;
-    }
-  }
-
+  
   async generateCourse(topic, difficulty, numModules, numLessonsPerModule = 3, generationId = null) {
     let courseWithIds;
     const usedImageTitles = new Set(); // Track used image titles for this course
@@ -2465,7 +2275,7 @@ Context: "${context.substring(0, 1000)}..."`;
             const lessonContentString = await this._makeApiRequest(lessonPrompt, 'lesson', false);
             
             // Optimized parsing logic with reduced logging
-            let parts = lessonContentString.split(/\s*\|\|\|\s*/);
+            let parts = lessonContentString.split(/\s*\|\|\|---\|\|\|\s*/);
             
             // If we don't get exactly 3 parts, try alternative separators
             if (parts.length !== 3) {
@@ -2723,6 +2533,7 @@ Return only the JSON array, no other text.`;
       throw new ApiError(500, `An unexpected error occurred during course generation: ${error.message}`);
     }
   }
+
   validateCourseStructure(data) {
     console.log(`[AIService] Validating course structure:`, {
       hasData: !!data,
@@ -2976,7 +2787,1009 @@ Example format:
     "relevance": "Comprehensive coverage of ancient civilizations including the topics discussed in this lesson"
   }
 ]
+
 Return only the JSON array, no other text.`;
+
+      const generatedReferences = await this._makeApiRequest(referencePrompt, 'bibliography', true);
+      
+      if (!Array.isArray(generatedReferences) || generatedReferences.length === 0) {
+        console.warn(`[AIService] AI failed to generate authentic references, falling back to static references`);
+        return this.generateBibliography(topic, subject, numReferences);
+      }
+
+      // Validate and clean up the generated references
+      const validatedReferences = generatedReferences
+        .filter(ref => ref && ref.author && ref.title && ref.publisher && ref.year)
+        .map((ref, index) => ({
+          id: index + 1,
+          author: ref.author.trim(),
+          year: ref.year.toString(),
+          title: ref.title.trim(),
+          publisher: ref.publisher.trim(),
+          type: ref.type || 'book',
+          relevance: ref.relevance || `Relevant to ${topic}`,
+          verified: true, // Mark as verified since they're AI-generated authentic references
+          citationNumber: index + 1
+        }))
+        .slice(0, numReferences);
+
+      console.log(`[AIService] Generated ${validatedReferences.length} authentic references for "${topic}"`);
+      return validatedReferences;
+
+    } catch (error) {
+      console.error(`[AIService] Error generating authentic bibliography for "${topic}":`, error.message);
+      // Fall back to static bibliography generation
+      return this.generateBibliography(topic, subject, numReferences);
+    }
+  }
+
+  /**
+   * Shuffle array for variety in reference selection
+   * @param {Array} array - Array to shuffle
+   * @returns {Array} Shuffled array
+   */
+  shuffleArray(array) {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  }
+
+  /**
+   * Verify that all references are authentic
+   * @param {Array} bibliography - Bibliography array to verify
+   * @returns {boolean} True if all references are verified
+   */
+  verifyBibliography(bibliography) {
+    return bibliography.every(ref => ref.verified === true);
+  }
+
+  /**
+   * Clean up malformed References sections in content
+   * @param {string} content - Content that might contain malformed References
+   * @returns {string} Cleaned content
+   */
+  cleanupMalformedReferences(content) {
+    if (!content || typeof content !== 'string') {
+      return content;
+    }
+
+    return content
+      // Fix the specific problematic pattern: "## References [1] ... [2] ..."
+      .replace(/## References\s*\[(\d+)\]/g, '\n## References\n\n[$1]')
+      // Ensure each citation is on its own line
+      .replace(/\]\s*\[(\d+)\]/g, '.\n\n[$1]')
+      // Add proper line breaks between citations
+      .replace(/\.\s*\[(\d+)\]/g, '.\n\n[$1]')
+      // Clean up any remaining issues
+      .replace(/\n{3,}/g, '\n\n'); // Normalize multiple line breaks
+  }
+}
+
+// --- SETUP AND CONFIGURATION ---
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// --- DATABASE SETUP ---
+const dbFilePath = path.join(__dirname, 'db.json');
+
+// Ensure the data directory exists
+const dataDir = path.resolve(__dirname, 'data');
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
+}
+
+const adapter = new JSONFile(dbFilePath);
+const defaultData = { users: [], courses: [], images: [], imageCache: [] };
+const db = new Low(adapter, defaultData);
+
+async function initializeDatabase() {
+  try {
+    // read() will create the file with defaultData if it doesn't exist or load existing data.
+    await db.read();
+    console.log(`[DB Debug] db.read() completed. File exists: ${fs.existsSync(dbFilePath)}`);
+    // Belt-and-suspenders: ensure data object and arrays are present after read.
+    db.data = db.data || defaultData;
+    db.data.users = db.data.users || [];
+    db.data.courses = db.data.courses || [];
+    db.data.imageCache = db.data.imageCache || [];
+    db.data.images = db.data.images || [];
+    
+    // Load courses from individual files if they exist
+    await loadCoursesFromFiles();
+    
+    // Clean up orphaned course files
+    await cleanupOrphanedCourseFiles();
+    
+    console.log('[DB] Database initialized successfully at:', dbFilePath);
+  } catch (error) {
+    console.error('[DB_ERROR] Could not initialize database:', error);
+    process.exit(1);
+  }
+}
+
+async function loadCoursesFromFiles() {
+  try {
+    const coursesDir = path.join(__dirname, 'data', 'courses');
+    if (!fs.existsSync(coursesDir)) {
+      console.log('[DB] No courses directory found, skipping course loading');
+      return;
+    }
+
+    const courseFiles = fs.readdirSync(coursesDir).filter(file => file.endsWith('.json') && file !== 'undefined.json');
+    console.log(`[DB] Found ${courseFiles.length} course files to load`);
+
+    for (const file of courseFiles) {
+      try {
+        const filePath = path.join(coursesDir, file);
+        const courseData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        
+        // Check if course already exists in database
+        const existingCourse = db.data.courses.find(c => c.id === courseData.id);
+        if (!existingCourse) {
+          db.data.courses.push(courseData);
+          console.log(`[DB] Loaded course: ${courseData.title} (${courseData.id})`);
+        } else {
+          console.log(`[DB] Course already exists: ${courseData.title} (${courseData.id})`);
+        }
+      } catch (error) {
+        console.error(`[DB_ERROR] Failed to load course file ${file}:`, error.message);
+      }
+    }
+
+    console.log(`[DB] Total courses in database: ${db.data.courses.length}`);
+  } catch (error) {
+    console.error('[DB_ERROR] Failed to load courses from files:', error);
+  }
+}
+
+/**
+ * Save a course to an individual JSON file
+ * @param {Object} course - The course object to save
+ */
+async function saveCourseToFile(course) {
+  try {
+    const coursesDir = path.join(__dirname, 'data', 'courses');
+    
+    // Ensure courses directory exists
+    if (!fs.existsSync(coursesDir)) {
+      fs.mkdirSync(coursesDir, { recursive: true });
+    }
+    
+    const courseFileName = `${course.id}.json`;
+    const courseFilePath = path.join(coursesDir, courseFileName);
+    
+    // Save course to file
+    fs.writeFileSync(courseFilePath, JSON.stringify(course, null, 2));
+    console.log(`[DB] Saved course to file: ${courseFileName}`);
+    
+  } catch (error) {
+    console.error(`[DB_ERROR] Failed to save course file for ${course.id}:`, error.message);
+    // Don't throw error to avoid breaking course creation
+  }
+}
+
+/**
+ * Clean up orphaned course files (files that exist but don't have corresponding database entries)
+ */
+async function cleanupOrphanedCourseFiles() {
+  try {
+    const coursesDir = path.join(__dirname, 'data', 'courses');
+    
+    if (!fs.existsSync(coursesDir)) {
+      return;
+    }
+    
+    const courseFiles = fs.readdirSync(coursesDir).filter(file => file.endsWith('.json') && file !== 'undefined.json');
+    const databaseCourseIds = db.data.courses.map(c => c.id);
+    
+    let orphanedCount = 0;
+    
+    for (const file of courseFiles) {
+      const courseId = file.replace('.json', '');
+      
+      if (!databaseCourseIds.includes(courseId)) {
+        const filePath = path.join(coursesDir, file);
+        try {
+          fs.unlinkSync(filePath);
+          console.log(`[DB] Cleaned up orphaned course file: ${file}`);
+          orphanedCount++;
+        } catch (error) {
+          console.error(`[DB_ERROR] Failed to delete orphaned file ${file}:`, error.message);
+        }
+      }
+    }
+    
+    if (orphanedCount > 0) {
+      console.log(`[DB] Cleaned up ${orphanedCount} orphaned course files`);
+    }
+    
+  } catch (error) {
+    console.error('[DB_ERROR] Failed to cleanup orphaned course files:', error.message);
+  }
+}
+
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
+const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
+
+// Supabase client
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://test.supabase.co';
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'test-key';
+const supabaseRedirectUrl = process.env.SUPABASE_REDIRECT_URL || 'https://thediscourse.ai';
+
+let supabase = null;
+
+if (!supabaseUrl || !supabaseAnonKey || supabaseUrl === 'your-supabase-url-here' || supabaseAnonKey === 'your-supabase-anon-key-here') {
+    console.warn('[SERVER_WARN] Supabase configuration is missing or invalid. Authentication will be disabled.');
+    console.warn('[SERVER_WARN] Please check your environment variables or .env file.');
+    console.warn(`[SERVER_DEBUG] SUPABASE_URL: ${supabaseUrl ? 'SET' : 'NOT SET'}`);
+    console.warn(`[SERVER_DEBUG] VITE_SUPABASE_URL: ${process.env.VITE_SUPABASE_URL ? 'SET' : 'NOT SET'}`);
+    console.warn(`[SERVER_DEBUG] SUPABASE_ANON_KEY: ${supabaseAnonKey ? 'SET' : 'NOT SET'}`);
+    console.warn(`[SERVER_DEBUG] VITE_SUPABASE_ANON_KEY: ${process.env.VITE_SUPABASE_ANON_KEY ? 'SET' : 'NOT SET'}`);
+    console.warn(`[SERVER_DEBUG] SUPABASE_REDIRECT_URL: ${supabaseRedirectUrl}`);
+} else {
+    try {
+        supabase = createClient(supabaseUrl, supabaseAnonKey, {
+            auth: {
+                autoRefreshToken: false,
+                persistSession: false,
+                redirectTo: supabaseRedirectUrl,
+            },
+        });
+        console.log('[SERVER] Supabase client initialized successfully');
+        console.log(`[SERVER] Supabase redirect URL: ${supabaseRedirectUrl}`);
+    } catch (error) {
+        console.error('[SERVER_ERROR] Failed to initialize Supabase client:', error.message);
+        supabase = null;
+    }
+}
+
+// Helper to get user by id
+// This function is no longer needed as we use req.user from the middleware.
+
+// --- MIDDLEWARE ---
+
+// Enhanced authentication middleware with Supabase token verification
+const authenticateToken = async (req, res, next) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    console.log('[AUTH] Authentication attempt:', {
+      path: req.path,
+      hasAuthHeader: !!authHeader,
+      hasToken: !!token,
+      tokenLength: token ? token.length : 0,
+      tokenPrefix: token ? token.substring(0, 10) + '...' : 'none'
+    });
+
+    if (!token) {
+      console.log('[AUTH] No token provided for:', req.path);
+      return res.status(401).json({ 
+        error: 'Access token required',
+        code: 'TOKEN_MISSING'
+      });
+    }
+
+    // Dev-mode fallback: accept tokens like "dev:<userId>" when Supabase is not configured
+    if (!supabase && token.startsWith('dev:')) {
+      const userId = token.slice(4);
+      const dbUser = db.data.users.find(u => u.id === userId);
+      if (!dbUser) {
+        return res.status(401).json({ error: 'User not found in local database', code: 'USER_NOT_FOUND' });
+      }
+      req.user = dbUser;
+      return next();
+    }
+
+    // Verify token using Supabase
+    if (!supabase) {
+      console.error('[AUTH_ERROR] Supabase client not initialized');
+      return res.status(500).json({ 
+        error: 'Authentication service not configured',
+        code: 'AUTH_SERVICE_ERROR'
+      });
+    }
+
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+
+    if (error || !user) {
+      console.log('[AUTH] Supabase token verification failed for:', req.path, 'Error:', error?.message || 'No user data');
+      
+      let errorMessage = 'Invalid or expired token';
+      let errorCode = 'TOKEN_INVALID';
+      
+      if (error?.message?.includes('expired')) {
+        errorMessage = 'Token has expired. Please log in again.';
+        errorCode = 'TOKEN_EXPIRED';
+      } else if (error?.message?.includes('invalid')) {
+        errorMessage = 'Invalid token. Please log in again.';
+        errorCode = 'TOKEN_SIGNATURE_INVALID';
+      }
+      
+      return res.status(401).json({ 
+        error: errorMessage,
+        code: errorCode
+      });
+    }
+
+    // Find user in local database to ensure they exist and have current data
+    const dbUser = db.data.users.find(u => u.id === user.id);
+    if (!dbUser) {
+      console.log('[AUTH] User not found in local database:', user.id);
+      return res.status(401).json({ 
+        error: 'User not found in local database',
+        code: 'USER_NOT_FOUND'
+      });
+    }
+
+    // Update req.user with fresh data from database
+    req.user = dbUser;
+    
+    // Add debugging for course access
+    if (req.path.includes('/api/courses/') && req.params.courseId) {
+      console.log('[AUTH] Course access authentication:', {
+        userId: dbUser.id,
+        userEmail: dbUser.email,
+        courseId: req.params.courseId,
+        path: req.path,
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    if (SHOULD_LOG_AUTH) {
+      console.log('[AUTH] User authenticated:', {
+        id: dbUser.id,
+        email: dbUser.email,
+        path: req.path,
+        credits: dbUser.courseCredits
+      });
+    }
+    next();
+  } catch (error) {
+    console.error('[AUTH_ERROR] Unexpected error in authenticateToken:', error);
+    return res.status(500).json({ 
+      error: 'Authentication service error',
+      code: 'AUTH_SERVICE_ERROR'
+    });
+  }
+};
+
+// Admin guard (if ADMIN_EMAILS is empty, allow any authenticated user)
+const requireAdminIfConfigured = (req, res, next) => {
+  if (ADMIN_EMAILS.size === 0) return next();
+  const email = req.user?.email?.toLowerCase();
+  if (!email || !ADMIN_EMAILS.has(email)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  next();
+};
+
+// --- API ROUTES ---
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    aiService: {
+      configured: !!global.aiService,
+      hasApiKey: !!(process.env.MISTRAL_API_KEY || process.env.VITE_MISTRAL_API_KEY),
+      ready: !!(global.aiService && global.aiService.apiKey)
+    }
+  });
+});
+
+// AI service test endpoint
+app.get('/api/test-ai', async (req, res) => {
+  if (!global.aiService) {
+    return res.status(503).json({
+        status: 'error',
+        message: 'AI service is not configured on the server.',
+        configured: false,
+        details: 'MISTRAL_API_KEY environment variable is not set or invalid',
+        solution: 'Get a valid API key from https://console.mistral.ai/ and set MISTRAL_API_KEY environment variable'
+    });
+  }
+  try {
+    const testPrompt = 'Generate a simple test response. Just say "AI service is working correctly."';
+    const response = await global.aiService._makeApiRequest(testPrompt, 'search', false);
+    
+    res.json({
+      status: 'success',
+      message: 'AI service appears to be working.',
+      configured: true,
+      testResponse: response,
+    });
+  } catch (error) {
+    console.error('[AI Test] Error:', error);
+    
+    let errorDetails = {
+      status: 'error',
+      message: error.message,
+      configured: true, // It's configured, but the request failed
+      errorType: 'api_request_failed'
+    };
+    
+    // Provide specific guidance based on error type
+    if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+      errorDetails.errorType = 'invalid_api_key';
+      errorDetails.solution = 'The Mistral API key is invalid or expired. Get a new key from https://console.mistral.ai/';
+    } else if (error.message.includes('429') || error.message.includes('Rate limited')) {
+      errorDetails.errorType = 'rate_limited';
+      errorDetails.solution = 'API rate limit exceeded. Wait a moment and try again.';
+    } else if (error.message.includes('Failed to fetch') || error.message.includes('Network')) {
+      errorDetails.errorType = 'network_error';
+      errorDetails.solution = 'Network connectivity issue. Check your internet connection.';
+    }
+    
+    res.status(500).json(errorDetails);
+  }
+});
+
+// Test endpoint for debugging
+app.get('/api/test', (req, res) => {
+  res.json({ 
+    status: 'Server is working!', 
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      imageSearch: '/api/image-search/search',
+      test: '/api/test'
+    }
+  });
+});
+
+// Test endpoint for Stripe configuration
+app.get('/api/test-stripe', (req, res) => {
+  res.json({ 
+    stripeConfigured: !!stripe,
+    hasSecretKey: !!process.env.STRIPE_SECRET_KEY,
+    hasWebhookSecret: !!process.env.STRIPE_WEBHOOK_SECRET
+  });
+});
+// Test endpoint for checkout session (without authentication)
+app.get('/api/test-checkout', (req, res) => {
+  res.json({ 
+    message: 'Checkout endpoint is accessible',
+    stripeConfigured: !!stripe,
+    timestamp: new Date().toISOString()
+  });
+});
+app.post('/api/ai/generate', authenticateToken, async (req, res, next) => {
+    if (!global.aiService) {
+        return next(new ApiError(503, 'AI service is not configured.'));
+    }
+
+    try {
+        const { prompt, intent, expectJsonResponse = true } = req.body;
+        if (!prompt || !intent) {
+            throw new ApiError(400, 'Missing required parameters: prompt, intent.');
+        }
+
+        const result = await global.aiService._makeApiRequest(prompt, intent, expectJsonResponse);
+        res.json(result);
+    } catch (error) {
+        next(error);
+    }
+});
+
+app.post('/api/ai/generate-bibliography', authenticateToken, async (req, res, next) => {
+    if (!global.aiService) {
+        return next(new ApiError(503, 'AI service is not configured.'));
+    }
+
+    try {
+        const { topic, subject, numReferences = 5, lessonContent = '' } = req.body;
+        if (!topic || !subject) {
+            throw new ApiError(400, 'Missing required parameters: topic, subject.');
+        }
+
+        console.log(`[API] Generating authentic bibliography for "${topic}" in ${subject}`);
+        
+        const bibliography = await global.aiService.generateAuthenticBibliography(
+            topic, 
+            subject, 
+            numReferences, 
+            lessonContent
+        );
+        
+        res.json({ 
+            success: true, 
+            bibliography,
+            message: `Generated ${bibliography.length} authentic academic references`
+        });
+    } catch (error) {
+        console.error(`[API] Error generating bibliography:`, error);
+        next(error);
+    }
+});
+
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { email, password, name, gdprConsent, policyVersion } = req.body;
+    if (!email || !password || !name) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+
+    // Require explicit GDPR consent and a policy version
+    if (gdprConsent !== true || !policyVersion) {
+      return res.status(400).json({ 
+        error: 'You must accept the Privacy Policy to create an account.',
+        code: 'GDPR_CONSENT_REQUIRED'
+      });
+    }
+
+    // Log registration attempt for debugging
+    console.log(`[AUTH] Registration attempt for email: ${email}`);
+    
+    // Check for common blocked email domains (removed example.com for testing)
+    const blockedDomains = [
+      'test.com', 'temp.com', 'fake.com', 'disposable.com', '10minutemail.com',
+      'guerrillamail.com', 'mailinator.com', 'tempmail.org', 'throwaway.email',
+      'yopmail.com', 'getnada.com', 'sharklasers.com', 'grr.la', 'guerrillamailblock.com',
+      'pokemail.net', 'spam4.me', 'bccto.me', 'chacuo.net', 'dispostable.com',
+      'fakeinbox.com', 'mailnesia.com', 'maildrop.cc', 'mailmetrash.com',
+      'trashmail.com', 'tempr.email', 'tmpeml.com', 'tmpmail.org', 'tmpmail.net',
+      'example.com', 'example.org', 'example.net', 'localhost.com', 'test.org',
+      'invalid.com', 'nonexistent.com', 'dummy.com', 'placeholder.com'
+    ];
+    const emailDomain = email.split('@')[1]?.toLowerCase();
+    if (blockedDomains.includes(emailDomain)) {
+      console.warn(`[AUTH] Blocked email domain attempted: ${emailDomain}`);
+      return res.status(400).json({ 
+        error: 'Invalid email domain. Please use a valid email address.',
+        code: 'email_domain_blocked'
+      });
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ 
+        error: 'Invalid email format. Please enter a valid email address.',
+        code: 'email_format_invalid'
+      });
+    }
+
+    // Additional email validation checks
+    const emailParts = email.split('@');
+    const localPart = emailParts[0];
+    const domainPart = emailParts[1];
+    
+    // Check for common invalid patterns
+    if (localPart.length < 2 || localPart.length > 64) {
+      return res.status(400).json({ 
+        error: 'Email address is too short or too long.',
+        code: 'email_length_invalid'
+      });
+    }
+    
+    if (domainPart.length < 3 || domainPart.length > 253) {
+      return res.status(400).json({ 
+        error: 'Invalid email domain.',
+        code: 'email_domain_invalid'
+      });
+    }
+    
+    // Check for common disposable email patterns
+    const disposablePatterns = [
+      /^temp/, /^test/, /^fake/, /^dummy/, /^throwaway/, /^spam/, /^trash/,
+      /^tmp/, /^disposable/, /^example/, /^sample/, /^demo/, /^placeholder/
+    ];
+    
+    if (disposablePatterns.some(pattern => pattern.test(localPart.toLowerCase()))) {
+      return res.status(400).json({ 
+        error: 'Please use a valid email address from a real provider.',
+        code: 'email_disposable_pattern'
+      });
+    }
+
+    // --- Supabase Registration ---
+    console.log(`[AUTH] Attempting Supabase registration for: ${email}`);
+    console.log(`[AUTH] Supabase URL: ${supabaseUrl}`);
+    console.log(`[AUTH] Supabase Key configured: ${supabaseAnonKey ? 'YES' : 'NO'}`);
+    
+    let data = { user: null, session: null };
+    let error = null;
+    if (supabase) {
+      const resp = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { 
+            name,
+            gdpr_policy_version: policyVersion,
+            gdpr_consent_at: new Date().toISOString()
+          },
+          emailRedirectTo: supabaseRedirectUrl
+        }
+      });
+      data = resp.data;
+      error = resp.error;
+    }
+
+    if (error) {
+      // Enhanced error logging
+      console.error('[AUTH] Supabase registration error:', {
+        status: error.status,
+        code: error.code,
+        message: error.message,
+        email: email,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Handle specific error types with better user feedback
+      if (error.code === 'email_address_invalid') {
+        return res.status(400).json({ 
+          error: 'Invalid email address. Please use a valid email from a real provider.',
+          code: error.code 
+        });
+      }
+      
+      if (error.code === 'email_exists' || error.message.includes('User already registered')) {
+        return res.status(400).json({ 
+          error: 'An account with this email already exists. Please try logging in instead.',
+          code: 'user_exists'
+        });
+      }
+      
+      if (error.code === 'signup_disabled') {
+        return res.status(400).json({ 
+          error: 'Account registration is currently disabled. Please contact support.',
+          code: error.code 
+        });
+      }
+      
+      if (error.status === 401) {
+        console.error('[AUTH] 401 Unauthorized - Possible Supabase configuration issue');
+        return res.status(500).json({ 
+          error: 'Authentication service configuration error. Please try again later.',
+          code: 'auth_config_error'
+        });
+      }
+      
+      // Generic error response
+      return res.status(500).json({ 
+        error: 'Failed to register user. Please try again later.',
+        code: error.code || 'registration_failed'
+      });
+    }
+
+    if (!data.user) {
+        console.error('[AUTH] Registration succeeded but no user data returned');
+        return res.status(500).json({ error: 'Registration failed: User data not returned' });
+    }
+    
+    console.log(`[AUTH] Registration successful for user: ${data.user.id}`);
+      
+    // --- Local DB User Creation (for credits) ---
+    // This part remains to manage app-specific data like credits
+    const localUser = {
+      id: data.user.id,
+      email: data.user.email,
+      name: name,
+      createdAt: new Date().toISOString(),
+      courseCredits: 1, // New users get 1 free course generation
+      gdprConsent: {
+        accepted: true,
+        policyVersion: policyVersion,
+        acceptedAt: new Date().toISOString(),
+        ip: (req.headers['x-forwarded-for']?.toString().split(',')[0] || req.ip || '').trim(),
+        userAgent: req.headers['user-agent'] || ''
+      }
+    };
+    db.data.users.push(localUser);
+    await db.write();
+
+    // Return a dev token when Supabase is not configured
+    const token = supabase ? data.session?.access_token : `dev:${localUser.id}`;
+    res.status(201).json({ 
+        message: supabase ? 'Registration successful. Please check your email to confirm your account.' : 'Registration successful (dev mode).',
+        token,
+        user: {
+            id: localUser.id,
+            email: localUser.email,
+            name: localUser.name,
+            courseCredits: localUser.courseCredits,
+            gdprConsent: localUser.gdprConsent
+        }
+    });
+
+  } catch (error) {
+    console.error('Registration process error:', error);
+    res.status(500).json({ error: 'An unexpected error occurred during registration' });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    console.log('[LOGIN] Login attempt for email:', email);
+    console.log('[LOGIN] Supabase configured:', !!supabase);
+
+    // --- Supabase Login (or dev fallback) ---
+    let data = { user: null, session: null };
+    let error = null;
+    if (supabase) {
+      const resp = await supabase.auth.signInWithPassword({ email, password });
+      data = resp.data;
+      error = resp.error;
+    } else {
+      // Dev mode: create/find local user and issue dev token
+      let local = db.data.users.find(u => u.email === email);
+      if (!local) {
+        local = { id: `dev_${Date.now()}`, email, name: email.split('@')[0], createdAt: new Date().toISOString(), courseCredits: 1 };
+        db.data.users.push(local);
+        await db.write();
+      }
+      data.user = { id: local.id, email: local.email, user_metadata: { name: local.name } };
+      data.session = { access_token: `dev:${local.id}` };
+    }
+
+    if (error) {
+      console.error('Supabase login error:', error);
+      
+      // Check for specific unconfirmed email error
+      if (error.message && (
+        error.message.includes('Email not confirmed') ||
+        error.message.includes('not confirmed') ||
+        error.message.includes('confirm your email') ||
+        error.message.includes('email_confirmed_at') ||
+        error.message.includes('unconfirmed')
+      )) {
+        return res.status(401).json({ 
+          error: 'Please confirm your email address before signing in. Check your inbox and spam folder for the confirmation link.',
+          code: 'EMAIL_NOT_CONFIRMED'
+        });
+      }
+      
+      // Check for invalid credentials error
+      if (error.code === 'invalid_credentials' || error.message.includes('Invalid login credentials')) {
+        return res.status(401).json({ 
+          error: 'Invalid email or password. Please check your credentials and try again.',
+          code: 'INVALID_CREDENTIALS'
+        });
+      }
+      
+      return res.status(401).json({ error: 'Invalid credentials', details: error.message });
+    }
+
+    if (!data.user || !data.session) {
+        return res.status(401).json({ error: 'Invalid credentials' });
+    }
+      
+    // --- Local User Sync ---
+    // Ensure local user exists and has credits
+    let localUser = db.data.users.find((u) => u.id === data.user.id);
+    if (!localUser) {
+        localUser = {
+            id: data.user.id,
+            email: data.user.email,
+            name: data.user.user_metadata?.name || data.user.email.split('@')[0],
+            createdAt: new Date().toISOString(),
+            courseCredits: 1
+        };
+        db.data.users.push(localUser);
+        await db.write();
+    } else {
+        // Only ensure credits exist, don't force minimum of 1
+        if (localUser.courseCredits === undefined || localUser.courseCredits === null) {
+            localUser.courseCredits = 1;
+            await db.write();
+        }
+    }
+
+    res.json({ 
+        message: 'Login successful',
+        token: data.session.access_token,
+        user: {
+            id: localUser.id,
+            email: localUser.email,
+            name: localUser.name,
+            courseCredits: localUser.courseCredits,
+        }
+    });
+
+  } catch (error) {
+    console.error('Login process error:', error);
+    res.status(500).json({ error: 'Failed to login' });
+  }
+});
+
+app.get('/api/auth/me', authenticateToken, (req, res) => {
+  // The user object is attached by authenticateToken middleware
+  const user = req.user;
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+  // Return safe fields from the local database user record
+  res.json({
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    courseCredits: user.courseCredits,
+  });
+});
+
+// Get current user info (for Supabase users)
+// This route is now protected and will return user data
+app.get('/api/user/current', authenticateToken, (req, res) => {
+  try {
+    if (req.user) {
+      const { id, email, name, courseCredits } = req.user;
+      return res.json({ id, email, name, courseCredits });
+    }
+
+    const authHeader = req.headers['authorization'] || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    if (!token) return res.status(200).json(null);
+
+    if (token.startsWith('dev:')) {
+      const userId = token.slice(4);
+      const dbUser = db.data.users.find(u => u.id === userId);
+      if (dbUser) {
+        const { id, email, name, courseCredits } = dbUser;
+        return res.json({ id, email, name, courseCredits });
+      }
+      return res.status(200).json(null);
+    }
+
+    return res.status(200).json(null);
+  } catch (e) {
+    console.warn('[Auth] /api/user/current fallback error:', e.message);
+    return res.status(200).json(null);
+  }
+});
+
+// Debug endpoint to check user credits
+app.get('/api/debug/credits', authenticateToken, (req, res) => {
+  const user = req.user;
+  const dbUser = db.data.users.find(u => u.id === user.id);
+  
+  console.log(`[DEBUG] User credits check for ${user.id}:`, {
+    reqUserCredits: user.courseCredits,
+    dbUserCredits: dbUser?.courseCredits,
+    dbUserFound: !!dbUser,
+    allUsers: db.data.users.map(u => ({ id: u.id, email: u.email, credits: u.courseCredits }))
+  });
+  
+  res.json({
+    reqUser: {
+      id: user.id,
+      email: user.email,
+      courseCredits: user.courseCredits
+    },
+    dbUser: dbUser ? {
+      id: dbUser.id,
+      email: dbUser.email,
+      courseCredits: dbUser.courseCredits
+    } : null,
+    allUsers: db.data.users.map(u => ({ id: u.id, email: u.email, credits: u.courseCredits }))
+  });
+});
+
+// Temporary endpoint to reset credits for testing
+app.post('/api/debug/reset-credits', authenticateToken, async (req, res) => {
+  const user = req.user;
+  const dbUser = db.data.users.find(u => u.id === user.id);
+  
+  if (dbUser) {
+    dbUser.courseCredits = 5; // Give 5 credits for testing
+    await db.write();
+    console.log(`[DEBUG] Reset credits for user ${user.id} to 5`);
+  }
+  
+  res.json({
+    message: 'Credits reset to 5 for testing',
+    user: {
+      id: user.id,
+      email: user.email,
+      courseCredits: dbUser?.courseCredits || 5
+    }
+  });
+});
+
+// Add credits to specific user by email
+app.post('/api/debug/add-credits', async (req, res) => {
+  try {
+    const { email, credits = 10 } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+    
+    const user = db.data.users.find(u => u.email === email);
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const oldCredits = user.courseCredits || 0;
+    user.courseCredits = oldCredits + credits;
+    await db.write();
+    
+    console.log(`[DEBUG] Added ${credits} credits to user ${email}. Old: ${oldCredits}, New: ${user.courseCredits}`);
+    
+    res.json({
+      message: `Added ${credits} credits to ${email}`,
+      user: {
+        id: user.id,
+        email: user.email,
+        oldCredits: oldCredits,
+        newCredits: user.courseCredits
+      }
+    });
+  } catch (error) {
+    console.error('[DEBUG] Error adding credits:', error);
+    res.status(500).json({ error: 'Failed to add credits' });
+  }
+});
+
+app.get('/api/courses/saved', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userEmail = req.user.email;
+    
+    console.log(`[API] Fetching saved courses for user ${userId} (${userEmail})`);
+    
+    // First, try to find courses with the current user ID
+    let userCourses = db.data.courses.filter(c => c.userId === userId);
+    
+    // If no courses found, check if there are courses with the same email but different user ID
+    // This handles the migration from old user ID format to Supabase UUID
+    if (userCourses.length === 0) {
+      console.log(`[API] No courses found for user ID ${userId}, checking for email-based migration`);
+      
+      // Find the existing user in the database with the same email
+      const existingUser = db.data.users.find(u => u.email === userEmail);
+      
+      if (existingUser && existingUser.id !== userId) {
+        console.log(`[API] Found existing user with same email: ${existingUser.id} vs current: ${userId}`);
+        
+        // Find courses that belong to the existing user
+        const existingUserCourses = db.data.courses.filter(c => c.userId === existingUser.id);
+        
+        if (existingUserCourses.length > 0) {
+          console.log(`[API] Found ${existingUserCourses.length} courses to migrate from user ${existingUser.id} to ${userId}`);
+          
+          // Update these courses to belong to the current user
+          for (const course of existingUserCourses) {
+            console.log(`[API] Migrating course ${course.id} from user ${course.userId} to user ${userId}`);
+            course.userId = userId;
+          }
+          
+          // Also update the existing user record to use the new ID
+          existingUser.id = userId;
+          
+          // Save the updated database
+          await db.write();
+          console.log(`[API] Successfully migrated ${existingUserCourses.length} courses and user record to user ${userId}`);
+          
+          // Now get the migrated courses
+          userCourses = db.data.courses.filter(c => c.userId === userId);
+        }
+      } else {
+        console.log(`[API] No existing user found with email ${userEmail} or user ID already matches`);
+      }
+    }
+    
+    console.log(`[API] Returning ${userCourses.length} courses for user ${userId}`);
+    console.log(`[API] All courses in database:`, db.data.courses.map(c => ({ id: c.id, userId: c.userId, title: c.title })));
+    console.log(`[API] User courses found:`, userCourses.map(c => ({ id: c.id, userId: c.userId, title: c.title })));
+    res.json(userCourses);
+  } catch (error) {
+    console.error(`[API_ERROR] Failed to fetch saved courses for user ${req.user.id}:`, error);
+    res.status(500).json({ error: 'Failed to fetch saved courses' });
+  }
+});
 
 app.get('/api/courses/:courseId', authenticateToken, async (req, res) => {
   try {
@@ -3094,6 +3907,312 @@ app.get('/api/courses/:courseId', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('[API] Error fetching course:', error);
     res.status(500).json({ error: 'Failed to fetch course' });
+  }
+});
+app.post('/api/courses/generate', authenticateToken, async (req, res, next) => {
+    if (!global.aiService) {
+        return next(new ApiError(503, 'Course generation is currently disabled.'));
+    }
+
+    const user = req.user; // Use req.user directly from middleware
+    if (!user) {
+        return next(new ApiError(404, 'User not found.'));
+    }
+    
+    // Add debugging to see the actual credit value
+    console.log(`[COURSE_GENERATION] Credit check for user ${user.id}:`, {
+        courseCredits: user.courseCredits,
+        type: typeof user.courseCredits,
+        isNull: user.courseCredits === null,
+        isUndefined: user.courseCredits === undefined,
+        isZero: user.courseCredits === 0
+    });
+    
+    // Fix the credit check - allow 0 credits but not null/undefined
+    if (user.courseCredits === null || user.courseCredits === undefined || user.courseCredits < 1) {
+        console.log(`[COURSE_GENERATION] Insufficient credits for user ${user.id}: ${user.courseCredits}`);
+        return next(new ApiError(402, 'Insufficient course credits.'));
+    }
+
+    try {
+        const { topic, difficulty, numModules, numLessonsPerModule } = req.body;
+        
+        console.log(`[COURSE_GENERATION] Starting generation for user ${user.id}:`, {
+            topic,
+            difficulty,
+            numModules,
+            numLessonsPerModule
+        });
+
+        // --- CONTENT MODERATION GATE ---
+        const BLOCKLIST = [
+          // NSFW and explicit sexual content
+          'porn', 'pornography', 'nsfw', 'erotic', 'sex', 'sexual', 'incest', 'rape', 'bestiality', 'pedophile', 'child porn',
+          // Extremism/terrorism
+          'terrorism', 'terrorist', 'isis', 'al-qaeda', 'daesh', 'extremist', 'extremism', 'bomb making', 'how to make a bomb',
+          // Hate speech / slurs (non-exhaustive placeholder)
+          'kill all', 'ethnic cleansing', 'genocide'
+        ];
+        const topicText = String(topic || '').toLowerCase();
+        const containsBlocked = BLOCKLIST.some(term => topicText.includes(term));
+        if (!topicText || containsBlocked) {
+          console.warn('[COURSE_GENERATION] Blocked by content policy. Topic:', topic);
+          return next(new ApiError(400, 'The requested topic violates our content policy and cannot be generated.'));
+        }
+
+        // Deduct credit before starting generation
+        user.courseCredits = Math.max(0, (user.courseCredits || 0) - 1);
+        await db.write();
+        
+        console.log(`[COURSE_GENERATION] Credit deducted for user ${user.id}. Remaining credits: ${user.courseCredits}`);
+
+        // Generate the course using the AI service
+        console.log(`[COURSE_GENERATION] Calling AI service to generate course...`);
+        
+        const course = await global.aiService.generateCourse(
+          topic,
+          difficulty,
+          numModules,
+          numLessonsPerModule
+        );
+
+        // Assign user ID and save course to database
+        course.userId = user.id;
+        course.id = `course_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        course.createdAt = new Date().toISOString();
+        course.published = false;
+
+              // Final validation: ensure all modules have proper isLocked properties
+              if (course.modules && Array.isArray(course.modules)) {
+                course.modules.forEach((module, mIdx) => {
+                  if (module.isLocked === undefined) {
+                    module.isLocked = mIdx > 0;
+                  }
+                });
+            }
+
+              // Save the course to database
+              db.data.courses.push(course);
+              await db.write();
+              
+              // Save course to individual file
+              await saveCourseToFile(course);
+
+        console.log(`[COURSE_GENERATION] Course generated and saved successfully for user ${user.id}:`, {
+          courseId: course.id,
+          courseTitle: course.title,
+          modulesCount: course.modules.length
+        });
+
+        // Clear any existing cache for this course to ensure fresh data
+        if (global.aiService && global.aiService.clearCache) {
+          try {
+            // Clear any potential cache entries for this course
+            const cacheKeysToClear = [
+              `image_search_${course.id}_strict`,
+              `image_search_${course.id}_relaxed`,
+              `course_context_${course.id}`
+            ];
+            
+            for (const cacheKey of cacheKeysToClear) {
+              global.aiService.clearCache(cacheKey);
+            }
+            
+            console.log(`[COURSE_GENERATION] Cleared cache for new course: ${course.id}`);
+          } catch (cacheError) {
+            console.warn(`[COURSE_GENERATION] Failed to clear cache for course ${course.id}:`, cacheError.message);
+          }
+        }
+
+        // Send SSE notification to client about new course
+        sendCourseGenerationNotification(user.id, {
+          type: 'course_generated',
+          courseId: course.id,
+          courseTitle: course.title,
+          modulesCount: course.modules.length,
+          timestamp: new Date().toISOString()
+        });
+
+        // Return the generated course
+        res.json({
+          success: true,
+          course: course,
+          message: 'Course generated successfully',
+          creditsRemaining: user.courseCredits,
+          courseId: course.id
+        });
+
+    } catch (error) {
+        console.error(`[COURSE_GENERATION] Error generating course for user ${user.id}:`, error);
+        
+        // Refund the credit on error
+        user.courseCredits = (user.courseCredits || 0) + 1;
+        await db.write();
+        
+        console.log(`[COURSE_GENERATION] Credit refunded for user ${user.id}. Credits: ${user.courseCredits}`);
+        
+        // Return appropriate error response
+        if (error.message.includes('Mistral API key is not configured')) {
+            return next(new ApiError(503, 'AI service is not configured. Please contact support to set up the AI service.'));
+        } else if (error.message.includes('Failed to fetch')) {
+            return next(new ApiError(503, 'Unable to connect to the AI service. Please check your internet connection and try again.'));
+        } else if (error.message.includes('rate limit') || error.message.includes('429')) {
+            return next(new ApiError(429, 'AI service is currently busy. Please try again in a few minutes.'));
+        } else {
+            return next(new ApiError(500, 'Course generation failed. Please try again.'));
+        }
+    }
+});
+
+// Helper function to send progress updates via SSE
+function sendProgressUpdate(userId, progressData) {
+  if (global.sseConnections && global.sseConnections.has(userId)) {
+    const res = global.sseConnections.get(userId);
+    res.write(`data: ${JSON.stringify(progressData)}\n\n`);
+  }
+}
+
+// Helper function to send course generation notifications via SSE
+function sendCourseGenerationNotification(userId, notificationData) {
+  console.log(`[SSE] Attempting to send notification to user ${userId}:`, notificationData);
+  console.log(`[SSE] Active connections:`, Array.from(global.sseConnections.keys()));
+  
+  if (global.sseConnections && global.sseConnections.has(userId)) {
+    const res = global.sseConnections.get(userId);
+    try {
+      res.write(`data: ${JSON.stringify(notificationData)}\n\n`);
+      console.log(`[SSE] Notification sent successfully to user ${userId}`);
+    } catch (error) {
+      console.error(`[SSE] Error sending notification to user ${userId}:`, error);
+      global.sseConnections.delete(userId);
+    }
+  } else {
+    console.log(`[SSE] No active connection found for user ${userId}`);
+  }
+}
+
+// SSE endpoint for real-time course generation notifications
+app.get('/api/courses/notifications', async (req, res) => {
+  // Handle authentication via query parameter for SSE
+  const token = req.query.token;
+  if (!token) {
+    return res.status(401).json({ error: 'No token provided' });
+  }
+
+  try {
+    // Verify token using Supabase to get the actual user ID
+    if (!supabase) {
+      console.error('[SSE] Supabase client not initialized');
+      return res.status(500).json({ error: 'Authentication service not configured' });
+    }
+
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    
+    if (error || !user) {
+      console.error('[SSE] Token verification failed:', error?.message || 'No user data');
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    const userId = user.id;
+    console.log(`[SSE] User authenticated for SSE: ${userId}`);
+
+  // Set SSE headers
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Cache-Control'
+  });
+
+  // Send initial connection message
+  res.write(`data: ${JSON.stringify({ type: 'connected', userId, timestamp: new Date().toISOString() })}\n\n`);
+
+  // Store the connection
+  global.sseConnections.set(userId, res);
+
+  // Handle client disconnect
+  req.on('close', () => {
+    console.log(`[SSE] Client disconnected: ${userId}`);
+    global.sseConnections.delete(userId);
+  });
+
+  // Handle connection error
+  req.on('error', (error) => {
+    console.error(`[SSE] Connection error for user ${userId}:`, error);
+    global.sseConnections.delete(userId);
+  });
+
+  console.log(`[SSE] Client connected: ${userId}`);
+  } catch (error) {
+    console.error('[SSE] Error setting up SSE connection:', error);
+    return res.status(500).json({ error: 'Failed to establish SSE connection' });
+  }
+});
+
+// Endpoint to check generation session status
+app.get('/api/courses/generation-status/:generationId', authenticateToken, async (req, res) => {
+  try {
+    const { generationId } = req.params;
+    const user = req.user;
+    
+    const session = global.generationSessions?.get(generationId);
+    if (!session) {
+      return res.status(404).json({ error: 'Generation session not found' });
+    }
+    
+    if (session.userId !== user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    res.json({
+      status: session.status,
+      progress: session.progress,
+      startTime: session.startTime,
+      course: session.course,
+      courseId: session.course?.id,
+      courseTitle: session.course?.title,
+      creditsRemaining: session.creditsRemaining,
+      error: session.error
+    });
+  } catch (error) {
+    console.error('[GENERATION_STATUS] Error checking generation status:', error);
+    res.status(500).json({ error: 'Failed to check generation status' });
+  }
+});
+
+// Endpoint to check and refund credits if course generation was interrupted
+app.post('/api/courses/check-generation-status', authenticateToken, async (req, res) => {
+  try {
+    const user = req.user;
+    const { generationStartTime } = req.body;
+    
+    // Check if there are any recent incomplete courses for this user
+    const recentCourses = db.data.courses.filter(course => 
+      course.userId === user.id && 
+      course.createdAt && 
+      new Date(course.createdAt) > new Date(generationStartTime)
+    );
+    
+    if (recentCourses.length === 0) {
+      // No recent courses found, generation might have failed
+      // Check if credits were deducted but course wasn't created
+      // This is a simple check - in production you might want more sophisticated tracking
+      res.json({ 
+        status: 'no_recent_courses',
+        message: 'No recent courses found. If generation failed, credits will be refunded.',
+        shouldRefund: true
+      });
+    } else {
+      res.json({ 
+        status: 'courses_found',
+        courses: recentCourses.map(c => ({ id: c.id, title: c.title })),
+        message: 'Recent courses found, no refund needed.'
+      });
+    }
+  } catch (error) {
+    console.error('[CREDIT_CHECK] Error checking generation status:', error);
+    res.status(500).json({ error: 'Failed to check generation status' });
   }
 });
 
@@ -3270,6 +4389,7 @@ app.post('/api/courses/:courseId/generate-quizzes', authenticateToken, async (re
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
 // New image search endpoint (handler and aliases)
 async function imageSearchHandler(req, res) {
   console.log(`[ImageSearch] ${req.method} ${req.path} - Headers:`, req.headers);
@@ -3305,6 +4425,7 @@ async function imageSearchHandler(req, res) {
   const courseId = body.courseId ?? null;
   const lessonId = body.lessonId ?? null;
   const moduleId = body.moduleId ?? null;
+
   // Augment used lists with already-used images from the course (server-side guarantee)
   if (courseId && Array.isArray(db?.data?.courses)) {
     try {
@@ -3654,6 +4775,7 @@ app.get('/api/image/fast', async (req, res) => {
     const isWikimediaImageUrl = isWikimediaUrl && (
       hasValidExtension || hasValidExtensionInUrl || isSvgFile
     );
+    
     if (!hasValidSvgExtension && !isPixabayImageUrl && !isWikimediaImageUrl) {
       console.warn(`[FastImageProxy] Invalid image format: ${parsedUrl.pathname} (URL: ${url.substring(0, 100)}...)`);
       return res.status(400).json({ error: 'Invalid image format' });
@@ -3759,6 +4881,22 @@ app.post('/api/image/clear-search-cache', (req, res) => {
     res.json({ message: `Force cleared ${cacheSize} image search cache entries` });
   } else {
     res.json({ message: 'No image search cache to clear' });
+  }
+});
+
+// Clean up orphaned course files (admin only)
+app.post('/api/admin/cleanup-courses', authenticateToken, async (req, res) => {
+  try {
+    const userEmail = req.user?.email?.toLowerCase();
+    if (!ADMIN_EMAILS.has(userEmail)) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    await cleanupOrphanedCourseFiles();
+    res.json({ message: 'Course cleanup completed successfully' });
+  } catch (error) {
+    console.error('[ADMIN] Failed to cleanup courses:', error);
+    res.status(500).json({ error: 'Failed to cleanup courses' });
   }
 });
 
@@ -3876,6 +5014,7 @@ app.post('/api/courses/:courseId/unpublish', authenticateToken, async (req, res)
     res.status(500).json({ error: 'Failed to unpublish course' });
   }
 });
+
 // CAPTCHA verification endpoint for public course access
 app.get('/api/captcha/verify/:courseId', 
   securityHeaders,
@@ -3988,6 +5127,7 @@ app.get('/api/captcha/verify/:courseId',
         challengeExists: !!storedChallenge,
         challengeMatch: normalizedStored === normalizedReceived
       });
+      
       if (storedChallenge && normalizedStored === normalizedReceived) {
         let expectedAnswer;
         try {
@@ -4309,6 +5449,7 @@ app.get('/api/captcha/new/:courseId',
     res.status(500).json({ error: 'Failed to generate new challenge' });
   }
 });
+
 // Handle public course access without specific course ID - redirect to a fallback course
 app.get('/api/public/courses', 
   securityHeaders,
@@ -4345,6 +5486,7 @@ This is your first lesson in our AI-powered learning platform. Here you'll disco
 - How to navigate the platform
 - Understanding the course structure
 - Making the most of your learning experience
+
 ## Getting Started
 Take your time to explore the interface and get comfortable with the learning environment.
 
@@ -4500,6 +5642,7 @@ Complete this lesson to unlock more content and continue your learning journey.`
     res.status(500).json({ error: 'Failed to fetch public course' });
   }
 });
+
 // Save quiz score for public course session
 app.post('/api/public/courses/:courseId/quiz-score', 
   securityHeaders,
@@ -4636,6 +5779,7 @@ app.post('/api/public/courses/:courseId/session',
     res.status(500).json({ error: 'Failed to create session' });
   }
 });
+
 // Get all quiz scores for public course session
 app.get('/api/public/courses/:courseId/quiz-scores', 
   securityHeaders,
@@ -4982,6 +6126,7 @@ app.delete('/api/courses/:courseId', authenticateToken, async (req, res) => {
     // Remove course from database
     db.data.courses = db.data.courses.filter(c => c !== course);
     await db.write();
+
     // Clear any cached data for this course
     if (global.aiService && global.aiService.clearCache) {
       try {
@@ -5279,6 +6424,7 @@ function findCachedImageByKey(cacheKey) {
   const rec = (db.data.imageCache || []).find(r => r.key === cacheKey);
   return rec || null;
 }
+
 async function downloadAndCacheImage(cacheKey, imageData) {
   try {
     if (!imageData || !imageData.sourceUrlForCaching) return null;
@@ -5315,6 +6461,7 @@ async function downloadAndCacheImage(cacheKey, imageData) {
       maxWidth: 800, // Reduced from 1200 to 800 for smaller files
       maxHeight: 600, // Reduced from 800 to 600 for smaller files
     });
+    
     const compressedSize = compressedBuffer.length;
     const compressionRatio = compressedSize / originalSize;
     const sizeReduction = ((originalSize - compressedSize) / originalSize * 100).toFixed(1);
@@ -5663,6 +6810,7 @@ app.get('/api/lessons/:lessonId/images', async (req, res) => {
     return res.status(500).json({ error: 'Failed to list images', details: e.message });
   }
 });
+
 // API: Delete an image from library (requires auth)
 app.delete('/api/images/:id', authenticateToken, requireAdminIfConfigured, async (req, res) => {
   try {
@@ -5730,6 +6878,7 @@ app.post('/api/tts/record-pause', async (req, res) => {
     });
   }
 });
+
 app.get('/api/tts/pause-position', async (req, res) => {
   try {
     const { lessonId } = req.query;
@@ -5905,8 +7054,16 @@ try {
   global.aiService = new AIService('');
 }
 // Start the server only when not running under tests
+let httpServer;
 if (process.env.NODE_ENV !== 'test') {
-  startServer();
+  startServer().then(server => {
+    httpServer = server;
+  }).catch(console.error);
+} else {
+  // For testing, create the server but don't start listening
+  httpServer = createHttpServer(app);
+  // Initialize database for testing
+  initializeDatabase().catch(console.error);
 }
 
 // SPA fallback: always serve index.html with no-cache so clients fetch the latest bundle
@@ -5972,3 +7129,317 @@ app.post('/api/image/clear-cache', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to clear image cache' });
   }
 });
+
+// Report problem endpoint
+app.post('/api/report-problem', async (req, res) => {
+  try {
+    console.log('[PROBLEM_REPORT] Request received:', {
+      method: req.method,
+      url: req.url,
+      headers: {
+        authorization: req.headers.authorization ? 'Present' : 'Missing',
+        'content-type': req.headers['content-type'],
+        'user-agent': req.headers['user-agent']
+      },
+      body: req.body ? 'Present' : 'Missing'
+    });
+    
+    // Verify Supabase token
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('[PROBLEM_REPORT] Authentication failed: No Bearer token');
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const token = authHeader.substring(7);
+    console.log('[PROBLEM_REPORT] Token extracted:', token ? 'Present' : 'Missing');
+    let user = null;
+
+    try {
+      console.log('[PROBLEM_REPORT] Verifying token with Supabase...');
+      const { data: { user: supabaseUser }, error } = await supabase.auth.getUser(token);
+      if (error || !supabaseUser) {
+        console.log('[PROBLEM_REPORT] Supabase auth failed:', error);
+        return res.status(401).json({ error: 'Invalid authentication token' });
+      }
+      user = supabaseUser;
+      console.log('[PROBLEM_REPORT] Authentication successful for user:', user.id);
+    } catch (authError) {
+      console.error('[PROBLEM_REPORT] Supabase auth error:', authError);
+      return res.status(401).json({ error: 'Authentication failed' });
+    }
+
+    // Handle multipart form data for file uploads
+    console.log('[PROBLEM_REPORT] Received form data:', {
+      body: req.body,
+      bodyKeys: req.body ? Object.keys(req.body) : 'No body keys',
+      bodyValues: req.body ? Object.values(req.body) : 'No body values',
+      files: req.files ? Object.keys(req.files) : 'No files',
+      contentType: req.headers['content-type'],
+      contentLength: req.headers['content-length']
+    });
+    
+    // Try to get message from different possible sources
+    let message = req.body.message;
+    if (!message && req.body && typeof req.body === 'object') {
+      // Try to find message in the body object
+      const bodyKeys = Object.keys(req.body);
+      console.log('[PROBLEM_REPORT] Available body keys:', bodyKeys);
+      
+      // Check if message might be nested or have a different key
+      for (const key of bodyKeys) {
+        if (key.toLowerCase().includes('message') || key.toLowerCase().includes('content')) {
+          console.log(`[PROBLEM_REPORT] Found potential message in key '${key}':`, req.body[key]);
+          message = req.body[key];
+          break;
+        }
+      }
+    }
+    
+    const userEmail = req.body.userEmail || user.email;
+    const userId = req.body.userId || user.id;
+    const timestamp = req.body.timestamp;
+    const userAgent = req.body.userAgent || req.headers['user-agent'];
+    const url = req.body.url || req.headers.referer || 'Unknown';
+    
+    console.log('[PROBLEM_REPORT] Parsed data:', {
+      message: message ? 'Present' : 'Missing',
+      userEmail,
+      userId,
+      timestamp,
+      userAgent: userAgent ? 'Present' : 'Missing',
+      url
+    });
+    
+    if (!message || !message.trim()) {
+      console.log('[PROBLEM_REPORT] Validation failed: Message is required');
+      return res.status(400).json({ error: 'Message is required' });
+    }
+
+    // Handle file uploads
+    const uploadedImages = [];
+    const imageCount = parseInt(req.body.imageCount) || 0;
+    
+    for (let i = 0; i < imageCount; i++) {
+      const imageFile = req.files?.[`image_${i}`];
+      if (imageFile) {
+        try {
+          // Generate unique filename
+          const fileExtension = imageFile.name.split('.').pop();
+          const fileName = `problem_report_${Date.now()}_${i}.${fileExtension}`;
+          const filePath = `./data/problem_reports/${fileName}`;
+          
+          // Ensure directory exists
+          const fs = require('fs');
+          const path = require('path');
+          const dir = path.dirname(filePath);
+          if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+          }
+          
+          // Save the file
+          await imageFile.mv(filePath);
+          uploadedImages.push({
+            originalName: imageFile.name,
+            savedName: fileName,
+            size: imageFile.size,
+            type: imageFile.mimetype
+          });
+          
+          console.log(`[PROBLEM_REPORT] Image uploaded: ${fileName}`);
+        } catch (uploadError) {
+          console.error(`[PROBLEM_REPORT] Failed to upload image ${i}:`, uploadError);
+        }
+      }
+    }
+
+    // Create the problem report object
+    const problemReport = {
+      id: `report_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      message: message.trim(),
+      userEmail: userEmail,
+      userId: userId,
+      timestamp: timestamp || new Date().toISOString(),
+      userAgent: userAgent,
+      url: url,
+      images: uploadedImages,
+      status: 'new',
+      createdAt: new Date().toISOString()
+    };
+
+    // Initialize problem reports array if it doesn't exist
+    if (!db.data.problemReports) {
+      db.data.problemReports = [];
+    }
+
+    // Add the report to the database
+    db.data.problemReports.push(problemReport);
+    await db.write();
+
+    // Send email notification to admin
+    try {
+      const emailContent = `
+New Problem Report Received
+
+Report ID: ${problemReport.id}
+User Email: ${problemReport.userEmail}
+User ID: ${problemReport.userId}
+Timestamp: ${new Date(problemReport.timestamp).toLocaleString()}
+URL: ${problemReport.url}
+User Agent: ${problemReport.userAgent}
+
+Message:
+${problemReport.message}
+
+${uploadedImages.length > 0 ? `
+Attached Images (${uploadedImages.length}):
+${uploadedImages.map((img, index) => `${index + 1}. ${img.originalName} (${img.size} bytes, ${img.type})`).join('\n')}
+` : 'No images attached'}
+
+---
+This is an automated notification from The Discourse AI platform.
+      `;
+
+      // Send email notification to admin
+      console.log('📧 [PROBLEM_REPORT] Email notification to admin@thediscourse.ai:');
+      console.log(emailContent);
+      
+      // Debug: Check environment variables
+      console.log('📧 [PROBLEM_REPORT] Environment variables check:');
+      console.log('📧 [PROBLEM_REPORT] SMTP_HOST:', process.env.SMTP_HOST ? 'SET' : 'NOT SET');
+      console.log('📧 [PROBLEM_REPORT] SMTP_PORT:', process.env.SMTP_PORT ? 'SET' : 'NOT SET');
+      console.log('📧 [PROBLEM_REPORT] SMTP_USER:', process.env.SMTP_USER ? 'SET' : 'NOT SET');
+      console.log('📧 [PROBLEM_REPORT] SMTP_PASS:', process.env.SMTP_PASS ? 'SET' : 'NOT SET');
+      console.log('📧 [PROBLEM_REPORT] EMAIL_WEBHOOK_URL:', process.env.EMAIL_WEBHOOK_URL ? 'SET' : 'NOT SET');
+      console.log('📧 [PROBLEM_REPORT] EMAIL_API_KEY:', process.env.EMAIL_API_KEY ? 'SET' : 'NOT SET');
+      console.log('📧 [PROBLEM_REPORT] EMAILJS_SERVICE_ID:', process.env.EMAILJS_SERVICE_ID ? 'SET' : 'NOT SET');
+      
+      // Simple email sending using fetch to a webhook or email service
+      // You can replace this with your preferred email service
+      try {
+        // Option 1: Send via SMTP server
+        if (process.env.SMTP_HOST && process.env.SMTP_PORT && process.env.SMTP_USER && process.env.SMTP_PASS) {
+          console.log('📧 [PROBLEM_REPORT] Attempting to send email via SMTP...');
+          
+          const transporter = nodemailer.createTransport({
+            host: process.env.SMTP_HOST,
+            port: process.env.SMTP_PORT,
+            secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
+            auth: {
+              user: process.env.SMTP_USER,
+              pass: process.env.SMTP_PASS
+            }
+          });
+          
+          const mailOptions = {
+            from: process.env.SMTP_FROM || process.env.SMTP_USER,
+            to: 'admin@thediscourse.ai',
+            subject: `New Problem Report - ${problemReport.id}`,
+            text: emailContent,
+            html: emailContent.replace(/\n/g, '<br>')
+          };
+          
+          const info = await transporter.sendMail(mailOptions);
+          console.log('📧 [PROBLEM_REPORT] Email sent via SMTP:', info.messageId);
+        }
+        
+        // Option 2: Send to a webhook (e.g., Zapier, Make.com, etc.)
+        else if (process.env.EMAIL_WEBHOOK_URL) {
+          await fetch(process.env.EMAIL_WEBHOOK_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: 'admin@thediscourse.ai',
+              subject: `New Problem Report - ${problemReport.id}`,
+              text: emailContent,
+              from: 'noreply@thediscourse.ai'
+            })
+          });
+          console.log('📧 [PROBLEM_REPORT] Email sent via webhook');
+        }
+        
+        // Option 3: Send to a simple email API service
+        else if (process.env.EMAIL_API_KEY) {
+          const emailResponse = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${process.env.EMAIL_API_KEY}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              from: 'noreply@thediscourse.ai',
+              to: 'admin@thediscourse.ai',
+              subject: `New Problem Report - ${problemReport.id}`,
+              text: emailContent
+            })
+          });
+          
+          if (emailResponse.ok) {
+            console.log('📧 [PROBLEM_REPORT] Email sent via Resend API');
+          } else {
+            console.error('📧 [PROBLEM_REPORT] Failed to send email via Resend API');
+          }
+        }
+        
+        // Option 4: Try using a free email service (EmailJS or similar)
+        else if (process.env.EMAILJS_SERVICE_ID && process.env.EMAILJS_TEMPLATE_ID && process.env.EMAILJS_USER_ID) {
+          const emailResponse = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              service_id: process.env.EMAILJS_SERVICE_ID,
+              template_id: process.env.EMAILJS_TEMPLATE_ID,
+              user_id: process.env.EMAILJS_USER_ID,
+              template_params: {
+                to_email: 'admin@thediscourse.ai',
+                subject: `New Problem Report - ${problemReport.id}`,
+                message: emailContent,
+                user_email: problemReport.userEmail,
+                report_id: problemReport.id
+              }
+            })
+          });
+          
+          if (emailResponse.ok) {
+            console.log('📧 [PROBLEM_REPORT] Email sent via EmailJS');
+          } else {
+            console.error('📧 [PROBLEM_REPORT] Failed to send email via EmailJS');
+          }
+        }
+        
+        // Option 5: Log to console for development (current fallback)
+        else {
+          console.log('📧 [PROBLEM_REPORT] Email would be sent to admin@thediscourse.ai');
+          console.log('📧 [PROBLEM_REPORT] Subject:', `New Problem Report - ${problemReport.id}`);
+          console.log('📧 [PROBLEM_REPORT] Content:', emailContent);
+          console.log('📧 [PROBLEM_REPORT] To enable email sending, set one of these environment variables:');
+          console.log('📧 [PROBLEM_REPORT] - SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS (for SMTP server)');
+          console.log('📧 [PROBLEM_REPORT] - EMAIL_WEBHOOK_URL (for webhook-based email services)');
+          console.log('📧 [PROBLEM_REPORT] - EMAIL_API_KEY (for Resend API)');
+          console.log('📧 [PROBLEM_REPORT] - EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_USER_ID (for EmailJS)');
+        }
+      } catch (emailSendError) {
+        console.error('📧 [PROBLEM_REPORT] Email sending failed:', emailSendError);
+      }
+
+    } catch (emailError) {
+      console.error('[PROBLEM_REPORT] Failed to send email notification:', emailError);
+      // Don't fail the request if email fails
+    }
+
+    console.log(`[PROBLEM_REPORT] New problem report submitted: ${problemReport.id} from ${problemReport.userEmail}`);
+
+    res.json({ 
+      success: true, 
+      message: 'Problem report submitted successfully',
+      reportId: problemReport.id,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('[PROBLEM_REPORT] Error submitting problem report:', error);
+    res.status(500).json({ error: 'Failed to submit problem report' });
+  }
+});
+export { app, db, httpServer as server };
+

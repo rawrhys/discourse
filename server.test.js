@@ -72,7 +72,12 @@ test('POST /api/lessons/:lessonId/complete - should handle course completion', a
   });
 
 test('Teardown: Close Server', (t) => {
-  server.close(() => {
+  if (server && typeof server.close === 'function') {
+    server.close(() => {
+      t.end();
+    });
+  } else {
+    // Server wasn't started, just end the test
     t.end();
-  });
+  }
 });
