@@ -671,8 +671,8 @@ const PublicCourseDisplay = () => {
     // Sync immediately
     syncTTSState();
 
-    // Set up interval to sync state periodically
-    const intervalId = setInterval(syncTTSState, 500);
+    // Set up interval to sync state periodically (reduced frequency to reduce backend load)
+    const intervalId = setInterval(syncTTSState, 2000);
 
     return () => {
       clearInterval(intervalId);
@@ -1023,8 +1023,8 @@ const PublicCourseDisplay = () => {
     // Sync immediately
     syncTTSState();
 
-    // Set up interval to sync state periodically
-    const intervalId = setInterval(syncTTSState, 500);
+    // Set up interval to sync state periodically (reduced frequency to reduce backend load)
+    const intervalId = setInterval(syncTTSState, 2000);
 
     return () => {
       clearInterval(intervalId);

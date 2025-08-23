@@ -323,7 +323,7 @@ const Dashboard = () => {
           logger.error('❌ [DASHBOARD] Error during course generation monitoring:', error);
           // Don't stop monitoring on error, just log it
         }
-      }, 5000); // Check every 5 seconds
+      }, 30000); // Check every 30 seconds to reduce backend load
     }
     
     // Cleanup function

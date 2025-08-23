@@ -1581,7 +1581,7 @@ class AIService {
       throw new ApiError(500, 'MISTRAL_API_KEY is not configured on the server.');
     }
     let attempt = 0;
-    const maxRetries = Infinity; // Never give up - retry indefinitely
+    const maxRetries = 3; // Limit retries to prevent infinite loops (was Infinity)
     const maxParseRetries = 5; // Maximum retries for parsing failures
 
     while (attempt < maxRetries) {
@@ -1608,7 +1608,7 @@ class AIService {
 
         if (!response.ok) {
           if (response.status === 429) {
-            // Reduced rate limiting delays - much faster retry
+            // Rate limiting - retry with exponential backoff
             const delay = Math.min(200 * Math.pow(1.5, attempt), 1000); // Max 1 second delay
             console.warn(`[AIService] Rate limited on attempt ${attempt + 1}. Retrying in ${delay}ms...`);
             await new Promise(resolve => setTimeout(resolve, delay));
@@ -1694,8 +1694,8 @@ class AIService {
         console.error(`[AIService] Attempt ${attempt + 1} failed for intent ${intent}:`, error.message);
         attempt++;
         
-        // Exponential backoff with a maximum delay of 30 seconds
-        const delay = Math.min(2000 * Math.pow(2, attempt), 30000);
+        // Exponential backoff with a maximum delay of 5 seconds
+        const delay = Math.min(1000 * Math.pow(1.5, attempt), 5000);
         console.log(`[AIService] Retrying in ${delay}ms... (attempt ${attempt + 1})`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
