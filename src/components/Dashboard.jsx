@@ -347,10 +347,10 @@ const Dashboard = () => {
       timestamp: new Date().toISOString(),
       user: user?.id
     });
-
+    
     setIsGenerating(true);
     setError(null);
-
+    
     // Proactively refresh the list before starting generation
     try { await fetchSavedCourses(true); } catch {}
 
@@ -375,11 +375,11 @@ const Dashboard = () => {
     });
 
     // Immediately update UI and start monitoring
-    setShowNewCourseForm(false);
+      setShowNewCourseForm(false);
     setIsMonitoring(true);
     setSuccessMessage(`Course generation for "${courseParams.prompt}" has started. It will appear on your dashboard shortly.`);
-    setShowSuccessToast(true);
-
+      setShowSuccessToast(true);
+      
     setTimeout(() => setShowSuccessToast(false), 8000);
 
   }, [api, user?.id, savedCourses.length, fetchSavedCourses]);
