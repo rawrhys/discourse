@@ -349,7 +349,6 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
       score -= 10000; // Immediate rejection for Norse content in Egypt courses
       console.log(`[ImageScoring] Immediate rejection for Norse content in Egypt course: "${haystack.substring(0, 100)}"`);
     }
-
     // Strong bonus for exact subject phrase appearing
     if (subj && haystack.includes(subj)) score += 50;
 
@@ -611,7 +610,6 @@ function isBannedImageCandidate(candidate, courseId) {
     return false;
   }
 }
-
 // Single-keyword extraction for image search
 function extractSearchKeywords(subject, content, maxKeywords = 4) {
   const simpleNormalize = (str) => (String(str || '')
@@ -1002,7 +1000,6 @@ function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitl
       }
     }
   }
-
   // Ensure we have enough queries for variety
   if (queries.length < 3) {
     // Add more specific historical terms for better image variety
@@ -1115,6 +1112,26 @@ function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitl
 
 function getPixabayApiKey() {
   return process.env.PIXABAY_API_KEY || '';
+}
+
+function getPexelsApiKey() {
+  return process.env.PEXELS_API_KEY || process.env.PEXELS_KEY || '';
+}
+
+function getUnsplashAccessKey() {
+  return process.env.UNSPLASH_ACCESS_KEY || process.env.UNSPLASH_KEY || '';
+}
+
+async function triggerUnsplashDownload(downloadLocation) {
+  try {
+    const key = getUnsplashAccessKey();
+    if (!key || !downloadLocation) return;
+    await fetchWithTimeout(downloadLocation, {
+      headers: { Authorization: `Client-ID ${key}` }
+    });
+  } catch (e) {
+    console.warn('[AIService] Unsplash download trigger failed:', e.message);
+  }
 }
 
 // Robust JSON Parser Utility (inline version for server)
@@ -1613,7 +1630,6 @@ class AIService {
       }
     ];
   }
-
   async _makeApiRequest(prompt, intent, expectJsonResponse = true) {
     if (!this.apiKey) {
       throw new ApiError(500, 'MISTRAL_API_KEY is not configured on the server.');
@@ -1957,7 +1973,6 @@ Context: "${context.substring(0, 1000)}..."`;
             candidates.push({ ...candidate, score: biasedScore });
           }
         }
-
         if (candidates.length > 0) {
           candidates.sort((a, b) => b.score - a.score);
           const best = candidates[0];
@@ -2107,8 +2122,159 @@ Context: "${context.substring(0, 1000)}..."`;
     }
   }
 
-  // Met Museum image service removed
-   
+  async fetchPexelsImage(subject, content = '', usedImageTitles = [], usedImageUrls = [], options = { relaxed: false }, courseContext = {}) {
+    const apiKey = getPexelsApiKey();
+    if (!apiKey) return null;
+    try {
+      const queries = buildRefinedSearchPhrases(subject, content, options.relaxed ? 4 : 2, courseContext?.title || '');
+      if (String(subject || '').trim()) {
+        const s = String(subject).trim();
+        if (!queries.includes(s)) queries.unshift(s);
+      }
+
+      const candidates = [];
+      const perPage = options.relaxed ? 30 : 15;
+      const dynamicNegs = getDynamicExtraNegatives(subject);
+      const mainText = extractMainLessonText(content);
+
+      for (const q of queries) {
+        const url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(q)}&per_page=${perPage}`;
+        const resp = await fetchWithTimeout(url, {
+          headers: { Authorization: apiKey }
+        });
+        if (!resp.ok) continue;
+        const data = await resp.json();
+        const photos = Array.isArray(data?.photos) ? data.photos : [];
+        for (const p of photos) {
+          const candidateUrl = p?.src?.large || p?.src?.medium || p?.src?.original;
+          if (!candidateUrl) continue;
+          if (usedImageUrls.includes(candidateUrl)) continue;
+          if (DISALLOWED_IMAGE_URL_SUBSTRINGS.some((s) => (candidateUrl || '').includes(s))) continue;
+
+          const imageTitle = (p.alt || subject || '').substring(0, 80) || `${subject}`;
+          if (Array.isArray(usedImageTitles) && usedImageTitles.includes(imageTitle)) continue;
+          const pageURL = p?.url || 'https://www.pexels.com';
+          const description = p.alt || imageTitle;
+          const haystack = `${imageTitle} ${description} ${pageURL} ${p.photographer || ''}`.toLowerCase();
+          if (containsAny(haystack, dynamicNegs)) continue;
+
+          const attribution = `Photo by ${p.photographer || 'Unknown'} on Pexels`;
+
+          const candidate = {
+            imageTitle,
+            imageUrl: candidateUrl,
+            pageURL,
+            attribution,
+            description,
+            uploader: p.photographer || undefined,
+            imageWidth: p.width,
+            imageHeight: p.height,
+          };
+          const score = computeImageRelevanceScore(subject, mainText, {
+            title: imageTitle,
+            description,
+            pageURL,
+            uploader: p.photographer,
+            imageWidth: p.width,
+            imageHeight: p.height,
+          }, courseContext);
+          candidates.push({ ...candidate, score });
+        }
+      }
+
+      if (candidates.length > 0) {
+        candidates.sort((a, b) => b.score - a.score);
+        const best = candidates[0];
+        const originalUrl = best.imageUrl;
+        return { ...best, imageUrl: `/api/image/fast?url=${encodeURIComponent(originalUrl)}`, sourceUrlForCaching: originalUrl };
+      }
+      return null;
+    } catch (e) {
+      console.warn('[AIService] Pexels fetch failed:', e.message);
+      return null;
+    }
+  }
+
+  async fetchUnsplashImage(subject, content = '', usedImageTitles = [], usedImageUrls = [], options = { relaxed: false }, courseContext = {}) {
+    const accessKey = getUnsplashAccessKey();
+    if (!accessKey) return null;
+    try {
+      const queries = buildRefinedSearchPhrases(subject, content, options.relaxed ? 4 : 2, courseContext?.title || '');
+      if (String(subject || '').trim()) {
+        const s = String(subject).trim();
+        if (!queries.includes(s)) queries.unshift(s);
+      }
+
+      const candidates = [];
+      const perPage = options.relaxed ? 30 : 15;
+      const dynamicNegs = getDynamicExtraNegatives(subject);
+      const mainText = extractMainLessonText(content);
+
+      for (const q of queries) {
+        const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(q)}&per_page=${perPage}`;
+        const resp = await fetchWithTimeout(url, {
+          headers: { Authorization: `Client-ID ${accessKey}` }
+        });
+        if (!resp.ok) continue;
+        const data = await resp.json();
+        const photos = Array.isArray(data?.results) ? data.results : [];
+        for (const p of photos) {
+          const candidateUrl = p?.urls?.regular || p?.urls?.full || p?.urls?.small;
+          if (!candidateUrl) continue;
+          if (usedImageUrls.includes(candidateUrl)) continue;
+          if (DISALLOWED_IMAGE_URL_SUBSTRINGS.some((s) => (candidateUrl || '').includes(s))) continue;
+
+          const name = (p?.user?.name || 'Unknown').trim();
+          const imageTitle = (p?.alt_description || p?.description || subject || '').toString().trim() || `${subject}`;
+          if (Array.isArray(usedImageTitles) && usedImageTitles.includes(imageTitle)) continue;
+          const pageURLBase = p?.links?.html || 'https://unsplash.com';
+          // Append required attribution params
+          const appName = encodeURIComponent('LMS intergration');
+          const pageURL = `${pageURLBase}?utm_source=${appName}&utm_medium=referral`;
+          const description = imageTitle;
+          const haystack = `${imageTitle} ${description} ${pageURL} ${name}`.toLowerCase();
+          if (containsAny(haystack, dynamicNegs)) continue;
+
+          const attribution = `Photo by ${name} on Unsplash`;
+
+          const candidate = {
+            imageTitle,
+            imageUrl: candidateUrl, // Hotlink directly to Unsplash image per policy
+            pageURL,
+            attribution,
+            description,
+            uploader: name,
+            unsplashDownloadLocation: p?.links?.download_location
+          };
+          const score = computeImageRelevanceScore(subject, mainText, {
+            title: imageTitle,
+            description,
+            pageURL,
+            uploader: name,
+            imageWidth: undefined,
+            imageHeight: undefined,
+          }, courseContext);
+          candidates.push({ ...candidate, score });
+        }
+      }
+
+      if (candidates.length > 0) {
+        candidates.sort((a, b) => b.score - a.score);
+        const best = candidates[0];
+        // Trigger required download ping
+        if (best.unsplashDownloadLocation) {
+          triggerUnsplashDownload(best.unsplashDownloadLocation).catch(() => {});
+        }
+        // Return as-is without proxy to comply with hotlinking
+        return { ...best };
+      }
+      return null;
+    } catch (e) {
+      console.warn('[AIService] Unsplash fetch failed:', e.message);
+      return null;
+    }
+  }
+
   // Try Wikipedia first; then Pixabay - optimized with parallel execution and caching
   async fetchRelevantImage(subject, content = '', usedImageTitles = [], usedImageUrls = [], options = { relaxed: false }, courseContext = {}) {
     // Create cache key for this search - include used images to prevent duplicates
@@ -2142,10 +2308,12 @@ Context: "${context.substring(0, 1000)}..."`;
       global.imageSearchCache.clear();
     }
     
-    // Execute both searches in parallel with timeout
+    // Execute searches in parallel with timeout (Wikipedia, Pixabay, Pexels)
     const searchPromises = [
       this.fetchWikipediaImage(subject, content, usedImageTitles, usedImageUrls, { relaxed: !!options.relaxed }, courseContext),
-      this.fetchPixabayImage(subject, content, usedImageTitles, usedImageUrls, { relaxed: !!options.relaxed }, courseContext)
+      this.fetchPixabayImage(subject, content, usedImageTitles, usedImageUrls, { relaxed: !!options.relaxed }, courseContext),
+      this.fetchPexelsImage(subject, content, usedImageTitles, usedImageUrls, { relaxed: !!options.relaxed }, courseContext),
+      this.fetchUnsplashImage(subject, content, usedImageTitles, usedImageUrls, { relaxed: !!options.relaxed }, courseContext)
     ];
     
     // Add timeout to prevent hanging
@@ -2154,44 +2322,34 @@ Context: "${context.substring(0, 1000)}..."`;
     });
     
     try {
-      const [wiki, pixa] = await Promise.race([
+      const [wiki, pixa, pex, uns] = await Promise.race([
         Promise.all(searchPromises),
         timeoutPromise
       ]);
       
-      // Check if the selected image is already being used
+      // Choose best by score among available results
       let selectedImage = null;
-      if (wiki && pixa) {
-        selectedImage = (Number(pixa.score || 0) > Number(wiki.score || 0)) ? pixa : wiki;
-      } else {
-        selectedImage = wiki || pixa;
+      const pool = [wiki, pixa, pex, uns].filter(Boolean);
+      if (pool.length > 0) {
+        pool.sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
+        selectedImage = pool[0];
       }
       
-      // If the selected image is already being used, try to find an alternative
+      // Duplicate avoidance logic remains the same
       if (selectedImage && usedImageUrls.length > 0) {
         const normalizedSelectedUrl = normalizeUrlForCompare(selectedImage.imageUrl);
         const isAlreadyUsed = usedImageUrls.some(url => normalizeUrlForCompare(url) === normalizedSelectedUrl);
-        
         if (isAlreadyUsed) {
           console.log(`[AIService] Selected image is already used, trying alternative for "${subject}" (used URLs: ${usedImageUrls.length})`);
-          
-          // Try the other service if available
-          if (wiki && pixa && selectedImage === wiki) {
-            selectedImage = pixa;
-            console.log(`[AIService] Switched to Pixabay image to avoid duplicate for "${subject}"`);
-          } else if (wiki && pixa && selectedImage === pixa) {
-            selectedImage = wiki;
-            console.log(`[AIService] Switched to Wikipedia image to avoid duplicate for "${subject}"`);
-          }
-          
-          // If still the same, try with more relaxed search
-          if (selectedImage && !options.relaxed) {
+          // try next best alternative in pool
+          const alt = pool.find(img => normalizeUrlForCompare(img.imageUrl) !== normalizedSelectedUrl);
+          if (alt) {
+            selectedImage = alt;
+            console.log(`[AIService] Switched to alternate image source.`);
+          } else if (!options.relaxed) {
             console.log(`[AIService] Trying relaxed search for alternative image for "${subject}"`);
             const relaxedResult = await this.fetchRelevantImage(subject, content, usedImageTitles, usedImageUrls, { relaxed: true }, courseContext);
-            if (relaxedResult) {
-              selectedImage = relaxedResult;
-              console.log(`[AIService] Found alternative image via relaxed search for "${subject}"`);
-            }
+            if (relaxedResult) selectedImage = relaxedResult;
           }
         }
       }
@@ -2214,13 +2372,15 @@ Context: "${context.substring(0, 1000)}..."`;
     let result = selectedImage;
     
     if (result) {
-      console.log(`[AIService] Final selected image for "${subject}":`, {
-        title: result.imageTitle,
-        score: result.score,
-        source: result.imageUrl.includes('wikimedia') ? 'Wikipedia' : 'Pixabay'
-      });
+      let src = 'Unknown';
+      const url = (result.pageURL || '') + ' ' + (result.imageUrl || '');
+      if (url.includes('wikipedia.org') || url.includes('wikimedia')) src = 'Wikipedia';
+      else if (url.includes('pixabay.com')) src = 'Pixabay';
+      else if (url.includes('pexels.com') || url.includes('images.pexels.com')) src = 'Pexels';
+      else if (url.includes('unsplash.com') || url.includes('images.unsplash.com')) src = 'Unsplash';
+      console.log(`[AIService] Final selected image for "${subject}":`, { title: result.imageTitle, score: result.score, source: src });
     } else {
-      console.log(`[AIService] No images found from either service`);
+      console.log(`[AIService] No images found from any service`);
     }
     
     // Cache the result
@@ -2243,7 +2403,6 @@ Context: "${context.substring(0, 1000)}..."`;
       return null;
     }
   }
-  
   async generateCourse(topic, difficulty, numModules, numLessonsPerModule = 3, generationId = null) {
     let courseWithIds;
     const usedImageTitles = new Set(); // Track used image titles for this course
@@ -2313,7 +2472,7 @@ Context: "${context.substring(0, 1000)}..."`;
             const lessonContentString = await this._makeApiRequest(lessonPrompt, 'lesson', false);
             
             // Optimized parsing logic with reduced logging
-            let parts = lessonContentString.split(/\s*\|\|\|---\|\|\|\s*/);
+            let parts = lessonContentString.split(/\s*\|\|\|\s*/);
             
             // If we don't get exactly 3 parts, try alternative separators
             if (parts.length !== 3) {
@@ -2571,7 +2730,6 @@ Return only the JSON array, no other text.`;
       throw new ApiError(500, `An unexpected error occurred during course generation: ${error.message}`);
     }
   }
-
   validateCourseStructure(data) {
     console.log(`[AIService] Validating course structure:`, {
       hasData: !!data,
@@ -2825,527 +2983,7 @@ Example format:
     "relevance": "Comprehensive coverage of ancient civilizations including the topics discussed in this lesson"
   }
 ]
-
 Return only the JSON array, no other text.`;
-
-      const generatedReferences = await this._makeApiRequest(referencePrompt, 'bibliography', true);
-      
-      if (!Array.isArray(generatedReferences) || generatedReferences.length === 0) {
-        console.warn(`[AIService] AI failed to generate authentic references, falling back to static references`);
-        return this.generateBibliography(topic, subject, numReferences);
-      }
-
-      // Validate and clean up the generated references
-      const validatedReferences = generatedReferences
-        .filter(ref => ref && ref.author && ref.title && ref.publisher && ref.year)
-        .map((ref, index) => ({
-          id: index + 1,
-          author: ref.author.trim(),
-          year: ref.year.toString(),
-          title: ref.title.trim(),
-          publisher: ref.publisher.trim(),
-          type: ref.type || 'book',
-          relevance: ref.relevance || `Relevant to ${topic}`,
-          verified: true, // Mark as verified since they're AI-generated authentic references
-          citationNumber: index + 1
-        }))
-        .slice(0, numReferences);
-
-      console.log(`[AIService] Generated ${validatedReferences.length} authentic references for "${topic}"`);
-      return validatedReferences;
-
-    } catch (error) {
-      console.error(`[AIService] Error generating authentic bibliography for "${topic}":`, error.message);
-      // Fall back to static bibliography generation
-      return this.generateBibliography(topic, subject, numReferences);
-    }
-  }
-
-  /**
-   * Shuffle array for variety in reference selection
-   * @param {Array} array - Array to shuffle
-   * @returns {Array} Shuffled array
-   */
-  shuffleArray(array) {
-    const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
-  }
-
-  /**
-   * Verify that all references are authentic
-   * @param {Array} bibliography - Bibliography array to verify
-   * @returns {boolean} True if all references are verified
-   */
-  verifyBibliography(bibliography) {
-    return bibliography.every(ref => ref.verified === true);
-  }
-
-  /**
-   * Clean up malformed References sections in content
-   * @param {string} content - Content that might contain malformed References
-   * @returns {string} Cleaned content
-   */
-  cleanupMalformedReferences(content) {
-    if (!content || typeof content !== 'string') {
-      return content;
-    }
-
-    return content
-      // Fix the specific problematic pattern: "## References [1] ... [2] ..."
-      .replace(/## References\s*\[(\d+)\]/g, '\n## References\n\n[$1]')
-      // Ensure each citation is on its own line
-      .replace(/\]\s*\[(\d+)\]/g, '.\n\n[$1]')
-      // Add proper line breaks between citations
-      .replace(/\.\s*\[(\d+)\]/g, '.\n\n[$1]')
-      // Clean up any remaining issues
-      .replace(/\n{3,}/g, '\n\n'); // Normalize multiple line breaks
-  }
-}
-
-// --- SETUP AND CONFIGURATION ---
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// --- DATABASE SETUP ---
-const dbFilePath = path.join(__dirname, 'db.json');
-
-// Ensure the data directory exists
-const dataDir = path.resolve(__dirname, 'data');
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
-
-const adapter = new JSONFile(dbFilePath);
-const defaultData = { users: [], courses: [], images: [], imageCache: [] };
-const db = new Low(adapter, defaultData);
-
-async function initializeDatabase() {
-  try {
-    // read() will create the file with defaultData if it doesn't exist or load existing data.
-    await db.read();
-    console.log(`[DB Debug] db.read() completed. File exists: ${fs.existsSync(dbFilePath)}`);
-    // Belt-and-suspenders: ensure data object and arrays are present after read.
-    db.data = db.data || defaultData;
-    db.data.users = db.data.users || [];
-    db.data.courses = db.data.courses || [];
-    db.data.imageCache = db.data.imageCache || [];
-    db.data.images = db.data.images || [];
-    
-    // Load courses from individual files if they exist
-    await loadCoursesFromFiles();
-    
-    // Clean up orphaned course files
-    await cleanupOrphanedCourseFiles();
-    
-    console.log('[DB] Database initialized successfully at:', dbFilePath);
-  } catch (error) {
-    console.error('[DB_ERROR] Could not initialize database:', error);
-    process.exit(1);
-  }
-}
-
-async function loadCoursesFromFiles() {
-  try {
-    const coursesDir = path.join(__dirname, 'data', 'courses');
-    if (!fs.existsSync(coursesDir)) {
-      console.log('[DB] No courses directory found, skipping course loading');
-      return;
-    }
-
-    const courseFiles = fs.readdirSync(coursesDir).filter(file => file.endsWith('.json') && file !== 'undefined.json');
-    console.log(`[DB] Found ${courseFiles.length} course files to load`);
-
-    for (const file of courseFiles) {
-      try {
-        const filePath = path.join(coursesDir, file);
-        const courseData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-        
-        // Check if course already exists in database
-        const existingCourse = db.data.courses.find(c => c.id === courseData.id);
-        if (!existingCourse) {
-          db.data.courses.push(courseData);
-          console.log(`[DB] Loaded course: ${courseData.title} (${courseData.id})`);
-        } else {
-          console.log(`[DB] Course already exists: ${courseData.title} (${courseData.id})`);
-        }
-      } catch (error) {
-        console.error(`[DB_ERROR] Failed to load course file ${file}:`, error.message);
-      }
-    }
-
-    console.log(`[DB] Total courses in database: ${db.data.courses.length}`);
-  } catch (error) {
-    console.error('[DB_ERROR] Failed to load courses from files:', error);
-  }
-}
-
-/**
- * Save a course to an individual JSON file
- * @param {Object} course - The course object to save
- */
-async function saveCourseToFile(course) {
-  try {
-    const coursesDir = path.join(__dirname, 'data', 'courses');
-    
-    // Ensure courses directory exists
-    if (!fs.existsSync(coursesDir)) {
-      fs.mkdirSync(coursesDir, { recursive: true });
-    }
-    
-    const courseFileName = `${course.id}.json`;
-    const courseFilePath = path.join(coursesDir, courseFileName);
-    
-    // Save course to file
-    fs.writeFileSync(courseFilePath, JSON.stringify(course, null, 2));
-    console.log(`[DB] Saved course to file: ${courseFileName}`);
-    
-  } catch (error) {
-    console.error(`[DB_ERROR] Failed to save course file for ${course.id}:`, error.message);
-    // Don't throw error to avoid breaking course creation
-  }
-}
-
-/**
- * Clean up orphaned course files (files that exist but don't have corresponding database entries)
- */
-async function cleanupOrphanedCourseFiles() {
-  try {
-    const coursesDir = path.join(__dirname, 'data', 'courses');
-    
-    if (!fs.existsSync(coursesDir)) {
-      return;
-    }
-    
-    const courseFiles = fs.readdirSync(coursesDir).filter(file => file.endsWith('.json') && file !== 'undefined.json');
-    const databaseCourseIds = db.data.courses.map(c => c.id);
-    
-    let orphanedCount = 0;
-    
-    for (const file of courseFiles) {
-      const courseId = file.replace('.json', '');
-      
-      if (!databaseCourseIds.includes(courseId)) {
-        const filePath = path.join(coursesDir, file);
-        try {
-          fs.unlinkSync(filePath);
-          console.log(`[DB] Cleaned up orphaned course file: ${file}`);
-          orphanedCount++;
-        } catch (error) {
-          console.error(`[DB_ERROR] Failed to delete orphaned file ${file}:`, error.message);
-        }
-      }
-    }
-    
-    if (orphanedCount > 0) {
-      console.log(`[DB] Cleaned up ${orphanedCount} orphaned course files`);
-    }
-    
-  } catch (error) {
-    console.error('[DB_ERROR] Failed to cleanup orphaned course files:', error.message);
-  }
-}
-
-const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
-const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
-
-// Supabase client
-const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://test.supabase.co';
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'test-key';
-const supabaseRedirectUrl = process.env.SUPABASE_REDIRECT_URL || 'https://thediscourse.ai';
-
-let supabase = null;
-
-if (!supabaseUrl || !supabaseAnonKey || supabaseUrl === 'your-supabase-url-here' || supabaseAnonKey === 'your-supabase-anon-key-here') {
-    console.warn('[SERVER_WARN] Supabase configuration is missing or invalid. Authentication will be disabled.');
-    console.warn('[SERVER_WARN] Please check your environment variables or .env file.');
-    console.warn(`[SERVER_DEBUG] SUPABASE_URL: ${supabaseUrl ? 'SET' : 'NOT SET'}`);
-    console.warn(`[SERVER_DEBUG] VITE_SUPABASE_URL: ${process.env.VITE_SUPABASE_URL ? 'SET' : 'NOT SET'}`);
-    console.warn(`[SERVER_DEBUG] SUPABASE_ANON_KEY: ${supabaseAnonKey ? 'SET' : 'NOT SET'}`);
-    console.warn(`[SERVER_DEBUG] VITE_SUPABASE_ANON_KEY: ${process.env.VITE_SUPABASE_ANON_KEY ? 'SET' : 'NOT SET'}`);
-    console.warn(`[SERVER_DEBUG] SUPABASE_REDIRECT_URL: ${supabaseRedirectUrl}`);
-} else {
-    try {
-        supabase = createClient(supabaseUrl, supabaseAnonKey, {
-            auth: {
-                autoRefreshToken: false,
-                persistSession: false,
-                redirectTo: supabaseRedirectUrl,
-            },
-        });
-        console.log('[SERVER] Supabase client initialized successfully');
-        console.log(`[SERVER] Supabase redirect URL: ${supabaseRedirectUrl}`);
-    } catch (error) {
-        console.error('[SERVER_ERROR] Failed to initialize Supabase client:', error.message);
-        supabase = null;
-    }
-}
-
-// Helper to get user by id
-// This function is no longer needed as we use req.user from the middleware.
-
-// --- MIDDLEWARE ---
-
-// Enhanced authentication middleware with Supabase token verification
-const authenticateToken = async (req, res, next) => {
-  try {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-
-    console.log('[AUTH] Authentication attempt:', {
-      path: req.path,
-      hasAuthHeader: !!authHeader,
-      hasToken: !!token,
-      tokenLength: token ? token.length : 0,
-      tokenPrefix: token ? token.substring(0, 10) + '...' : 'none'
-    });
-
-    if (!token) {
-      console.log('[AUTH] No token provided for:', req.path);
-      return res.status(401).json({ 
-        error: 'Access token required',
-        code: 'TOKEN_MISSING'
-      });
-    }
-
-    // Dev-mode fallback: accept tokens like "dev:<userId>" when Supabase is not configured
-    if (!supabase && token.startsWith('dev:')) {
-      const userId = token.slice(4);
-      const dbUser = db.data.users.find(u => u.id === userId);
-      if (!dbUser) {
-        return res.status(401).json({ error: 'User not found in local database', code: 'USER_NOT_FOUND' });
-      }
-      req.user = dbUser;
-      return next();
-    }
-
-    // Verify token using Supabase
-    if (!supabase) {
-      console.error('[AUTH_ERROR] Supabase client not initialized');
-      return res.status(500).json({ 
-        error: 'Authentication service not configured',
-        code: 'AUTH_SERVICE_ERROR'
-      });
-    }
-
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-
-    if (error || !user) {
-      console.log('[AUTH] Supabase token verification failed for:', req.path, 'Error:', error?.message || 'No user data');
-      
-      let errorMessage = 'Invalid or expired token';
-      let errorCode = 'TOKEN_INVALID';
-      
-      if (error?.message?.includes('expired')) {
-        errorMessage = 'Token has expired. Please log in again.';
-        errorCode = 'TOKEN_EXPIRED';
-      } else if (error?.message?.includes('invalid')) {
-        errorMessage = 'Invalid token. Please log in again.';
-        errorCode = 'TOKEN_SIGNATURE_INVALID';
-      }
-      
-      return res.status(401).json({ 
-        error: errorMessage,
-        code: errorCode
-      });
-    }
-
-    // Find user in local database to ensure they exist and have current data
-    const dbUser = db.data.users.find(u => u.id === user.id);
-    if (!dbUser) {
-      console.log('[AUTH] User not found in local database:', user.id);
-      return res.status(401).json({ 
-        error: 'User not found in local database',
-        code: 'USER_NOT_FOUND'
-      });
-    }
-
-    // Update req.user with fresh data from database
-    req.user = dbUser;
-    
-    // Add debugging for course access
-    if (req.path.includes('/api/courses/') && req.params.courseId) {
-      console.log('[AUTH] Course access authentication:', {
-        userId: dbUser.id,
-        userEmail: dbUser.email,
-        courseId: req.params.courseId,
-        path: req.path,
-        timestamp: new Date().toISOString()
-      });
-    }
-    
-    if (SHOULD_LOG_AUTH) {
-      console.log('[AUTH] User authenticated:', {
-        id: dbUser.id,
-        email: dbUser.email,
-        path: req.path,
-        credits: dbUser.courseCredits
-      });
-    }
-    next();
-  } catch (error) {
-    console.error('[AUTH_ERROR] Unexpected error in authenticateToken:', error);
-    return res.status(500).json({ 
-      error: 'Authentication service error',
-      code: 'AUTH_SERVICE_ERROR'
-    });
-  }
-};
-
-// Admin guard (if ADMIN_EMAILS is empty, allow any authenticated user)
-const requireAdminIfConfigured = (req, res, next) => {
-  if (ADMIN_EMAILS.size === 0) return next();
-  const email = req.user?.email?.toLowerCase();
-  if (!email || !ADMIN_EMAILS.has(email)) {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
-  next();
-};
-
-// --- API ROUTES ---
-
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.status(200).json({ 
-    status: 'ok', 
-    timestamp: new Date().toISOString(),
-    aiService: {
-      configured: !!global.aiService,
-      hasApiKey: !!(process.env.MISTRAL_API_KEY || process.env.VITE_MISTRAL_API_KEY),
-      ready: !!(global.aiService && global.aiService.apiKey)
-    }
-  });
-});
-
-// AI service test endpoint
-app.get('/api/test-ai', async (req, res) => {
-  if (!global.aiService) {
-    return res.status(503).json({
-        status: 'error',
-        message: 'AI service is not configured on the server.',
-        configured: false,
-        details: 'MISTRAL_API_KEY environment variable is not set or invalid',
-        solution: 'Get a valid API key from https://console.mistral.ai/ and set MISTRAL_API_KEY environment variable'
-    });
-  }
-  try {
-    const testPrompt = 'Generate a simple test response. Just say "AI service is working correctly."';
-    const response = await global.aiService._makeApiRequest(testPrompt, 'search', false);
-    
-    res.json({
-      status: 'success',
-      message: 'AI service appears to be working.',
-      configured: true,
-      testResponse: response,
-    });
-  } catch (error) {
-    console.error('[AI Test] Error:', error);
-    
-    let errorDetails = {
-      status: 'error',
-      message: error.message,
-      configured: true, // It's configured, but the request failed
-      errorType: 'api_request_failed'
-    };
-    
-    // Provide specific guidance based on error type
-    if (error.message.includes('401') || error.message.includes('Unauthorized')) {
-      errorDetails.errorType = 'invalid_api_key';
-      errorDetails.solution = 'The Mistral API key is invalid or expired. Get a new key from https://console.mistral.ai/';
-    } else if (error.message.includes('429') || error.message.includes('Rate limited')) {
-      errorDetails.errorType = 'rate_limited';
-      errorDetails.solution = 'API rate limit exceeded. Wait a moment and try again.';
-    } else if (error.message.includes('Failed to fetch') || error.message.includes('Network')) {
-      errorDetails.errorType = 'network_error';
-      errorDetails.solution = 'Network connectivity issue. Check your internet connection.';
-    }
-    
-    res.status(500).json(errorDetails);
-  }
-});
-
-// Test endpoint for debugging
-app.get('/api/test', (req, res) => {
-  res.json({ 
-    status: 'Server is working!', 
-    timestamp: new Date().toISOString(),
-    endpoints: {
-      imageSearch: '/api/image-search/search',
-      test: '/api/test'
-    }
-  });
-});
-
-// Test endpoint for Stripe configuration
-app.get('/api/test-stripe', (req, res) => {
-  res.json({ 
-    stripeConfigured: !!stripe,
-    hasSecretKey: !!process.env.STRIPE_SECRET_KEY,
-    hasWebhookSecret: !!process.env.STRIPE_WEBHOOK_SECRET
-  });
-});
-// Test endpoint for checkout session (without authentication)
-app.get('/api/test-checkout', (req, res) => {
-  res.json({ 
-    message: 'Checkout endpoint is accessible',
-    stripeConfigured: !!stripe,
-    timestamp: new Date().toISOString()
-  });
-});
-app.post('/api/ai/generate', authenticateToken, async (req, res, next) => {
-    if (!global.aiService) {
-        return next(new ApiError(503, 'AI service is not configured.'));
-    }
-
-    try {
-        const { prompt, intent, expectJsonResponse = true } = req.body;
-        if (!prompt || !intent) {
-            throw new ApiError(400, 'Missing required parameters: prompt, intent.');
-        }
-
-        const result = await global.aiService._makeApiRequest(prompt, intent, expectJsonResponse);
-        res.json(result);
-    } catch (error) {
-        next(error);
-    }
-});
-
-app.post('/api/ai/generate-bibliography', authenticateToken, async (req, res, next) => {
-    if (!global.aiService) {
-        return next(new ApiError(503, 'AI service is not configured.'));
-    }
-
-    try {
-        const { topic, subject, numReferences = 5, lessonContent = '' } = req.body;
-        if (!topic || !subject) {
-            throw new ApiError(400, 'Missing required parameters: topic, subject.');
-        }
-
-        console.log(`[API] Generating authentic bibliography for "${topic}" in ${subject}`);
-        
-        const bibliography = await global.aiService.generateAuthenticBibliography(
-            topic, 
-            subject, 
-            numReferences, 
-            lessonContent
-        );
-        
-        res.json({ 
-            success: true, 
-            bibliography,
-            message: `Generated ${bibliography.length} authentic academic references`
-        });
-    } catch (error) {
-        console.error(`[API] Error generating bibliography:`, error);
-        next(error);
-    }
-});
-
 app.post('/api/auth/register', async (req, res) => {
   try {
     const { email, password, name, gdprConsent, policyVersion } = req.body;
@@ -3425,7 +3063,6 @@ app.post('/api/auth/register', async (req, res) => {
         code: 'email_disposable_pattern'
       });
     }
-
     // --- Supabase Registration ---
     console.log(`[AUTH] Attempting Supabase registration for: ${email}`);
     console.log(`[AUTH] Supabase URL: ${supabaseUrl}`);
@@ -3770,7 +3407,6 @@ app.post('/api/debug/add-credits', async (req, res) => {
     res.status(500).json({ error: 'Failed to add credits' });
   }
 });
-
 app.get('/api/courses/saved', authenticateToken, async (req, res) => {
   // Prevent browser caching for this endpoint
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
@@ -4384,7 +4020,6 @@ app.post('/api/courses/:courseId/generate-quizzes', authenticateToken, async (re
     res.status(500).json({ error: 'Internal server error' });
   }
 });
-
 // New image search endpoint (handler and aliases)
 async function imageSearchHandler(req, res) {
   console.log(`[ImageSearch] ${req.method} ${req.path} - Headers:`, req.headers);
@@ -4420,7 +4055,6 @@ async function imageSearchHandler(req, res) {
   const courseId = body.courseId ?? null;
   const lessonId = body.lessonId ?? null;
   const moduleId = body.moduleId ?? null;
-
   // Augment used lists with already-used images from the course (server-side guarantee)
   if (courseId && Array.isArray(db?.data?.courses)) {
     try {
@@ -4770,7 +4404,6 @@ app.get('/api/image/fast', async (req, res) => {
     const isWikimediaImageUrl = isWikimediaUrl && (
       hasValidExtension || hasValidExtensionInUrl || isSvgFile
     );
-    
     if (!hasValidSvgExtension && !isPixabayImageUrl && !isWikimediaImageUrl) {
       console.warn(`[FastImageProxy] Invalid image format: ${parsedUrl.pathname} (URL: ${url.substring(0, 100)}...)`);
       return res.status(400).json({ error: 'Invalid image format' });
@@ -4876,21 +4509,6 @@ app.post('/api/image/clear-search-cache', (req, res) => {
     res.json({ message: `Force cleared ${cacheSize} image search cache entries` });
   } else {
     res.json({ message: 'No image search cache to clear' });
-  }
-});
-// Clean up orphaned course files (admin only)
-app.post('/api/admin/cleanup-courses', authenticateToken, async (req, res) => {
-  try {
-    const userEmail = req.user?.email?.toLowerCase();
-    if (!ADMIN_EMAILS.has(userEmail)) {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
-    
-    await cleanupOrphanedCourseFiles();
-    res.json({ message: 'Course cleanup completed successfully' });
-  } catch (error) {
-    console.error('[ADMIN] Failed to cleanup courses:', error);
-    res.status(500).json({ error: 'Failed to cleanup courses' });
   }
 });
 
@@ -5008,7 +4626,6 @@ app.post('/api/courses/:courseId/unpublish', authenticateToken, async (req, res)
     res.status(500).json({ error: 'Failed to unpublish course' });
   }
 });
-
 // CAPTCHA verification endpoint for public course access
 app.get('/api/captcha/verify/:courseId', 
   securityHeaders,
@@ -5121,7 +4738,6 @@ app.get('/api/captcha/verify/:courseId',
         challengeExists: !!storedChallenge,
         challengeMatch: normalizedStored === normalizedReceived
       });
-      
       if (storedChallenge && normalizedStored === normalizedReceived) {
         let expectedAnswer;
         try {
@@ -5443,7 +5059,6 @@ app.get('/api/captcha/new/:courseId',
     res.status(500).json({ error: 'Failed to generate new challenge' });
   }
 });
-
 // Handle public course access without specific course ID - redirect to a fallback course
 app.get('/api/public/courses', 
   securityHeaders,
@@ -5771,7 +5386,6 @@ app.post('/api/public/courses/:courseId/session',
     res.status(500).json({ error: 'Failed to create session' });
   }
 });
-
 // Get all quiz scores for public course session
 app.get('/api/public/courses/:courseId/quiz-scores', 
   securityHeaders,
@@ -6118,7 +5732,6 @@ app.delete('/api/courses/:courseId', authenticateToken, async (req, res) => {
     // Remove course from database
     db.data.courses = db.data.courses.filter(c => c !== course);
     await db.write();
-
     // Clear any cached data for this course
     if (global.aiService && global.aiService.clearCache) {
       try {
@@ -6452,7 +6065,6 @@ async function downloadAndCacheImage(cacheKey, imageData) {
       maxWidth: 800, // Reduced from 1200 to 800 for smaller files
       maxHeight: 600, // Reduced from 800 to 600 for smaller files
     });
-    
     const compressedSize = compressedBuffer.length;
     const compressionRatio = compressedSize / originalSize;
     const sizeReduction = ((originalSize - compressedSize) / originalSize * 100).toFixed(1);
@@ -6801,7 +6413,6 @@ app.get('/api/lessons/:lessonId/images', async (req, res) => {
     return res.status(500).json({ error: 'Failed to list images', details: e.message });
   }
 });
-
 // API: Delete an image from library (requires auth)
 app.delete('/api/images/:id', authenticateToken, requireAdminIfConfigured, async (req, res) => {
   try {
@@ -6869,7 +6480,6 @@ app.post('/api/tts/record-pause', async (req, res) => {
     });
   }
 });
-
 app.get('/api/tts/pause-position', async (req, res) => {
   try {
     const { lessonId } = req.query;

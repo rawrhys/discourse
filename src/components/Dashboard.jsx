@@ -32,6 +32,11 @@ const Dashboard = () => {
   const [isUpdatingCourseState, setIsUpdatingCourseState] = useState(false);
   const urlParams = new URLSearchParams(window.location.search);
   
+  // ETA countdown for generation
+  const [etaTotalSec, setEtaTotalSec] = useState(0);
+  const [etaStartMs, setEtaStartMs] = useState(0);
+  const [etaRemainingSec, setEtaRemainingSec] = useState(0);
+  
   // Connection diagnostic state
   const [connectionStatus, setConnectionStatus] = useState(null);
   const [showConnectionDiagnostic, setShowConnectionDiagnostic] = useState(false);
@@ -169,13 +174,18 @@ const Dashboard = () => {
           // Clear any existing errors since we got a success notification
           setError(null);
           
+          // Close the generation modal and reset ETA
+          setIsGenerating(false);
+          setEtaTotalSec(0);
+          setEtaRemainingSec(0);
+          setEtaStartMs(0);
+          
           // Show success message
           setSuccessMessage(`Course "${data.courseTitle}" generated successfully!`);
           setShowSuccessToast(true);
           
           // Close the generation form
           setShowNewCourseForm(false);
-          setIsGenerating(false);
           
           // Fetch updated course list after a short delay
           setTimeout(async () => {
@@ -329,39 +339,7 @@ const Dashboard = () => {
     }
   }, [user, savedCourses, showSuccessToast]);
 
-  // Auto-refresh courses periodically and on focus/visibility change
-  useEffect(() => {
-    if (!user) return;
-
-    const refresh = () => {
-      try {
-        logger.debug('🪄 [DASHBOARD] Auto-refreshing course list');
-        fetchSavedCourses(true);
-      } catch (e) {
-        logger.warn('⚠️ [DASHBOARD] Auto-refresh failed:', e?.message);
-      }
-    };
-
-    // Interval refresh every 20 seconds
-    const intervalId = setInterval(refresh, 20000);
-
-    // Refresh on window focus
-    const onFocus = () => refresh();
-    window.addEventListener('focus', onFocus);
-
-    // Refresh when tab becomes visible
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') refresh();
-    };
-    document.addEventListener('visibilitychange', onVisibilityChange);
-
-    // Cleanup
-    return () => {
-      clearInterval(intervalId);
-      window.removeEventListener('focus', onFocus);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-    };
-  }, [user, fetchSavedCourses]);
+  // Removed periodic and focus/visibility auto-refresh per request
 
   const handleGenerateCourse = useCallback(async (courseParams) => {
     logger.debug('🎯 [COURSE GENERATION] Starting simplified course generation process', {
@@ -376,22 +354,28 @@ const Dashboard = () => {
     // Proactively refresh the list before starting generation
     try { await fetchSavedCourses(true); } catch {}
 
+    // Compute a rough ETA based on requested size (clamped 60-600s)
+    const modules = courseParams.numModules || 3;
+    const lessons = courseParams.numLessonsPerModule || 3;
+    const estimated = Math.min(600, Math.max(60, modules * lessons * 15 + 30));
+    setEtaTotalSec(estimated);
+    setEtaStartMs(Date.now());
+    setEtaRemainingSec(estimated);
+
     // Fire and forget the API call
     api.generateCourse(
       courseParams.prompt, 
       courseParams.difficultyLevel || 'intermediate',
-      courseParams.numModules || 3,
-      courseParams.numLessonsPerModule || 3
+      modules,
+      lessons
     ).then(result => {
       logger.debug('✅ [COURSE GENERATION] API call returned a result (this might be rare for long generations):', result);
-      // No-op; monitor will pick it up
     }).catch(error => {
       logger.error('💥 [COURSE GENERATION] API call failed or timed out (expected for long generations):', error.message);
     });
 
     // Immediately update UI and start monitoring
     setShowNewCourseForm(false);
-    setIsGenerating(false);
     setIsMonitoring(true);
     setSuccessMessage(`Course generation for "${courseParams.prompt}" has started. It will appear on your dashboard shortly.`);
     setShowSuccessToast(true);
@@ -399,6 +383,19 @@ const Dashboard = () => {
     setTimeout(() => setShowSuccessToast(false), 8000);
 
   }, [api, user?.id, savedCourses.length, fetchSavedCourses]);
+
+  // Drive ETA countdown while generating
+  useEffect(() => {
+    if (!isGenerating || !etaStartMs || !etaTotalSec) return;
+    const tick = () => {
+      const elapsed = Math.floor((Date.now() - etaStartMs) / 1000);
+      const remaining = Math.max(0, etaTotalSec - elapsed);
+      setEtaRemainingSec(remaining);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [isGenerating, etaStartMs, etaTotalSec]);
 
   const handleLogout = () => {
     logout();
@@ -1190,19 +1187,33 @@ const Dashboard = () => {
             <div className="bg-white rounded-lg p-8 max-w-md w-full text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
               <h3 className="text-lg font-medium text-gray-900 mb-2">Generating Your Course</h3>
-              <p className="text-sm text-gray-600 mb-6">
+              <p className="text-sm text-gray-600 mb-2">
                 Please wait while we create your course. This may take a few minutes.
               </p>
+              {etaTotalSec > 0 && (
+                <div className="mt-2 mb-4">
+                  <div className="text-xs text-gray-500">Estimated time remaining</div>
+                  <div className="text-base font-semibold">
+                    {String(Math.floor(etaRemainingSec / 60)).padStart(2,'0')}
+                    :
+                    {String(etaRemainingSec % 60).padStart(2,'0')}
+                  </div>
+                  <div className="w-full bg-gray-200 rounded h-2 mt-2">
+                    <div
+                      className="bg-blue-600 h-2 rounded"
+                      style={{ width: `${Math.min(100, Math.max(0, ((etaTotalSec - etaRemainingSec) / etaTotalSec) * 100))}%` }}
+                    ></div>
+                  </div>
+                </div>
+              )}
               <button
                 onClick={() => {
-                  logger.debug('🛑 [DASHBOARD] User cancelled course generation');
+                  logger.debug('🛑 [DASHBOARD] User closed generation modal');
                   setIsGenerating(false);
-                  setShowNewCourseForm(false);
-                  setError(null);
                 }}
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
               >
-                Cancel Generation
+                Hide
               </button>
             </div>
           </div>
