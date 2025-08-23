@@ -511,6 +511,17 @@ const LessonView = ({
   const [academicReferences, setAcademicReferences] = useState([]);
   const [isGeneratingReferences, setIsGeneratingReferences] = useState(false);
   const [referencesError, setReferencesError] = useState(null);
+  
+  // Debug: Check API availability on component mount
+  useEffect(() => {
+    console.log('[LessonView] Component mounted - API check:', {
+      hasApi: !!api,
+      apiType: typeof api,
+      hasGenerateMethod: typeof api?.generateAuthenticBibliography === 'function',
+      apiMethods: api ? Object.keys(api) : 'NO_API',
+      timestamp: new Date().toISOString()
+    });
+  }, []);
 
   useEffect(() => {
     const generateAuthenticReferences = async (retryCount = 0) => {
@@ -1827,7 +1838,22 @@ const LessonView = ({
         <div className="mb-4 text-center">
           <button
             onClick={async () => {
-              console.log('[LessonView] Manual refresh of academic references triggered');
+              console.log('🎯 [LessonView] BUTTON CLICKED! Manual refresh of academic references triggered');
+              console.log('[LessonView] Button clicked - starting refresh process');
+              
+              // Simple test to make sure button click is working
+              alert('Button clicked! Check console for debug info.');
+              
+              // Debug: Log all the data we need
+              console.log('[LessonView] Data check:', {
+                hasPropLesson: !!propLesson,
+                hasContent: !!propLesson?.content,
+                hasTitle: !!propLesson?.title,
+                hasSubject: !!subject,
+                propLessonKeys: propLesson ? Object.keys(propLesson) : 'NO_LESSON',
+                subject: subject,
+                timestamp: new Date().toISOString()
+              });
               
               if (!propLesson?.content || !propLesson?.title || !subject) {
                 console.log('[LessonView] Cannot refresh - missing required data:', {
@@ -1866,6 +1892,15 @@ const LessonView = ({
                   timestamp: new Date().toISOString()
                 });
                 
+                // Debug: Log the exact function call we're about to make
+                console.log('[LessonView] About to call API function:', {
+                  functionName: 'api.generateAuthenticBibliography',
+                  functionType: typeof api.generateAuthenticBibliography,
+                  isFunction: typeof api.generateAuthenticBibliography === 'function',
+                  apiObject: api,
+                  timestamp: new Date().toISOString()
+                });
+                
                 // Use AI service to generate authentic academic references
                 console.log('[LessonView] Calling API to generate bibliography:', {
                   topic: propLesson.title,
@@ -1875,12 +1910,14 @@ const LessonView = ({
                   apiCall: 'api.generateAuthenticBibliography()'
                 });
                 
+                console.log('[LessonView] Making the actual API call now...');
                 const references = await api.generateAuthenticBibliography(
                   propLesson.title,
                   subject,
                   5, // Number of references
                   lessonContentString
                 );
+                console.log('[LessonView] API call completed, received response');
                 
                 console.log('[LessonView] Manual refresh - authentic academic references generated:', {
                   referencesCount: references.length,
