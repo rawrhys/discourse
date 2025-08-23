@@ -59,9 +59,19 @@ const AcademicReferencesFooter = memo(({ references, onCitationClick, isLoading 
           }`}>
             <div className="citation-item bg-white p-4 rounded-lg shadow-sm border border-gray-200">
               <div className="text-center text-gray-600">
-                <p>No academic references available for this lesson.</p>
-                <p className="text-sm mt-2">References are generated dynamically based on lesson content.</p>
-                <p className="text-sm">If you're seeing this message, the AI reference generation may need to be configured.</p>
+                <p className="font-semibold mb-2">No academic references available for this lesson.</p>
+                <p className="text-sm mb-2">References are generated dynamically based on lesson content.</p>
+                <p className="text-sm mb-3">If you're seeing this message, the AI reference generation may need to be configured.</p>
+                
+                <div className="bg-blue-50 border border-blue-200 rounded p-3 text-left">
+                  <p className="text-sm font-medium text-blue-800 mb-2">Troubleshooting:</p>
+                  <ul className="text-xs text-blue-700 space-y-1">
+                    <li>• Check if the AI service is properly configured</li>
+                    <li>• Verify the lesson has sufficient content (100+ characters)</li>
+                    <li>• Check browser console for error messages</li>
+                    <li>• Ensure you're authenticated and have proper permissions</li>
+                  </ul>
+                </div>
               </div>
             </div>
           </div>

@@ -3278,17 +3278,41 @@ app.post('/api/ai/generate', authenticateToken, async (req, res, next) => {
 });
 
 app.post('/api/ai/generate-bibliography', authenticateToken, async (req, res, next) => {
+    console.log(`[API] Bibliography generation request received:`, {
+        method: req.method,
+        url: req.url,
+        headers: req.headers,
+        body: req.body,
+        user: req.user?.id,
+        timestamp: new Date().toISOString()
+    });
+
     if (!global.aiService) {
+        console.error(`[API] AI service not configured for user ${req.user?.id}`);
         return next(new ApiError(503, 'AI service is not configured.'));
     }
 
     try {
         const { topic, subject, numReferences = 5, lessonContent = '' } = req.body;
         if (!topic || !subject) {
+            console.error(`[API] Missing required parameters for user ${req.user?.id}:`, { topic, subject });
             throw new ApiError(400, 'Missing required parameters: topic, subject.');
         }
 
-        console.log(`[API] Generating authentic bibliography for "${topic}" in ${subject}`);
+        console.log(`[API] Generating authentic bibliography for "${topic}" in ${subject} for user ${req.user?.id}`);
+        console.log(`[API] Request details:`, {
+            topic,
+            subject,
+            numReferences,
+            lessonContentLength: lessonContent?.length || 0,
+            lessonContentPreview: lessonContent?.substring(0, 200) + '...'
+        });
+        
+        console.log(`[API] About to call AI service for user ${req.user?.id}:`, {
+            aiServiceExists: !!global.aiService,
+            aiServiceType: global.aiService?.constructor?.name,
+            hasGenerateMethod: typeof global.aiService?.generateAuthenticBibliography === 'function'
+        });
         
         const bibliography = await global.aiService.generateAuthenticBibliography(
             topic, 
@@ -3297,15 +3321,39 @@ app.post('/api/ai/generate-bibliography', authenticateToken, async (req, res, ne
             lessonContent
         );
         
+        console.log(`[API] Bibliography generated successfully for user ${req.user?.id}:`, {
+            referencesCount: bibliography?.length || 0,
+            bibliography: bibliography
+        });
+        
         res.json({ 
             success: true, 
             bibliography,
             message: `Generated ${bibliography.length} authentic academic references`
         });
     } catch (error) {
-        console.error(`[API] Error generating bibliography:`, error);
+        console.error(`[API] Error generating bibliography for user ${req.user?.id}:`, error);
         next(error);
     }
+});
+
+// AI service health check
+app.get('/api/ai/health', (req, res) => {
+  try {
+    const health = {
+      aiServiceExists: !!global.aiService,
+      aiServiceType: global.aiService?.constructor?.name,
+      hasGenerateMethod: typeof global.aiService?.generateAuthenticBibliography === 'function',
+      hasApiKey: !!global.aiService?.apiKey,
+      timestamp: new Date().toISOString()
+    };
+    
+    console.log(`[API] AI service health check:`, health);
+    res.json(health);
+  } catch (error) {
+    console.error(`[API] Error in AI service health check:`, error);
+    res.status(500).json({ error: 'AI service health check failed' });
+  }
 });
 
 app.post('/api/auth/register', async (req, res) => {

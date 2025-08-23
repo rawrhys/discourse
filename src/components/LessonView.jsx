@@ -510,10 +510,16 @@ const LessonView = ({
   // Generate authentic academic references using AI service
   const [academicReferences, setAcademicReferences] = useState([]);
   const [isGeneratingReferences, setIsGeneratingReferences] = useState(false);
+  const [referencesError, setReferencesError] = useState(null);
 
   useEffect(() => {
-    const generateAuthenticReferences = async () => {
+    const generateAuthenticReferences = async (retryCount = 0) => {
       if (!propLesson?.content || !propLesson?.title || !subject) {
+        console.log('[LessonView] Skipping references generation - missing required data:', {
+          hasContent: !!propLesson?.content,
+          hasTitle: !!propLesson?.title,
+          hasSubject: !!subject
+        });
         setAcademicReferences([]);
         return;
       }
@@ -523,6 +529,7 @@ const LessonView = ({
         
         // Only generate if content is substantial
         if (lessonContentString.length < 100) {
+          console.log('[LessonView] Content too short for references:', lessonContentString.length);
           setAcademicReferences([]);
           return;
         }
@@ -530,7 +537,8 @@ const LessonView = ({
         console.log('[LessonView] Generating authentic academic references for:', {
           lessonTitle: propLesson.title,
           courseSubject: subject,
-          contentLength: lessonContentString?.length || 0
+          contentLength: lessonContentString?.length || 0,
+          retryCount: retryCount
         });
         
         console.log('[LessonView] Lesson content for references:', {
@@ -541,8 +549,16 @@ const LessonView = ({
         });
         
         setIsGeneratingReferences(true);
+        setReferencesError(null);
         
         // Use AI service to generate authentic academic references
+        console.log('[LessonView] Calling API to generate bibliography:', {
+          topic: propLesson.title,
+          subject: subject,
+          numReferences: 5,
+          contentLength: lessonContentString.length
+        });
+        
         const references = await api.generateAuthenticBibliography(
           propLesson.title,
           subject,
@@ -558,14 +574,31 @@ const LessonView = ({
           lessonTitle: propLesson.title
         });
         
-        setAcademicReferences(references);
+        if (references && references.length > 0) {
+          setAcademicReferences(references);
+          setReferencesError(null);
+        } else {
+          console.warn('[LessonView] No references returned from API');
+          setReferencesError('No references generated');
+          setAcademicReferences([]);
+        }
       } catch (error) {
         console.error('[LessonView] Error generating authentic academic references:', error);
         console.log('[LessonView] Error details:', {
           errorMessage: error.message,
           errorStack: error.stack,
-          errorType: error.constructor.name
+          errorType: error.constructor.name,
+          retryCount: retryCount
         });
+        
+        setReferencesError(error.message);
+        
+        // Retry logic for network errors
+        if (retryCount < 2 && (error.message.includes('fetch') || error.message.includes('network'))) {
+          console.log(`[LessonView] Retrying references generation (attempt ${retryCount + 1})`);
+          setTimeout(() => generateAuthenticReferences(retryCount + 1), 2000);
+          return;
+        }
         
         // Fallback to static references if AI generation fails
         try {
@@ -1789,6 +1822,33 @@ const LessonView = ({
             />
           </div>
         )}
+        
+        {/* Manual refresh button for academic references */}
+        <div className="mb-4 text-center">
+          <button
+            onClick={() => {
+              console.log('[LessonView] Manual refresh of academic references triggered');
+              setAcademicReferences([]);
+              setReferencesError(null);
+              // Trigger a re-generation by calling the effect again
+              const lessonContentString = getContentAsString(propLesson?.content);
+              if (lessonContentString && propLesson?.title && subject) {
+                console.log('[LessonView] Re-triggering references generation');
+                // Force re-run of the effect
+                setAcademicReferences([]);
+                setIsGeneratingReferences(true);
+                setTimeout(() => {
+                  setIsGeneratingReferences(false);
+                  // This will trigger the useEffect to run again
+                }, 100);
+              }
+            }}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 text-sm"
+            disabled={isGeneratingReferences}
+          >
+            {isGeneratingReferences ? 'Generating...' : 'Refresh Academic References'}
+          </button>
+        </div>
         
         {/* Navigation Section */}
         <div className="flex flex-col sm:flex-row items-center space-y-3 sm:space-y-0 sm:justify-between">

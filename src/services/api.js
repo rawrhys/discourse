@@ -56,11 +56,14 @@ class AIService {
     try {
       console.log(`[AIService] Generating authentic bibliography for "${topic}" in ${subject}`);
       
-      const response = await apiClient.post('/api/ai/generate-bibliography', {
-        topic,
-        subject,
-        numReferences,
-        lessonContent: lessonContent.substring(0, 2000) // Limit content size
+      const response = await apiClient('/api/ai/generate-bibliography', {
+        method: 'POST',
+        body: JSON.stringify({
+          topic,
+          subject,
+          numReferences,
+          lessonContent: lessonContent.substring(0, 2000) // Limit content size
+        })
       });
       
       return response.bibliography || [];
