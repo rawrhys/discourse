@@ -102,6 +102,16 @@ const Dashboard = () => {
       
       // Ensure we always set a valid array
       const validCourses = Array.isArray(courses) ? courses : [];
+      
+      // Debug: Log the course loading state
+      logger.info('🔄 [DASHBOARD] Main course fetch comparison:', {
+        previousCount: savedCourses.length,
+        newCount: validCourses.length,
+        previousCourses: savedCourses.map(c => ({ id: c.id, title: c.title })),
+        newCourses: validCourses.map(c => ({ id: c.id, title: c.title })),
+        timestamp: new Date().toISOString()
+      });
+      
       setSavedCourses(validCourses);
       
       // Clear any errors since we successfully fetched courses
@@ -226,6 +236,16 @@ const Dashboard = () => {
                 
                 // Ensure we always set a valid array
                 const validCourses = Array.isArray(courses) ? courses : [];
+                
+                // Debug: Log the current state vs new state
+                logger.info('🔄 [DASHBOARD] Course list refresh comparison:', {
+                  currentCount: savedCourses.length,
+                  newCount: validCourses.length,
+                  currentCourses: savedCourses.map(c => ({ id: c.id, title: c.title })),
+                  newCourses: validCourses.map(c => ({ id: c.id, title: c.title })),
+                  timestamp: new Date().toISOString()
+                });
+                
                 setSavedCourses(validCourses);
                 
                 // Clear any errors since we successfully fetched courses
@@ -375,12 +395,45 @@ const Dashboard = () => {
     });
 
     // Immediately update UI and start monitoring
-      setShowNewCourseForm(false);
+    setShowNewCourseForm(false);
     setIsMonitoring(true);
     setSuccessMessage(`Course generation for "${courseParams.prompt}" has started. It will appear on your dashboard shortly.`);
-      setShowSuccessToast(true);
-      
+    setShowSuccessToast(true);
+    
     setTimeout(() => setShowSuccessToast(false), 8000);
+    
+    // Multiple fallback refreshes to catch courses that might not trigger SSE
+    // First fallback: 10 seconds
+    setTimeout(async () => {
+      try {
+        logger.debug('🔄 [COURSE GENERATION] First fallback refresh (10s)');
+        await fetchSavedCourses(true);
+      } catch (error) {
+        logger.warn('⚠️ [COURSE GENERATION] First fallback refresh failed:', error.message);
+      }
+    }, 10000);
+    
+    // Second fallback: 30 seconds
+    setTimeout(async () => {
+      try {
+        logger.debug('🔄 [COURSE GENERATION] Second fallback refresh (30s)');
+        await fetchSavedCourses(true);
+        
+        // Check if we got a new course
+        const currentCount = savedCourses.length;
+        const newCourses = await api.getSavedCourses();
+        if (Array.isArray(newCourses) && newCourses.length > currentCount) {
+          logger.info('🎉 [COURSE GENERATION] Second fallback refresh found new course!');
+          setSavedCourses(newCourses);
+          setSuccessMessage('Course generation completed! New course found via fallback refresh.');
+          setShowSuccessToast(true);
+          setIsGenerating(false);
+          setIsMonitoring(false);
+        }
+      } catch (error) {
+        logger.warn('⚠️ [COURSE GENERATION] Second fallback refresh failed:', error.message);
+      }
+    }, 30000);
 
   }, [api, user?.id, savedCourses.length, fetchSavedCourses]);
 
@@ -725,6 +778,35 @@ const Dashboard = () => {
                 className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700"
               >
                 Add Tokens Now
+              </button>
+            </div>
+          </div>
+        )}
+        
+        {/* Debug Information */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="bg-gray-100 border border-gray-400 text-gray-700 px-4 py-3 rounded mb-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <strong>Debug Info:</strong>
+                <p className="text-sm mt-1">
+                  Courses: {savedCourses.length} | 
+                  SSE Connected: {courseNotificationService.isConnected ? 'Yes' : 'No'} | 
+                  User ID: {user?.id}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  logger.info('🔍 [DASHBOARD] Debug info:', {
+                    coursesCount: savedCourses.length,
+                    courses: savedCourses.map(c => ({ id: c.id, title: c.title, userId: c.userId })),
+                    user: { id: user?.id, email: user?.email },
+                    timestamp: new Date().toISOString()
+                  });
+                }}
+                className="bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-700"
+              >
+                Log Debug
               </button>
             </div>
           </div>

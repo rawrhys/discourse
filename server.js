@@ -3915,6 +3915,15 @@ app.post('/api/courses/generate', authenticateToken, async (req, res, next) => {
     }
 
     const user = req.user; // Use req.user directly from middleware
+    console.log(`[COURSE_GENERATION] User object from middleware:`, {
+      user: user,
+      userId: user?.id,
+      userEmail: user?.email,
+      userType: typeof user?.id,
+      userKeys: user ? Object.keys(user) : [],
+      reqUserKeys: req.user ? Object.keys(req.user) : []
+    });
+    
     if (!user) {
         return next(new ApiError(404, 'User not found.'));
     }
@@ -3977,10 +3986,24 @@ app.post('/api/courses/generate', authenticateToken, async (req, res, next) => {
         );
 
         // Assign user ID and save course to database
+        console.log(`[COURSE_GENERATION] User object before assignment:`, {
+          userId: user.id,
+          userEmail: user.email,
+          userType: typeof user.id,
+          userKeys: Object.keys(user)
+        });
+        
         course.userId = user.id;
         course.id = `course_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         course.createdAt = new Date().toISOString();
         course.published = false;
+        
+        console.log(`[COURSE_GENERATION] Course object after assignment:`, {
+          courseId: course.id,
+          courseUserId: course.userId,
+          courseUserIdType: typeof course.userId,
+          courseKeys: Object.keys(course)
+        });
 
               // Final validation: ensure all modules have proper isLocked properties
               if (course.modules && Array.isArray(course.modules)) {
@@ -3992,8 +4015,23 @@ app.post('/api/courses/generate', authenticateToken, async (req, res, next) => {
             }
 
               // Save the course to database
+              console.log(`[COURSE_GENERATION] Course before saving to database:`, {
+                courseId: course.id,
+                courseUserId: course.userId,
+                courseUserIdType: typeof course.userId
+              });
+              
               db.data.courses.push(course);
               await db.write();
+              
+              // Verify the course was saved correctly
+              const savedCourse = db.data.courses.find(c => c.id === course.id);
+              console.log(`[COURSE_GENERATION] Course after saving to database:`, {
+                courseId: savedCourse?.id,
+                courseUserId: savedCourse?.userId,
+                courseUserIdType: typeof savedCourse?.userId,
+                totalCourses: db.data.courses.length
+              });
               
               // Save course to individual file
               await saveCourseToFile(course);
@@ -4025,6 +4063,7 @@ app.post('/api/courses/generate', authenticateToken, async (req, res, next) => {
         }
 
         // Send SSE notification to client about new course
+        console.log(`[COURSE_GENERATION] About to send SSE notification for user ${user.id}`);
         sendCourseGenerationNotification(user.id, {
           type: 'course_generated',
           courseId: course.id,
@@ -4040,6 +4079,15 @@ app.post('/api/courses/generate', authenticateToken, async (req, res, next) => {
           message: 'Course generated successfully',
           creditsRemaining: user.courseCredits,
           courseId: course.id
+        });
+        
+        // Log final course state for debugging
+        console.log(`[COURSE_GENERATION] Final course state:`, {
+          courseId: course.id,
+          courseUserId: course.userId,
+          courseUserIdType: typeof course.userId,
+          totalCoursesInDB: db.data.courses.length,
+          userCoursesInDB: db.data.courses.filter(c => c.userId === user.id).length
         });
 
     } catch (error) {
@@ -4076,6 +4124,7 @@ function sendProgressUpdate(userId, progressData) {
 function sendCourseGenerationNotification(userId, notificationData) {
   console.log(`[SSE] Attempting to send notification to user ${userId}:`, notificationData);
   console.log(`[SSE] Active connections:`, Array.from(global.sseConnections.keys()));
+  console.log(`[SSE] User ID type:`, typeof userId, 'Value:', userId);
   
   if (global.sseConnections && global.sseConnections.has(userId)) {
     const res = global.sseConnections.get(userId);
@@ -4088,6 +4137,7 @@ function sendCourseGenerationNotification(userId, notificationData) {
     }
   } else {
     console.log(`[SSE] No active connection found for user ${userId}`);
+    console.log(`[SSE] Available user IDs:`, Array.from(global.sseConnections.keys()));
   }
 }
 
