@@ -734,7 +734,6 @@ const Dashboard = () => {
             </button>
           </div>
         </div>
-        </main>
         {credits === 0 && (
           <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4">
             You have no course tokens left. Please contact support for assistance.
@@ -1368,8 +1367,9 @@ export default Dashboard;
         />
       </>
                 )}
-    </div>
+    </main>
+  </div>
   );
-}
+};
 
 export default Dashboard;
