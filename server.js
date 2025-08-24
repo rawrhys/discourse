@@ -3696,7 +3696,7 @@ app.post('/api/auth/register', async (req, res) => {
       email: data.user.email,
       name: name,
       createdAt: new Date().toISOString(),
-      courseCredits: 1, // New users get 1 free course generation
+      courseCredits: 0, // New users start with 0 credits
       gdprConsent: {
         accepted: true,
         policyVersion: policyVersion,
@@ -3749,7 +3749,7 @@ app.post('/api/auth/login', async (req, res) => {
       // Dev mode: create/find local user and issue dev token
       let local = db.data.users.find(u => u.email === email);
       if (!local) {
-        local = { id: `dev_${Date.now()}`, email, name: email.split('@')[0], createdAt: new Date().toISOString(), courseCredits: 1 };
+        local = { id: `dev_${Date.now()}`, email, name: email.split('@')[0], createdAt: new Date().toISOString(), courseCredits: 0 };
         db.data.users.push(local);
         await db.write();
       }
@@ -3798,14 +3798,14 @@ app.post('/api/auth/login', async (req, res) => {
             email: data.user.email,
             name: data.user.user_metadata?.name || data.user.email.split('@')[0],
             createdAt: new Date().toISOString(),
-            courseCredits: 1
+            courseCredits: 0
         };
         db.data.users.push(localUser);
         await db.write();
     } else {
         // Only ensure credits exist, don't force minimum of 1
         if (localUser.courseCredits === undefined || localUser.courseCredits === null) {
-            localUser.courseCredits = 1;
+            localUser.courseCredits = 0;
             await db.write();
         }
     }
@@ -4160,7 +4160,7 @@ app.post('/api/courses/generate', authenticateToken, async (req, res, next) => {
         isZero: user.courseCredits === 0
     });
     
-    // Fix the credit check - allow 0 credits but not null/undefined
+    // Credit check - require at least 1 credit to generate a course
     if (user.courseCredits === null || user.courseCredits === undefined || user.courseCredits < 1) {
         console.log(`[COURSE_GENERATION] Insufficient credits for user ${user.id}: ${user.courseCredits}`);
         return next(new ApiError(402, 'Insufficient course credits.'));

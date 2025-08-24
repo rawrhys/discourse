@@ -25,7 +25,7 @@ const Dashboard = () => {
   const [isLoadingCourses, setIsLoadingCourses] = useState(false);
   const api = useApiWrapper();
   const [isBuying, setIsBuying] = useState(false);
-  const [credits, setCredits] = useState(1); // Default to 1 credit for all users
+  const [credits, setCredits] = useState(0); // Default to 0 credits for all users
   const [showConfetti, setShowConfetti] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
@@ -633,37 +633,10 @@ const Dashboard = () => {
     try {
       logger.debug('🛒 [PAYMENT] Starting payment flow');
       
-      // First, try to create a checkout session via our backend
-      const token = localStorage.getItem('token');
-      if (!token) {
-        throw new Error('Authentication required. Please log in again.');
-      }
-
-      const response = await fetch('/api/create-checkout-session', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        logger.debug('🛒 [PAYMENT] Checkout session created, redirecting to:', data.url);
-        window.location.href = data.url;
-        return;
-      } else {
-        logger.warn('🛒 [PAYMENT] Backend checkout failed, using direct Stripe URL');
-      }
-    } catch (error) {
-      logger.error('🛒 [PAYMENT] Error with backend checkout:', error);
-    }
-
-    // Fallback to direct Stripe URL if backend fails
-    try {
+      // Redirect directly to the new Stripe checkout page
       const successUrl = encodeURIComponent(`${window.location.origin}/dashboard?payment=success`);
-      const stripeCheckoutUrl = `https://buy.stripe.com/aFa8wP1Ba6Xu46abXq6oo00?success_url=${successUrl}`;
-      logger.debug('🛒 [PAYMENT] Using direct Stripe checkout:', stripeCheckoutUrl);
+      const stripeCheckoutUrl = `https://buy.stripe.com/3cIaEWgNC6uZdzx2SJdby00?success_url=${successUrl}`;
+      logger.debug('🛒 [PAYMENT] Redirecting to Stripe checkout:', stripeCheckoutUrl);
       window.location.href = stripeCheckoutUrl;
     } catch (err) {
       logger.error('🛒 [PAYMENT] Error redirecting to checkout:', err);
@@ -755,7 +728,13 @@ const Dashboard = () => {
             >
               {isBuying ? 'Processing...' : 'Buy More Tokens'}
             </button>
-            {/* Remove problematic Stripe buy button */}
+            
+            {/* Stripe Buy Button */}
+            <stripe-buy-button
+              buy-button-id="buy_btn_1RzcEZBTrJ3tlY9wPylxKl2f"
+              publishable-key="pk_live_51RzaHbBTrJ3tlY9wyNScSIpVlUPyGKTtpE9nbBpTy4c5WdQmrUDUAGrzXlF5qgtf7jsgilsnHsRnsQEmbx3Z2w2R00Fo9gN6QD"
+            >
+            </stripe-buy-button>
           </div>
         </div>
         

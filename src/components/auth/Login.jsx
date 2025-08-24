@@ -9,7 +9,7 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [showFreeCreditMsg, setShowFreeCreditMsg] = useState(true);
+  const [showTrialMsg, setShowTrialMsg] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e) => {
@@ -46,12 +46,12 @@ const Login = () => {
             </Link>
           </p>
         </div>
-        {showFreeCreditMsg && (
+        {showTrialMsg && (
           <div className="relative rounded-md bg-green-50 p-4 border border-green-200 mb-4">
             <button
               className="absolute top-2 right-2 text-green-700 hover:text-green-900 text-lg font-bold focus:outline-none"
-              onClick={() => setShowFreeCreditMsg(false)}
-              aria-label="Dismiss free credit message"
+              onClick={() => setShowTrialMsg(false)}
+              aria-label="Dismiss trial message"
             >
               ×
             </button>
@@ -63,7 +63,7 @@ const Login = () => {
               </div>
               <div className="ml-3">
                 <p className="text-sm text-green-800">
-                  <strong>All new signups get a free course generation.</strong>
+                  <strong>New signups can gain a free trial for a limited time.</strong>
                 </p>
               </div>
             </div>
