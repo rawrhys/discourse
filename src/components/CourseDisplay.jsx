@@ -455,7 +455,13 @@ const CourseDisplay = () => {
                 lessonScores: module.lessons.map(l => ({
                   title: l.title,
                   hasQuiz: !!(l.quiz && l.quiz.length > 0),
+                  quizLength: l.quiz ? l.quiz.length : 0,
                   score: l.quizScores ? l.quizScores[user?.id] : undefined
+                })),
+                allLessons: module.lessons.map(l => ({
+                  title: l.title,
+                  quiz: l.quiz,
+                  quizLength: l.quiz ? l.quiz.length : 0
                 }))
               });
             }
