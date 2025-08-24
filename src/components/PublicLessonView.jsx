@@ -447,6 +447,34 @@ const PublicLessonView = ({
     
     const generateReferences = async () => {
       try {
+        // Check if we already have saved references for this lesson
+        const lessonId = lesson.id || `${lesson.title}_${subject}`;
+        const savedReferences = AcademicReferencesService.getSavedReferences(lessonId);
+        
+        if (savedReferences && savedReferences.length > 0) {
+          console.log('[PublicLessonView] Using saved references for lesson:', lessonId);
+          setAcademicReferences(savedReferences);
+          
+          // Generate content with inline citations using saved references
+          const { content: contentWithInlineCitations } = AcademicReferencesService.generateInlineCitations(
+            deferredContent,
+            savedReferences
+          );
+          
+          setDeferredContent(contentWithInlineCitations);
+          
+          // Create references footer for saved references
+          try {
+            const footer = AcademicReferencesService.createReferencesFooter(savedReferences);
+            setReferencesFooter(footer);
+            console.log('[PublicLessonView] Created references footer from saved references:', footer);
+          } catch (error) {
+            console.warn('[PublicLessonView] Failed to create references footer from saved references:', error);
+          }
+          
+          return;
+        }
+        
         console.log('[PublicLessonView] Generating authentic academic references for:', lesson.title);
         
         // Use AI service to generate authentic academic references
@@ -468,6 +496,10 @@ const PublicLessonView = ({
         setDeferredContent(contentWithInlineCitations);
         
         console.log('[PublicLessonView] Authentic academic references generated:', references);
+        
+        // Save the generated references for future use
+        AcademicReferencesService.saveReferences(lessonId, references);
+        console.log('[PublicLessonView] References saved for future use');
         
         // Create references footer
         try {

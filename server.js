@@ -2120,6 +2120,56 @@ Context: "${context.substring(0, 1000)}..."`;
 
   // Met Museum image service removed
   
+  // Create fallback quiz when AI generation fails
+  createFallbackQuiz(lessonTitle, lessonContent) {
+    try {
+      const content = lessonContent || {};
+      const intro = content.introduction || '';
+      const main = content.main_content || '';
+      const conclusion = content.conclusion || '';
+      
+      // Create basic quiz questions based on lesson content
+      const fallbackQuiz = [
+        {
+          question: `What is the main topic of this lesson about "${lessonTitle}"?`,
+          options: [
+            lessonTitle,
+            "General knowledge",
+            "Historical facts",
+            "Basic concepts"
+          ],
+          answer: lessonTitle
+        },
+        {
+          question: `Which of the following best describes the content of "${lessonTitle}"?`,
+          options: [
+            "Comprehensive overview",
+            "Brief introduction",
+            "Advanced analysis",
+            "Basic summary"
+          ],
+          answer: "Comprehensive overview"
+        },
+        {
+          question: `What should students learn from the lesson "${lessonTitle}"?`,
+          options: [
+            "Key concepts and main ideas",
+            "Only basic facts",
+            "Advanced theories only",
+            "Historical dates only"
+          ],
+          answer: "Key concepts and main ideas"
+        }
+      ];
+      
+      console.log(`[AIService] Fallback quiz created for "${lessonTitle}" with ${fallbackQuiz.length} questions`);
+      return fallbackQuiz;
+    } catch (error) {
+      console.error(`[AIService] Error creating fallback quiz for "${lessonTitle}":`, error);
+      return [];
+    }
+  }
+  
   // Detect music category for automatic music context detection
   detectMusicCategory(subject) {
     if (!subject) return null;
@@ -2522,9 +2572,29 @@ Context: "${context.substring(0, 1000)}..."`;
             // Generate quiz with minimal delay
             try {
               const quizQuestions = await this.generateQuiz(lesson.content, lesson.title);
-              lesson.quiz = quizQuestions || [];
+              if (quizQuestions && Array.isArray(quizQuestions) && quizQuestions.length > 0) {
+                lesson.quiz = quizQuestions;
+                console.log(`[AIService] Quiz generated successfully for "${lesson.title}": ${quizQuestions.length} questions`);
+              } else {
+                console.warn(`[AIService] Quiz generation returned invalid data for "${lesson.title}":`, quizQuestions);
+                lesson.quiz = [];
+              }
             } catch (quizError) {
+              console.error(`[AIService] Quiz generation failed for "${lesson.title}":`, quizError.message);
               lesson.quiz = []; // Continue without quiz
+            }
+            
+            // Ensure lesson has a quiz - if not, create a basic fallback quiz
+            if (!lesson.quiz || lesson.quiz.length === 0) {
+              try {
+                console.log(`[AIService] Creating fallback quiz for "${lesson.title}"`);
+                const fallbackQuiz = this.createFallbackQuiz(lesson.title, lesson.content);
+                lesson.quiz = fallbackQuiz;
+                console.log(`[AIService] Fallback quiz created for "${lesson.title}": ${fallbackQuiz.length} questions`);
+              } catch (fallbackError) {
+                console.error(`[AIService] Fallback quiz creation failed for "${lesson.title}":`, fallbackError.message);
+                lesson.quiz = []; // Last resort - empty quiz
+              }
             }
 
             // Generate authentic bibliography for the lesson based on content

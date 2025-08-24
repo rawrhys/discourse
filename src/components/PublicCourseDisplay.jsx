@@ -223,6 +223,15 @@ const PublicCourseDisplay = () => {
       // Only generate if content is substantial
       if (processedContent.length < 100) return [];
       
+      // Check if we already have saved references for this lesson
+      const lessonId = currentLesson.id || `${currentLesson.title}_${course.subject}`;
+      const savedReferences = AcademicReferencesService.getSavedReferences(lessonId);
+      
+      if (savedReferences && savedReferences.length > 0) {
+        console.log('[PublicCourseDisplay] Using saved references for lesson:', lessonId);
+        return savedReferences;
+      }
+      
       console.log('[PublicCourseDisplay] Generating academic references for:', {
         lessonTitle: currentLesson.title,
         courseSubject: course.subject,
@@ -243,6 +252,12 @@ const PublicCourseDisplay = () => {
         courseSubject: course.subject,
         lessonTitle: currentLesson.title
       });
+      
+      // Save the generated references for future use
+      if (references && references.length > 0) {
+        AcademicReferencesService.saveReferences(lessonId, references);
+        console.log('[PublicCourseDisplay] References saved for future use');
+      }
       
       return references;
     } catch (error) {

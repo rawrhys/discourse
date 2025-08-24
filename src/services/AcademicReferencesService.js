@@ -15,6 +15,164 @@ class AcademicReferencesService {
     
     // Retain structure for potential future use, but do not use static defaults anymore
     this.defaultReferences = {};
+    
+    // Initialize storage for saved references
+    this.storageKey = 'academic_references_cache';
+    this.initializeStorage();
+  }
+
+  /**
+   * Initialize storage for academic references
+   */
+  initializeStorage() {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const existing = localStorage.getItem(this.storageKey);
+        if (!existing) {
+          localStorage.setItem(this.storageKey, JSON.stringify({}));
+        }
+      }
+    } catch (error) {
+      console.warn('[AcademicReferencesService] Failed to initialize storage:', error);
+    }
+  }
+
+  /**
+   * Save academic references for a specific lesson
+   */
+  saveReferences(lessonId, references) {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage && references && references.length > 0) {
+        const storage = JSON.parse(localStorage.getItem(this.storageKey) || '{}');
+        storage[lessonId] = {
+          references: references,
+          timestamp: Date.now(),
+          version: '1.0'
+        };
+        localStorage.setItem(this.storageKey, JSON.stringify(storage));
+        console.log(`[AcademicReferencesService] Saved ${references.length} references for lesson ${lessonId}`);
+        return true;
+      }
+    } catch (error) {
+      console.warn('[AcademicReferencesService] Failed to save references:', error);
+    }
+    return false;
+  }
+
+  /**
+   * Retrieve saved academic references for a specific lesson
+   */
+  getSavedReferences(lessonId) {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const storage = JSON.parse(localStorage.getItem(this.storageKey) || '{}');
+        const lessonData = storage[lessonId];
+        
+        if (lessonData && lessonData.references && lessonData.references.length > 0) {
+          // Check if references are not too old (30 days)
+          const maxAge = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
+          if (Date.now() - lessonData.timestamp < maxAge) {
+            console.log(`[AcademicReferencesService] Retrieved ${lessonData.references.length} saved references for lesson ${lessonId}`);
+            return lessonData.references;
+          } else {
+            // References are too old, remove them
+            delete storage[lessonId];
+            localStorage.setItem(this.storageKey, JSON.stringify(storage));
+            console.log(`[AcademicReferencesService] Removed expired references for lesson ${lessonId}`);
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('[AcademicReferencesService] Failed to retrieve saved references:', error);
+    }
+    return null;
+  }
+
+  /**
+   * Check if references exist for a lesson
+   */
+  hasReferences(lessonId) {
+    return this.getSavedReferences(lessonId) !== null;
+  }
+
+  /**
+   * Clear all saved references (useful for debugging or maintenance)
+   */
+  clearAllReferences() {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.removeItem(this.storageKey);
+        this.initializeStorage();
+        console.log('[AcademicReferencesService] Cleared all saved references');
+        return true;
+      }
+    } catch (error) {
+      console.warn('[AcademicReferencesService] Failed to clear references:', error);
+    }
+    return false;
+  }
+
+  /**
+   * Get storage statistics for debugging
+   */
+  getStorageStats() {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const storage = JSON.parse(localStorage.getItem(this.storageKey) || '{}');
+        const lessonIds = Object.keys(storage);
+        const totalReferences = lessonIds.reduce((total, lessonId) => {
+          return total + (storage[lessonId]?.references?.length || 0);
+        }, 0);
+        
+        return {
+          totalLessons: lessonIds.length,
+          totalReferences: totalReferences,
+          lessonIds: lessonIds,
+          storageSize: JSON.stringify(storage).length,
+          timestamp: new Date().toISOString()
+        };
+      }
+    } catch (error) {
+      console.warn('[AcademicReferencesService] Failed to get storage stats:', error);
+    }
+    return null;
+  }
+
+  /**
+   * Export all saved references (useful for backup)
+   */
+  exportAllReferences() {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const storage = JSON.parse(localStorage.getItem(this.storageKey) || '{}');
+        return {
+          data: storage,
+          exportDate: new Date().toISOString(),
+          version: '1.0'
+        };
+      }
+    } catch (error) {
+      console.warn('[AcademicReferencesService] Failed to export references:', error);
+    }
+    return null;
+  }
+
+  /**
+   * Import references from backup data
+   */
+  importReferences(backupData) {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage && backupData?.data) {
+        const currentStorage = JSON.parse(localStorage.getItem(this.storageKey) || '{}');
+        const mergedStorage = { ...currentStorage, ...backupData.data };
+        localStorage.setItem(this.storageKey, JSON.stringify(mergedStorage));
+        console.log('[AcademicReferencesService] Imported references from backup');
+        return true;
+      }
+    } catch (error) {
+      console.warn('[AcademicReferencesService] Failed to import references:', error);
+    }
+    return false;
   }
 
   /**

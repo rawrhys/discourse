@@ -535,6 +535,18 @@ const LessonView = ({
         return;
       }
       
+      // Check if we already have saved references for this lesson
+      const lessonId = propLesson.id || `${propLesson.title}_${subject}`;
+      const savedReferences = academicReferencesService.getSavedReferences(lessonId);
+      
+      if (savedReferences && savedReferences.length > 0) {
+        console.log('[LessonView] Using saved references for lesson:', lessonId);
+        setAcademicReferences(savedReferences);
+        setIsGeneratingReferences(false);
+        setReferencesError(null);
+        return;
+      }
+      
       try {
         const lessonContentString = getContentAsString(propLesson.content);
         
@@ -588,6 +600,10 @@ const LessonView = ({
         if (references && references.length > 0) {
           setAcademicReferences(references);
           setReferencesError(null);
+          
+          // Save the generated references for future use
+          academicReferencesService.saveReferences(lessonId, references);
+          console.log('[LessonView] References saved for future use');
         } else {
           console.warn('[LessonView] No references returned from API');
           setReferencesError('No references generated');

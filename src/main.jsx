@@ -8,6 +8,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import ErrorHandler from './utils/errorHandler.js';
 import './utils/performanceDebug.js'; // Import performance debugger
 import './utils/apiDebugger.js';
+import './utils/academicReferencesManager.js'; // Import academic references manager
 import api from './services/api';
 
 // Expose api to window for debugging

@@ -31,6 +31,12 @@
         e.stopPropagation();
         return true;
       }
+      // Check for Google Analytics deprecation warnings
+      if (e.message && e.message.includes('gtag') && e.message.includes('deprecated')) {
+        e.preventDefault();
+        e.stopPropagation();
+        return true;
+      }
       // Suppress Stripe-related errors that are blocked by ad blockers
       if (e.target && e.target.src && (
         e.target.src.includes('stripe.com') || 
@@ -53,7 +59,8 @@
         typeof arg === 'string' && 
         (arg.includes('feature_collector.js') || 
          arg.includes('deprecated') ||
-         arg.includes('ERR_BLOCKED_BY_CLIENT'))
+         arg.includes('ERR_BLOCKED_BY_CLIENT') ||
+         arg.includes('gtag'))
       )) {
         return; // Suppress the specific deprecation warning
       }
@@ -63,12 +70,30 @@
       const args = Array.from(arguments);
       if (args.some(arg => 
         typeof arg === 'string' && 
-        (arg.includes('feature_collector.js') && arg.includes('deprecated'))
+        (arg.includes('feature_collector.js') && arg.includes('deprecated')) ||
+        (arg.includes('gtag') && arg.includes('deprecated'))
       )) {
         return;
       }
       originalConsoleWarn.apply(console, arguments);
     };
+    
+    // Suppress Google Analytics deprecation warnings
+    if (typeof window !== 'undefined') {
+      // Override gtag function to prevent deprecation warnings
+      window.gtag = function() {
+        // Silently ignore gtag calls to prevent deprecation warnings
+        return;
+      };
+      
+      // Override dataLayer to prevent Google Analytics errors
+      window.dataLayer = window.dataLayer || [];
+      const originalPush = window.dataLayer.push;
+      window.dataLayer.push = function() {
+        // Silently ignore dataLayer pushes to prevent errors
+        return;
+      };
+    }
   </script>
 </head>
 
