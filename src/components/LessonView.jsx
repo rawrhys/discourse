@@ -487,6 +487,14 @@ const LessonView = ({
   // Academic references state
   const [highlightedCitation, setHighlightedCitation] = useState(null);
   
+  // Check if this is the onboarding course to hide certain features
+  const isOnboardingCourse = useMemo(() => {
+    if (!course) return false;
+    return course.title?.toLowerCase().includes('welcome to discourse ai') || 
+           course.title?.toLowerCase().includes('onboarding') ||
+           course.id?.includes('discourse-ai-onboarding');
+  }, [course]);
+  
   // Use the lesson prop as the main lesson data
   const propLesson = lesson;
   
@@ -1924,7 +1932,7 @@ const LessonView = ({
 
       <footer className="mt-8 pt-6 border-t border-gray-200">
         {/* References Section */}
-        {referencesFooter && (
+        {!isOnboardingCourse && referencesFooter && (
           <div className="mb-6">
             <AcademicReferencesFooter 
               references={referencesFooter.references}
@@ -1935,7 +1943,7 @@ const LessonView = ({
         )}
         
         {/* Debug: Always show references footer for testing */}
-        {!referencesFooter && (
+        {!isOnboardingCourse && !referencesFooter && (
           <div className="mb-6">
             <AcademicReferencesFooter 
               references={[]}
