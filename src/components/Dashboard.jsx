@@ -46,6 +46,17 @@ const Dashboard = () => {
   // Report Problem modal state
   const [showReportProblem, setShowReportProblem] = useState(false);
   
+  // Helper function to show success toast with auto-hide
+  const showSuccessToastWithTimeout = useCallback((message, timeoutMs = 4000) => {
+    setSuccessMessage(message);
+    setShowSuccessToast(true);
+    
+    // Auto-hide after specified timeout
+    setTimeout(() => {
+      setShowSuccessToast(false);
+    }, timeoutMs);
+  };
+  
   // Get the user's name from backend profile data, fallback to auth context
   const userName = userProfile?.name || user?.name || user?.email || 'Guest';
   
@@ -127,13 +138,7 @@ const Dashboard = () => {
       
       if (recentCourses.length > 0) {
         logger.info('🎉 [DASHBOARD] Found recent courses, showing success message:', recentCourses.map(c => c.title));
-        setSuccessMessage(`Found ${recentCourses.length} recently generated course${recentCourses.length > 1 ? 's' : ''}!`);
-        setShowSuccessToast(true);
-        
-        // Hide success message after a delay
-        setTimeout(() => {
-          setShowSuccessToast(false);
-        }, 3000);
+        showSuccessToastWithTimeout(`Found ${recentCourses.length} recently generated course${recentCourses.length > 1 ? 's' : ''}!`, 3000);
       }
       
     } catch (error) {
@@ -189,9 +194,8 @@ const Dashboard = () => {
           setEtaRemainingSec(0);
           setEtaStartMs(0);
           
-          // Show success message
-          setSuccessMessage(`Course "${data.courseTitle}" generated successfully!`);
-          setShowSuccessToast(true);
+              // Show success message
+        showSuccessToastWithTimeout(`Course "${data.courseTitle}" generated successfully!`);
           
           // Close the generation form
           setShowNewCourseForm(false);
@@ -475,9 +479,7 @@ const Dashboard = () => {
       setCourseToDelete(null);
       
       // Show success message
-      setSuccessMessage('Course deleted successfully! Refreshing course list...');
-      setShowSuccessToast(true);
-      setTimeout(() => setShowSuccessToast(false), 3000);
+      showSuccessToastWithTimeout('Course deleted successfully! Refreshing course list...', 3000);
 
       // --- NEW: Force a refresh of the course list ---
       // await fetchSavedCourses(true); // `true` forces a refetch
@@ -682,6 +684,15 @@ const Dashboard = () => {
               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
             </svg>
             <span className="font-medium">{successMessage}</span>
+            <button
+              onClick={() => setShowSuccessToast(false)}
+              className="ml-2 text-white hover:text-green-200 transition-colors duration-200"
+              aria-label="Close notification"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
         </div>
       )}
