@@ -1,0 +1,278 @@
+{
+  "id": "discourse-ai-onboarding",
+  "title": "Welcome to Discourse AI: Your Learning Journey Begins",
+  "description": "Get started with Discourse AI and discover how to create, navigate, and learn from AI-generated courses. This introductory course will walk you through all the essential features and help you make the most of your learning experience.",
+  "category": "Getting Started",
+  "difficulty": "Beginner",
+  "estimatedDuration": "20 minutes",
+  "isOnboarding": true,
+  "modules": [
+    {
+      "id": "module-1",
+      "title": "Getting Started with Discourse AI",
+      "isLocked": false,
+      "lessons": [
+        {
+          "id": "lesson-1",
+          "title": "Welcome to Your Learning Platform",
+          "content": {
+            "introduction": "Welcome to Discourse AI! This platform uses advanced artificial intelligence to create personalized learning experiences just for you. Whether you're interested in history, science, technology, or any other subject, our AI can generate comprehensive courses tailored to your learning style and pace.",
+            "main_content": "Discourse AI is more than just a traditional learning platform—it's an intelligent system that adapts to your needs. Here's what makes us special:\n\n🎯 **AI-Powered Course Generation**: Our advanced AI creates courses from scratch based on your interests and requirements. Simply describe what you want to learn, and we'll generate a complete course with modules, lessons, and interactive quizzes.\n\n📚 **Structured Learning**: Every course is organized into logical modules and lessons, making it easy to follow your learning path. Start with the basics and progress through increasingly advanced concepts.\n\n🧠 **Interactive Quizzes**: Test your knowledge with AI-generated quizzes that adapt to your performance. Get immediate feedback and explanations to reinforce your learning.\n\n📊 **Progress Tracking**: Monitor your learning journey with detailed progress tracking. See which lessons you've completed, your quiz scores, and how much of each course you've mastered.\n\n🔒 **Flexible Access**: Learn at your own pace. Courses are saved to your dashboard, so you can return to them anytime and continue where you left off.\n\n💡 **Smart Recommendations**: As you use the platform, our AI learns your preferences and can suggest new topics and courses that match your interests.\n\nThis onboarding course will walk you through each of these features, showing you exactly how to use Discourse AI to create your ideal learning experience. By the end, you'll be ready to generate your first custom course and start your learning journey!",
+            "conclusion": "You're now ready to explore the amazing world of AI-powered learning! In the next lesson, we'll dive deeper into how to generate your first custom course and discover the magic of AI-generated content."
+          },
+          "quiz": {
+            "questions": [
+              {
+                "question": "What makes Discourse AI different from traditional learning platforms?",
+                "options": [
+                  "It only offers pre-made courses",
+                  "It uses AI to generate personalized courses from scratch",
+                  "It doesn't have quizzes or assessments",
+                  "It's only available on mobile devices"
+                ],
+                "correctAnswer": 1,
+                "explanation": "Discourse AI uses advanced artificial intelligence to generate personalized courses from scratch based on your interests and requirements, making it unique from traditional platforms."
+              },
+              {
+                "question": "How are courses organized in Discourse AI?",
+                "options": [
+                  "Randomly without structure",
+                  "In a single long lesson",
+                  "Into logical modules and lessons",
+                  "Only as video content"
+                ],
+                "correctAnswer": 2,
+                "explanation": "Every course in Discourse AI is organized into logical modules and lessons, making it easy to follow your learning path from basics to advanced concepts."
+              },
+              {
+                "question": "What feature helps you track your learning progress?",
+                "options": [
+                  "Only quiz scores",
+                  "Detailed progress tracking showing completed lessons and quiz performance",
+                  "No progress tracking available",
+                  "Only time spent on the platform"
+                ],
+                "correctAnswer": 1,
+                "explanation": "Discourse AI provides detailed progress tracking that shows which lessons you've completed, your quiz scores, and how much of each course you've mastered."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "module-2",
+      "title": "Creating Your First Course",
+      "isLocked": false,
+      "lessons": [
+        {
+          "id": "lesson-2",
+          "title": "How to Generate a Custom Course",
+          "content": {
+            "introduction": "Ready to create your first AI-generated course? This lesson will walk you through the entire process, from describing what you want to learn to exploring your finished course. It's easier than you think!",
+            "main_content": "Creating a custom course with Discourse AI is a simple three-step process:\n\n**Step 1: Access the Course Generator**\nFrom your dashboard, you'll see a prominent 'Generate New Course' button. This is your gateway to creating custom learning experiences. The button is located at the top of your dashboard, making it easy to find and use.\n\n**Step 2: Describe Your Learning Goals**\nWhen you click the button, you'll be presented with a form where you can describe what you want to learn. Be as specific or general as you'd like:\n\n• **Specific**: 'Create a course about the history of ancient Rome from 753 BCE to 476 CE'\n• **General**: 'Teach me about machine learning basics'\n• **Creative**: 'I want to learn how to write science fiction stories'\n\n**Step 3: Choose Your Learning Preferences**\nYou can also customize your learning experience:\n\n• **Difficulty Level**: Choose from Beginner, Intermediate, or Advanced\n• **Course Structure**: Decide how many modules and lessons you want\n• **Learning Pace**: Select the depth and complexity that suits you\n\n**What Happens Next?**\nOnce you submit your request, our AI goes to work:\n\n1. **Analysis**: The AI analyzes your request and breaks it down into logical learning components\n2. **Generation**: It creates comprehensive content including detailed lessons, explanations, and examples\n3. **Structuring**: Content is organized into modules and lessons with a natural learning progression\n4. **Enhancement**: Interactive quizzes are generated to test your understanding\n5. **Delivery**: Your course appears on your dashboard, ready to explore\n\n**Course Generation Time**\nCourse generation typically takes 2-5 minutes, depending on the complexity and length you've requested. You'll see a progress indicator and can continue using the platform while your course is being created.\n\n**Tips for Better Results**\n• Be specific about your interests and goals\n• Mention any prerequisites or background knowledge you have\n• Include examples of what you want to learn\n• Specify if you prefer practical applications or theoretical knowledge\n\nRemember, you can always generate multiple courses on the same topic with different approaches, difficulty levels, or focuses. This allows you to explore subjects from multiple angles and find the learning style that works best for you!",
+            "conclusion": "You now know how to create your first custom course! In the next lesson, we'll explore how to navigate and interact with your generated course content."
+          },
+          "quiz": {
+            "questions": [
+              {
+                "question": "Where can you find the 'Generate New Course' button?",
+                "options": [
+                  "Only in the settings menu",
+                  "At the top of your dashboard",
+                  "Hidden in the footer",
+                  "Only available after completing other courses"
+                ],
+                "correctAnswer": 1,
+                "explanation": "The 'Generate New Course' button is prominently located at the top of your dashboard, making it easy to find and use."
+              },
+              {
+                "question": "What can you customize when generating a course?",
+                "options": [
+                  "Only the course title",
+                  "Difficulty level, number of modules/lessons, and learning preferences",
+                  "Only the course color scheme",
+                  "Nothing - courses are completely random"
+                ],
+                "correctAnswer": 1,
+                "explanation": "You can customize difficulty level, number of modules and lessons, and various learning preferences to create a course that matches your needs."
+              },
+              {
+                "question": "How long does course generation typically take?",
+                "options": [
+                  "Immediately",
+                  "2-5 minutes depending on complexity",
+                  "24 hours minimum",
+                  "Only on weekends"
+                ],
+                "correctAnswer": 1,
+                "explanation": "Course generation typically takes 2-5 minutes, depending on the complexity and length you've requested."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "module-3",
+      "title": "Navigating Your Course",
+      "isLocked": false,
+      "lessons": [
+        {
+          "id": "lesson-3",
+          "title": "Exploring Course Content and Structure",
+          "content": {
+            "introduction": "Your course has been generated! Now let's learn how to navigate through the content, understand the structure, and make the most of your learning experience. This lesson will show you all the features available in your course.",
+            "main_content": "Once your course is generated, you'll find it on your dashboard. Let's explore how to navigate and interact with your course content:\n\n**Course Dashboard Overview**\nYour dashboard displays all your courses in an organized layout:\n\n• **Course Cards**: Each course is displayed as a card showing the title, description, and progress\n• **Progress Indicators**: Visual progress bars show how much of each course you've completed\n• **Quick Actions**: Buttons to continue learning, view course details, or manage your courses\n\n**Understanding Course Structure**\nEvery course follows a logical structure designed for optimal learning:\n\n• **Modules**: These are the main sections of your course, each focusing on a specific aspect of the topic\n• **Lessons**: Within each module, you'll find individual lessons that break down concepts into digestible pieces\n• **Progressive Unlocking**: The first module is always unlocked, and subsequent modules unlock as you complete previous ones\n• **Learning Path**: Content flows naturally from basic concepts to more advanced topics\n\n**Navigating Through Content**\nHere's how to move through your course:\n\n1. **Start with Module 1**: Always begin with the first module, as it provides the foundation\n2. **Complete Lessons in Order**: Work through lessons sequentially for the best learning experience\n3. **Unlock New Modules**: As you complete modules, new ones automatically unlock\n4. **Return to Previous Content**: You can always go back to review previous lessons\n\n**Interactive Features**\nYour course includes several interactive elements:\n\n• **Content Reading**: Rich, detailed content with clear explanations and examples\n• **Progress Tracking**: Automatic tracking of which lessons you've completed\n• **Quiz Integration**: Interactive quizzes to test your understanding\n• **Navigation Controls**: Easy navigation between modules and lessons\n\n**Making the Most of Your Course**\nTo optimize your learning experience:\n\n• **Read Thoroughly**: Take time to absorb the content in each lesson\n• **Take Notes**: Consider taking notes on key concepts and insights\n• **Review Regularly**: Return to previous lessons to reinforce your understanding\n• **Complete Quizzes**: Use quizzes to test your knowledge and identify areas for review\n• **Set Learning Goals**: Establish daily or weekly learning targets\n\n**Course Management**\nYou have full control over your courses:\n\n• **Save Progress**: Your progress is automatically saved as you complete lessons\n• **Resume Learning**: Pick up exactly where you left off when you return\n• **Course Organization**: All your courses are neatly organized on your dashboard\n• **Easy Access**: Quick access to continue learning or start new courses\n\n**Troubleshooting Tips**\nIf you encounter any issues:\n\n• **Refresh the Page**: Sometimes a simple refresh resolves display issues\n• **Check Your Connection**: Ensure you have a stable internet connection\n• **Clear Browser Cache**: If problems persist, try clearing your browser cache\n• **Contact Support**: Our support team is always ready to help\n\nRemember, learning is a journey, not a race. Take your time with each lesson, and don't hesitate to review content multiple times if needed. The goal is understanding, not just completion!",
+            "conclusion": "You're now equipped with all the knowledge you need to navigate your courses effectively! In the next lesson, we'll explore the interactive features and how to track your learning progress."
+          },
+          "quiz": {
+            "questions": [
+              {
+                "question": "How does the module unlocking system work?",
+                "options": [
+                  "All modules are unlocked immediately",
+                  "The first module is unlocked, and others unlock as you complete previous ones",
+                  "Modules unlock randomly",
+                  "You must pay to unlock each module"
+                ],
+                "correctAnswer": 1,
+                "explanation": "The first module is always unlocked, and subsequent modules unlock as you complete previous ones, ensuring a logical learning progression."
+              },
+              {
+                "question": "What should you do to optimize your learning experience?",
+                "options": [
+                  "Skip lessons to finish faster",
+                  "Read thoroughly, take notes, review regularly, and complete quizzes",
+                  "Only read the lesson titles",
+                  "Complete the course in one sitting"
+                ],
+                "correctAnswer": 1,
+                "explanation": "To optimize learning, you should read thoroughly, take notes, review regularly, and complete quizzes to reinforce your understanding."
+              },
+              {
+                "question": "How is your learning progress tracked?",
+                "options": [
+                  "Only manually by you",
+                  "Automatically as you complete lessons and quizzes",
+                  "Only when you contact support",
+                  "Progress is not tracked at all"
+                ],
+                "correctAnswer": 1,
+                "explanation": "Your progress is automatically tracked as you complete lessons and quizzes, with visual indicators showing your advancement through the course."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "module-4",
+      "title": "Interactive Learning Features",
+      "isLocked": false,
+      "lessons": [
+        {
+          "id": "lesson-4",
+          "title": "Quizzes, Progress Tracking, and More",
+          "content": {
+            "introduction": "Discourse AI isn't just about reading content—it's about actively engaging with your learning through interactive features. This lesson will introduce you to quizzes, progress tracking, and other tools that make your learning experience dynamic and effective.",
+            "main_content": "Let's explore the interactive features that make Discourse AI a powerful learning platform:\n\n**Interactive Quizzes**\nEvery lesson includes carefully crafted quizzes designed to reinforce your learning:\n\n• **Multiple Choice Questions**: Test your understanding with thoughtfully designed questions\n• **Immediate Feedback**: Get instant feedback on your answers with detailed explanations\n• **Adaptive Difficulty**: Questions are designed to match the lesson content and your learning level\n• **Score Tracking**: Your quiz performance is tracked and displayed for each lesson\n• **Retry Options**: You can retake quizzes to improve your scores and understanding\n\n**How Quizzes Work**\nThe quiz system is designed to enhance rather than intimidate:\n\n1. **Question Types**: Questions cover key concepts from the lesson content\n2. **Answer Options**: Multiple choice format with clear, distinct options\n3. **Explanations**: Each question includes detailed explanations for correct answers\n4. **Scoring**: Quizzes are scored on a scale that helps you gauge your understanding\n5. **Progress Integration**: Quiz completion contributes to your overall course progress\n\n**Progress Tracking System**\nYour learning journey is automatically tracked in multiple ways:\n\n• **Lesson Completion**: Visual indicators show which lessons you've finished\n• **Module Progress**: Track your advancement through each module\n• **Overall Course Progress**: See how much of the entire course you've completed\n• **Quiz Performance**: Monitor your quiz scores and improvement over time\n• **Learning Streaks**: Track your consistent learning patterns\n\n**Understanding Progress Indicators**\nThe platform uses several visual cues to show your progress:\n\n• **Progress Bars**: Visual bars that fill as you complete content\n• **Completion Checkmarks**: Clear indicators for finished lessons and modules\n• **Score Displays**: Your quiz scores are prominently displayed\n• **Unlock Indicators**: Visual cues show which content is available and what's coming next\n\n**Making the Most of Interactive Features**\nTo maximize the benefits of these features:\n\n• **Take Quizzes Seriously**: Use them as learning tools, not just assessments\n• **Review Explanations**: Pay attention to feedback to understand concepts better\n• **Track Your Progress**: Regularly check your progress to stay motivated\n• **Set Learning Goals**: Use progress tracking to set and achieve learning milestones\n• **Identify Weak Areas**: Use quiz results to identify topics that need more attention\n\n**Additional Interactive Elements**\nBeyond quizzes and progress tracking, you'll find:\n\n• **Content Navigation**: Easy navigation between different parts of your course\n• **Responsive Design**: Content that adapts to your device and preferences\n• **Accessibility Features**: Tools and options to make learning accessible to everyone\n• **Mobile Optimization**: Learn on any device with responsive design\n\n**Tips for Success**\nHere are some strategies to make the most of interactive learning:\n\n• **Regular Practice**: Take quizzes regularly to reinforce your learning\n• **Active Engagement**: Don't just read—interact with the content and features\n• **Progress Monitoring**: Use progress tracking to stay motivated and on track\n• **Continuous Learning**: Take advantage of the ability to review and retry content\n• **Goal Setting**: Set specific learning goals and use progress tracking to achieve them\n\nRemember, the interactive features are designed to make your learning more effective and engaging. Use them actively to enhance your understanding and retention of the material!",
+            "conclusion": "You're now familiar with all the interactive features that make Discourse AI special! In our final lesson, we'll cover advanced features and tips for getting the most out of your learning experience."
+          },
+          "quiz": {
+            "questions": [
+              {
+                "question": "What type of feedback do you get from quizzes?",
+                "options": [
+                  "Only a final score",
+                  "Immediate feedback with detailed explanations for each answer",
+                  "No feedback at all",
+                  "Feedback only after completing the entire course"
+                ],
+                "correctAnswer": 1,
+                "explanation": "You get immediate feedback with detailed explanations for each answer, helping you understand concepts better and learn from any mistakes."
+              },
+              {
+                "question": "How does progress tracking help your learning?",
+                "options": [
+                  "It doesn't help at all",
+                  "It shows your advancement, helps you set goals, and identifies areas needing attention",
+                  "It only shows how much time you've spent",
+                  "It only tracks quiz scores"
+                ],
+                "correctAnswer": 1,
+                "explanation": "Progress tracking shows your advancement through the course, helps you set and achieve learning goals, and identifies areas that need more attention."
+              },
+              {
+                "question": "What should you do to maximize the benefits of interactive features?",
+                "options": [
+                  "Skip all quizzes",
+                  "Take quizzes seriously, review explanations, and actively engage with content",
+                  "Only read the content without interacting",
+                  "Complete everything as quickly as possible"
+                ],
+                "correctAnswer": 1,
+                "explanation": "To maximize benefits, you should take quizzes seriously, review explanations, and actively engage with the content rather than just reading passively."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "module-5",
+      "title": "Advanced Features and Tips",
+      "isLocked": false,
+      "lessons": [
+        {
+          "id": "lesson-5",
+          "title": "Maximizing Your Learning Experience",
+          "content": {
+            "introduction": "Congratulations! You've learned the basics of Discourse AI. Now let's explore some advanced features and expert tips that will help you get even more value from your learning experience. This final lesson will prepare you to become a power user of the platform.",
+            "main_content": "You're now ready to explore the advanced features and become a power user of Discourse AI. Here's what you can do to maximize your learning experience:\n\n**Advanced Course Generation Strategies**\nOnce you're comfortable with basic course creation, try these advanced techniques:\n\n• **Sequential Learning**: Generate courses that build upon each other for comprehensive subject mastery\n• **Comparative Learning**: Create courses on related topics to understand connections and differences\n• **Skill Development**: Focus on practical skills with courses that include real-world applications\n• **Deep Dives**: Generate highly detailed courses on specific aspects of broader topics\n• **Cross-Disciplinary Learning**: Combine different subjects to gain unique perspectives\n\n**Optimizing Your Learning Workflow**\nDevelop a learning routine that works best for you:\n\n• **Consistent Schedule**: Set aside regular time for learning, even if it's just 15-20 minutes daily\n• **Active Note-Taking**: Take notes while learning to reinforce retention and create personal study materials\n• **Regular Review**: Schedule regular review sessions to reinforce long-term retention\n• **Application Practice**: Apply what you learn through practical exercises or real-world projects\n• **Discussion and Sharing**: Discuss concepts with others to deepen understanding\n\n**Leveraging AI Capabilities**\nMake the most of the AI-powered features:\n\n• **Iterative Learning**: Generate multiple versions of courses on the same topic with different approaches\n• **Adaptive Difficulty**: Start with beginner courses and progressively generate more advanced content\n• **Personalized Content**: Be specific in your course requests to get content tailored to your interests\n• **Exploration**: Use the platform to explore new subjects and discover unexpected interests\n• **Continuous Improvement**: The more you use the platform, the better it becomes at serving your needs\n\n**Building Your Learning Portfolio**\nCreate a comprehensive learning journey:\n\n• **Diverse Subjects**: Explore different fields to build a well-rounded knowledge base\n• **Progressive Complexity**: Move from basic to advanced topics in your areas of interest\n• **Skill Integration**: Combine theoretical knowledge with practical applications\n• **Knowledge Connections**: Look for connections between different subjects and courses\n• **Long-term Goals**: Set long-term learning objectives and track your progress toward them\n\n**Troubleshooting and Support**\nKnow how to get help when you need it:\n\n• **Help Resources**: Familiarize yourself with available help documentation and support options\n• **Community Support**: Connect with other learners for tips and encouragement\n• **Technical Issues**: Know how to resolve common technical problems\n• **Feature Requests**: Provide feedback to help improve the platform\n• **Continuous Learning**: Stay updated on new features and improvements\n\n**Staying Motivated**\nMaintain your enthusiasm for learning:\n\n• **Celebrate Progress**: Acknowledge and celebrate your learning achievements\n• **Set Milestones**: Break down large learning goals into smaller, achievable milestones\n• **Track Growth**: Regularly review your progress and see how far you've come\n• **Stay Curious**: Maintain your natural curiosity and desire to learn\n• **Share Knowledge**: Teaching others what you've learned reinforces your own understanding\n\n**Future Learning Paths**\nPlan your continued learning journey:\n\n• **Skill Development**: Identify skills you want to develop and create courses to build them\n• **Career Advancement**: Use learning to advance your career or explore new opportunities\n• **Personal Growth**: Pursue learning for personal enrichment and growth\n• **Social Impact**: Apply your knowledge to make positive contributions to your community\n• **Lifelong Learning**: Embrace learning as a continuous, lifelong journey\n\n**Final Tips for Success**\nHere are some final recommendations to ensure your success:\n\n• **Start Small**: Begin with manageable learning goals and gradually increase complexity\n• **Be Consistent**: Regular, consistent learning is more effective than occasional intensive sessions\n• **Stay Flexible**: Adapt your learning approach based on what works best for you\n• **Embrace Challenges**: Don't shy away from difficult topics—they often provide the most growth\n• **Enjoy the Process**: Learning should be enjoyable, not just a means to an end\n\nRemember, you now have access to one of the most powerful AI-powered learning platforms available. The possibilities are endless, and your learning journey is just beginning. Use these tools wisely, stay curious, and never stop learning!",
+            "conclusion": "Congratulations! You've completed the Discourse AI onboarding course and are now ready to become a power user of the platform. You have all the knowledge and tools you need to create amazing learning experiences and achieve your educational goals. Happy learning!"
+          },
+          "quiz": {
+            "questions": [
+              {
+                "question": "What is a good strategy for building a comprehensive learning portfolio?",
+                "options": [
+                  "Only focus on one subject",
+                  "Explore diverse subjects, progress from basic to advanced, and integrate skills",
+                  "Skip all quizzes and assessments",
+                  "Complete courses as quickly as possible without understanding"
+                ],
+                "correctAnswer": 1,
+                "explanation": "Building a comprehensive learning portfolio involves exploring diverse subjects, progressing from basic to advanced topics, and integrating theoretical knowledge with practical skills."
+              },
+              {
+                "question": "How can you leverage AI capabilities for better learning?",
+                "options": [
+                  "Ignore the AI features",
+                  "Generate multiple course versions, adapt difficulty levels, and be specific in requests",
+                  "Only use pre-made courses",
+                  "Complete courses without interacting with content"
+                ],
+                "correctAnswer": 1,
+                "explanation": "You can leverage AI capabilities by generating multiple versions of courses, adapting difficulty levels, being specific in your requests, and using the platform to explore new subjects."
+              },
+              {
+                "question": "What is the key to maintaining motivation in your learning journey?",
+                "options": [
+                  "Only learning when forced",
+                  "Celebrating progress, setting milestones, tracking growth, and staying curious",
+                  "Avoiding all challenges",
+                  "Focusing only on easy topics"
+                ],
+                "correctAnswer": 1,
+                "explanation": "Maintaining motivation involves celebrating progress, setting achievable milestones, tracking your growth, and staying curious about new topics and challenges."
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "createdAt": "2024-01-01T00:00:00.000Z",
+  "updatedAt": "2024-01-01T00:00:00.000Z"
+}

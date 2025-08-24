@@ -3187,6 +3187,75 @@ async function cleanupOrphanedCourseFiles() {
   }
 }
 
+/**
+ * Assign the onboarding course to a new user
+ * @param {string} userId - The ID of the user to assign the course to
+ */
+async function assignOnboardingCourse(userId) {
+  try {
+    // Find the onboarding course
+    const onboardingCourse = db.data.courses.find(c => c.id === 'discourse-ai-onboarding');
+    
+    if (!onboardingCourse) {
+      console.log('[ONBOARDING] Onboarding course not found, skipping assignment');
+      return;
+    }
+    
+    // Check if user already has the onboarding course
+    const existingCourse = db.data.courses.find(c => 
+      c.userId === userId && c.id.includes('discourse-ai-onboarding')
+    );
+    
+    if (existingCourse) {
+      console.log(`[ONBOARDING] User ${userId} already has onboarding course`);
+      return;
+    }
+    
+    // Create a copy of the onboarding course for the user
+    const userCourse = {
+      ...onboardingCourse,
+      id: `onboarding_${userId}_${Date.now()}`,
+      userId: userId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    
+    // Add to courses table
+    db.data.courses.push(userCourse);
+    
+    await db.write();
+    console.log(`[ONBOARDING] Successfully assigned onboarding course to user ${userId}`);
+    
+  } catch (error) {
+    console.error(`[ONBOARDING] Failed to assign onboarding course to user ${userId}:`, error.message);
+    // Don't throw error to avoid breaking user creation
+  }
+}
+
+/**
+ * Ensure an existing user has the onboarding course
+ * @param {string} userId - The ID of the user to check
+ */
+async function ensureOnboardingCourse(userId) {
+  try {
+    // Check if user already has the onboarding course
+    const existingCourse = db.data.courses.find(c => 
+      c.userId === userId && c.id.includes('discourse-ai-onboarding')
+    );
+    
+    if (existingCourse) {
+      return; // User already has the course
+    }
+    
+    // User doesn't have the course, assign it
+    await assignOnboardingCourse(userId);
+    
+  } catch (error) {
+    console.error(`[ONBOARDING] Failed to ensure onboarding course for user ${userId}:`, error.message);
+    // Don't throw error to avoid breaking login flow
+  }
+}
+
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
 const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
@@ -3707,6 +3776,9 @@ app.post('/api/auth/register', async (req, res) => {
     };
     db.data.users.push(localUser);
     await db.write();
+    
+    // Assign onboarding course to new users
+    await assignOnboardingCourse(localUser.id);
 
     // Return a dev token when Supabase is not configured
     const token = supabase ? data.session?.access_token : `dev:${localUser.id}`;
@@ -3752,6 +3824,9 @@ app.post('/api/auth/login', async (req, res) => {
         local = { id: `dev_${Date.now()}`, email, name: email.split('@')[0], createdAt: new Date().toISOString(), courseCredits: 0 };
         db.data.users.push(local);
         await db.write();
+        
+        // Assign onboarding course to new dev users
+        await assignOnboardingCourse(local.id);
       }
       data.user = { id: local.id, email: local.email, user_metadata: { name: local.name } };
       data.session = { access_token: `dev:${local.id}` };
@@ -3802,12 +3877,18 @@ app.post('/api/auth/login', async (req, res) => {
         };
         db.data.users.push(localUser);
         await db.write();
+        
+        // Assign onboarding course to new users
+        await assignOnboardingCourse(localUser.id);
     } else {
         // Only ensure credits exist, don't force minimum of 1
         if (localUser.courseCredits === undefined || localUser.courseCredits === null) {
             localUser.courseCredits = 0;
             await db.write();
         }
+        
+        // Check if existing user needs onboarding course
+        await ensureOnboardingCourse(localUser.id);
     }
 
     res.json({ 
@@ -4011,6 +4092,41 @@ app.get('/api/courses/saved', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error(`[API_ERROR] Failed to fetch saved courses for user ${req.user.id}:`, error);
     res.status(500).json({ error: 'Failed to fetch saved courses' });
+  }
+});
+
+// Get onboarding course for the current user
+app.get('/api/courses/onboarding', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    console.log(`[API] Fetching onboarding course for user ${userId}`);
+    
+    // First check if user already has a copy of the onboarding course
+    let userOnboardingCourse = db.data.courses.find(c => 
+      c.userId === userId && c.id.includes('discourse-ai-onboarding')
+    );
+    
+    if (!userOnboardingCourse) {
+      // User doesn't have the course, assign it now
+      await assignOnboardingCourse(userId);
+      
+      // Fetch the newly assigned course
+      userOnboardingCourse = db.data.courses.find(c => 
+        c.userId === userId && c.id.includes('discourse-ai-onboarding')
+      );
+    }
+    
+    if (!userOnboardingCourse) {
+      return res.status(404).json({ error: 'Onboarding course not found' });
+    }
+    
+    console.log(`[API] Returning onboarding course for user ${userId}`);
+    res.json(userOnboardingCourse);
+    
+  } catch (error) {
+    console.error(`[API_ERROR] Failed to fetch onboarding course for user ${req.user.id}:`, error);
+    res.status(500).json({ error: 'Failed to fetch onboarding course' });
   }
 });
 
