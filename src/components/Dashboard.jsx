@@ -846,11 +846,29 @@ const Dashboard = () => {
                 Generate New Course
               </button>
             </div>
-
-            {error && (
-              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-                {error}
-                {(error.includes('SSL') || error.includes('Mixed Content') || error.includes('Backend server is unreachable')) && (
+                ):(
+                  <>
+                  {error && (
+                <>
+                  <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                    {error}
+                    {(error.includes('SSL') || error.includes('Mixed Content') || error.includes('Backend server is unreachable')) && (
+                      <div className="mt-2">
+                        <button
+                          onClick={runConnectionDiagnostic}
+                          className="text-sm bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
+                        >
+                          Run Connection Diagnostic
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+              <>
+                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                  {error}
+                  {(error.includes('SSL') || error.includes('Mixed Content') || error.includes('Backend server is unreachable')) && (
                   <div className="mt-2">
                     <button
                       onClick={runConnectionDiagnostic}
@@ -861,7 +879,8 @@ const Dashboard = () => {
                   </div>
                 )}
               </div>
-            )}
+            </>
+            )
 
             {/* Connection Diagnostic Modal */}
             {showConnectionDiagnostic && (
@@ -1234,10 +1253,10 @@ const Dashboard = () => {
                 </div>
               </div>
             )}
-          </div>
-        )}
-      </div>
-    ) : (
+
+export default Dashboard;
+      {/* New Course Form */}
+      {showNewCourseForm && (
           <div className="bg-white shadow sm:rounded-lg">
             <div className="px-4 py-5 sm:p-6">
               <div className="flex items-center justify-between mb-4">
@@ -1270,9 +1289,9 @@ const Dashboard = () => {
                   error={error}
                 />
               </div>
-            </div>
           </div>
-        )}
+        </div>
+      )}
 
         {/* Simple Course Generation Loading Modal */}
         {isGenerating && (
@@ -1347,9 +1366,10 @@ const Dashboard = () => {
             console.log('Report submitted successfully');
           }}
         />
-      </main>
+      </>
+                )}
     </div>
   );
-};
+}
 
 export default Dashboard;
