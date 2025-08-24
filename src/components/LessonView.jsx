@@ -1392,6 +1392,28 @@ const LessonView = ({
       console.log('[LessonView] View state updated to:', newView);
     }
   }, [view]);
+
+  // Handle onboarding completion: persist, navigate, and show toast on dashboard
+  const handleOnboardingComplete = useCallback(async () => {
+    try {
+      // Record completion on backend
+      await api.completeOnboarding();
+
+      // Set a localStorage flag as a frontend fallback/cache
+      if (user?.id) {
+        localStorage.setItem(`onboardingCompleted_${user.id}`, 'true');
+      } else {
+        localStorage.setItem('onboardingCompleted', 'true');
+      }
+
+      // Navigate to dashboard with a congratulatory toast param
+      const toastMsg = encodeURIComponent('🎉 Onboarding completed! Welcome to your dashboard.');
+      navigate(`/dashboard?onboarding=completed&msg=${toastMsg}`, { replace: true });
+    } catch (e) {
+      console.error('[LessonView] Failed to complete onboarding:', e);
+      alert('Failed to record onboarding completion. Please try again.');
+    }
+  }, [navigate, user?.id]);
   
   // Automatic image replacement for music content
   useEffect(() => {
@@ -2013,6 +2035,23 @@ const LessonView = ({
               Next<i className="fas fa-arrow-right ml-2"></i>
             </button>
           </div>
+          
+          {/* Onboarding Completion Button - Only show on final lesson of onboarding course */}
+          {isOnboardingCourse && 
+           activeModule?.id === 'module-5' && 
+           currentLessonIndex === totalLessonsInModule - 1 && (
+            <div className="flex flex-col items-center space-y-2">
+              <button
+                onClick={handleOnboardingComplete}
+                className="px-6 py-3 text-base font-medium rounded-md bg-green-600 text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200"
+              >
+                🎉 Complete Onboarding
+              </button>
+              <p className="text-xs text-gray-500 text-center max-w-xs">
+                Congratulations! Click here to complete your onboarding and return to the dashboard.
+              </p>
+            </div>
+          )}
         </div>
       </footer>
     </div>

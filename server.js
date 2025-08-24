@@ -2430,7 +2430,7 @@ Context: "${context.substring(0, 1000)}..."`;
             const lessonContentString = await this._makeApiRequest(lessonPrompt, 'lesson', false);
             
             // Optimized parsing logic with reduced logging
-            let parts = lessonContentString.split(/\s*\|\|\|---\|\|\|\s*/);
+            let parts = lessonContentString.split(/\s*\|\|\|\s*/);
             
             // If we don't get exactly 3 parts, try alternative separators
             if (parts.length !== 3) {
@@ -3058,7 +3058,7 @@ if (!fs.existsSync(dataDir)) {
 }
 
 const adapter = new JSONFile(dbFilePath);
-const defaultData = { users: [], courses: [], images: [], imageCache: [] };
+const defaultData = { users: [], courses: [], images: [], imageCache: [], onboardingCompletions: [] };
 const db = new Low(adapter, defaultData);
 
 async function initializeDatabase() {
@@ -3072,6 +3072,7 @@ async function initializeDatabase() {
     db.data.courses = db.data.courses || [];
     db.data.imageCache = db.data.imageCache || [];
     db.data.images = db.data.images || [];
+    db.data.onboardingCompletions = db.data.onboardingCompletions || [];
     
     // Load courses from individual files if they exist
     await loadCoursesFromFiles();
@@ -4233,6 +4234,65 @@ app.get('/api/courses/saved', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error(`[API_ERROR] Failed to fetch saved courses for user ${req.user.id}:`, error);
     res.status(500).json({ error: 'Failed to fetch saved courses' });
+  }
+});
+
+// Mark onboarding as completed for a user
+app.post('/api/onboarding/complete', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    console.log(`[ONBOARDING_COMPLETE] Marking onboarding as completed for user ${userId}`);
+    
+    // Check if user already has onboarding completion recorded
+    const existingCompletion = db.data.onboardingCompletions.find(c => c.userId === userId);
+    
+    if (existingCompletion) {
+      console.log(`[ONBOARDING_COMPLETE] User ${userId} already has onboarding completion recorded`);
+      return res.json({ 
+        message: 'Onboarding already marked as completed',
+        completedAt: existingCompletion.completedAt
+      });
+    }
+    
+    // Record onboarding completion
+    const completion = {
+      userId: userId,
+      completedAt: new Date().toISOString(),
+      email: req.user.email
+    };
+    
+    db.data.onboardingCompletions.push(completion);
+    await db.write();
+    
+    console.log(`[ONBOARDING_COMPLETE] Successfully marked onboarding as completed for user ${userId}`);
+    
+    res.json({ 
+      message: 'Onboarding marked as completed successfully',
+      completedAt: completion.completedAt
+    });
+    
+  } catch (error) {
+    console.error(`[ONBOARDING_COMPLETE] Error marking onboarding as completed:`, error.message);
+    res.status(500).json({ error: 'Failed to mark onboarding as completed' });
+  }
+});
+
+// Get onboarding completion status for a user
+app.get('/api/onboarding/status', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    const completion = db.data.onboardingCompletions.find(c => c.userId === userId);
+    
+    res.json({ 
+      completed: !!completion,
+      completedAt: completion?.completedAt || null
+    });
+    
+  } catch (error) {
+    console.error(`[ONBOARDING_STATUS] Error getting onboarding status:`, error.message);
+    res.status(500).json({ error: 'Failed to get onboarding status' });
   }
 });
 
@@ -6703,6 +6763,21 @@ app.delete('/api/courses/:courseId', authenticateToken, async (req, res) => {
         message: 'Course not found in database (may be already deleted). Cache cleared.',
         cacheCleared: true
       });
+    }
+
+    // Prevent deletion of onboarding course template or any user onboarding course
+    const isOnboardingCourse = (c) => {
+      const id = String(c.id || '');
+      const title = String(c.title || '').toLowerCase();
+      return id === 'discourse-ai-onboarding' ||
+             id.includes('discourse-ai-onboarding') ||
+             title.includes('onboarding') ||
+             title.includes('welcome to discourse ai');
+    };
+
+    if (isOnboardingCourse(course)) {
+      console.log(`[API] Blocked deletion attempt for onboarding course: ${course.id}`);
+      return res.status(400).json({ error: 'Cannot delete onboarding course' });
     }
 
     if (course.userId !== userId) {

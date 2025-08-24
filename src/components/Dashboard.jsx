@@ -31,6 +31,7 @@ const Dashboard = () => {
   const [successMessage, setSuccessMessage] = useState('');
   const [isUpdatingCourseState, setIsUpdatingCourseState] = useState(false);
   const urlParams = new URLSearchParams(window.location.search);
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
   
   // ETA countdown for generation
   const [etaTotalSec, setEtaTotalSec] = useState(0);
@@ -575,6 +576,21 @@ const Dashboard = () => {
     }
   }, [api]);
 
+  // Fetch onboarding completion status
+  const fetchOnboardingStatus = useCallback(async () => {
+    try {
+      const status = await api.getOnboardingStatus();
+      const completed = !!status?.completed;
+      setHasCompletedOnboarding(completed);
+      if (user?.id) {
+        localStorage.setItem(`onboardingCompleted_${user.id}`, String(completed));
+      }
+    } catch (error) {
+      const cached = user?.id ? localStorage.getItem(`onboardingCompleted_${user.id}`) : localStorage.getItem('onboardingCompleted');
+      setHasCompletedOnboarding(cached === 'true');
+    }
+  }, [api, user?.id]);
+
   // Fetch user credits from backend (deprecated - now handled by fetchUserProfile)
   const fetchUserCredits = useCallback(async () => {
     try {
@@ -598,8 +614,9 @@ const Dashboard = () => {
     // Fetch user profile when component mounts or user changes
     if (user) {
       fetchUserProfile();
+      fetchOnboardingStatus();
     }
-  }, [user, fetchUserProfile]);
+  }, [user, fetchUserProfile, fetchOnboardingStatus]);
 
   // Fetch saved courses on component mount
   useEffect(() => {
@@ -619,6 +636,16 @@ const Dashboard = () => {
         // If returning from Stripe payment, refresh user info
         if (urlParams.get('payment') === 'success') {
           handlePaymentSuccess();
+        }
+        // If returning from onboarding completion, show toast and refresh status
+        if (urlParams.get('onboarding') === 'completed') {
+          const msg = urlParams.get('msg') || 'Onboarding completed!';
+          setSuccessMessage(decodeURIComponent(msg));
+          setShowSuccessToast(true);
+          setTimeout(() => setShowSuccessToast(false), 4000);
+          const cleanUrl = window.location.pathname;
+          window.history.replaceState({}, document.title, cleanUrl);
+          fetchOnboardingStatus();
         }
         
       } catch (error) {
@@ -768,7 +795,7 @@ const Dashboard = () => {
         )}
         
         {/* Welcome Message for New Users */}
-        {savedCourses.length === 0 && (
+        {savedCourses.length === 0 && !hasCompletedOnboarding && (
           <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded mb-4">
             <div className="flex items-start">
               <div className="flex-shrink-0">
@@ -785,6 +812,7 @@ const Dashboard = () => {
                   <button
                     onClick={handleStartOnboarding}
                     className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    title="Complete onboarding to unlock the full dashboard experience"
                   >
                     🎓 Start Onboarding Course
                   </button>
@@ -860,12 +888,15 @@ const Dashboard = () => {
                   </svg>
                 </button>
               </div>
-              <button
-                onClick={handleStartOnboarding}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 mr-2"
-              >
-                🎓 Onboarding
-              </button>
+              {!hasCompletedOnboarding && (
+                <button
+                  onClick={handleStartOnboarding}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 mr-2"
+                  title="New here? Complete onboarding to learn the basics"
+                >
+                  🎓 Onboarding
+                </button>
+              )}
               <button
                 onClick={() => setShowNewCourseForm(true)}
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
@@ -963,12 +994,15 @@ const Dashboard = () => {
                     >
                       Generate Your First Course
                     </button>
-                    <button
-                      onClick={handleStartOnboarding}
-                      className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-                    >
-                      🎓 Start Onboarding Course
-                    </button>
+                    {!hasCompletedOnboarding && (
+                      <button
+                        onClick={handleStartOnboarding}
+                        className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                        title="We recommend completing onboarding first"
+                      >
+                        🎓 Start Onboarding Course
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -986,6 +1020,8 @@ const Dashboard = () => {
                       const courseId = course.id || `course_${Date.now()}_${Math.random()}`;
                       const canPublish = !!course.id && !course.published;
                       const courseTitle = course.title || 'Untitled Course';
+                      const titleLower = (courseTitle || '').toLowerCase();
+                      const isOnboardingCourse = titleLower.includes('welcome to discourse ai') || titleLower.includes('onboarding') || (course.id || '').includes('discourse-ai-onboarding');
                       const courseDescription = course.description || 'No description available';
                       const modulesCount = Array.isArray(course.modules) ? course.modules.length : 0;
                       const lessonsCount = Array.isArray(course.modules) ? course.modules.reduce((sum, m) => sum + (Array.isArray(m.lessons) ? m.lessons.length : 0), 0) : 0;
@@ -1014,15 +1050,17 @@ const Dashboard = () => {
                                   {modulesCount} modules • {lessonsCount} lessons
                                 </div>
                               </div>
-                              <button
-                                onClick={() => setCourseToDelete(course)}
-                                className="ml-4 text-gray-400 hover:text-red-500 transition-colors duration-200 opacity-0 group-hover:opacity-100"
-                                title="Delete course"
-                              >
-                                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                              </button>
+                              {!isOnboardingCourse && (
+                                <button
+                                  onClick={() => setCourseToDelete(course)}
+                                  className="ml-4 text-gray-400 hover:text-red-500 transition-colors duration-200 opacity-0 group-hover:opacity-100"
+                                  title="Delete course"
+                                >
+                                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
+                              )}
                             </div>
                             <div className="mt-4 flex gap-2">
                               <button
@@ -1046,6 +1084,11 @@ const Dashboard = () => {
                               >
                                 Continue Learning →
                               </button>
+                              {isOnboardingCourse && !hasCompletedOnboarding && (
+                                <span className="text-xs text-gray-500 self-center" title="Complete onboarding to unlock all features">
+                                  Tip: Complete onboarding to unlock all features
+                                </span>
+                              )}
                               {course.published && !course.title?.toLowerCase().includes('welcome to discourse ai') && 
                                !course.title?.toLowerCase().includes('onboarding') && 
                                !course.id?.includes('discourse-ai-onboarding') && (

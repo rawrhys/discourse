@@ -90,6 +90,13 @@ const api = {
     getOnboardingCourse: () => 
         apiClient('/api/courses/onboarding'),
 
+    // Onboarding status and completion
+    getOnboardingStatus: () =>
+        apiClient('/api/onboarding/status'),
+
+    completeOnboarding: () =>
+        apiClient('/api/onboarding/complete', { method: 'POST' }),
+
     getPublicCourse: (courseId, sessionId = null) => {
         // Normalize: strip optional trailing _<timestamp> (e.g., _1754750525562)
         const normalizedId = String(courseId || '').replace(/_[0-9]{10,}$/,'');
