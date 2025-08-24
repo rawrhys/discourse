@@ -164,19 +164,29 @@ const Dashboard = () => {
   // Setup SSE connection for course generation notifications
   useEffect(() => {
     if (user) {
-      // Get the auth token from localStorage or Supabase
-      const token = localStorage.getItem('token') || user.access_token;
-      
-      logger.debug('🔗 [DASHBOARD] Setting up SSE connection with token:', {
-        hasToken: !!token,
-        tokenLength: token ? token.length : 0,
-        tokenPrefix: token ? token.substring(0, 20) + '...' : 'none',
-        user: user?.id
-      });
-      
-      if (token) {
-        // Connect to SSE notifications
-        courseNotificationService.connect(token);
+      // Resolve a Supabase access token for SSE (prefer Supabase over any local token)
+      (async () => {
+        let token = null;
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          token = session?.access_token || user?.access_token || null;
+        } catch (e) {
+          logger.warn('🔗 [DASHBOARD] Failed to get Supabase session for SSE, falling back to local token');
+          token = user?.access_token || localStorage.getItem('token');
+        }
+
+        logger.debug('🔗 [DASHBOARD] Setting up SSE connection with token:', {
+          hasToken: !!token,
+          tokenLength: token ? token.length : 0,
+          tokenPrefix: token ? token.substring(0, 20) + '...' : 'none',
+          user: user?.id
+        });
+        
+        if (token) {
+          // Connect to SSE notifications
+          courseNotificationService.connect(token);
+        }
+      })();
         
         // Add event listener for course generation notifications
         const handleCourseGenerated = (data) => {
@@ -1021,7 +1031,16 @@ const Dashboard = () => {
                       const canPublish = !!course.id && !course.published;
                       const courseTitle = course.title || 'Untitled Course';
                       const titleLower = (courseTitle || '').toLowerCase();
-                      const isOnboardingCourse = titleLower.includes('welcome to discourse ai') || titleLower.includes('onboarding') || (course.id || '').includes('discourse-ai-onboarding');
+                      const idStr = String(course.id || '');
+                      const isOnboardingCourse =
+                        titleLower.includes('welcome to discourse ai') ||
+                        titleLower.includes('onboarding') ||
+                        idStr.includes('discourse-ai-onboarding') ||
+                        idStr.startsWith('onboarding_');
+                      // Hide onboarding course card after completion
+                      if (isOnboardingCourse && hasCompletedOnboarding) {
+                        return null;
+                      }
                       const courseDescription = course.description || 'No description available';
                       const modulesCount = Array.isArray(course.modules) ? course.modules.length : 0;
                       const lessonsCount = Array.isArray(course.modules) ? course.modules.reduce((sum, m) => sum + (Array.isArray(m.lessons) ? m.lessons.length : 0), 0) : 0;
