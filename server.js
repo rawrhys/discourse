@@ -3759,13 +3759,15 @@ app.post('/api/auth/register', async (req, res) => {
     console.log(`[AUTH] Registration successful for user: ${data.user.id}`);
       
     // --- Local DB User Creation (for credits) ---
-    // This part remains to manage app-specific data like credits
+    // Check if user is coming from successful payment
+    const paymentSuccess = req.headers['x-payment-success'] === 'true' || req.query.payment === 'success';
+    
     const localUser = {
       id: data.user.id,
       email: data.user.email,
       name: name,
       createdAt: new Date().toISOString(),
-      courseCredits: 0, // New users start with 0 credits
+      courseCredits: paymentSuccess ? 10 : 0, // Give credits if payment was successful
       gdprConsent: {
         accepted: true,
         policyVersion: policyVersion,
@@ -3797,6 +3799,65 @@ app.post('/api/auth/register', async (req, res) => {
   } catch (error) {
     console.error('Registration process error:', error);
     res.status(500).json({ error: 'An unexpected error occurred during registration' });
+  }
+});
+
+// Handle payment success for new registrations
+app.post('/api/auth/complete-registration', async (req, res) => {
+  try {
+    const { email, name, password, policyVersion = '1.0' } = req.body;
+    
+    if (!email || !name || !password) {
+      return res.status(400).json({ error: 'Email, name, and password are required' });
+    }
+
+    console.log(`[AUTH] Completing registration for user: ${email} after payment`);
+
+    // Check if user already exists
+    const existingUser = db.data.users.find(u => u.email === email);
+    if (existingUser) {
+      return res.status(400).json({ error: 'User already exists' });
+    }
+
+    // Create user with credits since payment was successful
+    const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    const localUser = {
+      id: userId,
+      email: email,
+      name: name,
+      createdAt: new Date().toISOString(),
+      courseCredits: 10, // Give credits since payment was successful
+      gdprConsent: {
+        accepted: true,
+        policyVersion: policyVersion,
+        acceptedAt: new Date().toISOString(),
+        ip: (req.headers['x-forwarded-for']?.toString().split(',')[0] || req.ip || '').trim(),
+        userAgent: req.headers['user-agent'] || ''
+      }
+    };
+
+    db.data.users.push(localUser);
+    await db.write();
+    
+    // Assign onboarding course
+    await assignOnboardingCourse(localUser.id);
+
+    console.log(`[AUTH] Registration completed successfully for user: ${userId}`);
+
+    res.status(201).json({ 
+      message: 'Registration completed successfully!',
+      user: {
+        id: localUser.id,
+        email: localUser.email,
+        name: localUser.name,
+        courseCredits: localUser.courseCredits
+      }
+    });
+
+  } catch (error) {
+    console.error('Complete registration error:', error);
+    res.status(500).json({ error: 'Failed to complete registration' });
   }
 });
 

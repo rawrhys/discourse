@@ -757,12 +757,7 @@ const Dashboard = () => {
               {isBuying ? 'Processing...' : 'Buy More Tokens'}
             </button>
             
-            {/* Stripe Buy Button */}
-            <stripe-buy-button
-              buy-button-id="buy_btn_1RzcEZBTrJ3tlY9wPylxKl2f"
-              publishable-key="pk_live_51RzaHbBTrJ3tlY9wyNScSIpVlUPyGKTtpE9nbBpTy4c5WdQmrUDUAGrzXlF5qgtf7jsgilsnHsRnsQEmbx3Z2w2R00Fo9gN6QD"
-            >
-            </stripe-buy-button>
+
           </div>
         </div>
         
