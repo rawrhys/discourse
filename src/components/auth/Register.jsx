@@ -248,7 +248,7 @@ const Register = () => {
                 type="submit"
                 className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
-                Continue to Payment
+                Complete Registration
               </button>
             </div>
           </form>
@@ -291,12 +291,12 @@ const Register = () => {
               </div>
               <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
                 <span className="text-sm font-medium text-gray-900">Course Credits</span>
-                <span className="text-sm text-gray-600">$9.99</span>
+                <span className="text-sm text-gray-600">Free for a limited time</span>
               </div>
               <div className="border-t pt-3">
                 <div className="flex items-center justify-between">
                   <span className="text-base font-medium text-gray-900">Total</span>
-                  <span className="text-base font-medium text-gray-900">$9.99</span>
+                  <span className="text-base font-medium text-gray-900">Free for a limited time</span>
                 </div>
               </div>
             </div>
