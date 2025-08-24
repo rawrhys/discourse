@@ -662,7 +662,7 @@ function extractSearchKeywords(subject, content, maxKeywords = 4) {
   return keywords.slice(0, maxKeywords);
 }
 // Build refined multi-word search phrases from extracted keywords and content without hardcoding subjects
-function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitle = '') {
+function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitle = '', options = {}) {
   const normalize = (str) => (String(str || '')
     .toLowerCase()
     .replace(/\([^)]*\)/g, ' ')
@@ -672,6 +672,10 @@ function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitl
   const STOPWORDS = new Set(['the','a','an','and','or','of','in','on','to','for','by','with','at','from','as','is','are','was','were','be','being','been','this','that','these','those','it','its','into','about','over','under','between','through','during','before','after','above','below','up','down','out','off','than','introduction','overview','lesson','chapter','era','modern','course','explores','rich','covering','political','cultural','religious']);
   const GENERIC_EVENT_WORDS = new Set(['fall','collapse','decline','rise','war','battle','revolution','crisis','empire','dynasty','state','society']);
   const tokenize = (str) => normalize(str).split(/\s+/).filter(t => t && t.length > 2 && !STOPWORDS.has(t));
+  
+  // Check if this is a music request
+  const isMusicRequest = options?.musicContext;
+  const musicCategory = options?.musicCategory;
 
   const dedupePush = (arr, value) => {
     if (value && !arr.includes(value)) arr.push(value);
@@ -742,6 +746,28 @@ function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitl
       dedupePush(queries, normalizedSubject);
     }
   }
+  
+  // For music requests, add music-specific search terms
+  if (isMusicRequest) {
+    const musicTerms = this?.musicTerms || [
+      'music', 'musical', 'instrument', 'performance', 'concert', 'band', 'orchestra',
+      'melody', 'rhythm', 'harmony', 'composition', 'song', 'tune', 'note', 'scale'
+    ];
+    
+    for (const term of musicTerms) {
+      if (subjectPhrase.toLowerCase().includes(term) || content.toLowerCase().includes(term)) {
+        dedupePush(queries, `${term} ${subjectPhrase}`);
+        dedupePush(queries, `${subjectPhrase} ${term}`);
+        break; // Only add one music term to avoid dilution
+      }
+    }
+    
+    // Add category-specific music terms
+    if (musicCategory && musicCategory !== 'general') {
+      dedupePush(queries, `${musicCategory} music`);
+      dedupePush(queries, `${musicCategory} musical`);
+    }
+  }
 
   // For Egypt courses, add specific Egyptian search terms to improve relevance
   if (courseTitle && courseTitle.toLowerCase().includes('egypt')) {
@@ -799,6 +825,16 @@ function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitl
       dedupePush(queries, `${term} ancient egypt`);
       dedupePush(queries, `${term} egyptian`);
       dedupePush(queries, `egyptian ${term}`);
+    }
+    // For music requests, combine content terms with music context
+    else if (isMusicRequest) {
+      if (musicCategory && musicCategory !== 'general') {
+        dedupePush(queries, `${term} ${musicCategory} music`);
+        dedupePush(queries, `${musicCategory} ${term}`);
+      } else {
+        dedupePush(queries, `${term} music`);
+        dedupePush(queries, `musical ${term}`);
+      }
     } else {
       dedupePush(queries, term);
     }
@@ -1856,7 +1892,7 @@ Context: "${context.substring(0, 1000)}..."`;
 
     try {
         const base = 'https://en.wikipedia.org/w/api.php';
-        const keywords = buildRefinedSearchPhrases(subject, content, options.relaxed ? 4 : 2, options.courseTitle || '');
+        const keywords = buildRefinedSearchPhrases(subject, content, options.relaxed ? 4 : 2, options.courseTitle || '', options);
         const dynamicNegs = getDynamicExtraNegatives(subject);
         const mainText = extractMainLessonText(content);
         
@@ -1977,7 +2013,7 @@ Context: "${context.substring(0, 1000)}..."`;
       return null;
     }
     try {
-      const queries = buildRefinedSearchPhrases(subject, content, options.relaxed ? 4 : 2, courseContext?.title || '');
+      const queries = buildRefinedSearchPhrases(subject, content, options.relaxed ? 4 : 2, courseContext?.title || '', options);
       // Ensure the full subject phrase is first
       if (String(subject || '').trim()) {
         const s = String(subject).trim();
@@ -2086,12 +2122,17 @@ Context: "${context.substring(0, 1000)}..."`;
    
   // Try Wikipedia first; then Pixabay - optimized with parallel execution and caching
   async fetchRelevantImage(subject, content = '', usedImageTitles = [], usedImageUrls = [], options = { relaxed: false }, courseContext = {}) {
+    // Check if this is a music-related request
+    const isMusicRequest = options.musicContext || courseContext?.musicContext;
+    const musicCategory = options.musicCategory || courseContext?.musicCategory;
+    
     // Create cache key for this search - include used images to prevent duplicates
     // Use a more unique cache key that includes lesson-specific information
     const lessonId = courseContext?.lessonId || 'unknown';
     const usedTitlesHash = usedImageTitles.length > 0 ? '_usedTitles_' + usedImageTitles.slice(0, 3).join('_').replace(/[^a-zA-Z0-9]/g, '').substring(0, 50) : '';
     const usedUrlsHash = usedImageUrls.length > 0 ? '_usedUrls_' + usedImageUrls.slice(0, 2).map(url => url.split('/').pop()?.split('?')[0] || '').join('_').replace(/[^a-zA-Z0-9]/g, '').substring(0, 30) : '';
-    const cacheKey = `image_search_${subject}_${lessonId}_${options.relaxed ? 'relaxed' : 'strict'}${usedTitlesHash}${usedUrlsHash}`;
+    const musicHash = isMusicRequest ? `_music_${musicCategory || 'general'}` : '';
+    const cacheKey = `image_search_${subject}_${lessonId}_${options.relaxed ? 'relaxed' : 'strict'}${usedTitlesHash}${usedUrlsHash}${musicHash}`;
     
     // Check if we have a cached result
     if (global.imageSearchCache && global.imageSearchCache.has(cacheKey)) {
@@ -2118,10 +2159,20 @@ Context: "${context.substring(0, 1000)}..."`;
     }
     
     // Execute both searches in parallel with timeout
-    const searchPromises = [
-      this.fetchWikipediaImage(subject, content, usedImageTitles, usedImageUrls, { relaxed: !!options.relaxed }, courseContext),
-      this.fetchPixabayImage(subject, content, usedImageTitles, usedImageUrls, { relaxed: !!options.relaxed }, courseContext)
-    ];
+    // For music requests, use enhanced search with music-specific context
+    let searchPromises;
+    if (isMusicRequest) {
+      console.log(`[AIService] Using music-specific search for category: ${musicCategory}`);
+      searchPromises = [
+        this.fetchWikipediaImage(subject, content, usedImageTitles, usedImageUrls, { relaxed: !!options.relaxed, musicContext: true, musicCategory }, courseContext),
+        this.fetchPixabayImage(subject, content, usedImageTitles, usedImageUrls, { relaxed: !!options.relaxed, musicContext: true, musicCategory }, courseContext)
+      ];
+    } else {
+      searchPromises = [
+        this.fetchWikipediaImage(subject, content, usedImageTitles, usedImageUrls, { relaxed: !!options.relaxed }, courseContext),
+        this.fetchPixabayImage(subject, content, usedImageTitles, usedImageUrls, { relaxed: !!options.relaxed }, courseContext)
+      ];
+    }
     
     // Add timeout to prevent hanging
     const timeoutPromise = new Promise((_, reject) => {

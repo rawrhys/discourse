@@ -1,5 +1,6 @@
 'use strict';
 import { API_BASE_URL } from '../config/api.js';
+import musicImageService from './MusicImageService.js';
 
 const SimpleImageService = {
   // Simple in-memory cache
@@ -183,6 +184,13 @@ const SimpleImageService = {
     if (!lessonTitle || !courseId || !lessonId) {
       console.warn('[SimpleImageService] Missing required parameters');
       return this.getFallbackImage(lessonTitle);
+    }
+
+    // Check if this is music-related content
+    const isMusicContent = this.detectMusicContent(lessonTitle);
+    if (isMusicContent) {
+      console.log('[SimpleImageService] Detected music content, using MusicImageService');
+      return await musicImageService.searchMusicImages(lessonTitle, courseId, lessonId, usedImageTitles, usedImageUrls);
     }
 
     const cacheKey = this.getCacheKey(lessonTitle, courseId, lessonId);
@@ -514,6 +522,23 @@ const SimpleImageService = {
       console.warn('[SimpleImageService] Failed to pre-cache image:', error.message);
       return false;
     }
+  },
+  
+  // Detect if content is music-related
+  detectMusicContent(lessonTitle) {
+    const text = lessonTitle.toLowerCase();
+    
+    // Music-specific terms
+    const musicTerms = [
+      'music', 'musical', 'melody', 'rhythm', 'harmony', 'composition', 'performance', 'concert',
+      'song', 'tune', 'note', 'scale', 'chord', 'tempo', 'beat', 'pitch', 'sound', 'audio',
+      'orchestra', 'band', 'ensemble', 'singer', 'vocal', 'instrument', 'piano', 'guitar',
+      'violin', 'drums', 'trumpet', 'saxophone', 'flute', 'clarinet', 'cello', 'bass',
+      'jazz', 'rock', 'pop', 'folk', 'classical', 'electronic', 'blues', 'country', 'reggae',
+      'symphony', 'sonata', 'concerto', 'opera', 'ballet', 'musical theater', 'recital'
+    ];
+    
+    return musicTerms.some(term => text.includes(term));
   }
 };
 
