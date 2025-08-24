@@ -714,11 +714,11 @@ const Dashboard = () => {
             </div>
           </div>
         </div>
-      </nav>
-
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        {/* Credits Display */}
-        <div className="flex items-center justify-between mb-6 bg-white p-4 rounded-lg shadow-sm">
+              </nav>
+        
+        <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+          {/* Credits Display */}
+          <div className="flex items-center justify-between mb-6 bg-white p-4 rounded-lg shadow-sm">
           <div className="flex items-center space-x-4">
             <div className="text-lg font-semibold text-gray-700">
               Tokens: <span className={credits === 0 ? 'text-red-500' : 'text-green-600'}>{credits}</span>
@@ -734,7 +734,7 @@ const Dashboard = () => {
             </button>
           </div>
         </div>
-        
+        </main>
         {credits === 0 && (
           <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4">
             You have no course tokens left. Please contact support for assistance.
