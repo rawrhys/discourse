@@ -55,7 +55,7 @@ const Dashboard = () => {
     setTimeout(() => {
       setShowSuccessToast(false);
     }, timeoutMs);
-  };
+  }, [setSuccessMessage, setShowSuccessToast]);
   
   // Get the user's name from backend profile data, fallback to auth context
   const userName = userProfile?.name || user?.name || user?.email || 'Guest';
