@@ -3339,6 +3339,7 @@ const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABA
 const supabaseRedirectUrl = process.env.SUPABASE_REDIRECT_URL || 'https://thediscourse.ai';
 
 let supabase = null;
+let supabaseAdmin = null; // Optional admin client for privileged operations (e.g., deleting users)
 
 if (!supabaseUrl || !supabaseAnonKey || supabaseUrl === 'your-supabase-url-here' || supabaseAnonKey === 'your-supabase-anon-key-here') {
     console.warn('[SERVER_WARN] Supabase configuration is missing or invalid. Authentication will be disabled.');
@@ -3363,6 +3364,18 @@ if (!supabaseUrl || !supabaseAnonKey || supabaseUrl === 'your-supabase-url-here'
         console.error('[SERVER_ERROR] Failed to initialize Supabase client:', error.message);
         supabase = null;
     }
+}
+
+// Initialize optional Supabase admin client when service role key is provided
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (supabaseUrl && supabaseServiceRoleKey && supabaseServiceRoleKey !== 'your-supabase-service-role-key-here') {
+  try {
+    supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
+    console.log('[SERVER] Supabase admin client initialized');
+  } catch (e) {
+    console.warn('[SERVER_WARN] Failed to initialize Supabase admin client:', e?.message);
+    supabaseAdmin = null;
+  }
 }
 
 // Helper to get user by id
@@ -6558,6 +6571,44 @@ app.post('/api/create-checkout-session', authenticateToken, async (req, res) => 
   }
 });
 
+// Stripe: Create billing portal session for managing subscription/payment details
+app.post('/api/billing/portal', authenticateToken, async (req, res) => {
+  try {
+    if (!stripe) {
+      return res.status(500).json({ error: 'Stripe not configured' });
+    }
+
+    const user = req.user;
+    // In a full implementation, you would store a stripeCustomerId on the user
+    // and use it here. As a fallback, create a customer on-the-fly if needed.
+    let customerId = user.stripeCustomerId;
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: user.email,
+        metadata: { userId: user.id }
+      });
+      customerId = customer.id;
+      // Persist to local DB user record
+      const dbUser = db.data.users.find(u => u.id === user.id);
+      if (dbUser) {
+        dbUser.stripeCustomerId = customerId;
+        await db.write();
+      }
+    }
+
+    const returnUrl = `${req.headers.origin || 'http://localhost:5173'}/dashboard`;
+    const session = await stripe.billingPortal.sessions.create({
+      customer: customerId,
+      return_url: returnUrl,
+    });
+
+    return res.json({ url: session.url });
+  } catch (e) {
+    console.error('[Stripe] Failed to create billing portal session:', e);
+    return res.status(500).json({ error: 'Failed to create billing portal session' });
+  }
+});
+
 // Stripe: Webhook to handle successful payment and add credits
 app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   let event;
@@ -6746,6 +6797,55 @@ app.get('/api/debug/course/:courseId', authenticateToken, (req, res) => {
   } catch (error) {
     console.error(`[DEBUG] Error in course debug endpoint:`, error);
     res.status(500).json({ error: 'Debug endpoint failed', message: error.message });
+  }
+});
+
+// Delete user account and their data
+app.post('/api/account/delete', authenticateToken, async (req, res) => {
+  try {
+    const { confirm } = req.body || {};
+    if (confirm !== 'Delete') {
+      return res.status(400).json({ error: "Confirmation text must be 'Delete'" });
+    }
+
+    const userId = req.user.id;
+    const userEmail = req.user.email;
+
+    // Remove user's courses
+    const userCourses = (db.data.courses || []).filter(c => c.userId === userId);
+    for (const course of userCourses) {
+      try {
+        // Remove JSON file if present
+        const coursesDir = path.join(__dirname, 'data', 'courses');
+        const courseFilePath = path.join(coursesDir, `${course.id}.json`);
+        if (fs.existsSync(courseFilePath)) {
+          fs.unlinkSync(courseFilePath);
+        }
+      } catch (e) {
+        console.warn('[ACCOUNT DELETE] Failed to delete course file:', course?.id, e?.message);
+      }
+    }
+    db.data.courses = (db.data.courses || []).filter(c => c.userId !== userId);
+
+    // Remove user
+    db.data.users = (db.data.users || []).filter(u => u.id !== userId);
+    await db.write();
+
+    // Optionally delete user from Supabase auth with admin key
+    if (supabaseAdmin && typeof supabaseAdmin.auth?.admin?.deleteUser === 'function') {
+      try {
+        await supabaseAdmin.auth.admin.deleteUser(userId);
+        console.log('[ACCOUNT DELETE] Deleted Supabase user:', userId);
+      } catch (e) {
+        console.warn('[ACCOUNT DELETE] Failed to delete Supabase user:', userId, e?.message);
+      }
+    }
+
+    console.log('[ACCOUNT DELETE] Account deleted for:', { userId, userEmail });
+    return res.json({ success: true });
+  } catch (e) {
+    console.error('[ACCOUNT DELETE] Failed to delete account:', e);
+    return res.status(500).json({ error: 'Failed to delete account' });
   }
 });
 

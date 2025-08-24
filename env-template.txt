@@ -16,6 +16,8 @@ MISTRAL_API_KEY=mist-your-actual-api-key-here
 # Supabase Configuration (optional - for user authentication)
 SUPABASE_URL=your-supabase-url-here
 SUPABASE_ANON_KEY=your-supabase-anon-key-here
+# Optional: Service role key for admin operations (e.g., account deletion)
+SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key-here
 
 # Stripe Configuration (optional - for payments)
 STRIPE_SECRET_KEY=your-stripe-secret-key-here

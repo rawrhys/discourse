@@ -215,6 +215,14 @@ const api = {
     unpublishCourse: (courseId) =>
         apiClient(`/api/courses/${courseId}/unpublish`, { method: 'POST' }),
 
+    // Billing portal session
+    openBillingPortal: () =>
+        apiClient('/api/billing/portal', { method: 'POST' }),
+
+    // Account deletion
+    deleteAccount: (confirm) =>
+        apiClient('/api/account/delete', { method: 'POST', body: JSON.stringify({ confirm }) }),
+
     getCurrentUser: () =>
         apiClient('/api/auth/me'),
 

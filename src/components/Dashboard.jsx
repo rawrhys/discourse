@@ -32,6 +32,11 @@ const Dashboard = () => {
   const [isUpdatingCourseState, setIsUpdatingCourseState] = useState(false);
   const urlParams = new URLSearchParams(window.location.search);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
+  // Settings modal state
+  const [showSettings, setShowSettings] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [isOpeningPortal, setIsOpeningPortal] = useState(false);
   
   // ETA countdown for generation
   const [etaTotalSec, setEtaTotalSec] = useState(0);
@@ -762,6 +767,12 @@ const Dashboard = () => {
                 Report Problem
               </button>
               <button
+                onClick={() => setShowSettings(true)}
+                className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors"
+              >
+                Settings
+              </button>
+              <button
                 onClick={handleLogout}
                 className="text-sm text-gray-600 hover:text-gray-900"
               >
@@ -1442,6 +1453,89 @@ const Dashboard = () => {
                 >
                   Delete
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Settings Modal */}
+        {showSettings && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold">Settings</h3>
+                <button onClick={() => setShowSettings(false)} className="text-gray-500 hover:text-gray-700">✕</button>
+              </div>
+
+              <div className="space-y-6">
+                <div>
+                  <h4 className="text-sm font-medium text-gray-900 mb-2">Manage Payments</h4>
+                  <p className="text-sm text-gray-600 mb-3">Open Stripe to manage your subscription, payment method, or invoices.</p>
+                  <button
+                    onClick={async () => {
+                      try {
+                        setIsOpeningPortal(true);
+                        const result = await api.openBillingPortal();
+                        const url = result?.url;
+                        if (url) {
+                          window.location.href = url;
+                        } else {
+                          alert('Unable to open billing portal.');
+                        }
+                      } catch (e) {
+                        alert('Failed to open billing portal: ' + (e?.message || 'Unknown error'));
+                      } finally {
+                        setIsOpeningPortal(false);
+                      }
+                    }}
+                    disabled={isOpeningPortal}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                  >
+                    {isOpeningPortal ? 'Opening…' : 'Manage Payments'}
+                  </button>
+                </div>
+
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-medium text-gray-900 mb-2">Delete Account</h4>
+                  <p className="text-sm text-gray-600 mb-3">Type <span className="font-semibold">Delete</span> to confirm. This will remove your account and all courses.</p>
+                  <input
+                    type="text"
+                    value={deleteConfirm}
+                    onChange={(e) => setDeleteConfirm(e.target.value)}
+                    placeholder="Type Delete to confirm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md mb-3"
+                  />
+                  <div className="flex justify-end gap-3">
+                    <button
+                      onClick={() => setShowSettings(false)}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (deleteConfirm !== 'Delete') {
+                          alert("Please type 'Delete' to confirm.");
+                          return;
+                        }
+                        try {
+                          setIsDeletingAccount(true);
+                          await api.deleteAccount('Delete');
+                          await logout();
+                          navigate('/login');
+                        } catch (e) {
+                          alert('Failed to delete account: ' + (e?.message || 'Unknown error'));
+                        } finally {
+                          setIsDeletingAccount(false);
+                        }
+                      }}
+                      disabled={deleteConfirm !== 'Delete' || isDeletingAccount}
+                      className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md disabled:opacity-50"
+                    >
+                      {isDeletingAccount ? 'Deleting…' : 'Delete Account'}
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
