@@ -175,6 +175,13 @@ const Dashboard = () => {
           token = user?.access_token || localStorage.getItem('token');
         }
 
+        // Avoid cross-origin SSE which can 401 on some backends; rely on fallbacks instead
+        const sameOrigin = !API_BASE_URL || String(API_BASE_URL).replace(/\/$/, '') === window.location.origin;
+        if (!sameOrigin) {
+          logger.warn('🔗 [DASHBOARD] Skipping SSE connection due to cross-origin backend; using polling fallbacks');
+          return;
+        }
+
         logger.debug('🔗 [DASHBOARD] Setting up SSE connection with token:', {
           hasToken: !!token,
           tokenLength: token ? token.length : 0,
@@ -287,6 +294,7 @@ const Dashboard = () => {
 
   // Start monitoring if we're currently generating a course
   useEffect(() => {
+    let monitoringInterval = null;
     if (isMonitoring) {
       logger.info('🔍 [DASHBOARD] Starting global course generation monitoring');
       
