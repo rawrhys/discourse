@@ -283,14 +283,10 @@ const Dashboard = () => {
           courseNotificationService.disconnect();
         };
       }
-    }
-  }, [user, api, isUpdatingCourseState]);
+    }, [user, api, isUpdatingCourseState]);
 
-  // Add a global course generation monitoring system
+  // Start monitoring if we're currently generating a course
   useEffect(() => {
-    let monitoringInterval = null;
-    
-    // Start monitoring if we're currently generating a course
     if (isMonitoring) {
       logger.info('🔍 [DASHBOARD] Starting global course generation monitoring');
       
