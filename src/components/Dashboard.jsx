@@ -1046,7 +1046,9 @@ const Dashboard = () => {
                               >
                                 Continue Learning →
                               </button>
-                              {course.published && (
+                              {course.published && !course.title?.toLowerCase().includes('welcome to discourse ai') && 
+                               !course.title?.toLowerCase().includes('onboarding') && 
+                               !course.id?.includes('discourse-ai-onboarding') && (
                                 <button
                                   onClick={() => {
                                     const publicUrl = `${window.location.origin}/public/course/${course.id}`;
@@ -1067,6 +1069,9 @@ const Dashboard = () => {
                                   Share
                                 </button>
                               )}
+                              {!course.title?.toLowerCase().includes('welcome to discourse ai') && 
+                               !course.title?.toLowerCase().includes('onboarding') && 
+                               !course.id?.includes('discourse-ai-onboarding') && (
                               <button
                                 onClick={async () => {
                                   // Prevent multiple clicks
@@ -1260,6 +1265,7 @@ const Dashboard = () => {
                               >
                                 {isUpdatingCourseState ? 'Updating...' : (course.published ? 'Unpublish' : 'Publish')}
                               </button>
+                              )}
                             </div>
                           </div>
                         </div>

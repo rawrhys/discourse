@@ -6183,6 +6183,17 @@ Complete this lesson to unlock more content and continue your learning journey.`
       course = fallbackCourse;
     }
     
+    // Block public access to onboarding course
+    if (course.title?.toLowerCase().includes('welcome to discourse ai') || 
+        course.title?.toLowerCase().includes('onboarding') ||
+        course.id?.includes('discourse-ai-onboarding')) {
+      console.log(`[API] Blocking public access to onboarding course: ${normalizedId}`);
+      return res.status(403).json({ 
+        error: 'Access Denied',
+        message: 'This course is not available for public access.'
+      });
+    }
+    
     if (!course.published) {
       console.log(`[API] Course ${normalizedId} is not published`);
       return res.status(404).json({ 

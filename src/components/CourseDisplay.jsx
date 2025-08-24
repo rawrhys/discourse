@@ -438,7 +438,11 @@ const CourseDisplay = () => {
         </div>
         <nav className="flex-1 overflow-y-auto p-4 space-y-2">
           {course.modules.map((module, moduleIndex) => {
-            const isLocked = !unlockedModules.has(module.id);
+            // For onboarding course, never lock modules
+            const isOnboardingCourse = course.title?.toLowerCase().includes('welcome to discourse ai') || 
+                                     course.title?.toLowerCase().includes('onboarding') ||
+                                     course.id?.includes('discourse-ai-onboarding');
+            const isLocked = isOnboardingCourse ? false : !unlockedModules.has(module.id);
             const lessonsWithQuizzes = module.lessons.filter(l => l.quiz && l.quiz.length > 0);
             const perfectScores = lessonsWithQuizzes.filter(l => 
               l.quizScores && l.quizScores[user?.id] === 5
@@ -517,6 +521,9 @@ const CourseDisplay = () => {
             );
           })}
         </nav>
+        {!course.title?.toLowerCase().includes('welcome to discourse ai') && 
+         !course.title?.toLowerCase().includes('onboarding') && 
+         !course.id?.includes('discourse-ai-onboarding') && (
         <div className="p-4 border-t">
           <button 
             onClick={handleShare} 
@@ -532,6 +539,7 @@ const CourseDisplay = () => {
               {shareCopied && <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-green-600 text-white text-xs rounded px-2 py-1 shadow-lg">Copied!</span>}
           </button>
         </div>
+        )}
       </div>
 
       <div className="flex-1 flex flex-col overflow-hidden">

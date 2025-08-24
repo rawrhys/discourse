@@ -1102,7 +1102,11 @@ const PublicCourseDisplay = () => {
   const renderModule = (module, moduleIndex) => {
     if (!module || !module.id) return null;
     
-    const isLocked = !unlockedModules.has(module.id);
+    // For onboarding course, never lock modules
+    const isOnboardingCourse = course.title?.toLowerCase().includes('welcome to discourse ai') || 
+                               course.title?.toLowerCase().includes('onboarding') ||
+                               course.id?.includes('discourse-ai-onboarding');
+    const isLocked = isOnboardingCourse ? false : !unlockedModules.has(module.id);
     const lessonsWithQuizzes = module.lessons?.filter(l => l.quiz && l.quiz.length > 0) || [];
     const perfectScores = lessonsWithQuizzes.filter(l => l.quizScore === 5);
     const quizProgress = lessonsWithQuizzes.length > 0 ? `${perfectScores.length}/${lessonsWithQuizzes.length}` : null;
