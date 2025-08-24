@@ -1333,6 +1333,64 @@ const LessonView = ({
       console.log('[LessonView] View state updated to:', newView);
     }
   }, [view]);
+  
+  // Automatic image replacement for music content
+  useEffect(() => {
+    const autoReplaceMusicImages = async () => {
+      // Check if this is music-related content
+      const isMusicContent = subject && (
+        subject.toLowerCase().includes('music') || 
+        propLesson?.title?.toLowerCase().includes('music') ||
+        propLesson?.title?.toLowerCase().includes('beatles') ||
+        propLesson?.title?.toLowerCase().includes('lennon') ||
+        propLesson?.title?.toLowerCase().includes('mccartney')
+      );
+      
+      if (isMusicContent && propLesson?.imageUrl) {
+        try {
+          console.log('[LessonView] Auto-detected music content, checking image relevance...');
+          
+          // Import and use SimpleImageService to check and replace if needed
+          const { default: SimpleImageService } = await import('../services/SimpleImageService.js');
+          
+          // Check if current image is relevant to music
+          const currentImageTitle = propLesson.imageTitle || '';
+          const isImageRelevant = SimpleImageService.detectMusicContent(currentImageTitle);
+          
+          if (!isImageRelevant) {
+            console.log('[LessonView] Current image is not music-relevant, auto-replacing...');
+            
+            const newImage = await SimpleImageService.forceReplaceMusicImages(
+              propLesson.title,
+              courseId,
+              propLesson.id,
+              [],
+              []
+            );
+            
+            if (newImage) {
+              console.log('[LessonView] Auto-replaced with music-relevant image:', newImage.title);
+              // Update the lesson with the new image
+              if (onUpdateLesson) {
+                onUpdateLesson({
+                  ...propLesson,
+                  imageUrl: newImage.url,
+                  imageTitle: newImage.title
+                });
+              }
+            }
+          }
+        } catch (error) {
+          console.warn('[LessonView] Auto image replacement failed:', error);
+        }
+      }
+    };
+    
+    // Run auto-replacement when component mounts or lesson changes
+    if (propLesson && subject) {
+      autoReplaceMusicImages();
+    }
+  }, [propLesson, subject, courseId, onUpdateLesson]);
 
   // Image handling effect
   useEffect(() => {
@@ -1705,36 +1763,7 @@ const LessonView = ({
             <i className="fas fa-book-open mr-2"></i>Lesson
           </button>
           
-          {/* Force image replacement button for music content */}
-          {subject && (subject.toLowerCase().includes('music') || propLesson?.title?.toLowerCase().includes('music') || propLesson?.title?.toLowerCase().includes('beatles')) && (
-            <button
-              onClick={async () => {
-                try {
-                  console.log('[LessonView] Force replacing music images for:', propLesson.title);
-                  // Import and use SimpleImageService to force replace images
-                  const { default: SimpleImageService } = await import('../services/SimpleImageService.js');
-                  const newImage = await SimpleImageService.forceReplaceMusicImages(
-                    propLesson.title,
-                    courseId,
-                    propLesson.id,
-                    [],
-                    []
-                  );
-                  if (newImage) {
-                    console.log('[LessonView] New music image loaded:', newImage.title);
-                    // Force a re-render to show the new image
-                    window.location.reload();
-                  }
-                } catch (error) {
-                  console.error('[LessonView] Failed to replace music image:', error);
-                }
-              }}
-              className="px-4 py-2 text-sm font-medium rounded-md transition-colors bg-yellow-500 text-white hover:bg-yellow-600"
-              title="Replace with music-relevant image"
-            >
-              <i className="fas fa-music mr-2"></i>Replace Image
-            </button>
-          )}
+
           <button
             onClick={() => {
               if (process.env.NODE_ENV === 'development') {
@@ -1865,121 +1894,7 @@ const LessonView = ({
           </div>
         )}
         
-        {/* Manual refresh button for academic references */}
-        <div className="mb-4 text-center">
-          <button
-            onClick={async () => {
-              console.log('🎯 [LessonView] BUTTON CLICKED! Manual refresh of academic references triggered');
-              console.log('[LessonView] Button clicked - starting refresh process');
-              
-              // Simple test to make sure button click is working
-              alert('Button clicked! Check console for debug info.');
-              
-              // Debug: Log all the data we need
-              console.log('[LessonView] Data check:', {
-                hasPropLesson: !!propLesson,
-                hasContent: !!propLesson?.content,
-                hasTitle: !!propLesson?.title,
-                hasSubject: !!subject,
-                propLessonKeys: propLesson ? Object.keys(propLesson) : 'NO_LESSON',
-                subject: subject,
-                timestamp: new Date().toISOString()
-              });
-              
-              if (!propLesson?.content || !propLesson?.title || !subject) {
-                console.log('[LessonView] Cannot refresh - missing required data:', {
-                  hasContent: !!propLesson?.content,
-                  hasTitle: !!propLesson?.title,
-                  hasSubject: !!subject
-                });
-                return;
-              }
-              
-              try {
-                const lessonContentString = getContentAsString(propLesson.content);
-                
-                // Only generate if content is substantial
-                if (lessonContentString.length < 100) {
-                  console.log('[LessonView] Content too short for references:', lessonContentString.length);
-                  setReferencesError('Lesson content is too short to generate meaningful references (minimum 100 characters)');
-                  return;
-                }
-                
-                console.log('[LessonView] Manually generating authentic academic references for:', {
-                  lessonTitle: propLesson.title,
-                  courseSubject: subject,
-                  contentLength: lessonContentString?.length || 0
-                });
-                
-                setIsGeneratingReferences(true);
-                setReferencesError(null);
-                setAcademicReferences([]);
-                
-                // Debug: Check if API service is available
-                console.log('[LessonView] API service check:', {
-                  hasApi: !!api,
-                  hasGenerateMethod: typeof api?.generateAuthenticBibliography === 'function',
-                  apiMethods: Object.keys(api || {}),
-                  timestamp: new Date().toISOString()
-                });
-                
-                // Debug: Log the exact function call we're about to make
-                console.log('[LessonView] About to call API function:', {
-                  functionName: 'api.generateAuthenticBibliography',
-                  functionType: typeof api.generateAuthenticBibliography,
-                  isFunction: typeof api.generateAuthenticBibliography === 'function',
-                  apiObject: api,
-                  timestamp: new Date().toISOString()
-                });
-                
-                // Use AI service to generate authentic academic references
-                console.log('[LessonView] Calling API to generate bibliography:', {
-                  topic: propLesson.title,
-                  subject: subject,
-                  numReferences: 5,
-                  contentLength: lessonContentString.length,
-                  apiCall: 'api.generateAuthenticBibliography()'
-                });
-                
-                console.log('[LessonView] Making the actual API call now...');
-                const references = await api.generateAuthenticBibliography(
-                  propLesson.title,
-                  subject,
-                  5, // Number of references
-                  lessonContentString
-                );
-                console.log('[LessonView] API call completed, received response');
-                
-                console.log('[LessonView] Manual refresh - authentic academic references generated:', {
-                  referencesCount: references.length,
-                  references: references,
-                  lessonContentStringLength: lessonContentString?.length || 0,
-                  courseSubject: subject,
-                  lessonTitle: propLesson.title
-                });
-                
-                if (references && references.length > 0) {
-                  setAcademicReferences(references);
-                  setReferencesError(null);
-                } else {
-                  console.warn('[LessonView] No references returned from API during manual refresh');
-                  setReferencesError('No references generated - please try again');
-                  setAcademicReferences([]);
-                }
-              } catch (error) {
-                console.error('[LessonView] Error during manual refresh of academic references:', error);
-                setReferencesError(`Failed to generate references: ${error.message}`);
-                setAcademicReferences([]);
-              } finally {
-                setIsGeneratingReferences(false);
-              }
-            }}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 text-sm"
-            disabled={isGeneratingReferences}
-          >
-            {isGeneratingReferences ? 'Generating...' : 'Refresh Academic References'}
-          </button>
-        </div>
+
         
         {/* Navigation Section */}
         <div className="flex flex-col sm:flex-row items-center space-y-3 sm:space-y-0 sm:justify-between">
