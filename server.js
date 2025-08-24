@@ -2119,12 +2119,53 @@ Context: "${context.substring(0, 1000)}..."`;
   }
 
   // Met Museum image service removed
+  
+  // Detect music category for automatic music context detection
+  detectMusicCategory(subject) {
+    if (!subject) return null;
+    
+    const text = subject.toLowerCase();
+    
+    // Music categories with their specific terms
+    const musicCategories = {
+      classical: ['orchestra', 'symphony', 'classical music', 'concert hall', 'conductor', 'violin', 'cello', 'piano', 'flute', 'clarinet', 'trumpet', 'trombone', 'french horn', 'timpani', 'harp', 'oboe', 'bassoon', 'percussion', 'string quartet', 'chamber music'],
+      jazz: ['jazz music', 'jazz band', 'saxophone', 'trumpet', 'piano', 'double bass', 'drums', 'jazz club', 'jazz musician', 'improvisation', 'swing', 'bebop', 'cool jazz', 'fusion', 'smooth jazz', 'jazz festival', 'jazz ensemble'],
+      rock: ['rock music', 'electric guitar', 'bass guitar', 'drums', 'rock band', 'concert', 'stage', 'microphone', 'amplifier', 'rock concert', 'music festival', 'band performance', 'electric bass', 'keyboard', 'synthesizer', 'rock star'],
+      folk: ['folk music', 'acoustic guitar', 'banjo', 'mandolin', 'fiddle', 'harmonica', 'accordion', 'traditional music', 'cultural music', 'ethnic music', 'world music', 'indigenous music', 'heritage music', 'roots music'],
+      electronic: ['electronic music', 'synthesizer', 'drum machine', 'dj equipment', 'music production', 'studio equipment', 'digital audio', 'electronic instruments', 'music technology', 'computer music', 'electronic dance music'],
+      historical: ['medieval music', 'renaissance music', 'baroque music', 'classical period', 'romantic music', 'early music', 'ancient music', 'historical instruments', 'period instruments', 'music manuscript', 'music history'],
+      cultural: ['african music', 'asian music', 'latin music', 'middle eastern music', 'indian music', 'chinese music', 'japanese music', 'celtic music', 'slavic music', 'arabic music', 'flamenco', 'tango', 'samba', 'reggae']
+    };
+    
+    // Check for specific music categories
+    for (const [category, terms] of Object.entries(musicCategories)) {
+      for (const term of terms) {
+        if (text.includes(term)) {
+          return category;
+        }
+      }
+    }
+    
+    // Check for general music terms
+    const generalMusicTerms = ['music', 'musical', 'melody', 'rhythm', 'harmony', 'composition', 'performance', 'concert', 'song', 'tune', 'note', 'scale', 'chord', 'tempo', 'beat', 'pitch', 'sound', 'audio'];
+    
+    for (const term of generalMusicTerms) {
+      if (text.includes(term)) {
+        return 'general';
+      }
+    }
+    
+    return null;
+  }
    
   // Try Wikipedia first; then Pixabay - optimized with parallel execution and caching
   async fetchRelevantImage(subject, content = '', usedImageTitles = [], usedImageUrls = [], options = { relaxed: false }, courseContext = {}) {
-    // Check if this is a music-related request
-    const isMusicRequest = options.musicContext || courseContext?.musicContext;
-    const musicCategory = options.musicCategory || courseContext?.musicCategory;
+      // Check if this is a music-related request
+  const isMusicRequest = options.musicContext || courseContext?.musicContext || 
+                        (subject && /\b(music|musical|melody|rhythm|harmony|composition|performance|concert|song|tune|note|scale|chord|tempo|beat|pitch|sound|audio|orchestra|band|ensemble|singer|vocal|instrument|piano|guitar|violin|drums|trumpet|saxophone|flute|clarinet|cello|bass|jazz|rock|pop|folk|classical|electronic|blues|country|reggae|symphony|sonata|concerto|opera|ballet)\b/i.test(subject));
+  
+  const musicCategory = options.musicCategory || courseContext?.musicCategory || 
+                       (isMusicRequest ? this.detectMusicCategory(subject) : null);
     
     // Create cache key for this search - include used images to prevent duplicates
     // Use a more unique cache key that includes lesson-specific information

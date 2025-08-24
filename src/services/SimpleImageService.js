@@ -192,6 +192,12 @@ const SimpleImageService = {
       console.log('[SimpleImageService] Detected music content, using MusicImageService');
       return await musicImageService.searchMusicImages(lessonTitle, courseId, lessonId, usedImageTitles, usedImageUrls);
     }
+    
+    // For non-music content, try to detect if it's historical content to avoid using historical fallbacks for music
+    const isHistoricalContent = this.detectHistoricalContent(lessonTitle);
+    if (isHistoricalContent && !isMusicContent) {
+      console.log('[SimpleImageService] Detected historical content, using historical fallbacks');
+    }
 
     const cacheKey = this.getCacheKey(lessonTitle, courseId, lessonId);
     
@@ -539,6 +545,20 @@ const SimpleImageService = {
     ];
     
     return musicTerms.some(term => text.includes(term));
+  },
+  
+  // Detect if content is historical-related
+  detectHistoricalContent(lessonTitle) {
+    const text = lessonTitle.toLowerCase();
+    
+    // Historical-specific terms
+    const historicalTerms = [
+      'history', 'ancient', 'rome', 'greek', 'egypt', 'medieval', 'renaissance', 'empire',
+      'republic', 'kingdom', 'dynasty', 'civilization', 'war', 'battle', 'revolution',
+      'pharaoh', 'emperor', 'king', 'queen', 'temple', 'ruins', 'artifact', 'manuscript'
+    ];
+    
+    return historicalTerms.some(term => text.includes(term));
   }
 };
 
