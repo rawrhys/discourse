@@ -1704,6 +1704,37 @@ const LessonView = ({
           >
             <i className="fas fa-book-open mr-2"></i>Lesson
           </button>
+          
+          {/* Force image replacement button for music content */}
+          {subject && (subject.toLowerCase().includes('music') || propLesson?.title?.toLowerCase().includes('music') || propLesson?.title?.toLowerCase().includes('beatles')) && (
+            <button
+              onClick={async () => {
+                try {
+                  console.log('[LessonView] Force replacing music images for:', propLesson.title);
+                  // Import and use SimpleImageService to force replace images
+                  const { default: SimpleImageService } = await import('../services/SimpleImageService.js');
+                  const newImage = await SimpleImageService.forceReplaceMusicImages(
+                    propLesson.title,
+                    courseId,
+                    propLesson.id,
+                    [],
+                    []
+                  );
+                  if (newImage) {
+                    console.log('[LessonView] New music image loaded:', newImage.title);
+                    // Force a re-render to show the new image
+                    window.location.reload();
+                  }
+                } catch (error) {
+                  console.error('[LessonView] Failed to replace music image:', error);
+                }
+              }}
+              className="px-4 py-2 text-sm font-medium rounded-md transition-colors bg-yellow-500 text-white hover:bg-yellow-600"
+              title="Replace with music-relevant image"
+            >
+              <i className="fas fa-music mr-2"></i>Replace Image
+            </button>
+          )}
           <button
             onClick={() => {
               if (process.env.NODE_ENV === 'development') {

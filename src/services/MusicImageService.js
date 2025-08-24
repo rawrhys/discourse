@@ -27,7 +27,9 @@ class MusicImageService {
       // Rock/Pop
       rock: [
         'rock music', 'electric guitar', 'bass guitar', 'drums', 'rock band', 'concert', 'stage', 'microphone', 'amplifier',
-        'rock concert', 'music festival', 'band performance', 'electric bass', 'keyboard', 'synthesizer', 'rock star'
+        'rock concert', 'music festival', 'band performance', 'electric bass', 'keyboard', 'synthesizer', 'rock star',
+        'beatles', 'beatle', 'lennon', 'mccartney', 'harrison', 'starr', 'ringo', 'paul', 'john', 'george',
+        'album', 'single', 'record', 'recording', 'studio', 'producer', 'arrangement', 'lyrics'
       ],
       
       // Folk/Traditional
@@ -346,6 +348,20 @@ class MusicImageService {
     const fallbacks = this.musicFallbacks[category] || this.musicFallbacks.general;
     const randomIndex = Math.floor(Math.random() * fallbacks.length);
     return fallbacks[randomIndex];
+  }
+  
+  /**
+   * Force image replacement for existing courses with irrelevant images
+   */
+  async forceImageReplacement(lessonTitle, courseId, lessonId, usedImageTitles = [], usedImageUrls = []) {
+    console.log('[MusicImageService] Force replacing image for:', lessonTitle);
+    
+    // Clear any cached results to force fresh search
+    const cacheKey = this.getCacheKey(lessonTitle, courseId, lessonId);
+    this.cache.delete(cacheKey);
+    
+    // Perform fresh music-specific search
+    return await this.searchMusicImages(lessonTitle, courseId, lessonId, usedImageTitles, usedImageUrls);
   }
 
   /**

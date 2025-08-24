@@ -193,6 +193,14 @@ const SimpleImageService = {
       return await musicImageService.searchMusicImages(lessonTitle, courseId, lessonId, usedImageTitles, usedImageUrls);
     }
     
+    // Also check course context for music-related content
+    const courseContext = await this.getCourseContext(courseId);
+    if (courseContext && this.detectMusicContent(courseContext.title || courseContext.subject || '')) {
+      console.log('[SimpleImageService] Detected music content from course context, using MusicImageService');
+      console.log('[SimpleImageService] Course title suggests music content:', courseContext.title);
+      return await musicImageService.searchMusicImages(lessonTitle, courseId, lessonId, usedImageTitles, usedImageUrls);
+    }
+    
     // For non-music content, try to detect if it's historical content to avoid using historical fallbacks for music
     const isHistoricalContent = this.detectHistoricalContent(lessonTitle);
     if (isHistoricalContent && !isMusicContent) {
@@ -541,7 +549,11 @@ const SimpleImageService = {
       'orchestra', 'band', 'ensemble', 'singer', 'vocal', 'instrument', 'piano', 'guitar',
       'violin', 'drums', 'trumpet', 'saxophone', 'flute', 'clarinet', 'cello', 'bass',
       'jazz', 'rock', 'pop', 'folk', 'classical', 'electronic', 'blues', 'country', 'reggae',
-      'symphony', 'sonata', 'concerto', 'opera', 'ballet', 'musical theater', 'recital'
+      'symphony', 'sonata', 'concerto', 'opera', 'ballet', 'musical theater', 'recital',
+      // Beatles and music history specific terms
+      'beatles', 'beatle', 'lennon', 'mccartney', 'harrison', 'starr', 'ringo', 'paul', 'john', 'george',
+      'album', 'single', 'record', 'recording', 'studio', 'producer', 'arrangement', 'lyrics',
+      'guitar riff', 'bass line', 'drum beat', 'vocal harmony', 'backup vocals', 'lead singer'
     ];
     
     return musicTerms.some(term => text.includes(term));
@@ -559,6 +571,32 @@ const SimpleImageService = {
     ];
     
     return historicalTerms.some(term => text.includes(term));
+  },
+  
+  // Get course context to check if the entire course is music-related
+  async getCourseContext(courseId) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/courses/${courseId}`);
+      if (response.ok) {
+        const course = await response.json();
+        return course;
+      }
+    } catch (error) {
+      console.warn('[SimpleImageService] Failed to get course context:', error);
+    }
+    return null;
+  },
+  
+  // Force replace existing irrelevant images for music content
+  async forceReplaceMusicImages(lessonTitle, courseId, lessonId, usedImageTitles = [], usedImageUrls = []) {
+    console.log('[SimpleImageService] Force replacing music images for:', lessonTitle);
+    
+    // Clear cache to force fresh search
+    const cacheKey = this.getCacheKey(lessonTitle, courseId, lessonId);
+    this.cache.delete(cacheKey);
+    
+    // Use MusicImageService to get fresh music-relevant images
+    return await musicImageService.forceImageReplacement(lessonTitle, courseId, lessonId, usedImageTitles, usedImageUrls);
   }
 };
 
