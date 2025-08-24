@@ -447,12 +447,33 @@ const PublicLessonView = ({
     
     const generateReferences = async () => {
       try {
+        const currentLessonId = lesson.id || `${lesson.title}_${subject}`;
+        const lastLessonId = AcademicReferencesService.getLastProcessedLessonId();
+        
+        // Check if we already have references in state for this lesson
+        if (academicReferences.length > 0 && lastLessonId === currentLessonId) {
+          console.log('[PublicLessonView] References already loaded for lesson:', currentLessonId);
+          return;
+        }
+        
+        // If switching to a different lesson, clear the current references first
+        if (lastLessonId && lastLessonId !== currentLessonId) {
+          console.log('[PublicLessonView] Switching to new lesson, clearing previous references');
+          setAcademicReferences([]);
+          setReferencesFooter(null);
+        }
+        
+        // Check if this lesson is already being processed to prevent duplicate generation
+        if (AcademicReferencesService.isLessonBeingProcessed(currentLessonId)) {
+          console.log('[PublicLessonView] Lesson is already being processed:', currentLessonId);
+          return;
+        }
+        
         // Check if we already have saved references for this lesson
-        const lessonId = lesson.id || `${lesson.title}_${subject}`;
-        const savedReferences = AcademicReferencesService.getSavedReferences(lessonId);
+        const savedReferences = AcademicReferencesService.getSavedReferences(currentLessonId);
         
         if (savedReferences && savedReferences.length > 0) {
-          console.log('[PublicLessonView] Using saved references for lesson:', lessonId);
+          console.log('[PublicLessonView] Using saved references for lesson:', currentLessonId);
           setAcademicReferences(savedReferences);
           
           // Generate content with inline citations using saved references
@@ -472,10 +493,17 @@ const PublicLessonView = ({
             console.warn('[PublicLessonView] Failed to create references footer from saved references:', error);
           }
           
+          // Mark this lesson as processed
+          AcademicReferencesService.setLastProcessedLessonId(currentLessonId);
+          // Ensure processing flag is cleared
+          AcademicReferencesService.markLessonAsNotProcessing(currentLessonId);
           return;
         }
         
         console.log('[PublicLessonView] Generating authentic academic references for:', lesson.title);
+        
+        // Mark this lesson as being processed to prevent duplicate generation
+        AcademicReferencesService.markLessonAsProcessing(currentLessonId);
         
         // Use AI service to generate authentic academic references
         const references = await api.generateAuthenticBibliography(
@@ -498,8 +526,11 @@ const PublicLessonView = ({
         console.log('[PublicLessonView] Authentic academic references generated:', references);
         
         // Save the generated references for future use
-        AcademicReferencesService.saveReferences(lessonId, references);
+        AcademicReferencesService.saveReferences(currentLessonId, references);
         console.log('[PublicLessonView] References saved for future use');
+        
+        // Mark this lesson as processed
+        AcademicReferencesService.setLastProcessedLessonId(currentLessonId);
         
         // Create references footer
         try {
@@ -535,11 +566,15 @@ const PublicLessonView = ({
           console.error('[PublicLessonView] Fallback reference generation also failed:', fallbackError);
           setAcademicReferences([]);
         }
+      } finally {
+        // Mark this lesson as no longer processing
+        const currentLessonId = lesson.id || `${lesson.title}_${subject}`;
+        AcademicReferencesService.markLessonAsNotProcessing(currentLessonId);
       }
     };
     
     generateReferences();
-  }, [renderPhase, deferredContent, subject, lesson?.title, courseDescription]);
+  }, [renderPhase, subject, lesson?.id, lesson?.title]); // Only depend on lesson ID and title, not content
 
   // Get flashcards data
   const flashcardData = lesson?.flashcards || lesson?.content?.flashcards || [];

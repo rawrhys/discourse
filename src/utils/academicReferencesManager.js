@@ -96,6 +96,24 @@ if (typeof window !== 'undefined') {
     },
 
     /**
+     * Get the last processed lesson ID
+     */
+    getLastProcessed() {
+      const lastId = academicReferencesService.getLastProcessedLessonId();
+      console.log('Last processed lesson ID:', lastId);
+      return lastId;
+    },
+
+    /**
+     * Clear the last processed lesson ID
+     */
+    clearLastProcessed() {
+      const result = academicReferencesService.clearLastProcessedLessonId();
+      console.log('Cleared last processed lesson ID:', result);
+      return result;
+    },
+
+    /**
      * Help function
      */
     help() {
@@ -109,12 +127,15 @@ Academic References Manager - Available Commands:
 📋 listLessons()        - List all lesson IDs with saved references
 🔍 getLessonReferences(lessonId) - Get references for a specific lesson
 ✅ hasReferences(lessonId) - Check if a lesson has saved references
+🔄 getLastProcessed()   - Get last processed lesson ID
+🗑️  clearLastProcessed() - Clear last processed lesson ID
 ❓ help()               - Show this help message
 
 Examples:
   AcademicReferencesManager.getStats()
   AcademicReferencesManager.listLessons()
   AcademicReferencesManager.getLessonReferences('lesson_123')
+  AcademicReferencesManager.getLastProcessed()
       `);
     }
   };

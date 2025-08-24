@@ -535,8 +535,30 @@ const LessonView = ({
         return;
       }
       
+      const currentLessonId = propLesson.id || `${propLesson.title}_${subject}`;
+      const lastLessonId = academicReferencesService.getLastProcessedLessonId();
+      
+      // Check if we already have references in state for this lesson
+      if (academicReferences.length > 0 && !isGeneratingReferences && lastLessonId === currentLessonId) {
+        console.log('[LessonView] References already loaded for lesson:', currentLessonId);
+        return;
+      }
+      
+      // If switching to a different lesson, clear the current references first
+      if (lastLessonId && lastLessonId !== currentLessonId) {
+        console.log('[LessonView] Switching to new lesson, clearing previous references');
+        setAcademicReferences([]);
+        setIsGeneratingReferences(false);
+        setReferencesError(null);
+      }
+      
+      // Check if this lesson is already being processed to prevent duplicate generation
+      if (academicReferencesService.isLessonBeingProcessed(lessonId)) {
+        console.log('[LessonView] Lesson is already being processed:', lessonId);
+        return;
+      }
+      
       // Check if we already have saved references for this lesson
-      const lessonId = propLesson.id || `${propLesson.title}_${subject}`;
       const savedReferences = academicReferencesService.getSavedReferences(lessonId);
       
       if (savedReferences && savedReferences.length > 0) {
@@ -544,6 +566,10 @@ const LessonView = ({
         setAcademicReferences(savedReferences);
         setIsGeneratingReferences(false);
         setReferencesError(null);
+        // Mark this lesson as processed
+        academicReferencesService.setLastProcessedLessonId(lessonId);
+        // Ensure processing flag is cleared
+        academicReferencesService.markLessonAsNotProcessing(lessonId);
         return;
       }
       
@@ -554,6 +580,8 @@ const LessonView = ({
         if (lessonContentString.length < 100) {
           console.log('[LessonView] Content too short for references:', lessonContentString.length);
           setAcademicReferences([]);
+          // Ensure processing flag is cleared
+          academicReferencesService.markLessonAsNotProcessing(lessonId);
           return;
         }
         
@@ -573,6 +601,9 @@ const LessonView = ({
         
         setIsGeneratingReferences(true);
         setReferencesError(null);
+        
+        // Mark this lesson as being processed to prevent duplicate generation
+        academicReferencesService.markLessonAsProcessing(lessonId);
         
         // Use AI service to generate authentic academic references
         console.log('[LessonView] Calling API to generate bibliography:', {
@@ -642,11 +673,13 @@ const LessonView = ({
         }
       } finally {
         setIsGeneratingReferences(false);
+        // Mark this lesson as no longer processing
+        academicReferencesService.markLessonAsNotProcessing(lessonId);
       }
     };
 
     generateAuthenticReferences();
-  }, [propLesson?.content, propLesson?.title, subject]);
+  }, [propLesson?.id, subject]); // Only depend on lesson ID and subject, not content or title
 
   // Handle citation click
   const handleCitationClick = useCallback((referenceId) => {

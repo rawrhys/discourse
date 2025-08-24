@@ -18,6 +18,7 @@ class AcademicReferencesService {
     
     // Initialize storage for saved references
     this.storageKey = 'academic_references_cache';
+    this.lastProcessedKey = 'academic_references_last_processed';
     this.initializeStorage();
   }
 
@@ -171,6 +172,118 @@ class AcademicReferencesService {
       }
     } catch (error) {
       console.warn('[AcademicReferencesService] Failed to import references:', error);
+    }
+    return false;
+  }
+
+  /**
+   * Get the last processed lesson ID to prevent unnecessary regeneration
+   */
+  getLastProcessedLessonId() {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        return localStorage.getItem(this.lastProcessedKey);
+      }
+    } catch (error) {
+      console.warn('[AcademicReferencesService] Failed to get last processed lesson ID:', error);
+    }
+    return null;
+  }
+
+  /**
+   * Set the last processed lesson ID to prevent unnecessary regeneration
+   */
+  setLastProcessedLessonId(lessonId) {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage && lessonId) {
+        localStorage.setItem(this.lastProcessedKey, lessonId);
+        console.log('[AcademicReferencesService] Set last processed lesson ID:', lessonId);
+        return true;
+      }
+    } catch (error) {
+      console.warn('[AcademicReferencesService] Failed to set last processed lesson ID:', error);
+    }
+    return false;
+  }
+
+  /**
+   * Clear the last processed lesson ID (useful for debugging)
+   */
+  clearLastProcessedLessonId() {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.removeItem(this.lastProcessedKey);
+        console.log('[AcademicReferencesService] Cleared last processed lesson ID');
+        return true;
+      }
+    } catch (error) {
+      console.warn('[AcademicReferencesService] Failed to clear last processed lesson ID:', error);
+    }
+    return false;
+  }
+
+  /**
+   * Check if a lesson is currently being processed to prevent duplicate generation
+   */
+  isLessonBeingProcessed(lessonId) {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const processingKey = `academic_references_processing_${lessonId}`;
+        const processingData = localStorage.getItem(processingKey);
+        
+        if (processingData) {
+          const { timestamp, timeout } = JSON.parse(processingData);
+          const now = Date.now();
+          
+          // Check if processing is still valid (within 5 minutes)
+          if (now - timestamp < 5 * 60 * 1000) {
+            return true;
+          } else {
+            // Clear expired processing flag
+            localStorage.removeItem(processingKey);
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('[AcademicReferencesService] Failed to check lesson processing status:', error);
+    }
+    return false;
+  }
+
+  /**
+   * Mark a lesson as being processed to prevent duplicate generation
+   */
+  markLessonAsProcessing(lessonId) {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage && lessonId) {
+        const processingKey = `academic_references_processing_${lessonId}`;
+        const processingData = {
+          timestamp: Date.now(),
+          timeout: 5 * 60 * 1000 // 5 minutes
+        };
+        localStorage.setItem(processingKey, JSON.stringify(processingData));
+        console.log('[AcademicReferencesService] Marked lesson as processing:', lessonId);
+        return true;
+      }
+    } catch (error) {
+      console.warn('[AcademicReferencesService] Failed to mark lesson as processing:', error);
+    }
+    return false;
+  }
+
+  /**
+   * Mark a lesson as no longer processing
+   */
+  markLessonAsNotProcessing(lessonId) {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage && lessonId) {
+        const processingKey = `academic_references_processing_${lessonId}`;
+        localStorage.removeItem(processingKey);
+        console.log('[AcademicReferencesService] Marked lesson as not processing:', lessonId);
+        return true;
+      }
+    } catch (error) {
+      console.warn('[AcademicReferencesService] Failed to mark lesson as not processing:', error);
     }
     return false;
   }
