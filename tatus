@@ -1,0 +1,5 @@
+[33m8c87f64[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Update project files and configurations
+[33mc60f3ec[m Fix main tag structure: properly wrap dashboard content inside main element
+[33m3f12eea[m Fix syntax errors: remove malformed main tag and fix missing ternary operator parentheses
+[33m8db9d17[m Fix useCallback dependency array for showSuccessToastWithTimeout function
+[33m0f8afcb[m Fix syntax errors and standardize notification handling in Dashboard

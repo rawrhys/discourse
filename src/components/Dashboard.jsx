@@ -24,6 +24,7 @@ const Dashboard = () => {
   const hasAttemptedFetch = useRef(false);
   const [isLoadingCourses, setIsLoadingCourses] = useState(false);
   const api = useApiWrapper();
+  const [isBuying, setIsBuying] = useState(false);
   const [credits, setCredits] = useState(0); // Default to 0 credits for all users
   const [showConfetti, setShowConfetti] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
@@ -45,17 +46,6 @@ const Dashboard = () => {
   
   // Report Problem modal state
   const [showReportProblem, setShowReportProblem] = useState(false);
-  
-  // Helper function to show success toast with auto-hide
-  const showSuccessToastWithTimeout = useCallback((message, timeoutMs = 4000) => {
-    setSuccessMessage(message);
-    setShowSuccessToast(true);
-    
-    // Auto-hide after specified timeout
-    setTimeout(() => {
-      setShowSuccessToast(false);
-    }, timeoutMs);
-  }, [setSuccessMessage, setShowSuccessToast]);
   
   // Get the user's name from backend profile data, fallback to auth context
   const userName = userProfile?.name || user?.name || user?.email || 'Guest';
@@ -138,24 +128,30 @@ const Dashboard = () => {
       
       if (recentCourses.length > 0) {
         logger.info('🎉 [DASHBOARD] Found recent courses, showing success message:', recentCourses.map(c => c.title));
-        showSuccessToastWithTimeout(`Found ${recentCourses.length} recently generated course${recentCourses.length > 1 ? 's' : ''}!`, 3000);
+        setSuccessMessage(`Found ${recentCourses.length} recently generated course${recentCourses.length > 1 ? 's' : ''}!`);
+        setShowSuccessToast(true);
+        
+        // Hide success message after a delay
+        setTimeout(() => {
+          setShowSuccessToast(false);
+        }, 3000);
       }
       
     } catch (error) {
-      logger.error('❌ [DASHBOARD] Error fetching saved courses:', {
-        error: error.message,
-        stack: error.stack,
-        timestamp: new Date().toISOString()
-      });
-      
-      // Set a user-friendly error message
-      setError('Failed to load courses. Please try refreshing the page.');
-      
-      // Don't clear existing courses on error, just show the error
-    } finally {
-      setIsLoadingCourses(false);
-    }
-  }, [api, isUpdatingCourseState]);
+    logger.error('❌ [DASHBOARD] Error fetching saved courses:', {
+      error: error.message,
+      stack: error.stack,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Set a user-friendly error message
+    setError('Failed to load courses. Please try refreshing the page.');
+    
+    // Don't clear existing courses on error, just show the error
+  } finally {
+    setIsLoadingCourses(false);
+  }
+}, [api, isUpdatingCourseState]);
   
   // Cleanup effect to reset state update flag on unmount
   useEffect(() => {
@@ -167,8 +163,8 @@ const Dashboard = () => {
   // Setup SSE connection for course generation notifications
   useEffect(() => {
     if (user) {
-      // Use the user's access token from Supabase session
-      const token = user.access_token;
+      // Get the auth token from localStorage or Supabase
+      const token = localStorage.getItem('token') || user.access_token;
       
       logger.debug('🔗 [DASHBOARD] Setting up SSE connection with token:', {
         hasToken: !!token,
@@ -195,7 +191,8 @@ const Dashboard = () => {
           setEtaStartMs(0);
           
           // Show success message
-          showSuccessToastWithTimeout(`Course "${data.courseTitle}" generated successfully!`);
+          setSuccessMessage(`Course "${data.courseTitle}" generated successfully!`);
+          setShowSuccessToast(true);
           
           // Close the generation form
           setShowNewCourseForm(false);
@@ -261,7 +258,8 @@ const Dashboard = () => {
             } catch (error) {
               logger.error('❌ [DASHBOARD] Failed to update course list after SSE notification:', error);
               // Even if the fetch fails, we know the course was generated, so show a success message
-              showSuccessToastWithTimeout('Course generated successfully! You can find it in your course list.');
+              setSuccessMessage('Course generated successfully! You can find it in your course list.');
+              setShowSuccessToast(true);
             }
           }, 1000);
         };
@@ -313,7 +311,8 @@ const Dashboard = () => {
           if (Array.isArray(courses) && courses.length > currentCourseCount) {
             logger.info('🎉 [DASHBOARD] New course detected during monitoring!');
             setSavedCourses(courses);
-            showSuccessToastWithTimeout('Course generation completed! New course found.');
+            setSuccessMessage('Course generation completed! New course found.');
+            setShowSuccessToast(true);
             setError(null); // Clear any errors
             setIsGenerating(false); // Stop generation state just in case
             setIsMonitoring(false); // Stop monitoring
@@ -349,7 +348,13 @@ const Dashboard = () => {
       
       if (recentCourses.length > 0 && !showSuccessToast) {
         logger.info('🎉 [DASHBOARD] Found recently generated courses on dashboard load:', recentCourses.map(c => c.title));
-        showSuccessToastWithTimeout(`Welcome back! You have ${recentCourses.length} recently generated course${recentCourses.length > 1 ? 's' : ''} available.`, 5000);
+        setSuccessMessage(`Welcome back! You have ${recentCourses.length} recently generated course${recentCourses.length > 1 ? 's' : ''} available.`);
+        setShowSuccessToast(true);
+        
+        // Hide success message after a delay
+        setTimeout(() => {
+          setShowSuccessToast(false);
+        }, 5000);
       }
     }
   }, [user, savedCourses, showSuccessToast]);
@@ -392,7 +397,10 @@ const Dashboard = () => {
     // Immediately update UI and start monitoring
     setShowNewCourseForm(false);
     setIsMonitoring(true);
-    showSuccessToastWithTimeout(`Course generation for "${courseParams.prompt}" has started. It will appear on your dashboard shortly.`, 8000);
+    setSuccessMessage(`Course generation for "${courseParams.prompt}" has started. It will appear on your dashboard shortly.`);
+    setShowSuccessToast(true);
+    
+    setTimeout(() => setShowSuccessToast(false), 8000);
     
     // Multiple fallback refreshes to catch courses that might not trigger SSE
     // First fallback: 10 seconds
@@ -417,7 +425,8 @@ const Dashboard = () => {
         if (Array.isArray(newCourses) && newCourses.length > currentCount) {
           logger.info('🎉 [COURSE GENERATION] Second fallback refresh found new course!');
           setSavedCourses(newCourses);
-          showSuccessToastWithTimeout('Course generation completed! New course found via fallback refresh.');
+          setSuccessMessage('Course generation completed! New course found via fallback refresh.');
+          setShowSuccessToast(true);
           setIsGenerating(false);
           setIsMonitoring(false);
         }
@@ -467,7 +476,9 @@ const Dashboard = () => {
       setCourseToDelete(null);
       
       // Show success message
-      showSuccessToastWithTimeout('Course deleted successfully! Refreshing course list...', 3000);
+      setSuccessMessage('Course deleted successfully! Refreshing course list...');
+      setShowSuccessToast(true);
+      setTimeout(() => setShowSuccessToast(false), 3000);
 
       // --- NEW: Force a refresh of the course list ---
       // await fetchSavedCourses(true); // `true` forces a refetch
@@ -489,7 +500,7 @@ const Dashboard = () => {
     try {
       logger.debug('💳 [PAYMENT] Processing payment success...');
       
-      const token = user.access_token; // Use user's access token
+      const token = localStorage.getItem('token');
       
       if (!token) {
         logger.error('❌ [PAYMENT] No authentication token found');
@@ -598,14 +609,17 @@ const Dashboard = () => {
         setError(null);
         
         // Force a fresh fetch immediately after login to avoid stale cache
-        const token = user.access_token;
+        const token = localStorage.getItem('token');
         if (token) {
           fetchSavedCourses(true);
         } else {
           fetchSavedCourses();
         }
         
-
+        // If returning from Stripe payment, refresh user info
+        if (urlParams.get('payment') === 'success') {
+          handlePaymentSuccess();
+        }
         
       } catch (error) {
         logger.error('❌ [DASHBOARD] Error in initial data fetch:', error);
@@ -614,34 +628,44 @@ const Dashboard = () => {
     }
   }, [user]);
 
-
+  const handleBuyMore = async () => {
+    setIsBuying(true);
+    try {
+      logger.debug('🛒 [PAYMENT] Starting payment flow');
+      
+      // Redirect directly to the new Stripe checkout page
+      const successUrl = encodeURIComponent(`${window.location.origin}/dashboard?payment=success`);
+      const stripeCheckoutUrl = `https://buy.stripe.com/3cIaEWgNC6uZdzx2SJdby00?success_url=${successUrl}`;
+      logger.debug('🛒 [PAYMENT] Redirecting to Stripe checkout:', stripeCheckoutUrl);
+      window.location.href = stripeCheckoutUrl;
+    } catch (err) {
+      logger.error('🛒 [PAYMENT] Error redirecting to checkout:', err);
+      alert('Error redirecting to checkout: ' + err.message);
+    } finally {
+      setIsBuying(false);
+    }
+  };
 
   const handleStartOnboarding = async () => {
     try {
       logger.debug('🎓 [ONBOARDING] Starting onboarding course');
       
-      // Debug: Log current authentication state
-      const { data: { session } } = await supabase.auth.getSession();
-      logger.debug('🎓 [ONBOARDING] Current Supabase session:', {
-        hasSession: !!session,
-        hasAccessToken: !!session?.access_token,
-        tokenLength: session?.access_token?.length || 0,
-        userId: session?.user?.id,
-        userEmail: session?.user?.email,
-        timestamp: new Date().toISOString()
+      // Fetch the onboarding course
+      const response = await fetch('/api/courses/onboarding', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
       });
-      
-      // Use the API service instead of direct fetch for better error handling
-      const onboardingCourse = await api.getOnboardingCourse();
-      
-      if (onboardingCourse) {
+
+      if (response.ok) {
+        const onboardingCourse = await response.json();
         logger.debug('🎓 [ONBOARDING] Onboarding course fetched successfully:', onboardingCourse.id);
         
         // Navigate to the onboarding course
         localStorage.setItem('currentCourseId', onboardingCourse.id);
         navigate(`/course/${onboardingCourse.id}`);
       } else {
-        logger.error('🎓 [ONBOARDING] No onboarding course data received');
+        logger.error('🎓 [ONBOARDING] Failed to fetch onboarding course:', response.status);
         alert('Failed to load onboarding course. Please try again.');
       }
     } catch (error) {
@@ -672,15 +696,6 @@ const Dashboard = () => {
               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
             </svg>
             <span className="font-medium">{successMessage}</span>
-            <button
-              onClick={() => setShowSuccessToast(false)}
-              className="ml-2 text-white hover:text-green-200 transition-colors duration-200"
-              aria-label="Close notification"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
           </div>
         </div>
       )}
@@ -714,11 +729,11 @@ const Dashboard = () => {
             </div>
           </div>
         </div>
-              </nav>
-        
-        <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-          {/* Credits Display */}
-          <div className="flex items-center justify-between mb-6 bg-white p-4 rounded-lg shadow-sm">
+      </nav>
+
+      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        {/* Credits and Buy More */}
+        <div className="flex items-center justify-between mb-6 bg-white p-4 rounded-lg shadow-sm">
           <div className="flex items-center space-x-4">
             <div className="text-lg font-semibold text-gray-700">
               Tokens: <span className={credits === 0 ? 'text-red-500' : 'text-green-600'}>{credits}</span>
@@ -727,16 +742,28 @@ const Dashboard = () => {
               onClick={fetchUserProfile}
               className="text-sm text-gray-500 hover:text-gray-700 transition-colors duration-200"
               title="Refresh user data"
-              >
+            >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
             </button>
           </div>
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={handleBuyMore}
+              disabled={isBuying}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isBuying ? 'Processing...' : 'Buy More Tokens'}
+            </button>
+            
+
+          </div>
         </div>
+        
         {credits === 0 && (
           <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4">
-            You have no course tokens left. Please contact support for assistance.
+            You have no course tokens left. Please buy more to generate new courses.
           </div>
         )}
         
@@ -757,7 +784,7 @@ const Dashboard = () => {
                 <div className="mt-3">
                   <button
                     onClick={handleStartOnboarding}
-                    className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                   >
                     🎓 Start Onboarding Course
                   </button>
@@ -767,7 +794,23 @@ const Dashboard = () => {
           </div>
         )}
         
-
+        {/* Payment Success Message */}
+        {urlParams.get('payment') === 'success' && (
+          <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <strong>Payment Successful!</strong>
+                <p className="text-sm mt-1">Thank you for your purchase. Your tokens should be added automatically.</p>
+              </div>
+              <button
+                onClick={handlePaymentSuccess}
+                className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700"
+              >
+                Add Tokens Now
+              </button>
+            </div>
+          </div>
+        )}
         
         {/* Debug Information */}
         {process.env.NODE_ENV === 'development' && (
@@ -801,23 +844,9 @@ const Dashboard = () => {
         {!showNewCourseForm ? (
           <div className="space-y-6">
             <div className="flex justify-between items-center">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">Your Courses</h2>
-                <p className="mt-1 text-sm text-gray-600">
-                  {savedCourses.length === 0 ? 'No courses yet. Start by generating your first course!' : `You have ${savedCourses.length} course${savedCourses.length === 1 ? '' : 's'}.`}
-                </p>
-              </div>
-              
-              {/* Debug Info */}
-              {process.env.NODE_ENV === 'development' && (
-                <div className="text-xs text-gray-500 bg-gray-100 p-2 rounded">
-                  <div>API: {API_BASE_URL || 'relative'}</div>
-                  <div>User: {user?.id?.substring(0, 8)}...</div>
-                  <div>Email: {user?.email}</div>
-                </div>
-              )}
-              
-              <button
+              <div className="flex items-center space-x-4">
+                <h2 className="text-2xl font-bold text-gray-900">Your Saved Courses</h2>
+                <button
                   onClick={() => {
                     logger.debug('🔄 [DASHBOARD] Manual refresh triggered by user');
                     fetchSavedCourses(true);
@@ -845,29 +874,11 @@ const Dashboard = () => {
                 Generate New Course
               </button>
             </div>
-                ):(
-                  <>
-                  {error && (
-                <>
-                  <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-                    {error}
-                    {(error.includes('SSL') || error.includes('Mixed Content') || error.includes('Backend server is unreachable')) && (
-                      <div className="mt-2">
-                        <button
-                          onClick={runConnectionDiagnostic}
-                          className="text-sm bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
-                        >
-                          Run Connection Diagnostic
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-              <>
-                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-                  {error}
-                  {(error.includes('SSL') || error.includes('Mixed Content') || error.includes('Backend server is unreachable')) && (
+
+            {error && (
+              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                {error}
+                {(error.includes('SSL') || error.includes('Mixed Content') || error.includes('Backend server is unreachable')) && (
                   <div className="mt-2">
                     <button
                       onClick={runConnectionDiagnostic}
@@ -878,8 +889,7 @@ const Dashboard = () => {
                   </div>
                 )}
               </div>
-            </>
-            )
+            )}
 
             {/* Connection Diagnostic Modal */}
             {showConnectionDiagnostic && (
@@ -1018,7 +1028,14 @@ const Dashboard = () => {
                               <button
                                 onClick={() => {
                                   try {
+                                    logger.debug('🎯 [DASHBOARD] Continue Learning clicked for course:', {
+                                      courseId: course.id,
+                                      courseTitle: course.title,
+                                      courseIdType: typeof course.id,
+                                      timestamp: new Date().toISOString()
+                                    });
                                     localStorage.setItem('currentCourseId', course.id);
+                                    logger.debug('📍 [DASHBOARD] Navigating to course:', `/course/${course.id}`);
                                     navigate(`/course/${course.id}`);
                                   } catch (error) {
                                     logger.error('❌ [DASHBOARD] Error navigating to course:', error);
@@ -1125,7 +1142,9 @@ const Dashboard = () => {
                                         setSavedCourses(current => [...current]);
                                       }, 100);
                                       
-                                      showSuccessToastWithTimeout('Course unpublished successfully!', 3000);
+                                      setSuccessMessage('Course unpublished successfully!');
+                                      setShowSuccessToast(true);
+                                      setTimeout(() => setShowSuccessToast(false), 3000);
                                       
                                       // Reset state update flag after a short delay
                                       setTimeout(() => {
@@ -1196,7 +1215,9 @@ const Dashboard = () => {
                                       
                                       // Trigger confetti animation
                                       setShowConfetti(true);
-                                      showSuccessToastWithTimeout('Course published successfully! 🎉', 3000);
+                                      setSuccessMessage('Course published successfully! 🎉');
+                                      setShowSuccessToast(true);
+                                      setTimeout(() => setShowSuccessToast(false), 3000);
                                       
                                       // Reset state update flag after confetti completes
                                       setTimeout(() => {
@@ -1252,10 +1273,8 @@ const Dashboard = () => {
                 </div>
               </div>
             )}
-
-export default Dashboard;
-      {/* New Course Form */}
-      {showNewCourseForm && (
+          </div>
+        ) : (
           <div className="bg-white shadow sm:rounded-lg">
             <div className="px-4 py-5 sm:p-6">
               <div className="flex items-center justify-between mb-4">
@@ -1288,9 +1307,9 @@ export default Dashboard;
                   error={error}
                 />
               </div>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
         {/* Simple Course Generation Loading Modal */}
         {isGenerating && (
@@ -1365,10 +1384,8 @@ export default Dashboard;
             console.log('Report submitted successfully');
           }}
         />
-      </>
-                )}
-    </main>
-  </div>
+      </main>
+    </div>
   );
 };
 

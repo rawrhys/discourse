@@ -3212,13 +3212,26 @@ async function assignOnboardingCourse(userId) {
       modulesCount: onboardingCourse.modules?.length
     });
     
-    // Check if user already has the onboarding course
+    // Check if user already has the onboarding course (more robust check)
     const existingCourse = db.data.courses.find(c => 
       c.userId === userId && c.id.includes('discourse-ai-onboarding')
     );
     
     if (existingCourse) {
       console.log(`[ONBOARDING] User ${userId} already has onboarding course:`, existingCourse.id);
+      return;
+    }
+    
+    // Additional safety check - look for any course with similar title
+    const hasSimilarCourse = db.data.courses.some(c => 
+      c.userId === userId && 
+      (c.title.toLowerCase().includes('welcome to discourse ai') || 
+       c.title.toLowerCase().includes('onboarding') ||
+       c.title.toLowerCase().includes('learning journey begins'))
+    );
+    
+    if (hasSimilarCourse) {
+      console.log(`[ONBOARDING] User ${userId} already has similar course, skipping onboarding assignment`);
       return;
     }
     
@@ -3251,18 +3264,59 @@ async function assignOnboardingCourse(userId) {
 }
 
 /**
+ * Clean up duplicate onboarding courses for a user
+ * @param {string} userId - The ID of the user to clean up
+ */
+async function cleanupDuplicateOnboardingCourses(userId) {
+  try {
+    const userOnboardingCourses = db.data.courses.filter(c => 
+      c.userId === userId && c.id.includes('discourse-ai-onboarding')
+    );
+    
+    if (userOnboardingCourses.length > 1) {
+      console.log(`[ONBOARDING] Found ${userOnboardingCourses.length} duplicate onboarding courses for user ${userId}, cleaning up...`);
+      
+      // Keep the first one, remove the rest
+      const [keepCourse, ...duplicates] = userOnboardingCourses;
+      
+      // Remove duplicates from the database
+      db.data.courses = db.data.courses.filter(c => !duplicates.includes(c));
+      
+      await db.write();
+      console.log(`[ONBOARDING] Cleaned up ${duplicates.length} duplicate onboarding courses for user ${userId}`);
+    }
+  } catch (error) {
+    console.error(`[ONBOARDING] Failed to cleanup duplicate onboarding courses for user ${userId}:`, error.message);
+  }
+}
+
+/**
  * Ensure an existing user has the onboarding course
  * @param {string} userId - The ID of the user to check
  */
 async function ensureOnboardingCourse(userId) {
   try {
-    // Check if user already has the onboarding course
+    // Check if user already has the onboarding course (more robust check)
     const existingCourse = db.data.courses.find(c => 
       c.userId === userId && c.id.includes('discourse-ai-onboarding')
     );
     
     if (existingCourse) {
+      console.log(`[ONBOARDING] User ${userId} already has onboarding course:`, existingCourse.id);
       return; // User already has the course
+    }
+    
+    // Additional safety check - look for any course with similar title
+    const hasSimilarCourse = db.data.courses.some(c => 
+      c.userId === userId && 
+      (c.title.toLowerCase().includes('welcome to discourse ai') || 
+       c.title.toLowerCase().includes('onboarding') ||
+       c.title.toLowerCase().includes('learning journey begins'))
+    );
+    
+    if (hasSimilarCourse) {
+      console.log(`[ONBOARDING] User ${userId} already has similar course, skipping onboarding assignment`);
+      return;
     }
     
     // User doesn't have the course, assign it
@@ -3966,8 +4020,16 @@ app.post('/api/auth/login', async (req, res) => {
             await db.write();
         }
         
-        // Check if existing user needs onboarding course
-        await ensureOnboardingCourse(localUser.id);
+        // Check if existing user needs onboarding course (only if they don't have one)
+        const hasOnboardingCourse = db.data.courses.some(c => 
+          c.userId === localUser.id && c.id.includes('discourse-ai-onboarding')
+        );
+        if (!hasOnboardingCourse) {
+          await ensureOnboardingCourse(localUser.id);
+        } else {
+          // Clean up any duplicate onboarding courses
+          await cleanupDuplicateOnboardingCourses(localUser.id);
+        }
     }
 
     res.json({ 
@@ -4213,6 +4275,14 @@ app.get('/api/courses/onboarding', authenticateToken, async (req, res) => {
         courseId: userOnboardingCourse?.id,
         allUserCourses: db.data.courses.filter(c => c.userId === userId).map(c => ({ id: c.id, title: c.title }))
       });
+    } else {
+      // Clean up any duplicate onboarding courses
+      await cleanupDuplicateOnboardingCourses(userId);
+      
+      // Re-fetch the course after cleanup
+      userOnboardingCourse = db.data.courses.find(c => 
+        c.userId === userId && c.id.includes('discourse-ai-onboarding')
+      );
     }
     
     if (!userOnboardingCourse) {

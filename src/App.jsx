@@ -54,8 +54,7 @@ const CourseLayout = () => {
 
   // Add detailed logging for courseId
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🔍 [COURSE LAYOUT] CourseId parameter received:', {
+    console.log('🔍 [COURSE LAYOUT] CourseId parameter received:', {
       courseId: courseId,
       courseIdType: typeof courseId,
       courseIdLength: courseId?.length,
@@ -64,7 +63,6 @@ const CourseLayout = () => {
       params: Object.fromEntries(new URLSearchParams(location.search)),
       timestamp: new Date().toISOString()
     });
-  }
     
     // If courseId is "saved", this is wrong - log an error and try to redirect
     if (courseId === 'saved') {
@@ -102,7 +100,15 @@ const CourseLayout = () => {
     }
 
     // Validate courseId format to prevent unnecessary API calls
-    if (!courseId.startsWith('course_')) {
+    // Allow both 'course_' prefixed IDs and 'onboarding_' prefixed IDs
+    console.log('🔍 [COURSE LAYOUT] Validating course ID format:', {
+      courseId: courseId,
+      startsWithCourse: courseId.startsWith('course_'),
+      startsWithOnboarding: courseId.startsWith('onboarding_'),
+      isValid: courseId.startsWith('course_') || courseId.startsWith('onboarding_')
+    });
+    
+    if (!courseId.startsWith('course_') && !courseId.startsWith('onboarding_')) {
       console.log('🔄 [COURSE LAYOUT] Invalid course ID format, redirecting to dashboard');
       navigate('/dashboard', { replace: true });
       return;
