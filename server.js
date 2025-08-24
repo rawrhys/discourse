@@ -3095,7 +3095,7 @@ async function loadCoursesFromFiles() {
     }
 
     const courseFiles = fs.readdirSync(coursesDir).filter(file => file.endsWith('.json') && file !== 'undefined.json');
-    console.log(`[DB] Found ${courseFiles.length} course files to load`);
+    console.log(`[DB] Found ${courseFiles.length} course files to load:`, courseFiles);
 
     for (const file of courseFiles) {
       try {
@@ -3116,6 +3116,7 @@ async function loadCoursesFromFiles() {
     }
 
     console.log(`[DB] Total courses in database: ${db.data.courses.length}`);
+    console.log(`[DB] Course IDs:`, db.data.courses.map(c => c.id));
   } catch (error) {
     console.error('[DB_ERROR] Failed to load courses from files:', error);
   }
@@ -3193,13 +3194,23 @@ async function cleanupOrphanedCourseFiles() {
  */
 async function assignOnboardingCourse(userId) {
   try {
+    console.log(`[ONBOARDING] Starting assignment for user ${userId}`);
+    
     // Find the onboarding course
     const onboardingCourse = db.data.courses.find(c => c.id === 'discourse-ai-onboarding');
     
     if (!onboardingCourse) {
       console.log('[ONBOARDING] Onboarding course not found, skipping assignment');
+      console.log('[ONBOARDING] Available courses:', db.data.courses.map(c => c.id));
       return;
     }
+    
+    console.log(`[ONBOARDING] Found onboarding template:`, {
+      id: onboardingCourse.id,
+      title: onboardingCourse.title,
+      hasModules: !!onboardingCourse.modules,
+      modulesCount: onboardingCourse.modules?.length
+    });
     
     // Check if user already has the onboarding course
     const existingCourse = db.data.courses.find(c => 
@@ -3207,7 +3218,7 @@ async function assignOnboardingCourse(userId) {
     );
     
     if (existingCourse) {
-      console.log(`[ONBOARDING] User ${userId} already has onboarding course`);
+      console.log(`[ONBOARDING] User ${userId} already has onboarding course:`, existingCourse.id);
       return;
     }
     
@@ -3220,6 +3231,12 @@ async function assignOnboardingCourse(userId) {
       updatedAt: new Date().toISOString()
     };
     
+    console.log(`[ONBOARDING] Created user course:`, {
+      id: userCourse.id,
+      userId: userCourse.userId,
+      title: userCourse.title
+    });
+    
     // Add to courses table
     db.data.courses.push(userCourse);
     
@@ -3228,6 +3245,7 @@ async function assignOnboardingCourse(userId) {
     
   } catch (error) {
     console.error(`[ONBOARDING] Failed to assign onboarding course to user ${userId}:`, error.message);
+    console.error(`[ONBOARDING] Error stack:`, error.stack);
     // Don't throw error to avoid breaking user creation
   }
 }
@@ -4162,6 +4180,18 @@ app.get('/api/courses/onboarding', authenticateToken, async (req, res) => {
     const userId = req.user.id;
     
     console.log(`[API] Fetching onboarding course for user ${userId}`);
+    console.log(`[API] User details:`, {
+      id: req.user.id,
+      email: req.user.email,
+      type: typeof req.user.id
+    });
+    console.log(`[API] Database state:`, {
+      totalUsers: db.data.users.length,
+      totalCourses: db.data.courses.length,
+      userExists: !!db.data.users.find(u => u.id === userId),
+      onboardingTemplateExists: !!db.data.courses.find(c => c.id === 'discourse-ai-onboarding'),
+      userCourses: db.data.courses.filter(c => c.userId === userId).map(c => ({ id: c.id, title: c.title }))
+    });
     
     // First check if user already has a copy of the onboarding course
     let userOnboardingCourse = db.data.courses.find(c => 
@@ -4169,6 +4199,7 @@ app.get('/api/courses/onboarding', authenticateToken, async (req, res) => {
     );
     
     if (!userOnboardingCourse) {
+      console.log(`[API] User ${userId} doesn't have onboarding course, assigning now...`);
       // User doesn't have the course, assign it now
       await assignOnboardingCourse(userId);
       
@@ -4176,13 +4207,20 @@ app.get('/api/courses/onboarding', authenticateToken, async (req, res) => {
       userOnboardingCourse = db.data.courses.find(c => 
         c.userId === userId && c.id.includes('discourse-ai-onboarding')
       );
+      
+      console.log(`[API] After assignment attempt:`, {
+        courseFound: !!userOnboardingCourse,
+        courseId: userOnboardingCourse?.id,
+        allUserCourses: db.data.courses.filter(c => c.userId === userId).map(c => ({ id: c.id, title: c.title }))
+      });
     }
     
     if (!userOnboardingCourse) {
+      console.log(`[API] Onboarding course assignment failed for user ${userId}`);
       return res.status(404).json({ error: 'Onboarding course not found' });
     }
     
-    console.log(`[API] Returning onboarding course for user ${userId}`);
+    console.log(`[API] Returning onboarding course for user ${userId}:`, userOnboardingCourse.id);
     res.json(userOnboardingCourse);
     
   } catch (error) {

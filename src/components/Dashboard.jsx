@@ -24,7 +24,6 @@ const Dashboard = () => {
   const hasAttemptedFetch = useRef(false);
   const [isLoadingCourses, setIsLoadingCourses] = useState(false);
   const api = useApiWrapper();
-  const [isBuying, setIsBuying] = useState(false);
   const [credits, setCredits] = useState(0); // Default to 0 credits for all users
   const [showConfetti, setShowConfetti] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
@@ -163,8 +162,8 @@ const Dashboard = () => {
   // Setup SSE connection for course generation notifications
   useEffect(() => {
     if (user) {
-      // Get the auth token from localStorage or Supabase
-      const token = localStorage.getItem('token') || user.access_token;
+      // Use the user's access token from Supabase session
+      const token = user.access_token;
       
       logger.debug('🔗 [DASHBOARD] Setting up SSE connection with token:', {
         hasToken: !!token,
@@ -500,7 +499,7 @@ const Dashboard = () => {
     try {
       logger.debug('💳 [PAYMENT] Processing payment success...');
       
-      const token = localStorage.getItem('token');
+      const token = user.access_token; // Use user's access token
       
       if (!token) {
         logger.error('❌ [PAYMENT] No authentication token found');
@@ -609,17 +608,14 @@ const Dashboard = () => {
         setError(null);
         
         // Force a fresh fetch immediately after login to avoid stale cache
-        const token = localStorage.getItem('token');
+        const token = user.access_token;
         if (token) {
           fetchSavedCourses(true);
         } else {
           fetchSavedCourses();
         }
         
-        // If returning from Stripe payment, refresh user info
-        if (urlParams.get('payment') === 'success') {
-          handlePaymentSuccess();
-        }
+
         
       } catch (error) {
         logger.error('❌ [DASHBOARD] Error in initial data fetch:', error);
@@ -628,44 +624,34 @@ const Dashboard = () => {
     }
   }, [user]);
 
-  const handleBuyMore = async () => {
-    setIsBuying(true);
-    try {
-      logger.debug('🛒 [PAYMENT] Starting payment flow');
-      
-      // Redirect directly to the new Stripe checkout page
-      const successUrl = encodeURIComponent(`${window.location.origin}/dashboard?payment=success`);
-      const stripeCheckoutUrl = `https://buy.stripe.com/3cIaEWgNC6uZdzx2SJdby00?success_url=${successUrl}`;
-      logger.debug('🛒 [PAYMENT] Redirecting to Stripe checkout:', stripeCheckoutUrl);
-      window.location.href = stripeCheckoutUrl;
-    } catch (err) {
-      logger.error('🛒 [PAYMENT] Error redirecting to checkout:', err);
-      alert('Error redirecting to checkout: ' + err.message);
-    } finally {
-      setIsBuying(false);
-    }
-  };
+
 
   const handleStartOnboarding = async () => {
     try {
       logger.debug('🎓 [ONBOARDING] Starting onboarding course');
       
-      // Fetch the onboarding course
-      const response = await fetch('/api/courses/onboarding', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
+      // Debug: Log current authentication state
+      const { data: { session } } = await supabase.auth.getSession();
+      logger.debug('🎓 [ONBOARDING] Current Supabase session:', {
+        hasSession: !!session,
+        hasAccessToken: !!session?.access_token,
+        tokenLength: session?.access_token?.length || 0,
+        userId: session?.user?.id,
+        userEmail: session?.user?.email,
+        timestamp: new Date().toISOString()
       });
-
-      if (response.ok) {
-        const onboardingCourse = await response.json();
+      
+      // Use the API service instead of direct fetch for better error handling
+      const onboardingCourse = await api.getOnboardingCourse();
+      
+      if (onboardingCourse) {
         logger.debug('🎓 [ONBOARDING] Onboarding course fetched successfully:', onboardingCourse.id);
         
         // Navigate to the onboarding course
         localStorage.setItem('currentCourseId', onboardingCourse.id);
         navigate(`/course/${onboardingCourse.id}`);
       } else {
-        logger.error('🎓 [ONBOARDING] Failed to fetch onboarding course:', response.status);
+        logger.error('🎓 [ONBOARDING] No onboarding course data received');
         alert('Failed to load onboarding course. Please try again.');
       }
     } catch (error) {
@@ -732,7 +718,7 @@ const Dashboard = () => {
       </nav>
 
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        {/* Credits and Buy More */}
+        {/* Credits Display */}
         <div className="flex items-center justify-between mb-6 bg-white p-4 rounded-lg shadow-sm">
           <div className="flex items-center space-x-4">
             <div className="text-lg font-semibold text-gray-700">
@@ -748,22 +734,11 @@ const Dashboard = () => {
               </svg>
             </button>
           </div>
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={handleBuyMore}
-              disabled={isBuying}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isBuying ? 'Processing...' : 'Buy More Tokens'}
-            </button>
-            
-
-          </div>
         </div>
         
         {credits === 0 && (
           <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4">
-            You have no course tokens left. Please buy more to generate new courses.
+            You have no course tokens left. Please contact support for assistance.
           </div>
         )}
         
@@ -784,7 +759,7 @@ const Dashboard = () => {
                 <div className="mt-3">
                   <button
                     onClick={handleStartOnboarding}
-                    className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                   >
                     🎓 Start Onboarding Course
                   </button>
@@ -794,23 +769,7 @@ const Dashboard = () => {
           </div>
         )}
         
-        {/* Payment Success Message */}
-        {urlParams.get('payment') === 'success' && (
-          <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <strong>Payment Successful!</strong>
-                <p className="text-sm mt-1">Thank you for your purchase. Your tokens should be added automatically.</p>
-              </div>
-              <button
-                onClick={handlePaymentSuccess}
-                className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700"
-              >
-                Add Tokens Now
-              </button>
-            </div>
-          </div>
-        )}
+
         
         {/* Debug Information */}
         {process.env.NODE_ENV === 'development' && (
@@ -844,9 +803,23 @@ const Dashboard = () => {
         {!showNewCourseForm ? (
           <div className="space-y-6">
             <div className="flex justify-between items-center">
-              <div className="flex items-center space-x-4">
-                <h2 className="text-2xl font-bold text-gray-900">Your Saved Courses</h2>
-                <button
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Your Courses</h2>
+                <p className="mt-1 text-sm text-gray-600">
+                  {savedCourses.length === 0 ? 'No courses yet. Start by generating your first course!' : `You have ${savedCourses.length} course${savedCourses.length === 1 ? '' : 's'}.`}
+                </p>
+              </div>
+              
+              {/* Debug Info */}
+              {process.env.NODE_ENV === 'development' && (
+                <div className="text-xs text-gray-500 bg-gray-100 p-2 rounded">
+                  <div>API: {API_BASE_URL || 'relative'}</div>
+                  <div>User: {user?.id?.substring(0, 8)}...</div>
+                  <div>Email: {user?.email}</div>
+                </div>
+              )}
+              
+              <button
                   onClick={() => {
                     logger.debug('🔄 [DASHBOARD] Manual refresh triggered by user');
                     fetchSavedCourses(true);

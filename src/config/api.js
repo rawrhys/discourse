@@ -14,12 +14,17 @@ const inferDefaultBaseUrl = () => {
         return ''; // Empty string means use relative URLs, which will be handled by Vite's proxy
       }
       
-      // For production, use the same domain as the frontend
-      // This assumes the backend is running on the same domain
-      return `https://${hostname}`;
+      // For production, check if we're on the same domain as the API
+      // If frontend and backend are on the same domain, use relative URLs
+      if (hostname === 'thediscourse.ai' || hostname === 'api.thediscourse.ai') {
+        return ''; // Use relative URLs for same-domain deployment
+      }
+      
+      // For different domains or when frontend is not on theiscourse.ai, use the full API URL
+      return 'https://thediscourse.ai';
     }
   } catch (_) {}
-  return 'https://thediscourse.ai'; // Default to production API
+  return 'https://thediscourse.ai'; // Default to production API for better compatibility
 };
 
 export const API_BASE_URL = inferDefaultBaseUrl();
