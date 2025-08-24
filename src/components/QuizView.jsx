@@ -20,7 +20,7 @@ function shuffleQuestionsAndOptions(questions) {
   });
 }
 
-export default function QuizView({ questions = [], onComplete, lessonId, module, onBack }) {
+export default function QuizView({ questions = [], onComplete, lessonId, module, onBack, course }) {
   if (process.env.NODE_ENV === 'development') {
     console.log('[QuizView] Component rendered with props:', { questionsLength: questions?.length, lessonId, moduleId: module?.id });
   }
@@ -31,6 +31,11 @@ export default function QuizView({ questions = [], onComplete, lessonId, module,
   const [shuffledQuestions, setShuffledQuestions] = useState([]);
   const [incorrectAnswers, setIncorrectAnswers] = useState({});
   const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false);
+
+  // Check if this is the onboarding course to bypass quiz locks
+  const isOnboardingCourse = course?.title?.toLowerCase().includes('welcome to discourse ai') || 
+                             course?.title?.toLowerCase().includes('onboarding') ||
+                             course?.id?.includes('discourse-ai-onboarding');
 
   useEffect(() => {
     if (questions && questions.length > 0) {
@@ -84,10 +89,16 @@ export default function QuizView({ questions = [], onComplete, lessonId, module,
           moduleId: module?.id,
           score: finalScore,
           correctCount,
-          totalQuestions: shuffledQuestions.length
+          totalQuestions: shuffledQuestions.length,
+          isOnboardingCourse: isOnboardingCourse
         });
       }
-      onComplete(finalScore);
+      
+      // For onboarding course, always complete regardless of score
+      // For other courses, only complete if score is 5/5
+      if (isOnboardingCourse || finalScore === 5) {
+        onComplete(finalScore);
+      }
     }
   };
 
@@ -193,11 +204,16 @@ export default function QuizView({ questions = [], onComplete, lessonId, module,
                   {score === 5 && <span className="ml-2 text-green-600">Perfect Score! 🎉</span>}
                 </p>
                 <p className={`text-sm ${score === 5 ? 'text-green-600' : 'text-red-600'}`}>
-                  {score === 5 ? 'Quiz passed!' : 'You must score 5/5 to unlock the next module.'}
+                  {score === 5 ? 'Quiz passed!' : (isOnboardingCourse ? 'Great job! You can continue to the next module.' : 'You must score 5/5 to unlock the next module.')}
                 </p>
-                {score < 5 && (
+                {score < 5 && !isOnboardingCourse && (
                   <div className="mt-3 p-3 bg-yellow-100 text-yellow-800 rounded text-sm">
                     To move to the next module, you must score 5/5 on all quizzes within this module.
+                  </div>
+                )}
+                {score < 5 && isOnboardingCourse && (
+                  <div className="mt-3 p-3 bg-blue-100 text-blue-800 rounded text-sm">
+                    This is an onboarding course - you can continue to the next module regardless of your score!
                   </div>
                 )}
               </div>

@@ -562,6 +562,7 @@ const CourseDisplay = () => {
                 }}
                 lessonId={currentLesson.id}
                 module={currentModule}
+                course={course}
               />
             </Suspense>
           ) : (
@@ -582,6 +583,7 @@ const CourseDisplay = () => {
                   handleModuleUpdate={handleModuleUpdate}
                   activeModule={currentModule}
                   courseDescription={course.description}
+                  course={course}
               />
             ) : (
               <div className="text-center text-gray-500 pt-10">

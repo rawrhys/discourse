@@ -466,7 +466,8 @@ const LessonView = ({
   imageTitleCounts = {},
   imageUrlCounts = {},
   courseId,
-  courseDescription = null
+  courseDescription = null,
+  course = null
 }) => {
   const { user } = useAuth(); // Add this line to get the user
   const { lessonId: lessonIdFromParams } = useParams();
@@ -1368,6 +1369,7 @@ const LessonView = ({
         lessonTitle={propLesson.title}
         lessonId={propLesson.id}
         module={activeModule}
+        course={course}
       />
     );
   }, [quizData, propLesson, activeModule, handleQuizComplete]);
