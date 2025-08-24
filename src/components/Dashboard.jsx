@@ -142,20 +142,20 @@ const Dashboard = () => {
       }
       
     } catch (error) {
-    logger.error('❌ [DASHBOARD] Error fetching saved courses:', {
-      error: error.message,
-      stack: error.stack,
-      timestamp: new Date().toISOString()
-    });
-    
-    // Set a user-friendly error message
-    setError('Failed to load courses. Please try refreshing the page.');
-    
-    // Don't clear existing courses on error, just show the error
-  } finally {
-    setIsLoadingCourses(false);
-  }
-}, [api, isUpdatingCourseState]);
+      logger.error('❌ [DASHBOARD] Error fetching saved courses:', {
+        error: error.message,
+        stack: error.stack,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Set a user-friendly error message
+      setError('Failed to load courses. Please try refreshing the page.');
+      
+      // Don't clear existing courses on error, just show the error
+    } finally {
+      setIsLoadingCourses(false);
+    }
+  }, [api, isUpdatingCourseState]);
   
   // Cleanup effect to reset state update flag on unmount
   useEffect(() => {
@@ -194,8 +194,8 @@ const Dashboard = () => {
           setEtaRemainingSec(0);
           setEtaStartMs(0);
           
-              // Show success message
-        showSuccessToastWithTimeout(`Course "${data.courseTitle}" generated successfully!`);
+          // Show success message
+          showSuccessToastWithTimeout(`Course "${data.courseTitle}" generated successfully!`);
           
           // Close the generation form
           setShowNewCourseForm(false);
@@ -261,8 +261,7 @@ const Dashboard = () => {
             } catch (error) {
               logger.error('❌ [DASHBOARD] Failed to update course list after SSE notification:', error);
               // Even if the fetch fails, we know the course was generated, so show a success message
-              setSuccessMessage('Course generated successfully! You can find it in your course list.');
-              setShowSuccessToast(true);
+              showSuccessToastWithTimeout('Course generated successfully! You can find it in your course list.');
             }
           }, 1000);
         };
@@ -314,8 +313,7 @@ const Dashboard = () => {
           if (Array.isArray(courses) && courses.length > currentCourseCount) {
             logger.info('🎉 [DASHBOARD] New course detected during monitoring!');
             setSavedCourses(courses);
-            setSuccessMessage('Course generation completed! New course found.');
-            setShowSuccessToast(true);
+            showSuccessToastWithTimeout('Course generation completed! New course found.');
             setError(null); // Clear any errors
             setIsGenerating(false); // Stop generation state just in case
             setIsMonitoring(false); // Stop monitoring
@@ -351,13 +349,7 @@ const Dashboard = () => {
       
       if (recentCourses.length > 0 && !showSuccessToast) {
         logger.info('🎉 [DASHBOARD] Found recently generated courses on dashboard load:', recentCourses.map(c => c.title));
-        setSuccessMessage(`Welcome back! You have ${recentCourses.length} recently generated course${recentCourses.length > 1 ? 's' : ''} available.`);
-        setShowSuccessToast(true);
-        
-        // Hide success message after a delay
-        setTimeout(() => {
-          setShowSuccessToast(false);
-        }, 5000);
+        showSuccessToastWithTimeout(`Welcome back! You have ${recentCourses.length} recently generated course${recentCourses.length > 1 ? 's' : ''} available.`, 5000);
       }
     }
   }, [user, savedCourses, showSuccessToast]);
@@ -400,10 +392,7 @@ const Dashboard = () => {
     // Immediately update UI and start monitoring
     setShowNewCourseForm(false);
     setIsMonitoring(true);
-    setSuccessMessage(`Course generation for "${courseParams.prompt}" has started. It will appear on your dashboard shortly.`);
-    setShowSuccessToast(true);
-    
-    setTimeout(() => setShowSuccessToast(false), 8000);
+    showSuccessToastWithTimeout(`Course generation for "${courseParams.prompt}" has started. It will appear on your dashboard shortly.`, 8000);
     
     // Multiple fallback refreshes to catch courses that might not trigger SSE
     // First fallback: 10 seconds
@@ -428,8 +417,7 @@ const Dashboard = () => {
         if (Array.isArray(newCourses) && newCourses.length > currentCount) {
           logger.info('🎉 [COURSE GENERATION] Second fallback refresh found new course!');
           setSavedCourses(newCourses);
-          setSuccessMessage('Course generation completed! New course found via fallback refresh.');
-          setShowSuccessToast(true);
+          showSuccessToastWithTimeout('Course generation completed! New course found via fallback refresh.');
           setIsGenerating(false);
           setIsMonitoring(false);
         }
@@ -1119,9 +1107,7 @@ const Dashboard = () => {
                                         setSavedCourses(current => [...current]);
                                       }, 100);
                                       
-                                      setSuccessMessage('Course unpublished successfully!');
-                                      setShowSuccessToast(true);
-                                      setTimeout(() => setShowSuccessToast(false), 3000);
+                                      showSuccessToastWithTimeout('Course unpublished successfully!', 3000);
                                       
                                       // Reset state update flag after a short delay
                                       setTimeout(() => {
@@ -1192,9 +1178,7 @@ const Dashboard = () => {
                                       
                                       // Trigger confetti animation
                                       setShowConfetti(true);
-                                      setSuccessMessage('Course published successfully! 🎉');
-                                      setShowSuccessToast(true);
-                                      setTimeout(() => setShowSuccessToast(false), 3000);
+                                      showSuccessToastWithTimeout('Course published successfully! 🎉', 3000);
                                       
                                       // Reset state update flag after confetti completes
                                       setTimeout(() => {
