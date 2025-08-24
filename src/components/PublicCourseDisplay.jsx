@@ -175,14 +175,6 @@ const PublicCourseDisplay = () => {
   const [imageData, setImageData] = useState(null);
   const [imageLoading, setImageLoading] = useState(false);
 
-  // Check if this is the onboarding course to hide certain features
-  const isOnboardingCourse = useMemo(() => {
-    if (!course) return false;
-    return course.title?.toLowerCase().includes('welcome to discourse ai') || 
-           course.title?.toLowerCase().includes('onboarding') ||
-           course.id?.includes('discourse-ai-onboarding');
-  }, [course]);
-
   // Refs
   const ttsStateUpdateTimeoutRef = useRef(null);
   const isLessonChanging = useRef(false);
@@ -1256,7 +1248,7 @@ const PublicCourseDisplay = () => {
                       >
                         Content
                       </button>
-                      {!isOnboardingCourse && flashcardData && flashcardData.length > 0 && (
+                      {flashcardData && flashcardData.length > 0 && (
                         <button
                           onClick={() => setActiveTab('flashcards')}
                           className={`py-4 px-1 border-b-2 font-medium text-sm ${
@@ -1268,7 +1260,7 @@ const PublicCourseDisplay = () => {
                           Flashcards
                         </button>
                       )}
-                      {!isOnboardingCourse && currentLesson.quiz && currentLesson.quiz.length > 0 && (
+                      {currentLesson.quiz && currentLesson.quiz.length > 0 && (
                         <button
                           onClick={() => setActiveTab('quiz')}
                           className={`py-4 px-1 border-b-2 font-medium text-sm ${
@@ -1290,7 +1282,7 @@ const PublicCourseDisplay = () => {
                         <div className="flex justify-between items-center mb-6">
                           <h2 className="text-3xl font-bold text-gray-900">{currentLesson.title}</h2>
                           <div className="flex space-x-2">
-                            {!isOnboardingCourse && !ttsStatus.isPlaying && !ttsStatus.isPaused ? (
+                            {!ttsStatus.isPlaying && !ttsStatus.isPaused ? (
                               // Show only Read Aloud button when not playing
                               <button
                                 onClick={handleStartAudio}
@@ -1299,7 +1291,7 @@ const PublicCourseDisplay = () => {
                               >
                                 Read Aloud
                               </button>
-                            ) : !isOnboardingCourse && (
+                            ) : (
                               // Show Pause/Resume and Stop buttons when playing or paused
                               <>
                                 <button
@@ -1397,7 +1389,7 @@ const PublicCourseDisplay = () => {
                         <div className="flex justify-between items-center mb-6">
                           <h2 className="text-2xl font-bold text-gray-900">Flashcards</h2>
                           <div className="flex space-x-2">
-                            {!isOnboardingCourse && !ttsStatus.isPlaying && !ttsStatus.isPaused ? (
+                            {!ttsStatus.isPlaying && !ttsStatus.isPaused ? (
                               // Show only Read Flashcards button when not playing
                               <button
                                 onClick={handleStartAudio}
@@ -1406,7 +1398,7 @@ const PublicCourseDisplay = () => {
                               >
                                 Read Flashcards
                               </button>
-                            ) : !isOnboardingCourse && (
+                            ) : (
                               // Show Pause/Resume and Stop buttons when playing or paused
                               <>
                                 <button
@@ -1435,7 +1427,7 @@ const PublicCourseDisplay = () => {
                   </div>
 
                   {/* References Section */}
-                  {!isOnboardingCourse && referencesFooter && referencesFooter.references && (
+                  {referencesFooter && referencesFooter.references && (
                     <div className="border-t border-gray-200 p-6">
                       <AcademicReferencesFooter 
                         references={referencesFooter.references}

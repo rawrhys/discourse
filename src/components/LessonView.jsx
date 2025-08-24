@@ -1822,56 +1822,61 @@ const LessonView = ({
             <i className="fas fa-book-open mr-2"></i>Lesson
           </button>
           
-
-          <button
-            onClick={() => {
-              if (process.env.NODE_ENV === 'development') {
-                console.log('[LessonView] Switching to quiz view');
-              }
-              handleTabChange('quiz');
-            }}
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-              view === 'quiz' 
-                ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                : propLesson.quizScores && propLesson.quizScores[user?.id] === 5
-                ? 'bg-green-600 text-white hover:bg-green-700'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-            disabled={!quizData || quizData.length === 0}
-          >
-            <i className={`mr-2 ${propLesson.quizScores && propLesson.quizScores[user?.id] === 5 ? 'fas fa-check' : 'fas fa-question-circle'}`}></i>
-            Quiz {quizData?.length ? `(${quizData.length})` : ''}
-            {propLesson.quizScores && propLesson.quizScores[user?.id] === 5 && ' ✓'}
-          </button>
-          <button
-            onClick={() => {
-              if (process.env.NODE_ENV === 'development') {
-                console.log('[LessonView] Switching to flashcards view');
-              }
-              handleTabChange('flashcards');
-            }}
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-              view === 'flashcards' 
-                ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-            disabled={false}
-          >
-            <i className="fas fa-clone mr-2"></i>Flashcards {flashcardData?.length ? `(${flashcardData.length})` : ''}
-          </button>
-          <button
-            onClick={ttsStatus.isPlaying ? handlePauseResumeAudio : ttsStatus.isPaused ? handlePauseResumeAudio : handleStartAudio}
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-              ttsStatus.isPlaying || ttsStatus.isPaused
-                ? 'bg-green-600 text-white hover:bg-green-700'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
-            }`}
-            title={ttsStatus.isPlaying ? 'Pause reading' : ttsStatus.isPaused ? 'Resume reading' : 'Start reading aloud'}
-          >
-            <i className={`mr-2 ${ttsStatus.isPlaying ? 'fas fa-pause' : ttsStatus.isPaused ? 'fas fa-play' : 'fas fa-volume-up'}`}></i>
-            {ttsStatus.isPlaying ? 'Pause' : ttsStatus.isPaused ? 'Resume' : 'Read Aloud'}
-          </button>
-          {(ttsStatus.isPlaying || ttsStatus.isPaused) && (
+          {!isOnboardingCourse && (
+            <button
+              onClick={() => {
+                if (process.env.NODE_ENV === 'development') {
+                  console.log('[LessonView] Switching to quiz view');
+                }
+                handleTabChange('quiz');
+              }}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                view === 'quiz' 
+                  ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                  : propLesson.quizScores && propLesson.quizScores[user?.id] === 5
+                  ? 'bg-green-600 text-white hover:bg-green-700'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+              disabled={!quizData || quizData.length === 0}
+            >
+              <i className={`mr-2 ${propLesson.quizScores && propLesson.quizScores[user?.id] === 5 ? 'fas fa-check' : 'fas fa-question-circle'}`}></i>
+              Quiz {quizData?.length ? `(${quizData.length})` : ''}
+              {propLesson.quizScores && propLesson.quizScores[user?.id] === 5 && ' ✓'}
+            </button>
+          )}
+          {!isOnboardingCourse && (
+            <button
+              onClick={() => {
+                if (process.env.NODE_ENV === 'development') {
+                  console.log('[LessonView] Switching to flashcards view');
+                }
+                handleTabChange('flashcards');
+              }}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                view === 'flashcards' 
+                  ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+              disabled={false}
+            >
+              <i className="fas fa-clone mr-2"></i>Flashcards {flashcardData?.length ? `(${flashcardData.length})` : ''}
+            </button>
+          )}
+          {!isOnboardingCourse && (
+            <button
+              onClick={ttsStatus.isPlaying ? handlePauseResumeAudio : ttsStatus.isPaused ? handlePauseResumeAudio : handleStartAudio}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                ttsStatus.isPlaying || ttsStatus.isPaused
+                  ? 'bg-green-600 text-white hover:bg-green-700'
+                  : 'bg-blue-600 text-white hover:bg-blue-700'
+              }`}
+              title={ttsStatus.isPlaying ? 'Pause reading' : ttsStatus.isPaused ? 'Resume reading' : 'Start reading aloud'}
+            >
+              <i className={`mr-2 ${ttsStatus.isPlaying ? 'fas fa-pause' : ttsStatus.isPaused ? 'fas fa-play' : 'fas fa-volume-up'}`}></i>
+              {ttsStatus.isPlaying ? 'Pause' : ttsStatus.isPaused ? 'Resume' : 'Read Aloud'}
+            </button>
+          )}
+          {!isOnboardingCourse && (ttsStatus.isPlaying || ttsStatus.isPaused) && (
             <button
               onClick={handleStopAudio}
               className="px-3 py-2 text-sm font-medium rounded-md transition-colors bg-red-600 text-white hover:bg-red-700"
@@ -1893,12 +1898,12 @@ const LessonView = ({
                 {memoizedContent}
               </div>
             )}
-            {view === 'quiz' && (
+            {!isOnboardingCourse && view === 'quiz' && (
               <div>
                 {memoizedQuizView}
               </div>
             )}
-            {view === 'flashcards' && (
+            {!isOnboardingCourse && view === 'flashcards' && (
               <div>
                 {renderFlashcards()}
               </div>
@@ -1909,12 +1914,12 @@ const LessonView = ({
         {/* Spacing between content and messages */}
         <div className="mb-4"></div>
         
-        {showFailMessage && (
+        {!isOnboardingCourse && showFailMessage && (
           <div className="p-3 mb-4 bg-yellow-100 text-yellow-800 rounded text-center text-sm">
             To move to the next module, you must score 5/5 on all quizzes within this module.
           </div>
         )}
-        {showSuccessMessage && (
+        {!isOnboardingCourse && showSuccessMessage && (
           <div className="p-3 mb-4 bg-green-100 text-green-800 rounded text-center text-sm">
             Perfect Score! 🎉 Module progress updated successfully.
           </div>
