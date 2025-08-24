@@ -248,37 +248,56 @@ const CourseDisplay = () => {
   useEffect(() => {
     if (course && course.modules) {
       const initialUnlocked = new Set();
-      course.modules.forEach((module, index) => {
-        // First module is always unlocked
-        if (index === 0) {
+      
+      // For onboarding course, unlock all modules
+      const isOnboardingCourse = course.title?.toLowerCase().includes('welcome to discourse ai') || 
+                                 course.title?.toLowerCase().includes('onboarding') ||
+                                 course.id?.includes('discourse-ai-onboarding');
+      
+      if (isOnboardingCourse) {
+        // Unlock all modules for onboarding course
+        course.modules.forEach(module => {
           initialUnlocked.add(module.id);
-        } else {
-          // For subsequent modules, check if they should be unlocked based on previous module completion
-          const previousModule = course.modules[index - 1];
-          if (previousModule) {
-            // Check if previous module has all quizzes completed with perfect scores
-            const lessonsWithQuizzes = previousModule.lessons.filter(l => l.quiz && l.quiz.length > 0);
-            const perfectScores = lessonsWithQuizzes.filter(l => 
-              l.quizScores && l.quizScores[user?.id] === 5
-            );
-            
-            // Unlock if all lessons with quizzes have perfect scores
-            if (lessonsWithQuizzes.length > 0 && perfectScores.length === lessonsWithQuizzes.length) {
-              initialUnlocked.add(module.id);
+        });
+      } else {
+        // For other courses, use the existing unlock logic
+        course.modules.forEach((module, index) => {
+          // First module is always unlocked
+          if (index === 0) {
+            initialUnlocked.add(module.id);
+          } else {
+            // For subsequent modules, check if they should be unlocked based on previous module completion
+            const previousModule = course.modules[index - 1];
+            if (previousModule) {
+              // Check if previous module has all quizzes completed with perfect scores
+              const lessonsWithQuizzes = previousModule.lessons.filter(l => l.quiz && l.quiz.length > 0);
+              const perfectScores = lessonsWithQuizzes.filter(l => 
+                l.quizScores && l.quizScores[user?.id] === 5
+              );
+              
+              // Unlock if all lessons with quizzes have perfect scores
+              if (lessonsWithQuizzes.length > 0 && perfectScores.length === lessonsWithQuizzes.length) {
+                initialUnlocked.add(module.id);
+              }
             }
           }
-        }
-      });
+        });
+      }
+      
       setUnlockedModules(initialUnlocked);
       
       if (process.env.NODE_ENV === 'development') {
-        console.log('[CourseDisplay] Module unlock status:', course.modules.map((module, index) => ({
-          index,
-          title: module.title,
-          isUnlocked: initialUnlocked.has(module.id),
-          lessonsWithQuizzes: module.lessons.filter(l => l.quiz && l.quiz.length > 0).length,
-          perfectScores: module.lessons.filter(l => l.quiz && l.quiz.length > 0 && l.quizScores && l.quizScores[user?.id] === 5).length
-        })));
+        console.log('[CourseDisplay] Module unlock status:', {
+          isOnboardingCourse,
+          courseTitle: course.title,
+          modules: course.modules.map((module, index) => ({
+            index,
+            title: module.title,
+            isUnlocked: initialUnlocked.has(module.id),
+            lessonsWithQuizzes: module.lessons.filter(l => l.quiz && l.quiz.length > 0).length,
+            perfectScores: module.lessons.filter(l => l.quiz && l.quiz.length > 0 && l.quizScores && l.quizScores[user?.id] === 5).length
+          }))
+        });
       }
     }
   }, [course, user?.id]);
@@ -310,7 +329,13 @@ const CourseDisplay = () => {
   const handleModuleSelect = useCallback((moduleId) => {
     if (!course?.modules) return;
     const moduleData = course.modules.find(m => m.id === moduleId);
-    if (!moduleData || !unlockedModules.has(moduleId)) return;
+    
+    // For onboarding course, bypass unlock check
+    const isOnboardingCourse = course.title?.toLowerCase().includes('welcome to discourse ai') || 
+                               course.title?.toLowerCase().includes('onboarding') ||
+                               course.id?.includes('discourse-ai-onboarding');
+    
+    if (!moduleData || (!isOnboardingCourse && !unlockedModules.has(moduleId))) return;
     
     setActiveModuleId(moduleId);
     if (moduleData.lessons.length > 0) {

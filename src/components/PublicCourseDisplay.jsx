@@ -590,7 +590,13 @@ const PublicCourseDisplay = () => {
   const handleModuleSelect = useCallback((moduleId) => {
     if (!course?.modules || !courseId || !sessionId) return;
     const moduleData = course.modules.find(m => m.id === moduleId);
-    if (!moduleData || !unlockedModules.has(moduleId)) return;
+    
+    // For onboarding course, bypass unlock check
+    const isOnboardingCourse = course.title?.toLowerCase().includes('welcome to discourse ai') || 
+                               course.title?.toLowerCase().includes('onboarding') ||
+                               course.id?.includes('discourse-ai-onboarding');
+    
+    if (!moduleData || (!isOnboardingCourse && !unlockedModules.has(moduleId))) return;
     
     setActiveModuleId(moduleId);
     if (moduleData.lessons.length > 0) {
@@ -804,29 +810,44 @@ const PublicCourseDisplay = () => {
     if (course?.modules && sessionId && course.modules.length > 0) {
       const initialUnlocked = new Set();
       
-      // Safely add the first module
-      if (course.modules[0]?.id) {
-        initialUnlocked.add(course.modules[0].id);
-      }
+      // For onboarding course, unlock all modules
+      const isOnboardingCourse = course.title?.toLowerCase().includes('welcome to discourse ai') || 
+                                 course.title?.toLowerCase().includes('onboarding') ||
+                                 course.id?.includes('discourse-ai-onboarding');
       
-      // Process remaining modules with additional safety checks
-      for (let i = 1; i < course.modules.length; i++) {
-        const previousModule = course.modules[i - 1];
-        const currentModule = course.modules[i];
-        
-        // Ensure both modules exist and have the required properties
-        if (!previousModule?.lessons || !currentModule?.id) {
-          continue;
+      if (isOnboardingCourse) {
+        // Unlock all modules for onboarding course
+        course.modules.forEach(module => {
+          if (module?.id) {
+            initialUnlocked.add(module.id);
+          }
+        });
+      } else {
+        // For other courses, use the existing unlock logic
+        // Safely add the first module
+        if (course.modules[0]?.id) {
+          initialUnlocked.add(course.modules[0].id);
         }
         
-        const lessonsWithQuizzes = previousModule.lessons.filter(l => l.quiz && l.quiz.length > 0);
-        
-        if (lessonsWithQuizzes.length === 0) {
-          initialUnlocked.add(currentModule.id);
-        } else {
-          const perfectScores = lessonsWithQuizzes.filter(l => l.quizScore === 5);
-          if (perfectScores.length === lessonsWithQuizzes.length) {
+        // Process remaining modules with additional safety checks
+        for (let i = 1; i < course.modules.length; i++) {
+          const previousModule = course.modules[i - 1];
+          const currentModule = course.modules[i];
+          
+          // Ensure both modules exist and have the required properties
+          if (!previousModule?.lessons || !currentModule?.id) {
+            continue;
+          }
+          
+          const lessonsWithQuizzes = previousModule.lessons.filter(l => l.quiz && l.quiz.length > 0);
+          
+          if (lessonsWithQuizzes.length === 0) {
             initialUnlocked.add(currentModule.id);
+          } else {
+            const perfectScores = lessonsWithQuizzes.filter(l => l.quizScore === 5);
+            if (perfectScores.length === lessonsWithQuizzes.length) {
+              initialUnlocked.add(currentModule.id);
+            }
           }
         }
       }
