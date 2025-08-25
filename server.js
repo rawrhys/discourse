@@ -3058,7 +3058,7 @@ if (!fs.existsSync(dataDir)) {
 }
 
 const adapter = new JSONFile(dbFilePath);
-const defaultData = { users: [], courses: [], images: [], imageCache: [], onboardingCompletions: [] };
+const defaultData = { users: [], courses: [], images: [], imageCache: [], onboardingCompletions: [], trialRecords: [] };
 const db = new Low(adapter, defaultData);
 
 async function initializeDatabase() {
@@ -3071,6 +3071,7 @@ async function initializeDatabase() {
     db.data.users = db.data.users || [];
     db.data.courses = db.data.courses || [];
     db.data.imageCache = db.data.imageCache || [];
+    db.data.trialRecords = db.data.trialRecords || [];
     db.data.images = db.data.images || [];
     db.data.onboardingCompletions = db.data.onboardingCompletions || [];
     
@@ -3766,6 +3767,27 @@ app.post('/api/auth/register', async (req, res) => {
       });
     }
 
+    // --- Anti-abuse: Prevent multiple free trials per email/IP/device ---
+    const now = Date.now();
+    const clientIp = (req.headers['x-forwarded-for']?.toString().split(',')[0] || req.ip || '').trim();
+    const userAgent = String(req.headers['user-agent'] || '').slice(0, 300);
+    const normalizedEmail = email.trim().toLowerCase();
+
+    db.data.trialRecords = db.data.trialRecords || [];
+    const existingTrialForEmail = db.data.trialRecords.find(r => r.email === normalizedEmail);
+    const recentTrialsForIp = db.data.trialRecords.filter(r => r.ip && clientIp && r.ip === clientIp && (now - new Date(r.createdAt).getTime()) < 90 * 24 * 60 * 60 * 1000);
+    const recentTrialsForDevice = db.data.trialRecords.filter(r => r.userAgent && userAgent && r.userAgent === userAgent && (now - new Date(r.createdAt).getTime()) < 90 * 24 * 60 * 60 * 1000);
+
+    if (existingTrialForEmail) {
+      return res.status(400).json({ error: 'An account with this email already claimed a free trial.', code: 'trial_email_used' });
+    }
+    if (recentTrialsForIp.length >= 2) {
+      return res.status(400).json({ error: 'Too many trial signups from this network recently. Please contact support.', code: 'trial_ip_rate_limited' });
+    }
+    if (recentTrialsForDevice.length >= 2) {
+      return res.status(400).json({ error: 'Too many trial signups from this device recently. Please contact support.', code: 'trial_device_rate_limited' });
+    }
+
     // --- Supabase Registration ---
     console.log(`[AUTH] Attempting Supabase registration for: ${email}`);
     console.log(`[AUTH] Supabase URL: ${supabaseUrl}`);
@@ -3864,6 +3886,18 @@ app.post('/api/auth/register', async (req, res) => {
     };
     db.data.users.push(localUser);
     await db.write();
+
+    // Record a trial claim marker to prevent re-use
+    try {
+      db.data.trialRecords = db.data.trialRecords || [];
+      db.data.trialRecords.push({
+        email: normalizedEmail,
+        ip: (req.headers['x-forwarded-for']?.toString().split(',')[0] || req.ip || '').trim(),
+        userAgent: String(req.headers['user-agent'] || '').slice(0, 300),
+        createdAt: new Date().toISOString()
+      });
+      await db.write();
+    } catch {}
     
     // Assign onboarding course to new users
     await assignOnboardingCourse(localUser.id);
@@ -6909,6 +6943,27 @@ app.get('/api/debug/course/:courseId', authenticateToken, (req, res) => {
   } catch (error) {
     console.error(`[DEBUG] Error in course debug endpoint:`, error);
     res.status(500).json({ error: 'Debug endpoint failed', message: error.message });
+  }
+});
+
+// Admin: List trial records (email/IP/userAgent/timestamp)
+app.get('/api/admin/trials', authenticateToken, requireAdminIfConfigured, async (req, res) => {
+  try {
+    db.data.trialRecords = db.data.trialRecords || [];
+    return res.json({ count: db.data.trialRecords.length, records: db.data.trialRecords });
+  } catch (e) {
+    return res.status(500).json({ error: 'Failed to list trials' });
+  }
+});
+
+// Admin: Clear trial records
+app.post('/api/admin/trials/clear', authenticateToken, requireAdminIfConfigured, async (req, res) => {
+  try {
+    db.data.trialRecords = [];
+    await db.write();
+    return res.json({ success: true });
+  } catch (e) {
+    return res.status(500).json({ error: 'Failed to clear trials' });
   }
 });
 

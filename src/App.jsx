@@ -22,7 +22,8 @@ const CaptchaPage = lazy(() => import('./components/CaptchaPage'));
 const PrivacyPolicy = lazy(() => import('./components/legal/PrivacyPolicy.jsx'));
 const UserAgreement = lazy(() => import('./components/legal/UserAgreement.jsx'));
 const PerformanceDashboard = lazy(() => import('./components/PerformanceDashboard'));
-
+const ForgotPassword = lazy(() => import('./components/auth/ForgotPassword'));
+const ResetPassword = lazy(() => import('./components/auth/ResetPassword'));
 
 
 const ProtectedRoute = ({ children }) => {
@@ -338,6 +339,8 @@ function App() {
             <Route path="/" element={<Homepage />} />
             <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
             <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
+            <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
+            <Route path="/reset-password" element={<PublicRoute><ResetPassword /></PublicRoute>} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/terms" element={<UserAgreement />} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
