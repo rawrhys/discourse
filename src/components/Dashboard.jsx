@@ -208,7 +208,70 @@ const Dashboard = () => {
             logger.warn('🔗 [DASHBOARD] Failed to set SSE cookie:', e?.message || e);
           }
           // Connect to SSE notifications (cookie will be sent automatically; token is also appended as fallback)
-          courseNotificationService.connect(token);
+          try {
+            await courseNotificationService.connect(token);
+            
+            // Test the connection after a short delay
+            setTimeout(async () => {
+              try {
+                const debugInfo = await courseNotificationService.getDebugInfo();
+                logger.info('🔗 [DASHBOARD] SSE connection debug info:', debugInfo);
+                
+                if (!courseNotificationService.isConnected) {
+                  logger.warn('🔗 [DASHBOARD] SSE connection failed, attempting forced reconnection...');
+                  const reconnectResult = await courseNotificationService.forceReconnect();
+                  logger.info('🔗 [DASHBOARD] Forced reconnection result:', reconnectResult);
+                  
+                  // If reconnection failed, try one more time with a longer delay
+                  setTimeout(async () => {
+                    if (!courseNotificationService.isConnected) {
+                      logger.warn('🔗 [DASHBOARD] Second reconnection attempt...');
+                      const secondReconnectResult = await courseNotificationService.forceReconnect();
+                      logger.info('🔗 [DASHBOARD] Second reconnection result:', secondReconnectResult);
+                      
+                      // If still not connected, try alternative strategies
+                      if (!courseNotificationService.isConnected) {
+                        logger.warn('🔗 [DASHBOARD] Trying alternative connection strategies...');
+                        const alternativeResult = await courseNotificationService.tryAlternativeConnectionStrategies();
+                        logger.info('🔗 [DASHBOARD] Alternative strategies result:', alternativeResult);
+                        
+                        // If still not connected, run comprehensive diagnostics
+                        if (!courseNotificationService.isConnected) {
+                          logger.warn('🔗 [DASHBOARD] Running comprehensive diagnostics...');
+                          try {
+                            const diagnostics = await courseNotificationService.getConnectionDiagnostics();
+                            logger.info('🔗 [DASHBOARD] Diagnostics completed:', diagnostics);
+                            
+                            // Generate and log recommendations
+                            const recommendations = courseNotificationService.generateTroubleshootingRecommendations(diagnostics);
+                            if (recommendations.length > 0) {
+                              logger.warn('🔗 [DASHBOARD] Troubleshooting recommendations:', recommendations);
+                              
+                              // Try to apply automatic fixes
+                              for (const rec of recommendations) {
+                                if (rec.action === 'refresh_page') {
+                                  logger.info('🔗 [DASHBOARD] Applying automatic fix: refresh page');
+                                  // Don't actually refresh, just log the recommendation
+                                  break;
+                                }
+                              }
+                            }
+                          } catch (diagnosticError) {
+                            logger.error('🔗 [DASHBOARD] Diagnostics failed:', diagnosticError);
+                          }
+                        }
+                      }
+                    }
+                  }, 5000);
+                }
+              } catch (debugError) {
+                logger.warn('🔗 [DASHBOARD] Failed to get SSE debug info:', debugError?.message || debugError);
+              }
+            }, 2000);
+            
+          } catch (e) {
+            logger.warn('🔗 [DASHBOARD] Failed to connect to SSE notifications:', e?.message || e);
+          }
         }
       })();
         
@@ -886,6 +949,87 @@ const Dashboard = () => {
                   SSE Connected: {courseNotificationService.isConnected ? 'Yes' : 'No'} | 
                   User ID: {user?.id}
                 </p>
+                <div className="mt-2 space-x-2">
+                  <button
+                    onClick={async () => {
+                      try {
+                        const debugInfo = await courseNotificationService.getDebugInfo();
+                        console.log('🔗 [DASHBOARD] Manual SSE debug info:', debugInfo);
+                        alert(`SSE Debug Info:\n${JSON.stringify(debugInfo, null, 2)}`);
+                      } catch (error) {
+                        console.error('🔗 [DASHBOARD] Manual debug failed:', error);
+                        alert(`Debug failed: ${error.message}`);
+                      }
+                    }}
+                    className="bg-blue-500 text-white px-2 py-1 rounded text-xs hover:bg-blue-600"
+                  >
+                    Debug SSE
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const result = await courseNotificationService.forceReconnect();
+                        console.log('🔗 [DASHBOARD] Manual reconnection result:', result);
+                        alert(`Reconnection result: ${JSON.stringify(result, null, 2)}`);
+                      } catch (error) {
+                        console.error('🔗 [DASHBOARD] Manual reconnection failed:', error);
+                        alert(`Reconnection failed: ${error.message}`);
+                      }
+                    }}
+                    className="bg-green-500 text-white px-2 py-1 rounded text-xs hover:bg-green-600"
+                  >
+                    Force Reconnect
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const result = await courseNotificationService.tryAlternativeConnectionStrategies();
+                        console.log('🔗 [DASHBOARD] Alternative strategies result:', result);
+                        alert(`Alternative strategies result: ${JSON.stringify(result, null, 2)}`);
+                      } catch (error) {
+                        console.error('🔗 [DASHBOARD] Alternative strategies failed:', error);
+                        alert(`Alternative strategies failed: ${error.message}`);
+                      }
+                    }}
+                    className="bg-purple-500 text-white px-2 py-1 rounded text-xs hover:bg-purple-600"
+                  >
+                    Try Alternatives
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const diagnostics = await courseNotificationService.getConnectionDiagnostics();
+                        console.log('🔗 [DASHBOARD] Connection diagnostics:', diagnostics);
+                        
+                        // Generate recommendations
+                        const recommendations = courseNotificationService.generateTroubleshootingRecommendations(diagnostics);
+                        
+                        // Create a formatted message
+                        let message = 'Connection Diagnostics:\n\n';
+                        message += `Status: ${courseNotificationService.isConnected ? 'Connected' : 'Disconnected'}\n`;
+                        message += `Browser: ${diagnostics.browserCompatibility.userAgent.split(' ').slice(0, 3).join(' ')}\n\n`;
+                        
+                        if (recommendations.length > 0) {
+                          message += 'Recommendations:\n';
+                          recommendations.forEach((rec, index) => {
+                            message += `${index + 1}. ${rec.title}\n`;
+                            message += `   ${rec.solution}\n\n`;
+                          });
+                        } else {
+                          message += 'No specific issues detected.\n';
+                        }
+                        
+                        alert(message);
+                      } catch (error) {
+                        console.error('🔗 [DASHBOARD] Diagnostics failed:', error);
+                        alert(`Diagnostics failed: ${error.message}`);
+                      }
+                    }}
+                    className="bg-orange-500 text-white px-2 py-1 rounded text-xs hover:bg-orange-600"
+                  >
+                    Full Diagnostics
+                  </button>
+                </div>
               </div>
               <button
                 onClick={() => {

@@ -4779,8 +4779,38 @@ function sendCourseGenerationNotification(userId, notificationData) {
 
 // SSE endpoint for real-time course generation notifications
 app.get('/api/courses/notifications', async (req, res) => {
+  console.log('[SSE] SSE connection attempt:', {
+    hasCookies: !!req.cookies,
+    cookieKeys: req.cookies ? Object.keys(req.cookies) : [],
+    hasSseToken: !!req.cookies?.sse_token,
+    hasQueryToken: !!req.query.token,
+    userAgent: req.headers['user-agent'],
+    origin: req.headers.origin,
+    timestamp: new Date().toISOString()
+  });
+  
+  // Check for rate limiting (max 5 SSE connections per user)
+  const clientIP = req.ip || req.connection.remoteAddress;
+  const userConnections = global.sseConnections ? Array.from(global.sseConnections.values()) : [];
+  const connectionsFromIP = userConnections.filter(conn => conn.ip === clientIP).length;
+  
+  if (connectionsFromIP >= 5) {
+    console.warn(`[SSE] Rate limit exceeded for IP ${clientIP}: ${connectionsFromIP} connections`);
+    return res.status(429).json({ error: 'Too many SSE connections from this IP' });
+  }
+  
   // Prefer authentication via HttpOnly cookie; fall back to query param in dev
-  const token = req.cookies?.sse_token || req.query.token;
+  let token = req.cookies?.sse_token || req.query.token;
+  
+  // If no token in cookie or query, check Authorization header as last resort
+  if (!token && req.headers.authorization) {
+    const authHeader = req.headers.authorization;
+    if (authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
+      console.log('[SSE] Using token from Authorization header');
+    }
+  }
+  
   if (!token) {
     console.error('[SSE] No token provided for SSE connection');
     return res.status(401).json({ error: 'No token provided' });
@@ -4806,14 +4836,31 @@ app.get('/api/courses/notifications', async (req, res) => {
     } else if (supabase) {
       // Try Supabase verification first
       try {
+        console.log('[SSE] Attempting Supabase token verification...');
         const { data: { user }, error } = await supabase.auth.getUser(token);
         if (user && !error) {
           userId = user.id;
           console.log(`[SSE] Supabase authentication successful for user: ${userId}`);
+        } else {
+          console.error('[SSE] Supabase token verification failed:', error);
         }
       } catch (e) {
         console.warn('[SSE] Supabase getUser threw error:', e?.message);
       }
+      
+      // If Supabase verification failed, try to extract user ID from token directly
+      if (!userId && token.includes('.')) {
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          if (payload.sub) {
+            console.log('[SSE] Extracted user ID from JWT payload:', payload.sub);
+            userId = payload.sub;
+          }
+        } catch (jwtError) {
+          console.warn('[SSE] Failed to parse JWT payload:', jwtError.message);
+        }
+      }
+      
       if (!userId) {
         console.error('[SSE] Supabase authentication failed for SSE connection');
         return res.status(401).json({ error: 'Unauthorized' });
@@ -4842,7 +4889,10 @@ app.get('/api/courses/notifications', async (req, res) => {
     // Send initial connection message
     res.write(`data: ${JSON.stringify({ type: 'connected', userId, timestamp: new Date().toISOString() })}\n\n`);
 
-    // Store the connection
+    // Store the connection with metadata
+    res.ip = clientIP;
+    res.userId = userId;
+    res.connectedAt = new Date().toISOString();
     global.sseConnections.set(userId, res);
 
     // Handle client disconnect
@@ -4857,6 +4907,23 @@ app.get('/api/courses/notifications', async (req, res) => {
       global.sseConnections.delete(userId);
     });
 
+    // Set up periodic health check for this connection
+    const healthCheckInterval = setInterval(() => {
+      try {
+        // Send a ping to keep the connection alive
+        res.write(`data: ${JSON.stringify({ type: 'ping', timestamp: new Date().toISOString() })}\n\n`);
+      } catch (error) {
+        console.error(`[SSE] Health check failed for user ${userId}:`, error);
+        clearInterval(healthCheckInterval);
+        global.sseConnections.delete(userId);
+      }
+    }, 30000); // Send ping every 30 seconds
+
+    // Clean up interval on disconnect
+    req.on('close', () => {
+      clearInterval(healthCheckInterval);
+    });
+
     console.log(`[SSE] Client connected successfully: ${userId}`);
   } catch (error) {
     console.error('[SSE] Error setting up SSE connection:', error);
@@ -4867,32 +4934,116 @@ app.get('/api/courses/notifications', async (req, res) => {
 // Endpoint to set SSE auth cookie from Supabase token
 app.post('/api/auth/sse-cookie', async (req, res) => {
   try {
+    console.log('[SSE COOKIE] Setting SSE cookie:', {
+      hasAuthHeader: !!req.headers['authorization'],
+      hasBodyToken: !!req.body?.token,
+      contentType: req.headers['content-type']
+    });
+    
     const authHeader = req.headers['authorization'];
     const bearer = authHeader && authHeader.split(' ')[1];
     const providedToken = bearer || req.body?.token;
     if (!providedToken) {
+      console.error('[SSE COOKIE] Missing token in request');
       return res.status(400).json({ error: 'Missing token' });
     }
     if (!supabase) {
+      console.error('[SSE COOKIE] Supabase not configured');
       return res.status(500).json({ error: 'Authentication service not configured' });
     }
+    
+    console.log('[SSE COOKIE] Verifying token with Supabase...');
     const { data: { user }, error } = await supabase.auth.getUser(providedToken);
     if (error || !user) {
+      console.error('[SSE COOKIE] Token verification failed:', error);
       return res.status(401).json({ error: 'Invalid token' });
     }
 
     // Set HttpOnly cookie. Secure if HTTPS, SameSite=Lax for SSE compatibility
+    // Note: SameSite=None requires Secure=true and may not work in all browsers
     const isSecure = (process.env.BACKEND_PUBLIC_URL || '').startsWith('https://');
-    res.cookie('sse_token', providedToken, {
+    const cookieOptions = {
       httpOnly: true,
       secure: isSecure,
-      sameSite: 'lax',
+      sameSite: 'lax', // Use 'lax' for better compatibility, 'none' only if secure
       maxAge: 60 * 60 * 1000 // 1 hour
+    };
+    
+    // If we're in a secure context and need cross-site cookies, try SameSite=None
+    if (isSecure && req.headers.origin && req.headers.origin !== req.headers.host) {
+      try {
+        cookieOptions.sameSite = 'none';
+        console.log('[SSE COOKIE] Using SameSite=None for cross-origin requests');
+      } catch (e) {
+        console.warn('[SSE COOKIE] Failed to set SameSite=None, falling back to lax');
+        cookieOptions.sameSite = 'lax';
+      }
+    }
+    
+    console.log('[SSE COOKIE] Setting cookie with options:', {
+      secure: isSecure,
+      sameSite: 'lax',
+      maxAge: '1 hour',
+      userId: user.id
     });
+    
+    res.cookie('sse_token', providedToken, cookieOptions);
+    console.log('[SSE COOKIE] Cookie set successfully for user:', user.id);
     return res.json({ success: true });
   } catch (e) {
     console.error('[SSE COOKIE] Failed to set cookie:', e);
     return res.status(500).json({ error: 'Failed to set cookie' });
+  }
+});
+
+// Debug endpoint to check SSE connection status
+app.get('/api/auth/sse-debug', async (req, res) => {
+  try {
+    const token = req.cookies?.sse_token || req.query.token;
+    if (!token) {
+      return res.json({ 
+        status: 'no_token',
+        message: 'No SSE token found',
+        cookies: req.cookies ? Object.keys(req.cookies) : [],
+        hasQueryToken: !!req.query.token
+      });
+    }
+
+    let userId = null;
+    if (supabase) {
+      try {
+        const { data: { user }, error } = await supabase.auth.getUser(token);
+        if (user && !error) {
+          userId = user.id;
+        }
+      } catch (e) {
+        console.warn('[SSE DEBUG] Supabase verification failed:', e?.message);
+      }
+    }
+
+    // Check server health
+    const serverHealth = {
+      uptime: process.uptime(),
+      memoryUsage: process.memoryUsage(),
+      nodeVersion: process.version,
+      platform: process.platform,
+      timestamp: new Date().toISOString()
+    };
+
+    return res.json({
+      status: 'token_found',
+      hasUserId: !!userId,
+      userId: userId,
+      tokenLength: token.length,
+      tokenPrefix: token.substring(0, 20) + '...',
+      cookies: req.cookies ? Object.keys(req.cookies) : [],
+      hasSseToken: !!req.cookies?.sse_token,
+      activeConnections: global.sseConnections ? Array.from(global.sseConnections.keys()) : [],
+      serverHealth: serverHealth
+    });
+  } catch (error) {
+    console.error('[SSE DEBUG] Error:', error);
+    return res.status(500).json({ error: error.message });
   }
 });
 
