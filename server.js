@@ -6618,24 +6618,35 @@ app.post('/api/billing/portal', authenticateToken, async (req, res) => {
     }
 
     const user = req.user;
-    // In a full implementation, you would store a stripeCustomerId on the user
-    // and use it here. As a fallback, create a customer on-the-fly if needed.
+    if (!user?.email) {
+      return res.status(400).json({ error: 'User email is required to create billing portal session' });
+    }
+
+    // Try existing stored customer ID, else look up by email, else create
     let customerId = user.stripeCustomerId;
+    const dbUser = db.data.users.find(u => u.id === user.id);
+    if (!customerId && dbUser?.stripeCustomerId) customerId = dbUser.stripeCustomerId;
     if (!customerId) {
-      const customer = await stripe.customers.create({
-        email: user.email,
-        metadata: { userId: user.id }
-      });
-      customerId = customer.id;
-      // Persist to local DB user record
-      const dbUser = db.data.users.find(u => u.id === user.id);
-      if (dbUser) {
+      const existing = await stripe.customers.list({ email: user.email, limit: 1 });
+      if (existing?.data?.length) {
+        customerId = existing.data[0].id;
+      } else {
+        const created = await stripe.customers.create({ email: user.email, metadata: { userId: user.id } });
+        customerId = created.id;
+      }
+      if (dbUser && customerId) {
         dbUser.stripeCustomerId = customerId;
         await db.write();
       }
     }
 
-    const returnUrl = `${req.headers.origin || 'http://localhost:5173'}/dashboard`;
+    // Determine safe return URL
+    let origin = req.headers.origin;
+    if (!origin && req.headers.referer) {
+      try { origin = new URL(req.headers.referer).origin; } catch {}
+    }
+    origin = origin || process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
+    const returnUrl = `${origin}/dashboard`;
     const session = await stripe.billingPortal.sessions.create({
       customer: customerId,
       return_url: returnUrl,
@@ -6644,7 +6655,8 @@ app.post('/api/billing/portal', authenticateToken, async (req, res) => {
     return res.json({ url: session.url });
   } catch (e) {
     console.error('[Stripe] Failed to create billing portal session:', e);
-    return res.status(500).json({ error: 'Failed to create billing portal session' });
+    const message = e?.message || 'Unknown error';
+    return res.status(500).json({ error: `Failed to create billing portal session: ${message}` });
   }
 });
 
