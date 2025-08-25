@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../../config/supabase';
 
 const ForgotPassword = () => {
@@ -58,6 +59,11 @@ const ForgotPassword = () => {
             </button>
           </div>
         </form>
+        <div className="text-center mt-3">
+          <Link to="/login" className="text-sm text-indigo-600 hover:text-indigo-500">
+            ← Back to login
+          </Link>
+        </div>
       </div>
     </div>
   );
