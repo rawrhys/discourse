@@ -4768,33 +4768,31 @@ app.get('/api/courses/notifications', async (req, res) => {
       }
       console.log(`[SSE] Dev mode authentication successful for user: ${userId}`);
     } else if (supabase) {
-      // Verify token using Supabase Admin client to avoid 401s
+      // Try Supabase verification first
       try {
         const { data: { user }, error } = await supabase.auth.getUser(token);
-        if (error || !user) {
-          console.warn('[SSE] Supabase getUser failed, attempting decode fallback');
-          // Fallback: decode JWT without verification to extract sub; SSE is low risk
-          const payload = token.split('.')[1];
-          const decoded = JSON.parse(Buffer.from(payload, 'base64').toString('utf8'));
-          if (!decoded?.sub) {
-            console.error('[SSE] Token decode failed - no sub');
-            return res.status(401).json({ error: 'Invalid token' });
-          }
-          userId = decoded.sub;
-          console.log(`[SSE] Fallback JWT decode successful for user: ${userId}`);
-        } else {
+        if (user && !error) {
           userId = user.id;
           console.log(`[SSE] Supabase authentication successful for user: ${userId}`);
         }
       } catch (e) {
-        console.error('[SSE] Token verification error:', e?.message);
-        // As a last resort, try to decode the token to get sub
+        console.warn('[SSE] Supabase getUser threw error, attempting decode:', e?.message);
+      }
+      // Fallback: decode JWT without verification to extract sub
+      if (!userId) {
         try {
           const payload = token.split('.')[1];
           const decoded = JSON.parse(Buffer.from(payload, 'base64').toString('utf8'));
-          userId = decoded?.sub;
-        } catch {}
-        if (!userId) return res.status(401).json({ error: 'Invalid token' });
+          if (decoded?.sub) {
+            userId = decoded.sub;
+            console.log(`[SSE] Fallback JWT decode successful for user: ${userId}`);
+          }
+        } catch (e) {
+          console.error('[SSE] Token decode failed:', e?.message);
+        }
+        if (!userId) {
+          return res.status(401).json({ error: 'Unauthorized' });
+        }
       }
     } else {
       console.error('[SSE] Neither Supabase nor dev mode available for authentication');

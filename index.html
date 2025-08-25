@@ -72,8 +72,8 @@
       const args = Array.from(arguments);
       if (args.some(arg => 
         typeof arg === 'string' && 
-        (arg.includes('feature_collector.js') && arg.includes('deprecated')) ||
-        (arg.includes('gtag') && arg.includes('deprecated'))
+        ((arg.includes('feature_collector.js') && arg.includes('deprecated')) ||
+         (arg.includes('gtag') && arg.includes('deprecated')))
       )) {
         return;
       }

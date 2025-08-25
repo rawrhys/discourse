@@ -754,12 +754,12 @@ const Dashboard = () => {
             <div className="flex items-center">
               <h1 className="text-xl font-semibold">Course Dashboard</h1>
             </div>
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2 sm:space-x-4">
               <span className="text-sm text-gray-600">Welcome, {userName}!</span>
 
               <button
                 onClick={() => setShowReportProblem(true)}
-                className="inline-flex items-center px-3 py-2 text-sm font-medium text-purple-700 bg-purple-100 border border-purple-300 rounded-md hover:bg-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-colors"
+                className="inline-flex items-center px-2.5 py-1.5 text-xs sm:text-sm font-medium text-purple-700 bg-purple-100 border border-purple-300 rounded-md hover:bg-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-colors"
               >
                 <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" />
@@ -768,13 +768,13 @@ const Dashboard = () => {
               </button>
               <button
                 onClick={() => setShowSettings(true)}
-                className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors"
+                className="inline-flex items-center px-2.5 py-1.5 text-xs sm:text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors"
               >
                 Settings
               </button>
               <button
                 onClick={handleLogout}
-                className="text-sm text-gray-600 hover:text-gray-900"
+                className="text-xs sm:text-sm text-gray-600 hover:text-gray-900"
               >
                 Logout
               </button>
@@ -785,31 +785,29 @@ const Dashboard = () => {
 
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         {/* Credits and Buy More */}
-        <div className="flex items-center justify-between mb-6 bg-white p-4 rounded-lg shadow-sm">
-          <div className="flex items-center space-x-4">
-            <div className="text-lg font-semibold text-gray-700">
+        <div className="flex items-center justify-between mb-6 bg-white p-3 sm:p-4 rounded-lg shadow-sm">
+          <div className="flex items-center space-x-2 sm:space-x-4">
+            <div className="text-sm sm:text-lg font-semibold text-gray-700">
               Tokens: <span className={credits === 0 ? 'text-red-500' : 'text-green-600'}>{credits}</span>
             </div>
             <button
               onClick={fetchUserProfile}
-              className="text-sm text-gray-500 hover:text-gray-700 transition-colors duration-200"
+              className="text-xs sm:text-sm text-gray-500 hover:text-gray-700 transition-colors duration-200"
               title="Refresh user data"
             >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="h-3 w-3 sm:h-4 sm:w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
             </button>
           </div>
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2 sm:space-x-3">
             <button
               onClick={handleBuyMore}
               disabled={isBuying}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center px-3 py-1.5 sm:px-4 sm:py-2 border border-transparent text-xs sm:text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isBuying ? 'Processing...' : 'Buy More Tokens'}
+              {isBuying ? 'Processing...' : 'Buy Tokens'}
             </button>
-            
-
           </div>
         </div>
         
