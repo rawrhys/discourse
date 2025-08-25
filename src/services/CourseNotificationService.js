@@ -2,6 +2,38 @@
 import { API_BASE_URL } from '../config/api';
 import { supabase } from '../config/supabase';
 
+// Global error handler to suppress 401 errors from EventSource
+const suppressEventSourceErrors = () => {
+  // Override console.error to filter out 401 errors from EventSource
+  const originalConsoleError = console.error;
+  console.error = function(...args) {
+    const message = args.join(' ');
+    // Suppress 401 errors and EventSource connection errors
+    if (message.includes('401') || 
+        message.includes('Unauthorized') || 
+        message.includes('Failed to load resource') ||
+        message.includes('net::ERR_ABORTED') ||
+        (message.includes('notifications') && message.includes('401'))) {
+      return; // Don't log these errors
+    }
+    originalConsoleError.apply(console, args);
+  };
+
+  // Override console.warn to filter out 401 warnings
+  const originalConsoleWarn = console.warn;
+  console.warn = function(...args) {
+    const message = args.join(' ');
+    // Suppress 401 warnings
+    if (message.includes('401') || message.includes('Unauthorized')) {
+      return; // Don't log these warnings
+    }
+    originalConsoleWarn.apply(console, args);
+  };
+};
+
+// Initialize error suppression
+suppressEventSourceErrors();
+
 class CourseNotificationService {
   constructor() {
     this.eventSource = null;
@@ -14,6 +46,7 @@ class CourseNotificationService {
     this.lastAuthCheck = 0;
     this.authCheckInterval = 60000; // Check auth every minute
     this.silentMode = false; // Prevent console spam during retries
+    this.authFailed = false; // Track if authentication has failed
   }
 
   // Check if user is authenticated before making requests
@@ -56,16 +89,16 @@ class CourseNotificationService {
     this.lastToken = token;
 
     try {
-      // Check authentication state first
-      const isAuth = await this.isAuthenticated();
-      if (!isAuth) {
-        console.log('[CourseNotificationService] User not authenticated, skipping SSE connection');
-        this.silentMode = true; // Enable silent mode to prevent console spam
+      // Check if we should attempt connection
+      const shouldConnect = await this.shouldAttemptConnection();
+      if (!shouldConnect) {
+        console.log('[CourseNotificationService] Connection attempt blocked - SSE disabled or not authenticated');
         return;
       }
 
-      // Reset silent mode if we're authenticated
+      // Reset flags if we're proceeding with connection
       this.silentMode = false;
+      this.authFailed = false;
 
       // First, ensure the SSE cookie is set before attempting to connect
       this.cookieSetSuccessfully = false;
@@ -85,6 +118,8 @@ class CourseNotificationService {
           if (!response.ok) {
             if (response.status === 401) {
               console.log('[CourseNotificationService] Authentication failed, skipping SSE connection');
+              this.authFailed = true;
+              this.silentMode = true;
               return;
             }
             throw new Error(`Failed to set SSE cookie: ${response.status} ${response.statusText}`);
@@ -95,12 +130,20 @@ class CourseNotificationService {
         } catch (cookieError) {
           if (cookieError.message.includes('401') || cookieError.message.includes('Unauthorized')) {
             console.log('[CourseNotificationService] Authentication failed, skipping SSE connection');
+            this.authFailed = true;
+            this.silentMode = true;
             return;
           }
           console.error('[CourseNotificationService] Failed to set SSE cookie:', cookieError);
           this.cookieSetSuccessfully = false;
           // Don't fail completely, try to connect anyway
         }
+      }
+
+      // If authentication failed at any point, don't create EventSource
+      if (this.authFailed) {
+        console.log('[CourseNotificationService] Authentication failed, preventing EventSource creation');
+        return;
       }
 
       // Now connect to SSE endpoint
@@ -122,9 +165,13 @@ class CourseNotificationService {
 
       // Create EventSource with credentials to ensure cookies are sent
       // Note: EventSource doesn't support custom headers, so we rely on cookies
-      this.eventSource = new EventSource(url, { 
-        withCredentials: true 
-      });
+      this.eventSource = this.createEventSource(url);
+      
+      // If EventSource creation failed, don't proceed
+      if (!this.eventSource) {
+        console.log('[CourseNotificationService] EventSource creation failed, aborting connection');
+        return;
+      }
 
       this.eventSource.onopen = () => {
         console.log('[CourseNotificationService] SSE connection established successfully');
@@ -133,6 +180,7 @@ class CourseNotificationService {
         this.reconnectDelay = 1000;
         this.reconnecting = false;
         this.silentMode = false; // Reset silent mode on successful connection
+        this.authFailed = false; // Reset auth failed flag
       };
 
       this.eventSource.onmessage = (event) => {
@@ -154,6 +202,7 @@ class CourseNotificationService {
         // Check if this is a 401 error (authentication failed)
         if (this.eventSource && this.eventSource.readyState === EventSource.CONNECTING) {
           console.log('[CourseNotificationService] Connection failed - likely authentication issue');
+          this.authFailed = true; // Mark auth as failed
           // Try to refresh token and reconnect
           if (!this.reconnecting) {
             this.reconnecting = true;
@@ -173,6 +222,7 @@ class CourseNotificationService {
       if (!error.message.includes('401') && !error.message.includes('Unauthorized')) {
         console.error('[CourseNotificationService] Error creating SSE connection:', error);
       }
+      this.authFailed = true; // Mark auth as failed
       // Try to reconnect after a delay
       setTimeout(() => this.handleReconnect(), 3000);
     }
@@ -377,6 +427,11 @@ class CourseNotificationService {
       return false;
     }
     
+    // Don't attempt operations if authentication has failed
+    if (this.authFailed) {
+      return false;
+    }
+    
     // Check if user is authenticated
     const isAuth = await this.isAuthenticated();
     if (!isAuth) {
@@ -386,22 +441,105 @@ class CourseNotificationService {
     return true;
   }
 
-  
+  // Completely disable SSE connections (called when auth fails repeatedly)
+  disableSSE() {
+    this.authFailed = true;
+    this.silentMode = true;
+    this.disconnect();
+    console.log('[CourseNotificationService] SSE connections disabled due to authentication failures');
+  }
+
+  // Check if SSE is disabled
+  isSSEDisabled() {
+    return this.authFailed || this.silentMode;
+  }
+
+  // Force enable SSE (called when user successfully re-authenticates)
+  forceEnableSSE() {
+    this.authFailed = false;
+    this.silentMode = false;
+    this.reconnectAttempts = 0;
+    console.log('[CourseNotificationService] SSE connections re-enabled');
+  }
+
+  // Prevent any network requests when disabled
+  async makeNetworkRequest(url, options = {}) {
+    if (this.isSSEDisabled()) {
+      console.log('[CourseNotificationService] Network request blocked - SSE is disabled');
+      return { blocked: true, reason: 'SSE disabled' };
+    }
+    
+    try {
+      return await this.silentFetch(url, options);
+    } catch (error) {
+      if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+        this.disableSSE(); // Disable SSE on auth failures
+      }
+      throw error;
+    }
+  }
+
+  // Create EventSource only when allowed
+  createEventSource(url) {
+    if (this.isSSEDisabled()) {
+      console.log('[CourseNotificationService] EventSource creation blocked - SSE is disabled');
+      return null;
+    }
+    
+    try {
+      return new EventSource(url, { withCredentials: true });
+    } catch (error) {
+      console.error('[CourseNotificationService] Failed to create EventSource:', error);
+      return null;
+    }
+  }
+
+  // Check if we should attempt connection
+  async shouldAttemptConnection() {
+    // Don't attempt if SSE is disabled
+    if (this.isSSEDisabled()) {
+      return false;
+    }
+    
+    // Don't attempt if not authenticated
+    const isAuth = await this.isAuthenticated();
+    if (!isAuth) {
+      return false;
+    }
+    
+    return true;
+  }
+
+  // Completely prevent any SSE operations when disabled
+  preventSSEOperations() {
+    if (this.isSSEDisabled()) {
+      console.log('[CourseNotificationService] SSE operations blocked - SSE is disabled');
+      return true; // Operations are blocked
+    }
+    return false; // Operations are allowed
+  }
 
   // Test SSE connection manually
   async testConnection(token) {
     try {
+      // Check if SSE is disabled
+      if (this.isSSEDisabled()) {
+        console.log('[CourseNotificationService] SSE is disabled, skipping connection test');
+        return { success: false, error: 'SSE is disabled' };
+      }
+      
       // Check authentication state first
       const isAuth = await this.isAuthenticated();
       if (!isAuth) {
         console.log('[CourseNotificationService] User not authenticated, skipping connection test');
+        this.disableSSE(); // Disable SSE on auth failure
         return { success: false, error: 'User not authenticated' };
       }
 
       console.log('[CourseNotificationService] Testing SSE connection...');
       
       // First test the cookie endpoint
-      const cookieResponse = await this.silentFetch(`${API_BASE_URL}/api/auth/sse-cookie`, {
+      const cookieResponse = await this.makeNetworkRequest(`${API_BASE_URL}/api/auth/sse-cookie`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -411,9 +549,14 @@ class CourseNotificationService {
         credentials: 'include'
       });
       
+      if (cookieResponse.blocked) {
+        return { success: false, error: cookieResponse.reason };
+      }
+      
       if (!cookieResponse.ok) {
         if (cookieResponse.status === 401) {
           console.log('[CourseNotificationService] Authentication failed during connection test');
+          this.disableSSE(); // Disable SSE on auth failure
           return { success: false, error: 'Authentication failed' };
         }
         throw new Error(`Cookie endpoint failed: ${cookieResponse.status} ${cookieResponse.statusText}`);
@@ -422,13 +565,18 @@ class CourseNotificationService {
       console.log('[CourseNotificationService] Cookie endpoint test passed');
       
       // Now test the SSE endpoint with a simple GET request
-      const sseResponse = await this.silentFetch(`${API_BASE_URL}/api/courses/notifications`, {
+      const sseResponse = await this.makeNetworkRequest(`${API_BASE_URL}/api/courses/notifications`, {
         method: 'GET',
         credentials: 'include'
       });
       
+      if (sseResponse.blocked) {
+        return { success: false, error: sseResponse.reason };
+      }
+      
       if (sseResponse.status === 401) {
         console.log('[CourseNotificationService] SSE endpoint requires authentication');
+        this.disableSSE(); // Disable SSE on auth failure
         return { success: false, error: 'SSE endpoint requires authentication' };
       }
       
@@ -447,24 +595,42 @@ class CourseNotificationService {
   // Get debug information about SSE connection
   async getDebugInfo() {
     try {
+      // Check if SSE is disabled
+      if (this.isSSEDisabled()) {
+        console.log('[CourseNotificationService] SSE is disabled, skipping debug info fetch');
+        return { 
+          error: 'SSE is disabled',
+          clientStatus: this.getConnectionStatus()
+        };
+      }
+      
       // Check authentication state first
       const isAuth = await this.isAuthenticated();
       if (!isAuth) {
         console.log('[CourseNotificationService] User not authenticated, skipping debug info fetch');
+        this.disableSSE(); // Disable SSE on auth failure
         return { 
           error: 'User not authenticated',
           clientStatus: this.getConnectionStatus()
         };
       }
 
-      const response = await this.silentFetch(`${API_BASE_URL}/api/auth/sse-debug`, {
+      const response = await this.makeNetworkRequest(`${API_BASE_URL}/api/auth/sse-debug`, {
         method: 'GET',
         credentials: 'include'
       });
       
+      if (response.blocked) {
+        return { 
+          error: response.reason,
+          clientStatus: this.getConnectionStatus()
+        };
+      }
+      
       if (!response.ok) {
         if (response.status === 401) {
           console.log('[CourseNotificationService] Authentication failed during debug info fetch');
+          this.disableSSE(); // Disable SSE on auth failure
           return { 
             error: 'Authentication failed',
             clientStatus: this.getConnectionStatus()
@@ -564,14 +730,21 @@ class CourseNotificationService {
   // Set cookie only (for testing)
   async setCookieOnly(token) {
     try {
+      // Check if SSE is disabled
+      if (this.isSSEDisabled()) {
+        console.log('[CourseNotificationService] SSE is disabled, skipping cookie set');
+        return false;
+      }
+      
       // Check authentication state first
       const isAuth = await this.isAuthenticated();
       if (!isAuth) {
         console.log('[CourseNotificationService] User not authenticated, skipping cookie set');
+        this.disableSSE(); // Disable SSE on auth failure
         return false;
       }
 
-      const response = await this.silentFetch(`${API_BASE_URL}/api/auth/sse-cookie`, {
+      const response = await this.makeNetworkRequest(`${API_BASE_URL}/api/auth/sse-cookie`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -581,9 +754,14 @@ class CourseNotificationService {
         credentials: 'include'
       });
       
+      if (response.blocked) {
+        return false;
+      }
+      
       if (!response.ok) {
         if (response.status === 401) {
           console.log('[CourseNotificationService] Authentication failed during cookie set');
+          this.disableSSE(); // Disable SSE on auth failure
           return false;
         }
         throw new Error(`Failed to set cookie: ${response.status}`);
@@ -722,10 +900,21 @@ class CourseNotificationService {
   async testNetworkConnectivity() {
     const tests = {};
     
+    // Check if SSE is disabled
+    if (this.isSSEDisabled()) {
+      console.log('[CourseNotificationService] SSE is disabled, skipping network connectivity test');
+      return {
+        basicConnectivity: { success: false, error: 'SSE is disabled', timestamp: new Date().toISOString() },
+        sseEndpoint: { success: false, error: 'SSE is disabled', timestamp: new Date().toISOString() },
+        blockingDetection: this.detectBlockingScenarios()
+      };
+    }
+    
     // Check authentication state first
     const isAuth = await this.isAuthenticated();
     if (!isAuth) {
       console.log('[CourseNotificationService] User not authenticated, skipping network connectivity test');
+      this.disableSSE(); // Disable SSE on auth failure
       return {
         basicConnectivity: { success: false, error: 'User not authenticated', timestamp: new Date().toISOString() },
         sseEndpoint: { success: false, error: 'User not authenticated', timestamp: new Date().toISOString() },
@@ -736,18 +925,26 @@ class CourseNotificationService {
     try {
       // Test basic connectivity
       const startTime = Date.now();
-      const response = await this.silentFetch(`${API_BASE_URL}/api/auth/sse-debug`, {
+      const response = await this.makeNetworkRequest(`${API_BASE_URL}/api/auth/sse-debug`, {
         method: 'GET',
         credentials: 'include'
       });
       const endTime = Date.now();
       
-      tests.basicConnectivity = {
-        success: response.ok,
-        status: response.status,
-        responseTime: endTime - startTime,
-        timestamp: new Date().toISOString()
-      };
+      if (response.blocked) {
+        tests.basicConnectivity = {
+          success: false,
+          error: response.reason,
+          timestamp: new Date().toISOString()
+        };
+      } else {
+        tests.basicConnectivity = {
+          success: response.ok,
+          status: response.status,
+          responseTime: endTime - startTime,
+          timestamp: new Date().toISOString()
+        };
+      }
     } catch (error) {
       tests.basicConnectivity = {
         success: false,
@@ -759,18 +956,26 @@ class CourseNotificationService {
     try {
       // Test SSE endpoint specifically
       const startTime = Date.now();
-      const response = await this.silentFetch(`${API_BASE_URL}/api/courses/notifications`, {
+      const response = await this.makeNetworkRequest(`${API_BASE_URL}/api/courses/notifications`, {
         method: 'GET',
         credentials: 'include'
       });
       const endTime = Date.now();
       
-      tests.sseEndpoint = {
-        success: response.ok,
-        status: response.status,
-        responseTime: endTime - startTime,
-        timestamp: new Date().toISOString()
-      };
+      if (response.blocked) {
+        tests.sseEndpoint = {
+          success: false,
+          error: response.reason,
+          timestamp: new Date().toISOString()
+        };
+      } else {
+        tests.sseEndpoint = {
+          success: response.ok,
+          status: response.status,
+          responseTime: endTime - startTime,
+          timestamp: new Date().toISOString()
+        };
+      }
     } catch (error) {
       tests.sseEndpoint = {
         success: false,

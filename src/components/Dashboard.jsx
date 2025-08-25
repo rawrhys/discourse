@@ -194,23 +194,37 @@ const Dashboard = () => {
         });
         
         if (token) {
+          // Check if SSE operations are blocked
+          if (courseNotificationService.preventSSEOperations()) {
+            logger.info('🔗 [DASHBOARD] SSE operations blocked, skipping all SSE-related activities');
+            return;
+          }
+          
           // Check if user is authenticated before proceeding
           try {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session?.access_token) {
               logger.info('🔗 [DASHBOARD] User not authenticated, skipping SSE connection');
+              courseNotificationService.disableSSE(); // Disable SSE to prevent future attempts
               return;
             }
           } catch (authError) {
             logger.warn('🔗 [DASHBOARD] Failed to verify authentication, skipping SSE connection:', authError?.message || authError);
+            courseNotificationService.disableSSE(); // Disable SSE to prevent future attempts
             return;
           }
           
-          // Reset silent mode when we have a fresh token
-          courseNotificationService.resetSilentMode();
+          // Force enable SSE when we have a fresh token
+          courseNotificationService.forceEnableSSE();
           
           // Set HttpOnly cookie for SSE then connect without token in URL
           try {
+            // Check if SSE is still enabled before attempting cookie set
+            if (courseNotificationService.isSSEDisabled()) {
+              logger.info('🔗 [DASHBOARD] SSE disabled, skipping cookie set attempt');
+              return;
+            }
+            
             const cookieResponse = await fetch(`${API_BASE_URL}/api/auth/sse-cookie`, {
               method: 'POST',
               headers: {
@@ -222,14 +236,22 @@ const Dashboard = () => {
             
             if (cookieResponse.status === 401) {
               logger.warn('🔗 [DASHBOARD] Authentication failed when setting SSE cookie, skipping SSE connection');
+              courseNotificationService.disableSSE(); // Disable SSE to prevent future attempts
               return;
             }
           } catch (e) {
             logger.warn('🔗 [DASHBOARD] Failed to set SSE cookie:', e?.message || e);
+            // Don't disable SSE for network errors, only for auth failures
           }
           
           // Connect to SSE notifications (cookie will be sent automatically; token is also appended as fallback)
           try {
+            // Final check before attempting connection
+            if (courseNotificationService.isSSEDisabled()) {
+              logger.info('🔗 [DASHBOARD] SSE disabled, skipping connection attempt');
+              return;
+            }
+            
             await courseNotificationService.connect(token);
             
             // Test the connection after a short delay
