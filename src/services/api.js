@@ -215,9 +215,7 @@ const api = {
     unpublishCourse: (courseId) =>
         apiClient(`/api/courses/${courseId}/unpublish`, { method: 'POST' }),
 
-    // Billing portal session
-    openBillingPortal: () =>
-        apiClient('/api/billing/portal', { method: 'POST' }),
+    // Billing portal session removed; frontend links directly to Stripe portal
 
     // Billing status
     getBillingStatus: () =>

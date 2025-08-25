@@ -6641,55 +6641,7 @@ app.post('/api/create-checkout-session', authenticateToken, async (req, res) => 
   }
 });
 
-// Stripe: Create billing portal session for managing subscription/payment details
-app.post('/api/billing/portal', authenticateToken, async (req, res) => {
-  try {
-    if (!stripe) {
-      return res.status(500).json({ error: 'Stripe not configured' });
-    }
-
-    const user = req.user;
-    if (!user?.email) {
-      return res.status(400).json({ error: 'User email is required to create billing portal session' });
-    }
-
-    // Try existing stored customer ID, else look up by email, else create
-    let customerId = user.stripeCustomerId;
-    const dbUser = db.data.users.find(u => u.id === user.id);
-    if (!customerId && dbUser?.stripeCustomerId) customerId = dbUser.stripeCustomerId;
-    if (!customerId) {
-      const existing = await stripe.customers.list({ email: user.email, limit: 1 });
-      if (existing?.data?.length) {
-        customerId = existing.data[0].id;
-      } else {
-        const created = await stripe.customers.create({ email: user.email, metadata: { userId: user.id } });
-        customerId = created.id;
-      }
-      if (dbUser && customerId) {
-        dbUser.stripeCustomerId = customerId;
-        await db.write();
-      }
-    }
-
-    // Determine safe return URL
-    let origin = req.headers.origin;
-    if (!origin && req.headers.referer) {
-      try { origin = new URL(req.headers.referer).origin; } catch {}
-    }
-    origin = origin || process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
-    const returnUrl = `${origin}/dashboard`;
-    const session = await stripe.billingPortal.sessions.create({
-      customer: customerId,
-      return_url: returnUrl,
-    });
-
-    return res.json({ url: session.url });
-  } catch (e) {
-    console.error('[Stripe] Failed to create billing portal session:', e);
-    const message = e?.message || 'Unknown error';
-    return res.status(500).json({ error: `Failed to create billing portal session: ${message}` });
-  }
-});
+// Removed Stripe billing portal route; frontend now links directly to Stripe customer portal
 
 // Billing: Get current customer's subscription status
 app.get('/api/billing/status', authenticateToken, async (req, res) => {
