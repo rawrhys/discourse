@@ -1482,20 +1482,13 @@ const Dashboard = () => {
                   <h4 className="text-sm font-medium text-gray-900 mb-2">Manage Payments</h4>
                   <p className="text-sm text-gray-600 mb-3">Open Stripe to manage your subscription, payment method, or invoices.</p>
                   <button
-                    onClick={async () => {
+                    onClick={() => {
                       try {
                         setIsOpeningPortal(true);
-                        const result = await api.openBillingPortal();
-                        const url = result?.url;
-                        if (url) {
-                          window.location.href = url;
-                        } else {
-                          alert('Unable to open billing portal.');
-                        }
+                        window.location.href = 'https://billing.stripe.com/p/login/3cIaEWgNC6uZdzx2SJdby00';
                       } catch (e) {
-                        alert('Failed to open billing portal: ' + (e?.message || 'Unknown error'));
-                      } finally {
                         setIsOpeningPortal(false);
+                        alert('Failed to open billing portal: ' + (e?.message || 'Unknown error'));
                       }
                     }}
                     disabled={isOpeningPortal}
