@@ -184,10 +184,7 @@ const Dashboard = () => {
 
         // Avoid cross-origin SSE which can 401 on some backends; rely on fallbacks instead
         const sameOrigin = !API_BASE_URL || String(API_BASE_URL).replace(/\/$/, '') === window.location.origin;
-        if (!sameOrigin) {
-          logger.warn('🔗 [DASHBOARD] Skipping SSE connection due to cross-origin backend; using polling fallbacks');
-          return;
-        }
+        // Allow cross-origin if API_BASE_URL is different, but ensure cookie and token are set
 
         logger.debug('🔗 [DASHBOARD] Setting up SSE connection with token:', {
           hasToken: !!token,
@@ -210,7 +207,7 @@ const Dashboard = () => {
           } catch (e) {
             logger.warn('🔗 [DASHBOARD] Failed to set SSE cookie:', e?.message || e);
           }
-          // Connect to SSE notifications (cookie will be sent automatically)
+          // Connect to SSE notifications (cookie will be sent automatically; token is also appended as fallback)
           courseNotificationService.connect(token);
         }
       })();

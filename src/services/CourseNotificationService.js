@@ -23,12 +23,12 @@ class CourseNotificationService {
     this.lastToken = token;
 
     try {
-      // EventSource will rely on HttpOnly cookie; no token in URL
-      const url = `${API_BASE_URL}/api/courses/notifications`;
+      // Prefer HttpOnly cookie; include token in query as a resilient fallback
+      const url = `${API_BASE_URL}/api/courses/notifications?token=${encodeURIComponent(token || '')}`;
       console.log('[CourseNotificationService] Attempting to connect to SSE:', url);
 
-      // Ensure cookie is set before opening connection
-      this.eventSource = new EventSource(url);
+      // Ensure cookie is set before opening connection; include credentials for CORS cases
+      this.eventSource = new EventSource(url, { withCredentials: true });
 
       this.eventSource.onopen = () => {
         console.log('[CourseNotificationService] SSE connection established successfully');
