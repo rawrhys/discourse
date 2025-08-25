@@ -1,5 +1,6 @@
 // src/services/CourseNotificationService.js
 import { API_BASE_URL } from '../config/api';
+import { supabase } from '../config/supabase';
 
 class CourseNotificationService {
   constructor() {
@@ -9,6 +10,7 @@ class CourseNotificationService {
     this.maxReconnectAttempts = 5;
     this.reconnectDelay = 1000; // Start with 1 second
     this.listeners = new Map();
+    this.reconnecting = false;
   }
 
   // Connect to SSE endpoint
@@ -32,6 +34,7 @@ class CourseNotificationService {
         this.isConnected = true;
         this.reconnectAttempts = 0;
         this.reconnectDelay = 1000;
+        this.reconnecting = false;
       };
 
       this.eventSource.onmessage = (event) => {
@@ -46,13 +49,10 @@ class CourseNotificationService {
       this.eventSource.onerror = (error) => {
         console.error('[CourseNotificationService] SSE connection error:', error);
         this.isConnected = false;
-        
-        // Don't reconnect immediately on first error, wait a bit
-        if (this.reconnectAttempts === 0) {
-          console.log('[CourseNotificationService] First SSE error, waiting before reconnection...');
-          setTimeout(() => this.handleReconnect(), 2000);
-        } else {
-          this.handleReconnect();
+        // Try to refresh token once before backing off
+        if (!this.reconnecting) {
+          this.reconnecting = true;
+          this.refreshAndReconnect();
         }
       };
 
@@ -61,6 +61,35 @@ class CourseNotificationService {
       // Try to reconnect after a delay
       setTimeout(() => this.handleReconnect(), 3000);
     }
+  }
+
+  // Try to fetch a fresh Supabase access token and reconnect
+  async refreshAndReconnect() {
+    try {
+      let freshToken = null;
+      // Get current session
+      const { data: { session } } = await supabase.auth.getSession();
+      freshToken = session?.access_token || null;
+      if (!freshToken) {
+        // Attempt explicit refresh
+        const { data, error } = await supabase.auth.refreshSession();
+        if (!error) {
+          freshToken = data?.session?.access_token || null;
+        }
+      }
+
+      if (freshToken) {
+        console.log('[CourseNotificationService] Obtained fresh token. Reconnecting SSE.');
+        this.lastToken = freshToken;
+        this.handleReconnect(true);
+        return;
+      }
+      console.warn('[CourseNotificationService] Could not obtain fresh token; falling back to backoff reconnect.');
+    } catch (e) {
+      console.warn('[CourseNotificationService] Token refresh failed:', e?.message || e);
+    }
+    // Default backoff if refreshing didn't work
+    this.handleReconnect();
   }
 
   // Handle incoming SSE messages
@@ -83,14 +112,16 @@ class CourseNotificationService {
   }
 
   // Handle reconnection logic
-  handleReconnect() {
+  handleReconnect(hasFreshToken = false) {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       console.error('[CourseNotificationService] Max reconnection attempts reached');
+      this.reconnecting = false;
       return;
     }
 
     this.reconnectAttempts++;
-    const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1); // Exponential backoff
+    // If we have a fresh token, try quicker; otherwise exponential backoff
+    const delay = hasFreshToken ? 500 : (this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1));
     
     console.log(`[CourseNotificationService] Attempting to reconnect in ${delay}ms (attempt ${this.reconnectAttempts})`);
     
@@ -103,6 +134,8 @@ class CourseNotificationService {
           console.error('[CourseNotificationService] No token available for reconnection');
         }
       }
+      // Allow future reconnect attempts
+      this.reconnecting = false;
     }, delay);
   }
 
