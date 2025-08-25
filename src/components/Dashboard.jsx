@@ -169,15 +169,14 @@ const Dashboard = () => {
   // Setup SSE connection for course generation notifications
   useEffect(() => {
     if (user) {
-      // Resolve a Supabase access token for SSE (prefer Supabase over any local token)
+      // Resolve a Supabase access token for SSE (Supabase only)
       (async () => {
         let token = null;
         try {
           const { data: { session } } = await supabase.auth.getSession();
-          token = session?.access_token || user?.access_token || null;
+          token = session?.access_token || null;
         } catch (e) {
-          logger.warn('🔗 [DASHBOARD] Failed to get Supabase session for SSE, falling back to local token');
-          token = user?.access_token || localStorage.getItem('token');
+          logger.warn('🔗 [DASHBOARD] Failed to get Supabase session for SSE');
         }
 
         // Avoid cross-origin SSE which can 401 on some backends; rely on fallbacks instead
@@ -195,7 +194,20 @@ const Dashboard = () => {
         });
         
         if (token) {
-          // Connect to SSE notifications
+          // Set HttpOnly cookie for SSE then connect without token in URL
+          try {
+            await fetch(`${API_BASE_URL}/api/auth/sse-cookie`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({})
+            });
+          } catch (e) {
+            logger.warn('🔗 [DASHBOARD] Failed to set SSE cookie:', e?.message || e);
+          }
+          // Connect to SSE notifications (cookie will be sent automatically)
           courseNotificationService.connect(token);
         }
       })();

@@ -120,6 +120,12 @@ export const AuthProvider = ({ children }) => {
       if (error) {
         console.error('Logout error:', error);
       }
+      // Clear SSE cookie on logout
+      try {
+        await fetch(`${window.location.origin}/api/auth/clear-sse-cookie`, { method: 'POST' });
+      } catch (e) {
+        // Non-fatal
+      }
       setUser(null);
       try { localStorage.removeItem('token'); } catch {}
     } catch (error) {

@@ -23,10 +23,11 @@ class CourseNotificationService {
     this.lastToken = token;
 
     try {
-      // EventSource doesn't support custom headers, so we'll use a query parameter for the token
-      const url = `${API_BASE_URL}/api/courses/notifications?token=${encodeURIComponent(token)}`;
+      // EventSource will rely on HttpOnly cookie; no token in URL
+      const url = `${API_BASE_URL}/api/courses/notifications`;
       console.log('[CourseNotificationService] Attempting to connect to SSE:', url);
-      
+
+      // Ensure cookie is set before opening connection
       this.eventSource = new EventSource(url);
 
       this.eventSource.onopen = () => {
@@ -79,7 +80,20 @@ class CourseNotificationService {
       }
 
       if (freshToken) {
-        console.log('[CourseNotificationService] Obtained fresh token. Reconnecting SSE.');
+        console.log('[CourseNotificationService] Obtained fresh token. Updating SSE cookie then reconnecting.');
+        try {
+          const fullUrl = `${API_BASE_URL}/api/auth/sse-cookie`;
+          await fetch(fullUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${freshToken}`
+            },
+            body: JSON.stringify({})
+          });
+        } catch (e) {
+          console.warn('[CourseNotificationService] Failed setting SSE cookie:', e?.message || e);
+        }
         this.lastToken = freshToken;
         this.handleReconnect(true);
         return;
@@ -100,12 +114,12 @@ class CourseNotificationService {
       case 'connected':
         console.log('[CourseNotificationService] Connected to SSE server');
         break;
-      
+
       case 'course_generated':
         console.log('[CourseNotificationService] Course generated notification:', data);
         this.notifyListeners('course_generated', data);
         break;
-      
+
       default:
         console.log('[CourseNotificationService] Unknown message type:', data.type);
     }
@@ -122,9 +136,9 @@ class CourseNotificationService {
     this.reconnectAttempts++;
     // If we have a fresh token, try quicker; otherwise exponential backoff
     const delay = hasFreshToken ? 500 : (this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1));
-    
+
     console.log(`[CourseNotificationService] Attempting to reconnect in ${delay}ms (attempt ${this.reconnectAttempts})`);
-    
+
     setTimeout(() => {
       if (!this.isConnected) {
         // We need to store the token for reconnection

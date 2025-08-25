@@ -1,4 +1,5 @@
 import express from 'express';
+import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import axios from 'axios';
 import dotenv from 'dotenv';
@@ -128,6 +129,7 @@ app.use(fileUpload({
 
 // JSON and URL-encoded middleware - must come AFTER fileUpload
 app.use(express.json());
+app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 
 // Logging flags
@@ -4777,8 +4779,8 @@ function sendCourseGenerationNotification(userId, notificationData) {
 
 // SSE endpoint for real-time course generation notifications
 app.get('/api/courses/notifications', async (req, res) => {
-  // Handle authentication via query parameter for SSE
-  const token = req.query.token;
+  // Prefer authentication via HttpOnly cookie; fall back to query param in dev
+  const token = req.cookies?.sse_token || req.query.token;
   if (!token) {
     console.error('[SSE] No token provided for SSE connection');
     return res.status(401).json({ error: 'No token provided' });
@@ -4810,30 +4812,11 @@ app.get('/api/courses/notifications', async (req, res) => {
           console.log(`[SSE] Supabase authentication successful for user: ${userId}`);
         }
       } catch (e) {
-        console.warn('[SSE] Supabase getUser threw error, attempting decode:', e?.message);
+        console.warn('[SSE] Supabase getUser threw error:', e?.message);
       }
-      // Fallback: decode JWT without verification to extract sub
       if (!userId) {
-        try {
-          const payload = token.split('.')[1];
-          const decoded = JSON.parse(Buffer.from(payload, 'base64').toString('utf8'));
-          if (decoded?.sub) {
-            userId = decoded.sub;
-            console.log(`[SSE] Fallback JWT decode successful for user: ${userId}`);
-          }
-        } catch (e) {
-          console.error('[SSE] Token decode failed:', e?.message);
-        }
-        if (!userId) {
-          // As a final fallback, derive a stable pseudo user id from the token hash
-          try {
-            const hash = crypto.createHash('sha256').update(String(token)).digest('hex');
-            userId = `anon_${hash.slice(0, 16)}`;
-            console.warn('[SSE] Using hashed token fallback userId:', userId);
-          } catch (e) {
-            return res.status(401).json({ error: 'Unauthorized' });
-          }
-        }
+        console.error('[SSE] Supabase authentication failed for SSE connection');
+        return res.status(401).json({ error: 'Unauthorized' });
       }
     } else {
       console.error('[SSE] Neither Supabase nor dev mode available for authentication');
@@ -4871,6 +4854,54 @@ app.get('/api/courses/notifications', async (req, res) => {
   } catch (error) {
     console.error('[SSE] Error setting up SSE connection:', error);
     return res.status(500).json({ error: 'Failed to establish SSE connection' });
+  }
+});
+
+// Endpoint to set SSE auth cookie from Supabase token
+app.post('/api/auth/sse-cookie', async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const bearer = authHeader && authHeader.split(' ')[1];
+    const providedToken = bearer || req.body?.token;
+    if (!providedToken) {
+      return res.status(400).json({ error: 'Missing token' });
+    }
+    if (!supabase) {
+      return res.status(500).json({ error: 'Authentication service not configured' });
+    }
+    const { data: { user }, error } = await supabase.auth.getUser(providedToken);
+    if (error || !user) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    // Set HttpOnly cookie. Secure if HTTPS, SameSite=Lax for SSE compatibility
+    const isSecure = (process.env.BACKEND_PUBLIC_URL || '').startsWith('https://');
+    res.cookie('sse_token', providedToken, {
+      httpOnly: true,
+      secure: isSecure,
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 1000 // 1 hour
+    });
+    return res.json({ success: true });
+  } catch (e) {
+    console.error('[SSE COOKIE] Failed to set cookie:', e);
+    return res.status(500).json({ error: 'Failed to set cookie' });
+  }
+});
+
+// Endpoint to clear SSE cookie
+app.post('/api/auth/clear-sse-cookie', (req, res) => {
+  try {
+    const isSecure = (process.env.BACKEND_PUBLIC_URL || '').startsWith('https://');
+    res.clearCookie('sse_token', {
+      httpOnly: true,
+      secure: isSecure,
+      sameSite: 'lax'
+    });
+    return res.json({ success: true });
+  } catch (e) {
+    console.error('[SSE COOKIE] Failed to clear cookie:', e);
+    return res.status(500).json({ error: 'Failed to clear cookie' });
   }
 });
 
