@@ -3401,6 +3401,42 @@ const authenticateToken = async (req, res, next) => {
     });
 
     if (!token) {
+      // Fallback 1: authenticate via HttpOnly cookie containing user id
+      const cookieUserId = req.cookies?.sse_user_id;
+      if (cookieUserId) {
+        const dbUser = db.data.users.find(u => u.id === cookieUserId);
+        if (dbUser) {
+          console.log('[AUTH] Cookie-based authentication successful for user:', cookieUserId);
+          req.user = dbUser;
+          return next();
+        } else {
+          console.log('[AUTH] Cookie user id not found in local database:', cookieUserId);
+          return res.status(401).json({ 
+            error: 'User not found in local database',
+            code: 'USER_NOT_FOUND'
+          });
+        }
+      }
+
+      // Fallback 2: if a Supabase access token is stored in cookie, verify it
+      const cookieToken = req.cookies?.sse_token;
+      if (cookieToken && supabase) {
+        try {
+          const { data: { user }, error } = await supabase.auth.getUser(cookieToken);
+          if (user && !error) {
+            const dbUser = db.data.users.find(u => u.id === user.id);
+            if (!dbUser) {
+              return res.status(401).json({ error: 'User not found in local database', code: 'USER_NOT_FOUND' });
+            }
+            console.log('[AUTH] Cookie token verification successful for:', user.id);
+            req.user = dbUser;
+            return next();
+          }
+        } catch (e) {
+          console.warn('[AUTH] Cookie token verification failed:', e?.message);
+        }
+      }
+
       console.log('[AUTH] No token provided for:', req.path);
       return res.status(401).json({ 
         error: 'Access token required',
@@ -4783,6 +4819,7 @@ app.get('/api/courses/notifications', async (req, res) => {
     hasCookies: !!req.cookies,
     cookieKeys: req.cookies ? Object.keys(req.cookies) : [],
     hasSseToken: !!req.cookies?.sse_token,
+    hasSseUserId: !!req.cookies?.sse_user_id,
     hasQueryToken: !!req.query.token,
     userAgent: req.headers['user-agent'],
     origin: req.headers.origin,
@@ -4801,6 +4838,75 @@ app.get('/api/courses/notifications', async (req, res) => {
   
   // Prefer authentication via HttpOnly cookie; fall back to query param in dev
   let token = req.cookies?.sse_token || req.query.token;
+
+  // If sse_user_id cookie is present, authenticate via DB directly (no token required)
+  if (!token && req.cookies?.sse_user_id) {
+    const cookieUserId = req.cookies.sse_user_id;
+    const dbUser = db.data.users.find(u => u.id === cookieUserId);
+    if (!dbUser) {
+      console.error('[SSE] sse_user_id not found in local database:', cookieUserId);
+      return res.status(401).json({ error: 'User not found in local database' });
+    }
+    // Authenticated via DB
+    const userId = dbUser.id;
+
+    // Set SSE headers (support credentialed requests when cross-origin)
+    const requestOrigin = req.headers.origin;
+    const allowOrigin = requestOrigin || '*';
+    const headers = {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': allowOrigin,
+      'Access-Control-Allow-Headers': 'Cache-Control',
+    };
+    if (requestOrigin) {
+      headers['Access-Control-Allow-Credentials'] = 'true';
+      headers['Vary'] = 'Origin';
+    }
+    res.writeHead(200, headers);
+
+    // Send initial connection message
+    res.write(`data: ${JSON.stringify({ type: 'connected', userId, timestamp: new Date().toISOString() })}\n\n`);
+
+    // Store the connection with metadata
+    res.ip = clientIP;
+    res.userId = userId;
+    res.connectedAt = new Date().toISOString();
+    global.sseConnections.set(userId, res);
+
+    // Handle client disconnect
+    req.on('close', () => {
+      console.log(`[SSE] Client disconnected: ${userId}`);
+      global.sseConnections.delete(userId);
+    });
+
+    // Handle connection error
+    req.on('error', (error) => {
+      console.error(`[SSE] Connection error for user ${userId}:`, error);
+      global.sseConnections.delete(userId);
+    });
+
+    // Set up periodic health check for this connection
+    const healthCheckInterval = setInterval(() => {
+      try {
+        // Send a ping to keep the connection alive
+        res.write(`data: ${JSON.stringify({ type: 'ping', timestamp: new Date().toISOString() })}\n\n`);
+      } catch (error) {
+        console.error(`[SSE] Health check failed for user ${userId}:`, error);
+        clearInterval(healthCheckInterval);
+        global.sseConnections.delete(userId);
+      }
+    }, 30000); // Send ping every 30 seconds
+
+    // Clean up interval on disconnect
+    req.on('close', () => {
+      clearInterval(healthCheckInterval);
+    });
+
+    console.log(`[SSE] Client connected successfully via DB cookie: ${userId}`);
+    return; // Early return - already handled
+  }
   
   // If no token in cookie or query, check Authorization header as last resort
   if (!token && req.headers.authorization) {
@@ -4988,6 +5094,13 @@ app.post('/api/auth/sse-cookie', async (req, res) => {
     });
     
     res.cookie('sse_token', providedToken, cookieOptions);
+    // Also set a stable user id cookie for DB-backed auth fallback
+    try {
+      res.cookie('sse_user_id', user.id, { ...cookieOptions });
+      console.log('[SSE COOKIE] Set sse_user_id cookie for user:', user.id);
+    } catch (e) {
+      console.warn('[SSE COOKIE] Failed to set sse_user_id cookie:', e?.message);
+    }
     console.log('[SSE COOKIE] Cookie set successfully for user:', user.id);
     return res.json({ success: true });
   } catch (e) {
@@ -5000,12 +5113,15 @@ app.post('/api/auth/sse-cookie', async (req, res) => {
 app.get('/api/auth/sse-debug', async (req, res) => {
   try {
     const token = req.cookies?.sse_token || req.query.token;
+    const sseUserId = req.cookies?.sse_user_id || null;
     if (!token) {
       return res.json({ 
         status: 'no_token',
         message: 'No SSE token found',
         cookies: req.cookies ? Object.keys(req.cookies) : [],
-        hasQueryToken: !!req.query.token
+        hasQueryToken: !!req.query.token,
+        hasSseUserId: !!sseUserId,
+        sseUserId: sseUserId
       });
     }
 
@@ -5038,6 +5154,8 @@ app.get('/api/auth/sse-debug', async (req, res) => {
       tokenPrefix: token.substring(0, 20) + '...',
       cookies: req.cookies ? Object.keys(req.cookies) : [],
       hasSseToken: !!req.cookies?.sse_token,
+      hasSseUserId: !!sseUserId,
+      sseUserId: sseUserId,
       activeConnections: global.sseConnections ? Array.from(global.sseConnections.keys()) : [],
       serverHealth: serverHealth
     });

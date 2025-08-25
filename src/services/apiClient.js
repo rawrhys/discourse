@@ -25,6 +25,8 @@ const apiClient = async (url, options = {}) => {
       ...defaultHeaders,
       ...fetchOptions.headers,
     },
+    // Ensure cookies (like sse_user_id) are sent for cross-origin requests
+    credentials: fetchOptions.credentials || 'include',
     body: fetchOptions.body,
   };
 
