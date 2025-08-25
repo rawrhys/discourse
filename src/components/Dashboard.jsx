@@ -750,11 +750,11 @@ const Dashboard = () => {
       
       <nav className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
+          <div className="flex justify-between h-16 wrap-on-mobile">
             <div className="flex items-center">
               <h1 className="text-xl font-semibold">Course Dashboard</h1>
             </div>
-            <div className="flex items-center space-x-2 sm:space-x-4">
+            <div className="flex items-center space-x-2 sm:space-x-4 wrap-on-mobile">
               <span className="text-sm text-gray-600">Welcome, {userName}!</span>
 
               <button
@@ -785,8 +785,8 @@ const Dashboard = () => {
 
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         {/* Credits and Buy More */}
-        <div className="flex items-center justify-between mb-6 bg-white p-3 sm:p-4 rounded-lg shadow-sm">
-          <div className="flex items-center space-x-2 sm:space-x-4">
+        <div className="flex items-center justify-between mb-6 bg-white p-3 sm:p-4 rounded-lg shadow-sm wrap-on-mobile">
+          <div className="flex items-center space-x-2 sm:space-x-4 wrap-on-mobile">
             <div className="text-sm sm:text-lg font-semibold text-gray-700">
               Tokens: <span className={credits === 0 ? 'text-red-500' : 'text-green-600'}>{credits}</span>
             </div>
@@ -800,11 +800,11 @@ const Dashboard = () => {
               </svg>
             </button>
           </div>
-          <div className="flex items-center space-x-2 sm:space-x-3">
+          <div className="flex items-center space-x-2 sm:space-x-3 wrap-on-mobile">
             <button
               onClick={handleBuyMore}
               disabled={isBuying}
-              className="inline-flex items-center px-3 py-1.5 sm:px-4 sm:py-2 border border-transparent text-xs sm:text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center px-3 py-1.5 sm:px-4 sm:py-2 border border-transparent text-xs sm:text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed btn-sm"
             >
               {isBuying ? 'Processing...' : 'Buy Tokens'}
             </button>
