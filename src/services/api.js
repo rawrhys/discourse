@@ -219,6 +219,14 @@ const api = {
     openBillingPortal: () =>
         apiClient('/api/billing/portal', { method: 'POST' }),
 
+    // Billing status
+    getBillingStatus: () =>
+        apiClient('/api/billing/status'),
+
+    // Cancel subscription and optionally send feedback
+    cancelSubscription: (cancelAtPeriodEnd = true, feedback = '') =>
+        apiClient('/api/billing/cancel-subscription', { method: 'POST', body: JSON.stringify({ cancelAtPeriodEnd, feedback }) }),
+
     // Account deletion
     deleteAccount: (confirm) =>
         apiClient('/api/account/delete', { method: 'POST', body: JSON.stringify({ confirm }) }),
