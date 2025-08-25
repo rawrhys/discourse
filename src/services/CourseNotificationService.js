@@ -11,6 +11,39 @@ class CourseNotificationService {
     this.reconnectDelay = 1000; // Start with 1 second
     this.listeners = new Map();
     this.reconnecting = false;
+    this.lastAuthCheck = 0;
+    this.authCheckInterval = 60000; // Check auth every minute
+    this.silentMode = false; // Prevent console spam during retries
+  }
+
+  // Check if user is authenticated before making requests
+  async isAuthenticated() {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      return !!session?.access_token;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  // Silent fetch wrapper that doesn't log errors to console
+  async silentFetch(url, options = {}) {
+    try {
+      const response = await fetch(url, options);
+      if (!response.ok && response.status !== 401) {
+        // Only log non-401 errors if not in silent mode
+        if (!this.silentMode) {
+          console.warn(`[CourseNotificationService] Silent fetch failed: ${response.status} ${response.statusText}`);
+        }
+      }
+      return response;
+    } catch (error) {
+      // Don't log network errors in silent mode
+      if (!this.silentMode) {
+        console.warn(`[CourseNotificationService] Silent fetch network error: ${error.message}`);
+      }
+      throw error;
+    }
   }
 
   // Connect to SSE endpoint
@@ -23,12 +56,23 @@ class CourseNotificationService {
     this.lastToken = token;
 
     try {
+      // Check authentication state first
+      const isAuth = await this.isAuthenticated();
+      if (!isAuth) {
+        console.log('[CourseNotificationService] User not authenticated, skipping SSE connection');
+        this.silentMode = true; // Enable silent mode to prevent console spam
+        return;
+      }
+
+      // Reset silent mode if we're authenticated
+      this.silentMode = false;
+
       // First, ensure the SSE cookie is set before attempting to connect
       this.cookieSetSuccessfully = false;
       if (token) {
         try {
           console.log('[CourseNotificationService] Setting SSE cookie before connecting...');
-          const response = await fetch(`${API_BASE_URL}/api/auth/sse-cookie`, {
+          const response = await this.silentFetch(`${API_BASE_URL}/api/auth/sse-cookie`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -39,12 +83,20 @@ class CourseNotificationService {
           });
           
           if (!response.ok) {
+            if (response.status === 401) {
+              console.log('[CourseNotificationService] Authentication failed, skipping SSE connection');
+              return;
+            }
             throw new Error(`Failed to set SSE cookie: ${response.status} ${response.statusText}`);
           }
           
           console.log('[CourseNotificationService] SSE cookie set successfully');
           this.cookieSetSuccessfully = true;
         } catch (cookieError) {
+          if (cookieError.message.includes('401') || cookieError.message.includes('Unauthorized')) {
+            console.log('[CourseNotificationService] Authentication failed, skipping SSE connection');
+            return;
+          }
           console.error('[CourseNotificationService] Failed to set SSE cookie:', cookieError);
           this.cookieSetSuccessfully = false;
           // Don't fail completely, try to connect anyway
@@ -80,6 +132,7 @@ class CourseNotificationService {
         this.reconnectAttempts = 0;
         this.reconnectDelay = 1000;
         this.reconnecting = false;
+        this.silentMode = false; // Reset silent mode on successful connection
       };
 
       this.eventSource.onmessage = (event) => {
@@ -92,7 +145,10 @@ class CourseNotificationService {
       };
 
       this.eventSource.onerror = (error) => {
-        console.error('[CourseNotificationService] SSE connection error:', error);
+        // Don't log errors in silent mode to prevent console spam
+        if (!this.silentMode) {
+          console.error('[CourseNotificationService] SSE connection error:', error);
+        }
         this.isConnected = false;
         
         // Check if this is a 401 error (authentication failed)
@@ -113,7 +169,10 @@ class CourseNotificationService {
       };
 
     } catch (error) {
-      console.error('[CourseNotificationService] Error creating SSE connection:', error);
+      // Don't log authentication errors to prevent console spam
+      if (!error.message.includes('401') && !error.message.includes('Unauthorized')) {
+        console.error('[CourseNotificationService] Error creating SSE connection:', error);
+      }
       // Try to reconnect after a delay
       setTimeout(() => this.handleReconnect(), 3000);
     }
@@ -138,7 +197,7 @@ class CourseNotificationService {
         console.log('[CourseNotificationService] Obtained fresh token. Updating SSE cookie then reconnecting.');
         try {
           const fullUrl = `${API_BASE_URL}/api/auth/sse-cookie`;
-          const response = await fetch(fullUrl, {
+          const response = await this.silentFetch(fullUrl, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -149,11 +208,21 @@ class CourseNotificationService {
           });
           
           if (!response.ok) {
+            if (response.status === 401) {
+              console.log('[CourseNotificationService] Authentication still failed with fresh token');
+              this.silentMode = true; // Enable silent mode to prevent console spam
+              return;
+            }
             throw new Error(`Failed to set SSE cookie: ${response.status} ${response.statusText}`);
           }
           
           console.log('[CourseNotificationService] SSE cookie updated successfully');
         } catch (e) {
+          if (e.message.includes('401') || e.message.includes('Unauthorized')) {
+            console.log('[CourseNotificationService] Authentication still failed with fresh token');
+            this.silentMode = true; // Enable silent mode to prevent console spam
+            return;
+          }
           console.warn('[CourseNotificationService] Failed setting SSE cookie:', e?.message || e);
         }
         this.lastToken = freshToken;
@@ -161,8 +230,10 @@ class CourseNotificationService {
         return;
       }
       console.warn('[CourseNotificationService] Could not obtain fresh token; falling back to backoff reconnect.');
+      this.silentMode = true; // Enable silent mode to prevent console spam
     } catch (e) {
       console.warn('[CourseNotificationService] Token refresh failed:', e?.message || e);
+      this.silentMode = true; // Enable silent mode to prevent console spam
     }
     // Default backoff if refreshing didn't work
     this.handleReconnect();
@@ -197,8 +268,8 @@ class CourseNotificationService {
 
   // Handle reconnection logic
   handleReconnect(hasFreshToken = false) {
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error('[CourseNotificationService] Max reconnection attempts reached');
+    if (!this.shouldAttemptReconnection()) {
+      console.log('[CourseNotificationService] Skipping reconnection attempt (silent mode or max attempts reached)');
       this.reconnecting = false;
       return;
     }
@@ -273,17 +344,64 @@ class CourseNotificationService {
       hasEventSource: !!this.eventSource,
       eventSourceState: this.eventSource ? this.eventSource.readyState : null,
       cookieSetSuccessfully: this.cookieSetSuccessfully,
-      lastToken: this.lastToken ? `${this.lastToken.substring(0, 20)}...` : null
+      lastToken: this.lastToken ? `${this.lastToken.substring(0, 20)}...` : null,
+      silentMode: this.silentMode
     };
   }
+
+  // Reset silent mode (called when user successfully authenticates)
+  resetSilentMode() {
+    this.silentMode = false;
+    console.log('[CourseNotificationService] Silent mode reset');
+  }
+
+  // Check if we should attempt reconnection (prevents spam during auth failures)
+  shouldAttemptReconnection() {
+    // Don't attempt reconnection if in silent mode (auth failures)
+    if (this.silentMode) {
+      return false;
+    }
+    
+    // Don't attempt reconnection if we've reached max attempts
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      return false;
+    }
+    
+    return true;
+  }
+
+  // Check if we should attempt operations (prevents unnecessary API calls)
+  async shouldAttemptOperations() {
+    // Don't attempt operations if in silent mode
+    if (this.silentMode) {
+      return false;
+    }
+    
+    // Check if user is authenticated
+    const isAuth = await this.isAuthenticated();
+    if (!isAuth) {
+      return false;
+    }
+    
+    return true;
+  }
+
+  
 
   // Test SSE connection manually
   async testConnection(token) {
     try {
+      // Check authentication state first
+      const isAuth = await this.isAuthenticated();
+      if (!isAuth) {
+        console.log('[CourseNotificationService] User not authenticated, skipping connection test');
+        return { success: false, error: 'User not authenticated' };
+      }
+
       console.log('[CourseNotificationService] Testing SSE connection...');
       
       // First test the cookie endpoint
-      const cookieResponse = await fetch(`${API_BASE_URL}/api/auth/sse-cookie`, {
+      const cookieResponse = await this.silentFetch(`${API_BASE_URL}/api/auth/sse-cookie`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -294,26 +412,34 @@ class CourseNotificationService {
       });
       
       if (!cookieResponse.ok) {
+        if (cookieResponse.status === 401) {
+          console.log('[CourseNotificationService] Authentication failed during connection test');
+          return { success: false, error: 'Authentication failed' };
+        }
         throw new Error(`Cookie endpoint failed: ${cookieResponse.status} ${cookieResponse.statusText}`);
       }
       
       console.log('[CourseNotificationService] Cookie endpoint test passed');
       
       // Now test the SSE endpoint with a simple GET request
-      const sseResponse = await fetch(`${API_BASE_URL}/api/courses/notifications`, {
+      const sseResponse = await this.silentFetch(`${API_BASE_URL}/api/courses/notifications`, {
         method: 'GET',
         credentials: 'include'
       });
       
       if (sseResponse.status === 401) {
-        throw new Error('SSE endpoint requires authentication');
+        console.log('[CourseNotificationService] SSE endpoint requires authentication');
+        return { success: false, error: 'SSE endpoint requires authentication' };
       }
       
       console.log('[CourseNotificationService] SSE endpoint test passed');
       return { success: true, message: 'Connection test passed' };
       
     } catch (error) {
-      console.error('[CourseNotificationService] Connection test failed:', error);
+      // Don't log authentication errors to prevent console spam
+      if (!error.message.includes('401') && !error.message.includes('Unauthorized')) {
+        console.error('[CourseNotificationService] Connection test failed:', error);
+      }
       return { success: false, error: error.message };
     }
   }
@@ -321,12 +447,29 @@ class CourseNotificationService {
   // Get debug information about SSE connection
   async getDebugInfo() {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/sse-debug`, {
+      // Check authentication state first
+      const isAuth = await this.isAuthenticated();
+      if (!isAuth) {
+        console.log('[CourseNotificationService] User not authenticated, skipping debug info fetch');
+        return { 
+          error: 'User not authenticated',
+          clientStatus: this.getConnectionStatus()
+        };
+      }
+
+      const response = await this.silentFetch(`${API_BASE_URL}/api/auth/sse-debug`, {
         method: 'GET',
         credentials: 'include'
       });
       
       if (!response.ok) {
+        if (response.status === 401) {
+          console.log('[CourseNotificationService] Authentication failed during debug info fetch');
+          return { 
+            error: 'Authentication failed',
+            clientStatus: this.getConnectionStatus()
+          };
+        }
         throw new Error(`Debug endpoint failed: ${response.status} ${response.statusText}`);
       }
       
@@ -336,7 +479,10 @@ class CourseNotificationService {
         clientStatus: this.getConnectionStatus()
       };
     } catch (error) {
-      console.error('[CourseNotificationService] Failed to get debug info:', error);
+      // Don't log authentication errors to prevent console spam
+      if (!error.message.includes('401') && !error.message.includes('Unauthorized')) {
+        console.error('[CourseNotificationService] Failed to get debug info:', error);
+      }
       return { 
         error: error.message,
         clientStatus: this.getConnectionStatus()
@@ -418,7 +564,14 @@ class CourseNotificationService {
   // Set cookie only (for testing)
   async setCookieOnly(token) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/sse-cookie`, {
+      // Check authentication state first
+      const isAuth = await this.isAuthenticated();
+      if (!isAuth) {
+        console.log('[CourseNotificationService] User not authenticated, skipping cookie set');
+        return false;
+      }
+
+      const response = await this.silentFetch(`${API_BASE_URL}/api/auth/sse-cookie`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -429,6 +582,10 @@ class CourseNotificationService {
       });
       
       if (!response.ok) {
+        if (response.status === 401) {
+          console.log('[CourseNotificationService] Authentication failed during cookie set');
+          return false;
+        }
         throw new Error(`Failed to set cookie: ${response.status}`);
       }
       
@@ -436,7 +593,11 @@ class CourseNotificationService {
       return true;
     } catch (error) {
       this.cookieSetSuccessfully = false;
-      throw error;
+      // Don't log authentication errors to prevent console spam
+      if (!error.message.includes('401') && !error.message.includes('Unauthorized')) {
+        throw error;
+      }
+      return false;
     }
   }
 
@@ -561,10 +722,21 @@ class CourseNotificationService {
   async testNetworkConnectivity() {
     const tests = {};
     
+    // Check authentication state first
+    const isAuth = await this.isAuthenticated();
+    if (!isAuth) {
+      console.log('[CourseNotificationService] User not authenticated, skipping network connectivity test');
+      return {
+        basicConnectivity: { success: false, error: 'User not authenticated', timestamp: new Date().toISOString() },
+        sseEndpoint: { success: false, error: 'User not authenticated', timestamp: new Date().toISOString() },
+        blockingDetection: this.detectBlockingScenarios()
+      };
+    }
+    
     try {
       // Test basic connectivity
       const startTime = Date.now();
-      const response = await fetch(`${API_BASE_URL}/api/auth/sse-debug`, {
+      const response = await this.silentFetch(`${API_BASE_URL}/api/auth/sse-debug`, {
         method: 'GET',
         credentials: 'include'
       });
@@ -587,7 +759,7 @@ class CourseNotificationService {
     try {
       // Test SSE endpoint specifically
       const startTime = Date.now();
-      const response = await fetch(`${API_BASE_URL}/api/courses/notifications`, {
+      const response = await this.silentFetch(`${API_BASE_URL}/api/courses/notifications`, {
         method: 'GET',
         credentials: 'include'
       });

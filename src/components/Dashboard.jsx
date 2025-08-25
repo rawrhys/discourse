@@ -194,9 +194,24 @@ const Dashboard = () => {
         });
         
         if (token) {
+          // Check if user is authenticated before proceeding
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.access_token) {
+              logger.info('🔗 [DASHBOARD] User not authenticated, skipping SSE connection');
+              return;
+            }
+          } catch (authError) {
+            logger.warn('🔗 [DASHBOARD] Failed to verify authentication, skipping SSE connection:', authError?.message || authError);
+            return;
+          }
+          
+          // Reset silent mode when we have a fresh token
+          courseNotificationService.resetSilentMode();
+          
           // Set HttpOnly cookie for SSE then connect without token in URL
           try {
-            await fetch(`${API_BASE_URL}/api/auth/sse-cookie`, {
+            const cookieResponse = await fetch(`${API_BASE_URL}/api/auth/sse-cookie`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -204,9 +219,15 @@ const Dashboard = () => {
               },
               body: JSON.stringify({})
             });
+            
+            if (cookieResponse.status === 401) {
+              logger.warn('🔗 [DASHBOARD] Authentication failed when setting SSE cookie, skipping SSE connection');
+              return;
+            }
           } catch (e) {
             logger.warn('🔗 [DASHBOARD] Failed to set SSE cookie:', e?.message || e);
           }
+          
           // Connect to SSE notifications (cookie will be sent automatically; token is also appended as fallback)
           try {
             await courseNotificationService.connect(token);
@@ -218,6 +239,13 @@ const Dashboard = () => {
                 logger.info('🔗 [DASHBOARD] SSE connection debug info:', debugInfo);
                 
                 if (!courseNotificationService.isConnected) {
+                  // Check if we're in silent mode (auth failures)
+                  const status = courseNotificationService.getConnectionStatus();
+                  if (status.silentMode) {
+                    logger.info('🔗 [DASHBOARD] SSE connection in silent mode due to auth failures, skipping reconnection attempts');
+                    return;
+                  }
+                  
                   logger.warn('🔗 [DASHBOARD] SSE connection failed, attempting forced reconnection...');
                   const reconnectResult = await courseNotificationService.forceReconnect();
                   logger.info('🔗 [DASHBOARD] Forced reconnection result:', reconnectResult);
@@ -225,18 +253,39 @@ const Dashboard = () => {
                   // If reconnection failed, try one more time with a longer delay
                   setTimeout(async () => {
                     if (!courseNotificationService.isConnected) {
+                      // Check silent mode again
+                      const status = courseNotificationService.getConnectionStatus();
+                      if (status.silentMode) {
+                        logger.info('🔗 [DASHBOARD] SSE connection still in silent mode, skipping further attempts');
+                        return;
+                      }
+                      
                       logger.warn('🔗 [DASHBOARD] Second reconnection attempt...');
                       const secondReconnectResult = await courseNotificationService.forceReconnect();
                       logger.info('🔗 [DASHBOARD] Second reconnection result:', secondReconnectResult);
                       
                       // If still not connected, try alternative strategies
                       if (!courseNotificationService.isConnected) {
+                        // Check silent mode again
+                        const status = courseNotificationService.getConnectionStatus();
+                        if (status.silentMode) {
+                          logger.info('🔗 [DASHBOARD] SSE connection still in silent mode, skipping alternative strategies');
+                          return;
+                        }
+                        
                         logger.warn('🔗 [DASHBOARD] Trying alternative connection strategies...');
                         const alternativeResult = await courseNotificationService.tryAlternativeConnectionStrategies();
                         logger.info('🔗 [DASHBOARD] Alternative strategies result:', alternativeResult);
                         
                         // If still not connected, run comprehensive diagnostics
                         if (!courseNotificationService.isConnected) {
+                          // Check silent mode again
+                          const status = courseNotificationService.getConnectionStatus();
+                          if (status.silentMode) {
+                            logger.info('🔗 [DASHBOARD] SSE connection still in silent mode, skipping diagnostics');
+                            return;
+                          }
+                          
                           logger.warn('🔗 [DASHBOARD] Running comprehensive diagnostics...');
                           try {
                             const diagnostics = await courseNotificationService.getConnectionDiagnostics();
@@ -265,12 +314,18 @@ const Dashboard = () => {
                   }, 5000);
                 }
               } catch (debugError) {
-                logger.warn('🔗 [DASHBOARD] Failed to get SSE debug info:', debugError?.message || debugError);
+                // Don't log auth errors to prevent console spam
+                if (!debugError?.message?.includes('401') && !debugError?.message?.includes('Unauthorized')) {
+                  logger.warn('🔗 [DASHBOARD] Failed to get SSE debug info:', debugError?.message || debugError);
+                }
               }
             }, 2000);
             
           } catch (e) {
-            logger.warn('🔗 [DASHBOARD] Failed to connect to SSE notifications:', e?.message || e);
+            // Don't log auth errors to prevent console spam
+            if (!e?.message?.includes('401') && !e?.message?.includes('Unauthorized')) {
+              logger.warn('🔗 [DASHBOARD] Failed to connect to SSE notifications:', e?.message || e);
+            }
           }
         }
       })();
@@ -336,10 +391,10 @@ const Dashboard = () => {
                 const validCourses = Array.isArray(courses) ? courses : [];
                 
                 // Debug: Log the current state vs new state
-                logger.info('🔄 [DASHBOARD] Course list refresh comparison:', {
-                  currentCount: savedCourses.length,
+                logger.info('🔄 [DASHBOARD] SSE notification course fetch comparison:', {
+                  previousCount: savedCourses.length,
                   newCount: validCourses.length,
-                  currentCourses: savedCourses.map(c => ({ id: c.id, title: c.title })),
+                  previousCourses: savedCourses.map(c => ({ id: c.id, title: c.title })),
                   newCourses: validCourses.map(c => ({ id: c.id, title: c.title })),
                   timestamp: new Date().toISOString()
                 });
@@ -348,18 +403,14 @@ const Dashboard = () => {
                 
                 // Clear any errors since we successfully fetched courses
                 setError(null);
-                
               };
               
               await refreshCourses();
-              logger.info('✅ [DASHBOARD] Course list updated after SSE notification');
-            } catch (error) {
-              logger.error('❌ [DASHBOARD] Failed to update course list after SSE notification:', error);
-              // Even if the fetch fails, we know the course was generated, so show a success message
-              setSuccessMessage('Course generated successfully! You can find it in your course list.');
-              setShowSuccessToast(true);
+            } catch (refreshError) {
+              logger.error('❌ [DASHBOARD] Failed to refresh courses after SSE notification:', refreshError);
+              // Don't show error to user for background refresh failures
             }
-          }, 1000);
+          }, 1000); // Reduced delay for better UX
         };
         
         courseNotificationService.addEventListener('course_generated', handleCourseGenerated);
