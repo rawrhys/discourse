@@ -23,11 +23,13 @@ class CourseNotificationService {
     this.lastToken = token;
 
     try {
-      // Prefer HttpOnly cookie; include token in query as a resilient fallback
-      const url = `${API_BASE_URL}/api/courses/notifications?token=${encodeURIComponent(token || '')}`;
+      // Prefer Supabase cookie; do NOT expose token in URL when we have one
+      const url = token
+        ? `${API_BASE_URL}/api/courses/notifications`
+        : `${API_BASE_URL}/api/courses/notifications`;
       console.log('[CourseNotificationService] Attempting to connect to SSE:', url);
 
-      // Ensure cookie is set before opening connection; include credentials for CORS cases
+      // Ensure cookie is set before opening connection; include credentials for CORS
       this.eventSource = new EventSource(url, { withCredentials: true });
 
       this.eventSource.onopen = () => {

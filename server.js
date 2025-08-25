@@ -4823,14 +4823,21 @@ app.get('/api/courses/notifications', async (req, res) => {
       return res.status(500).json({ error: 'Authentication service not configured' });
     }
 
-    // Set SSE headers
-    res.writeHead(200, {
+    // Set SSE headers (support credentialed requests when cross-origin)
+    const requestOrigin = req.headers.origin;
+    const allowOrigin = requestOrigin || '*';
+    const headers = {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'Cache-Control'
-    });
+      'Access-Control-Allow-Origin': allowOrigin,
+      'Access-Control-Allow-Headers': 'Cache-Control',
+    };
+    if (requestOrigin) {
+      headers['Access-Control-Allow-Credentials'] = 'true';
+      headers['Vary'] = 'Origin';
+    }
+    res.writeHead(200, headers);
 
     // Send initial connection message
     res.write(`data: ${JSON.stringify({ type: 'connected', userId, timestamp: new Date().toISOString() })}\n\n`);

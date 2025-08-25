@@ -184,7 +184,7 @@ const Dashboard = () => {
 
         // Avoid cross-origin SSE which can 401 on some backends; rely on fallbacks instead
         const sameOrigin = !API_BASE_URL || String(API_BASE_URL).replace(/\/$/, '') === window.location.origin;
-        // Allow cross-origin if API_BASE_URL is different, but ensure cookie and token are set
+        // Ensure Supabase cookie is set; authorize via cookie (not query)
 
         logger.debug('🔗 [DASHBOARD] Setting up SSE connection with token:', {
           hasToken: !!token,
