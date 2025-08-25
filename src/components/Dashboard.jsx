@@ -37,6 +37,9 @@ const Dashboard = () => {
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [isOpeningPortal, setIsOpeningPortal] = useState(false);
+  const [cancellationFeedback, setCancellationFeedback] = useState('');
+  const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(true);
+  const [isCancellingSubscription, setIsCancellingSubscription] = useState(false);
   
   // ETA countdown for generation
   const [etaTotalSec, setEtaTotalSec] = useState(0);
@@ -1496,6 +1499,54 @@ const Dashboard = () => {
                   >
                     {isOpeningPortal ? 'Opening…' : 'Manage Payments'}
                   </button>
+                </div>
+
+                {/* Cancel Subscription */}
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-medium text-gray-900 mb-2">Cancel Subscription</h4>
+                  <p className="text-sm text-gray-600 mb-3">Optionally tell us why you're canceling. You can choose to cancel at the end of the current period or immediately.</p>
+                  <textarea
+                    value={cancellationFeedback}
+                    onChange={(e) => setCancellationFeedback(e.target.value)}
+                    placeholder="Optional feedback (helps us improve)"
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md mb-3"
+                  />
+                  <label className="flex items-center text-sm text-gray-700 mb-3">
+                    <input
+                      type="checkbox"
+                      checked={cancelAtPeriodEnd}
+                      onChange={(e) => setCancelAtPeriodEnd(e.target.checked)}
+                      className="mr-2"
+                    />
+                    Cancel at period end (recommended)
+                  </label>
+                  <div className="flex justify-end">
+                    <button
+                      onClick={async () => {
+                        try {
+                          setIsCancellingSubscription(true);
+                          const result = await api.cancelSubscription(cancelAtPeriodEnd, cancellationFeedback.trim());
+                          if (result?.success) {
+                            alert('Subscription cancellation requested successfully.');
+                            // Clear feedback for next time
+                            setCancellationFeedback('');
+                            // Optionally refresh billing status later if we surface it
+                          } else {
+                            alert('Cancellation request completed, but response was unexpected.');
+                          }
+                        } catch (e) {
+                          alert('Failed to cancel subscription: ' + (e?.message || 'Unknown error'));
+                        } finally {
+                          setIsCancellingSubscription(false);
+                        }
+                      }}
+                      disabled={isCancellingSubscription}
+                      className="px-4 py-2 text-sm font-medium text-white bg-yellow-600 hover:bg-yellow-700 rounded-md disabled:opacity-50"
+                    >
+                      {isCancellingSubscription ? 'Submitting…' : 'Cancel Subscription'}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="border-t pt-4">
