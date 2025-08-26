@@ -171,7 +171,9 @@ const EXTRA_NEGATIVE_TERMS = [
   'submarine','submarines','aircraft carrier','carrier strike group','destroyer','frigate','battleship',
   'navy seals','special forces','camo','camouflage','kevlar','night vision',
   // Seasonal/ambiguous terms to avoid when subject implies historical events
-  'autumn','fall season','fall foliage','autumn foliage','autumn leaves','fall leaves','leaf','leaves','pumpkin','halloween','thanksgiving','maple leaves','autumn colors','autumnal','scarecrow','harvest festival','corn maze'
+  'autumn','fall season','fall foliage','autumn foliage','autumn leaves','fall leaves','leaf','leaves','pumpkin','halloween','thanksgiving','maple leaves','autumn colors','autumnal','scarecrow','harvest festival','corn maze',
+  // Conspiracy theories and uneducational content (completely inappropriate for educational use)
+  'ufo','aliens','alien abduction','flying saucer','spaceship','roswell','area 51','men in black','crop circles','alien contact','extraterrestrial','et','little green men','grey aliens','reptilian','reptilians','shadow people','shadow person','shadow government','deep state','new world order','nwo','illuminati','freemason','freemasons','masonic','masonry','secret society','secret societies','chemtrails','flat earth','moon landing hoax','moon landing fake','fake moon landing','bermuda triangle','atlantis','lost city of atlantis','bigfoot','sasquatch','loch ness','nessie','chupacabra','mothman','vampire','vampires','werewolf','werewolves','zombie','zombies','ghost','ghosts','haunted','haunting','paranormal','supernatural','occult','witchcraft','satanic','demonic','possession','exorcism','crystal healing','energy healing','aura','chakra','chakras','astrology','horoscope','zodiac','tarot','palm reading','psychic','medium','clairvoyant','telepathy','telekinesis','mind reading','mind control','brainwashing','mk ultra','project blue beam','project blue book','disclosure','whistleblower','cover up','coverup','suppressed technology','free energy','perpetual motion','anti gravity','time travel','time machine','parallel universe','parallel universes','multiverse','alternate reality','alternate dimension','dimension jumping','reality shifting','quantum consciousness','quantum healing','quantum immortality','simulation theory','matrix','holographic universe','mandela effect','berenstein bears','berenstain bears','timeline shift','reality glitch','glitch in the matrix','synchronicity','meaningful coincidences','law of attraction','manifestation','vibration','frequency','ascension','starseed','lightworker','indigo child','crystal child','rainbow child','dna activation','kundalini awakening','third eye','pineal gland','dmt','ayahuasca','psilocybin','mushroom','mushrooms','psychedelic','psychedelics','consciousness expansion','ego death','spiritual awakening','enlightenment','nirvana','samadhi','kundalini','chakra alignment','energy field','morphogenetic field','akashic records','past life','past lives','reincarnation','karma','dharma','soul purpose','life purpose','divine plan','divine timing','angel numbers','angel number','numerology','sacred geometry','golden ratio','fibonacci','phi','pi','mathematical constants','mathematical constant','sacred numbers','sacred number','bible code','torah code','quran code','ancient wisdom','ancient knowledge','lost knowledge','forbidden knowledge','hidden knowledge','esoteric knowledge','esoteric wisdom','hermetic principles','hermetic philosophy','hermeticism','kabbalah','cabala','qabalah','gnostic','gnosticism','mysticism','mystical','mystic','mystics','enlightened','enlightenment','awakened','awakening','conscious','consciousness','higher self','higher consciousness','divine self','divine consciousness','god consciousness','christ consciousness','buddha nature','buddha mind','buddha consciousness','buddha awareness','buddha wisdom','buddha knowledge','buddha understanding','buddha realization','buddha enlightenment','buddha awakening','buddha consciousness','buddha mind','buddha nature','buddha self','buddha being','buddha essence','buddha spirit','buddha soul','buddha heart','buddha body'
 ];
 
 const normalizeForCompare = (str) => String(str || '').toLowerCase().trim();
@@ -265,7 +267,46 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
       // Generic landscape (completely irrelevant to history)
       'dawn', 'ocean', 'sky', 'sunrise', 'sunset', 'landscape', 'early morning', 'boating', 'intercoastal', 'marsh', 'mountain', 'forest',
       // Modern activities (completely irrelevant to history)
-      'sport', 'game', 'exercise', 'fitness', 'cooking', 'shopping', 'business', 'technology', 'digital', 'online', 'web', 'internet'
+      'sport', 'game', 'exercise', 'fitness', 'cooking', 'shopping', 'business', 'technology', 'digital', 'online', 'web', 'internet',
+      // Science fiction, fantasy, and uneducational content (completely irrelevant to history)
+      'ufo', 'alien', 'spaceship', 'flying saucer', 'abduction', 'beam', 'suspended', 'mid-air', 'levitating', 'floating', 'hovering',
+      'roswell', 'area 51', 'men in black', 'crop circles', 'alien contact', 'extraterrestrial', 'et', 'little green men', 'grey aliens',
+      'reptilian', 'reptilians', 'shadow people', 'shadow person', 'shadow government', 'deep state', 'new world order', 'nwo',
+      'illuminati', 'freemason', 'freemasons', 'masonic', 'masonry', 'secret society', 'secret societies', 'chemtrails', 'flat earth',
+      'moon landing hoax', 'moon landing fake', 'fake moon landing', 'bermuda triangle', 'atlantis', 'lost city of atlantis',
+      'bigfoot', 'sasquatch', 'loch ness', 'nessie', 'chupacabra', 'mothman', 'vampire', 'vampires', 'werewolf', 'werewolves',
+      'zombie', 'zombies', 'ghost', 'ghosts', 'haunted', 'haunting', 'paranormal', 'supernatural', 'occult', 'witchcraft',
+      'satanic', 'demonic', 'possession', 'exorcism', 'crystal healing', 'energy healing', 'aura', 'chakra', 'chakras',
+      'astrology', 'horoscope', 'zodiac', 'tarot', 'palm reading', 'psychic', 'medium', 'clairvoyant', 'telepathy',
+      'telekinesis', 'mind reading', 'mind control', 'brainwashing', 'mk ultra', 'project blue beam', 'project blue book',
+      'disclosure', 'whistleblower', 'cover up', 'coverup', 'suppressed technology', 'free energy', 'perpetual motion',
+      'anti gravity', 'time travel', 'time machine', 'parallel universe', 'parallel universes', 'multiverse',
+      'alternate reality', 'alternate dimension', 'dimension jumping', 'reality shifting', 'quantum consciousness',
+      'quantum healing', 'quantum immortality', 'simulation theory', 'matrix', 'holographic universe', 'mandela effect',
+      'berenstein bears', 'berenstain bears', 'timeline shift', 'reality glitch', 'glitch in the matrix',
+      'synchronicity', 'meaningful coincidences', 'law of attraction', 'manifestation', 'vibration', 'frequency',
+      'ascension', 'starseed', 'lightworker', 'indigo child', 'crystal child', 'rainbow child', 'dna activation',
+      'kundalini awakening', 'third eye', 'pineal gland', 'dmt', 'ayahuasca', 'psilocybin', 'mushroom', 'mushrooms',
+      'psychedelic', 'psychedelics', 'consciousness expansion', 'ego death', 'spiritual awakening', 'enlightenment',
+      'nirvana', 'samadhi', 'kundalini', 'chakra alignment', 'energy field', 'morphogenetic field', 'akashic records',
+      'past life', 'past lives', 'reincarnation', 'karma', 'dharma', 'soul purpose', 'life purpose', 'divine plan',
+      'divine timing', 'angel numbers', 'angel number', 'numerology', 'sacred geometry', 'golden ratio', 'fibonacci',
+      'phi', 'pi', 'mathematical constants', 'mathematical constant', 'sacred numbers', 'sacred number',
+      'bible code', 'torah code', 'quran code', 'ancient wisdom', 'ancient knowledge', 'lost knowledge',
+      'forbidden knowledge', 'hidden knowledge', 'esoteric knowledge', 'esoteric wisdom', 'hermetic principles',
+      'hermetic philosophy', 'hermeticism', 'kabbalah', 'cabala', 'qabalah', 'gnostic', 'gnosticism',
+      'mysticism', 'mystical', 'mystic', 'mystics', 'enlightened', 'enlightenment', 'awakened', 'awakening',
+      'conscious', 'consciousness', 'higher self', 'higher consciousness', 'divine self', 'divine consciousness',
+      'god consciousness', 'christ consciousness', 'buddha nature', 'buddha mind', 'buddha consciousness',
+      'buddha awareness', 'buddha wisdom', 'buddha knowledge', 'buddha understanding', 'buddha realization',
+      'buddha enlightenment', 'buddha awakening', 'buddha consciousness', 'buddha mind', 'buddha nature',
+      'buddha self', 'buddha being', 'buddha essence', 'buddha spirit', 'buddha soul', 'buddha heart', 'buddha body',
+      // Modern people and clothing (completely irrelevant to ancient history)
+      'modern clothing', 'jeans', 'sneakers', 'backpack', 'jacket', 't-shirt', 'collared shirt', 'modern person', 'contemporary', 'present day',
+      // Medieval castles and architecture (irrelevant to ancient Egypt)
+      'medieval castle', 'castle turret', 'battlements', 'medieval architecture', 'feudal castle', 'european castle', 'stone castle',
+      // Anachronistic combinations
+      'anachronistic', 'time travel', 'mixed periods', 'historical mismatch', 'period confusion'
     ];
     
     for (const term of completelyIrrelevantTerms) {
@@ -527,13 +568,63 @@ function isBannedImageCandidate(candidate, courseId) {
     if (!url.startsWith('http://') && !url.startsWith('https://')) return true;
     if (DISALLOWED_IMAGE_URL_SUBSTRINGS.some((s) => url.includes(s))) return true;
     if (DISALLOWED_IMAGE_URL_SUBSTRINGS.some((s) => pageURL.includes(s))) return true;
+    
+    // Comprehensive check for uneducational content (conspiracy theories, pseudoscience, etc.)
+    const haystack = `${title} ${desc} ${pageURL} ${uploader}`;
+    const uneducationalTerms = [
+      'ufo', 'aliens', 'alien', 'spaceship', 'flying saucer', 'abduction', 'roswell', 'area 51', 'men in black',
+      'crop circles', 'extraterrestrial', 'et', 'little green men', 'grey aliens', 'reptilian', 'reptilians',
+      'shadow people', 'shadow person', 'shadow government', 'deep state', 'new world order', 'nwo',
+      'illuminati', 'freemason', 'freemasons', 'masonic', 'masonry', 'secret society', 'secret societies',
+      'chemtrails', 'flat earth', 'moon landing hoax', 'moon landing fake', 'fake moon landing',
+      'bermuda triangle', 'atlantis', 'lost city of atlantis', 'bigfoot', 'sasquatch', 'loch ness', 'nessie',
+      'chupacabra', 'mothman', 'vampire', 'vampires', 'werewolf', 'werewolves', 'zombie', 'zombies',
+      'ghost', 'ghosts', 'haunted', 'haunting', 'paranormal', 'supernatural', 'occult', 'witchcraft',
+      'satanic', 'demonic', 'possession', 'exorcism', 'crystal healing', 'energy healing', 'aura',
+      'chakra', 'chakras', 'astrology', 'horoscope', 'zodiac', 'tarot', 'palm reading', 'psychic',
+      'medium', 'clairvoyant', 'telepathy', 'telekinesis', 'mind reading', 'mind control', 'brainwashing',
+      'mk ultra', 'project blue beam', 'project blue book', 'disclosure', 'whistleblower', 'cover up',
+      'coverup', 'suppressed technology', 'free energy', 'perpetual motion', 'anti gravity', 'time travel',
+      'time machine', 'parallel universe', 'parallel universes', 'multiverse', 'alternate reality',
+      'alternate dimension', 'dimension jumping', 'reality shifting', 'quantum consciousness',
+      'quantum healing', 'quantum immortality', 'simulation theory', 'matrix', 'holographic universe',
+      'mandela effect', 'berenstein bears', 'berenstain bears', 'timeline shift', 'reality glitch',
+      'glitch in the matrix', 'synchronicity', 'meaningful coincidences', 'law of attraction',
+      'manifestation', 'vibration', 'frequency', 'ascension', 'starseed', 'lightworker', 'indigo child',
+      'crystal child', 'rainbow child', 'dna activation', 'kundalini awakening', 'third eye',
+      'pineal gland', 'dmt', 'ayahuasca', 'psilocybin', 'mushroom', 'mushrooms', 'psychedelic',
+      'psychedelics', 'consciousness expansion', 'ego death', 'spiritual awakening', 'enlightenment',
+      'nirvana', 'samadhi', 'kundalini', 'chakra alignment', 'energy field', 'morphogenetic field',
+      'akashic records', 'past life', 'past lives', 'reincarnation', 'karma', 'dharma', 'soul purpose',
+      'life purpose', 'divine plan', 'divine timing', 'angel numbers', 'angel number', 'numerology',
+      'sacred geometry', 'golden ratio', 'fibonacci', 'phi', 'pi', 'mathematical constants',
+      'mathematical constant', 'sacred numbers', 'sacred number', 'bible code', 'torah code',
+      'quran code', 'ancient wisdom', 'ancient knowledge', 'lost knowledge', 'forbidden knowledge',
+      'hidden knowledge', 'esoteric knowledge', 'esoteric wisdom', 'hermetic principles',
+      'hermetic philosophy', 'hermeticism', 'kabbalah', 'cabala', 'qabalah', 'gnostic', 'gnosticism',
+      'mysticism', 'mystical', 'mystic', 'mystics', 'enlightened', 'enlightenment', 'awakened',
+      'awakening', 'conscious', 'consciousness', 'higher self', 'higher consciousness', 'divine self',
+      'divine consciousness', 'god consciousness', 'christ consciousness', 'buddha nature', 'buddha mind',
+      'buddha consciousness', 'buddha awareness', 'buddha wisdom', 'buddha knowledge', 'buddha understanding',
+      'buddha realization', 'buddha enlightenment', 'buddha awakening', 'buddha consciousness', 'buddha mind',
+      'buddha nature', 'buddha self', 'buddha being', 'buddha essence', 'buddha spirit', 'buddha soul',
+      'buddha heart', 'buddha body'
+    ];
+    
+    // Check for uneducational content - this should always be blocked regardless of course context
+    for (const term of uneducationalTerms) {
+      if (haystack.includes(term)) {
+        console.log(`[ImageScoring] IMMEDIATE REJECTION for uneducational content: "${term}" in "${haystack.substring(0, 100)}"`);
+        return true; // Always reject uneducational content
+      }
+    }
 
     // If we have course context, apply dynamic negatives using the course title as subject
     try {
       if (courseId && Array.isArray(db?.data?.courses)) {
         const course = db.data.courses.find((c) => c.id === courseId);
         const subject = course?.title || '';
-        const haystack = `${title} ${desc} ${pageURL} ${uploader}`;
+        // haystack already defined above for uneducational content check
         
         // Get dynamic negatives but be more lenient for historical/educational content
         const dynamicNegs = getDynamicExtraNegatives(subject);
@@ -807,6 +898,59 @@ function buildRefinedSearchPhrases(subject, content, maxQueries = 10, courseTitl
     dedupePush(queries, 'ancient ruler');
     dedupePush(queries, 'ancient leader');
     dedupePush(queries, 'ancient civilization');
+  }
+  
+  // Filter out any queries containing uneducational or conspiracy theory terms
+  const uneducationalTerms = [
+    'ufo', 'aliens', 'alien', 'spaceship', 'flying saucer', 'abduction', 'roswell', 'area 51', 'men in black',
+    'crop circles', 'extraterrestrial', 'et', 'little green men', 'grey aliens', 'reptilian', 'reptilians',
+    'shadow people', 'shadow person', 'shadow government', 'deep state', 'new world order', 'nwo',
+    'illuminati', 'freemason', 'freemasons', 'masonic', 'masonry', 'secret society', 'secret societies',
+    'chemtrails', 'flat earth', 'moon landing hoax', 'moon landing fake', 'fake moon landing',
+    'bermuda triangle', 'atlantis', 'lost city of atlantis', 'bigfoot', 'sasquatch', 'loch ness', 'nessie',
+    'chupacabra', 'mothman', 'vampire', 'vampires', 'werewolf', 'werewolves', 'zombie', 'zombies',
+    'ghost', 'ghosts', 'haunted', 'haunting', 'paranormal', 'supernatural', 'occult', 'witchcraft',
+    'satanic', 'demonic', 'possession', 'exorcism', 'crystal healing', 'energy healing', 'aura',
+    'chakra', 'chakras', 'astrology', 'horoscope', 'zodiac', 'tarot', 'palm reading', 'psychic',
+    'medium', 'clairvoyant', 'telepathy', 'telekinesis', 'mind reading', 'mind control', 'brainwashing',
+    'mk ultra', 'project blue beam', 'project blue book', 'disclosure', 'whistleblower', 'cover up',
+    'coverup', 'suppressed technology', 'free energy', 'perpetual motion', 'anti gravity', 'time travel',
+    'time machine', 'parallel universe', 'parallel universes', 'multiverse', 'alternate reality',
+    'alternate dimension', 'dimension jumping', 'reality shifting', 'quantum consciousness',
+    'quantum healing', 'quantum immortality', 'simulation theory', 'matrix', 'holographic universe',
+    'mandela effect', 'berenstein bears', 'berenstain bears', 'timeline shift', 'reality glitch',
+    'glitch in the matrix', 'synchronicity', 'meaningful coincidences', 'law of attraction',
+    'manifestation', 'vibration', 'frequency', 'ascension', 'starseed', 'lightworker', 'indigo child',
+    'crystal child', 'rainbow child', 'dna activation', 'kundalini awakening', 'third eye',
+    'pineal gland', 'dmt', 'ayahuasca', 'psilocybin', 'mushroom', 'mushrooms', 'psychedelic',
+    'psychedelics', 'consciousness expansion', 'ego death', 'spiritual awakening', 'enlightenment',
+    'nirvana', 'samadhi', 'kundalini', 'chakra alignment', 'energy field', 'morphogenetic field',
+    'akashic records', 'past life', 'past lives', 'reincarnation', 'karma', 'dharma', 'soul purpose',
+    'life purpose', 'divine plan', 'divine timing', 'angel numbers', 'angel number', 'numerology',
+    'sacred geometry', 'golden ratio', 'fibonacci', 'phi', 'pi', 'mathematical constants',
+    'mathematical constant', 'sacred numbers', 'sacred number', 'bible code', 'torah code',
+    'quran code', 'ancient wisdom', 'ancient knowledge', 'lost knowledge', 'forbidden knowledge',
+    'hidden knowledge', 'esoteric knowledge', 'esoteric wisdom', 'hermetic principles',
+    'hermetic philosophy', 'hermeticism', 'kabbalah', 'cabala', 'qabalah', 'gnostic', 'gnosticism',
+    'mysticism', 'mystical', 'mystic', 'mystics', 'enlightened', 'enlightenment', 'awakened',
+    'awakening', 'conscious', 'consciousness', 'higher self', 'higher consciousness', 'divine self',
+    'divine consciousness', 'god consciousness', 'christ consciousness', 'buddha nature', 'buddha mind',
+    'buddha consciousness', 'buddha awareness', 'buddha wisdom', 'buddha knowledge', 'buddha understanding',
+    'buddha realization', 'buddha enlightenment', 'buddha awakening', 'buddha consciousness', 'buddha mind',
+    'buddha nature', 'buddha self', 'buddha being', 'buddha essence', 'buddha spirit', 'buddha soul',
+    'buddha heart', 'buddha body'
+  ];
+  
+  // Filter out queries containing uneducational terms
+  const filteredQueries = queries.filter(query => {
+    const queryLower = query.toLowerCase();
+    return !uneducationalTerms.some(term => queryLower.includes(term));
+  });
+  
+  console.log(`[ImageScoring] Filtered out ${queries.length - filteredQueries.length} queries containing uneducational terms`);
+  console.log(`[ImageScoring] Remaining queries: ${filteredQueries.length}/${queries.length}`);
+  
+  return filteredQueries.slice(0, maxQueries);
     dedupePush(queries, 'ancient history');
     dedupePush(queries, 'ancient art');
     dedupePush(queries, 'ancient architecture');
@@ -2426,74 +2570,116 @@ Context: "${context.substring(0, 1000)}..."`;
             }
           }
           
-          try {
-            // Generate lesson content with infinite retries
-            const lessonPrompt = this.constructLessonPrompt(courseWithIds.title, module.title, lesson.title, lesson.key_terms || []);
-            const lessonContentString = await this._makeApiRequest(lessonPrompt, 'lesson', false);
-            
-            // Optimized parsing logic with reduced logging
-            let parts = lessonContentString.split(/\s*\|\|\|\s*/);
-            
-            // If we don't get exactly 3 parts, try alternative separators
-            if (parts.length !== 3) {
-              // Try different separator patterns
-              const separators = [
-                /\s*---\s*/,
-                /\s*\|\|\|\s*/,
-                /\s*###\s*/,
-                /\s*##\s*/,
-                /\s*\*\*\*Introduction\*\*\*|\s*\*\*\*Main Content\*\*\*|\s*\*\*\*Conclusion\*\*\*/,
-                /\s*Introduction:|\s*Main Content:|\s*Conclusion:/
-              ];
+          // Enhanced lesson generation with retry logic and validation
+          let lessonGenerated = false;
+          let retryCount = 0;
+          const maxRetries = 3;
+          
+          while (!lessonGenerated && retryCount < maxRetries) {
+            try {
+              console.log(`[AIService] Generating lesson "${lesson.title}" (attempt ${retryCount + 1}/${maxRetries})`);
               
-              for (const separator of separators) {
-                const testParts = lessonContentString.split(separator);
-                if (testParts.length >= 3) {
-                  parts = testParts;
-                  break;
+              // Generate lesson content with infinite retries
+              const lessonPrompt = this.constructLessonPrompt(courseWithIds.title, module.title, lesson.title, lesson.key_terms || []);
+              const lessonContentString = await this._makeApiRequest(lessonPrompt, 'lesson', false);
+              
+              // Validate lesson content quality
+              if (!lessonContentString || lessonContentString.length < 100) {
+                throw new Error(`Lesson content too short (${lessonContentString?.length || 0} characters)`);
+              }
+              
+              // Optimized parsing logic with reduced logging
+              let parts = lessonContentString.split(/\s*\|\|\|\s*/);
+              
+              // If we don't get exactly 3 parts, try alternative separators
+              if (parts.length !== 3) {
+                // Try different separator patterns
+                const separators = [
+                  /\s*---\s*/,
+                  /\s*\|\|\|\s*/,
+                  /\s*###\s*/,
+                  /\s*##\s*/,
+                  /\s*\*\*\*Introduction\*\*\*|\s*\*\*\*Main Content\*\*\*|\s*\*\*\*Conclusion\*\*\*/,
+                  /\s*Introduction:|\s*Main Content:|\s*Conclusion:/
+                ];
+                
+                for (const separator of separators) {
+                  const testParts = lessonContentString.split(separator);
+                  if (testParts.length >= 3) {
+                    parts = testParts;
+                    break;
+                  }
                 }
               }
-            }
-            
-            if (parts.length >= 3) {
-              lesson.content = {
-                introduction: parts[0].trim(),
-                main_content: parts[1].trim(),
-                conclusion: parts[2].trim(),
-              };
-            } else if (parts.length === 2) {
-              // Handle case where we only get 2 parts
-              lesson.content = {
-                introduction: parts[0].trim(),
-                main_content: parts[1].trim(),
-                conclusion: `Summary of ${lesson.title}`
-              };
-            } else {
-              // Fallback for when the AI doesn't produce structured content
               
-              // Try to intelligently split the content
-              const content = lessonContentString.trim();
-              const sentences = content.split(/[.!?]+/).filter(s => s.trim().length > 10);
-              
-              if (sentences.length >= 3) {
-                const introEnd = Math.ceil(sentences.length * 0.2);
-                const mainEnd = Math.ceil(sentences.length * 0.8);
+              // Validate parsed content structure
+              if (parts.length >= 3) {
+                const intro = parts[0].trim();
+                const main = parts[1].trim();
+                const conclusion = parts[2].trim();
+                
+                // Check if content sections are substantial
+                if (intro.length < 20 || main.length < 100 || conclusion.length < 20) {
+                  throw new Error(`Content sections too short: intro(${intro.length}), main(${main.length}), conclusion(${conclusion.length})`);
+                }
                 
                 lesson.content = {
-                  introduction: sentences.slice(0, introEnd).join('. ') + '.',
-                  main_content: sentences.slice(introEnd, mainEnd).join('. ') + '.',
-                  conclusion: sentences.slice(mainEnd).join('. ') + '.'
+                  introduction: intro,
+                  main_content: main,
+                  conclusion: conclusion,
                 };
-              } else {
-                // Last resort: clean the string and place it all in main_content
-                const cleanedContent = lessonContentString.replace(/[|\-*#]/g, ' ').replace(/\s+/g, ' ').trim();
+              } else if (parts.length === 2) {
+                // Handle case where we only get 2 parts
+                const intro = parts[0].trim();
+                const main = parts[1].trim();
+                
+                if (intro.length < 20 || main.length < 100) {
+                  throw new Error(`Two-part content too short: intro(${intro.length}), main(${main.length})`);
+                }
+                
                 lesson.content = {
-                  introduction: `Overview of ${lesson.title}`,
-                  main_content: cleanedContent,
+                  introduction: intro,
+                  main_content: main,
                   conclusion: `Summary of ${lesson.title}`
                 };
+              } else {
+                // Fallback for when the AI doesn't produce structured content
+                // Try to intelligently split the content
+                const content = lessonContentString.trim();
+                const sentences = content.split(/[.!?]+/).filter(s => s.trim().length > 10);
+                
+                if (sentences.length >= 3) {
+                  const introEnd = Math.ceil(sentences.length * 0.2);
+                  const mainEnd = Math.ceil(sentences.length * 0.8);
+                  
+                  const intro = sentences.slice(0, introEnd).join('. ') + '.';
+                  const main = sentences.slice(introEnd, mainEnd).join('. ') + '.';
+                  const conclusion = sentences.slice(mainEnd).join('. ') + '.';
+                  
+                  if (intro.length < 20 || main.length < 100 || conclusion.length < 20) {
+                    throw new Error(`Intelligently split content too short: intro(${intro.length}), main(${main.length}), conclusion(${conclusion.length})`);
+                  }
+                  
+                  lesson.content = {
+                    introduction: intro,
+                    main_content: main,
+                    conclusion: conclusion
+                  };
+                } else {
+                  // Last resort: clean the string and place it all in main_content
+                  const cleanedContent = lessonContentString.replace(/[|\-*#]/g, ' ').replace(/\s+/g, ' ').trim();
+                  
+                  if (cleanedContent.length < 100) {
+                    throw new Error(`Cleaned content too short: ${cleanedContent.length} characters`);
+                  }
+                  
+                  lesson.content = {
+                    introduction: `Overview of ${lesson.title}`,
+                    main_content: cleanedContent,
+                    conclusion: `Summary of ${lesson.title}`
+                  };
+                }
               }
-            }
 
     
             
@@ -2571,19 +2757,44 @@ Context: "${context.substring(0, 1000)}..."`;
               }
             }
             
-            // Generate quiz with minimal delay
-            try {
-              const quizQuestions = await this.generateQuiz(lesson.content, lesson.title);
-              if (quizQuestions && Array.isArray(quizQuestions) && quizQuestions.length > 0) {
-                lesson.quiz = quizQuestions;
-                console.log(`[AIService] Quiz generated successfully for "${lesson.title}": ${quizQuestions.length} questions`);
-              } else {
-                console.warn(`[AIService] Quiz generation returned invalid data for "${lesson.title}":`, quizQuestions);
-                lesson.quiz = [];
+            // Generate quiz with retry logic
+            let quizGenerated = false;
+            let quizRetryCount = 0;
+            const maxQuizRetries = 2;
+            
+            while (!quizGenerated && quizRetryCount < maxQuizRetries) {
+              try {
+                console.log(`[AIService] Generating quiz for "${lesson.title}" (attempt ${quizRetryCount + 1}/${maxQuizRetries})`);
+                
+                const quizQuestions = await this.generateQuiz(lesson.content, lesson.title);
+                if (quizQuestions && Array.isArray(quizQuestions) && quizQuestions.length >= 3) {
+                  lesson.quiz = quizQuestions;
+                  console.log(`[AIService] Quiz generated successfully for "${lesson.title}": ${quizQuestions.length} questions`);
+                  quizGenerated = true;
+                } else {
+                  throw new Error(`Quiz generation returned invalid data: ${quizQuestions?.length || 0} questions`);
+                }
+              } catch (quizError) {
+                console.warn(`[AIService] Quiz generation attempt ${quizRetryCount + 1} failed for "${lesson.title}":`, quizError.message);
+                quizRetryCount++;
+                
+                if (quizRetryCount >= maxQuizRetries) {
+                  // Create fallback quiz after all retries fail
+                  try {
+                    console.log(`[AIService] Creating fallback quiz for "${lesson.title}" after ${maxQuizRetries} failed attempts`);
+                    const fallbackQuiz = this.createFallbackQuiz(lesson.title, lesson.content);
+                    lesson.quiz = fallbackQuiz;
+                    console.log(`[AIService] Fallback quiz created for "${lesson.title}": ${fallbackQuiz.length} questions`);
+                    quizGenerated = true;
+                  } catch (fallbackError) {
+                    console.error(`[AIService] Fallback quiz creation failed for "${lesson.title}":`, fallbackError.message);
+                    lesson.quiz = [];
+                  }
+                } else {
+                  // Wait before retrying quiz generation
+                  await new Promise(resolve => setTimeout(resolve, 1000 * quizRetryCount));
+                }
               }
-            } catch (quizError) {
-              console.error(`[AIService] Quiz generation failed for "${lesson.title}":`, quizError.message);
-              lesson.quiz = []; // Continue without quiz
             }
             
             // Ensure lesson has a quiz - if not, create a basic fallback quiz
@@ -2655,19 +2866,38 @@ Return only the JSON array, no other text.`;
                 global.progressCallback({ type: 'flashcards_complete', lessonTitle: lesson.title, message: `Flashcards created for: ${lesson.title}` });
             }
 
-            // Removed artificial delay for faster processing
-            
+            // Final validation - ensure lesson is complete
+            if (lesson.content && lesson.content.main_content && lesson.content.main_content.length >= 100 && 
+                lesson.quiz && lesson.quiz.length >= 3 && lesson.flashcards && lesson.flashcards.length >= 3) {
+              console.log(`[AIService] Lesson "${lesson.title}" completed successfully with ${lesson.quiz.length} quiz questions and ${lesson.flashcards.length} flashcards`);
+              lessonGenerated = true;
+            } else {
+              throw new Error(`Lesson validation failed: content(${lesson.content?.main_content?.length || 0}), quiz(${lesson.quiz?.length || 0}), flashcards(${lesson.flashcards?.length || 0})`);
+            }
+
           } catch (lessonError) {
-            console.error(`[AIService] Lesson generation failed for "${lesson.title}":`, lessonError.message);
-            // Create fallback content instead of failing completely
-            lesson.content = {
-              introduction: `Introduction to ${lesson.title}`,
-              main_content: `Content for ${lesson.title} will be generated. Please try again later.`,
-              conclusion: `Summary of ${lesson.title}`
-            };
-            lesson.quiz = [];
-            lesson.flashcards = [];
+            console.error(`[AIService] Lesson generation attempt ${retryCount + 1} failed for "${lesson.title}":`, lessonError.message);
+            retryCount++;
+            
+            if (retryCount >= maxRetries) {
+              console.error(`[AIService] All ${maxRetries} attempts failed for lesson "${lesson.title}". Creating minimal fallback content.`);
+              // Create minimal fallback content after all retries fail
+              lesson.content = {
+                introduction: `Introduction to ${lesson.title}`,
+                main_content: `Content for ${lesson.title} will be generated. Please try again later.`,
+                conclusion: `Summary of ${lesson.title}`
+              };
+              lesson.quiz = [];
+              lesson.flashcards = [];
+              lessonGenerated = true; // Mark as "complete" to prevent infinite loops
+            } else {
+              // Wait before retrying lesson generation
+              const delay = 2000 * retryCount; // Exponential backoff: 2s, 4s, 6s
+              console.log(`[AIService] Retrying lesson "${lesson.title}" in ${delay}ms (attempt ${retryCount + 1}/${maxRetries})`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+            }
           }
+        }
         });
         
         // Wait for all lessons in this module to complete
@@ -2676,6 +2906,28 @@ Return only the JSON array, no other text.`;
       
       // Wait for all modules to complete
       await Promise.all(modulePromises);
+      
+      // Final course validation - ensure all lessons are complete
+      let incompleteLessons = 0;
+      let totalLessons = 0;
+      
+      for (const module of courseWithIds.modules) {
+        for (const lesson of module.lessons) {
+          totalLessons++;
+          if (!lesson.content?.main_content || lesson.content.main_content.length < 100 ||
+              !lesson.quiz || lesson.quiz.length < 3 ||
+              !lesson.flashcards || lesson.flashcards.length < 3) {
+            incompleteLessons++;
+            console.warn(`[AIService] Lesson "${lesson.title}" is incomplete: content(${lesson.content?.main_content?.length || 0}), quiz(${lesson.quiz?.length || 0}), flashcards(${lesson.flashcards?.length || 0})`);
+          }
+        }
+      }
+      
+      if (incompleteLessons > 0) {
+        console.warn(`[AIService] Course "${topic}" completed with ${incompleteLessons}/${totalLessons} incomplete lessons`);
+      } else {
+        console.log(`[AIService] Course "${topic}" completed successfully with all ${totalLessons} lessons complete`);
+      }
       
       console.log(`[AIService] Course generation completed successfully for "${topic}"`);
       
@@ -2966,333 +3218,6 @@ Example format:
 ]
 
 Return only the JSON array, no other text.`;
-
-      const generatedReferences = await this._makeApiRequest(referencePrompt, 'bibliography', true);
-      
-      if (!Array.isArray(generatedReferences) || generatedReferences.length === 0) {
-        console.warn(`[AIService] AI failed to generate authentic references, falling back to static references`);
-        return this.generateBibliography(topic, subject, numReferences);
-      }
-
-      // Validate and clean up the generated references
-      const validatedReferences = generatedReferences
-        .filter(ref => ref && ref.author && ref.title && ref.publisher && ref.year)
-        .map((ref, index) => ({
-          id: index + 1,
-          author: ref.author.trim(),
-          year: ref.year.toString(),
-          title: ref.title.trim(),
-          publisher: ref.publisher.trim(),
-          type: ref.type || 'book',
-          relevance: ref.relevance || `Relevant to ${topic}`,
-          verified: true, // Mark as verified since they're AI-generated authentic references
-          citationNumber: index + 1
-        }))
-        .slice(0, numReferences);
-
-      console.log(`[AIService] Generated ${validatedReferences.length} authentic references for "${topic}"`);
-      return validatedReferences;
-
-    } catch (error) {
-      console.error(`[AIService] Error generating authentic bibliography for "${topic}":`, error.message);
-      // Fall back to static bibliography generation
-      return this.generateBibliography(topic, subject, numReferences);
-    }
-  }
-
-  /**
-   * Shuffle array for variety in reference selection
-   * @param {Array} array - Array to shuffle
-   * @returns {Array} Shuffled array
-   */
-  shuffleArray(array) {
-    const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
-  }
-
-  /**
-   * Verify that all references are authentic
-   * @param {Array} bibliography - Bibliography array to verify
-   * @returns {boolean} True if all references are verified
-   */
-  verifyBibliography(bibliography) {
-    return bibliography.every(ref => ref.verified === true);
-  }
-
-  /**
-   * Clean up malformed References sections in content
-   * @param {string} content - Content that might contain malformed References
-   * @returns {string} Cleaned content
-   */
-  cleanupMalformedReferences(content) {
-    if (!content || typeof content !== 'string') {
-      return content;
-    }
-
-    return content
-      // Fix the specific problematic pattern: "## References [1] ... [2] ..."
-      .replace(/## References\s*\[(\d+)\]/g, '\n## References\n\n[$1]')
-      // Ensure each citation is on its own line
-      .replace(/\]\s*\[(\d+)\]/g, '.\n\n[$1]')
-      // Add proper line breaks between citations
-      .replace(/\.\s*\[(\d+)\]/g, '.\n\n[$1]')
-      // Clean up any remaining issues
-      .replace(/\n{3,}/g, '\n\n'); // Normalize multiple line breaks
-  }
-}
-
-// --- SETUP AND CONFIGURATION ---
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// --- DATABASE SETUP ---
-const dbFilePath = path.join(__dirname, 'db.json');
-
-// Ensure the data directory exists
-const dataDir = path.resolve(__dirname, 'data');
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
-
-const adapter = new JSONFile(dbFilePath);
-const defaultData = { users: [], courses: [], images: [], imageCache: [], onboardingCompletions: [], trialRecords: [] };
-const db = new Low(adapter, defaultData);
-
-async function initializeDatabase() {
-  try {
-    // read() will create the file with defaultData if it doesn't exist or load existing data.
-    await db.read();
-    console.log(`[DB Debug] db.read() completed. File exists: ${fs.existsSync(dbFilePath)}`);
-    // Belt-and-suspenders: ensure data object and arrays are present after read.
-    db.data = db.data || defaultData;
-    db.data.users = db.data.users || [];
-    db.data.courses = db.data.courses || [];
-    db.data.imageCache = db.data.imageCache || [];
-    db.data.trialRecords = db.data.trialRecords || [];
-    db.data.images = db.data.images || [];
-    db.data.onboardingCompletions = db.data.onboardingCompletions || [];
-    
-    // Load courses from individual files if they exist
-    await loadCoursesFromFiles();
-    
-    // Clean up orphaned course files
-    await cleanupOrphanedCourseFiles();
-    
-    console.log('[DB] Database initialized successfully at:', dbFilePath);
-  } catch (error) {
-    console.error('[DB_ERROR] Could not initialize database:', error);
-    process.exit(1);
-  }
-}
-
-async function loadCoursesFromFiles() {
-  try {
-    const coursesDir = path.join(__dirname, 'data', 'courses');
-    if (!fs.existsSync(coursesDir)) {
-      console.log('[DB] No courses directory found, skipping course loading');
-      return;
-    }
-
-    const courseFiles = fs.readdirSync(coursesDir).filter(file => file.endsWith('.json') && file !== 'undefined.json');
-    console.log(`[DB] Found ${courseFiles.length} course files to load:`, courseFiles);
-
-    for (const file of courseFiles) {
-      try {
-        const filePath = path.join(coursesDir, file);
-        const courseData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-        
-        // Check if course already exists in database
-        const existingCourse = db.data.courses.find(c => c.id === courseData.id);
-        if (!existingCourse) {
-          db.data.courses.push(courseData);
-          console.log(`[DB] Loaded course: ${courseData.title} (${courseData.id})`);
-        } else {
-          console.log(`[DB] Course already exists: ${courseData.title} (${courseData.id})`);
-        }
-      } catch (error) {
-        console.error(`[DB_ERROR] Failed to load course file ${file}:`, error.message);
-      }
-    }
-
-    console.log(`[DB] Total courses in database: ${db.data.courses.length}`);
-    console.log(`[DB] Course IDs:`, db.data.courses.map(c => c.id));
-  } catch (error) {
-    console.error('[DB_ERROR] Failed to load courses from files:', error);
-  }
-}
-
-/**
- * Save a course to an individual JSON file
- * @param {Object} course - The course object to save
- */
-async function saveCourseToFile(course) {
-  try {
-    const coursesDir = path.join(__dirname, 'data', 'courses');
-    
-    // Ensure courses directory exists
-    if (!fs.existsSync(coursesDir)) {
-      fs.mkdirSync(coursesDir, { recursive: true });
-    }
-    
-    const courseFileName = `${course.id}.json`;
-    const courseFilePath = path.join(coursesDir, courseFileName);
-    
-    // Save course to file
-    fs.writeFileSync(courseFilePath, JSON.stringify(course, null, 2));
-    console.log(`[DB] Saved course to file: ${courseFileName}`);
-    
-  } catch (error) {
-    console.error(`[DB_ERROR] Failed to save course file for ${course.id}:`, error.message);
-    // Don't throw error to avoid breaking course creation
-  }
-}
-
-/**
- * Clean up orphaned course files (files that exist but don't have corresponding database entries)
- */
-async function cleanupOrphanedCourseFiles() {
-  try {
-    const coursesDir = path.join(__dirname, 'data', 'courses');
-    
-    if (!fs.existsSync(coursesDir)) {
-      return;
-    }
-    
-    const courseFiles = fs.readdirSync(coursesDir).filter(file => file.endsWith('.json') && file !== 'undefined.json');
-    const databaseCourseIds = db.data.courses.map(c => c.id);
-    
-    let orphanedCount = 0;
-    
-    for (const file of courseFiles) {
-      const courseId = file.replace('.json', '');
-      
-      if (!databaseCourseIds.includes(courseId)) {
-        const filePath = path.join(coursesDir, file);
-        try {
-          fs.unlinkSync(filePath);
-          console.log(`[DB] Cleaned up orphaned course file: ${file}`);
-          orphanedCount++;
-        } catch (error) {
-          console.error(`[DB_ERROR] Failed to delete orphaned file ${file}:`, error.message);
-        }
-      }
-    }
-    
-    if (orphanedCount > 0) {
-      console.log(`[DB] Cleaned up ${orphanedCount} orphaned course files`);
-    }
-    
-  } catch (error) {
-    console.error('[DB_ERROR] Failed to cleanup orphaned course files:', error.message);
-  }
-}
-
-/**
- * Assign the onboarding course to a new user
- * @param {string} userId - The ID of the user to assign the course to
- */
-async function assignOnboardingCourse(userId) {
-  try {
-    console.log(`[ONBOARDING] Starting assignment for user ${userId}`);
-    
-    // Find the onboarding course
-    const onboardingCourse = db.data.courses.find(c => c.id === 'discourse-ai-onboarding');
-    
-    if (!onboardingCourse) {
-      console.log('[ONBOARDING] Onboarding course not found, skipping assignment');
-      console.log('[ONBOARDING] Available courses:', db.data.courses.map(c => c.id));
-      return;
-    }
-    
-    console.log(`[ONBOARDING] Found onboarding template:`, {
-      id: onboardingCourse.id,
-      title: onboardingCourse.title,
-      hasModules: !!onboardingCourse.modules,
-      modulesCount: onboardingCourse.modules?.length
-    });
-    
-    // Check if user already has the onboarding course (more robust check)
-    const existingCourse = db.data.courses.find(c => 
-      c.userId === userId && c.id.includes('discourse-ai-onboarding')
-    );
-    
-    if (existingCourse) {
-      console.log(`[ONBOARDING] User ${userId} already has onboarding course:`, existingCourse.id);
-      return;
-    }
-    
-    // Additional safety check - look for any course with similar title
-    const hasSimilarCourse = db.data.courses.some(c => 
-      c.userId === userId && 
-      (c.title.toLowerCase().includes('welcome to discourse ai') || 
-       c.title.toLowerCase().includes('onboarding') ||
-       c.title.toLowerCase().includes('learning journey begins'))
-    );
-    
-    if (hasSimilarCourse) {
-      console.log(`[ONBOARDING] User ${userId} already has similar course, skipping onboarding assignment`);
-      return;
-    }
-    
-    // Create a copy of the onboarding course for the user
-    const userCourse = {
-      ...onboardingCourse,
-      id: `onboarding_${userId}_${Date.now()}`,
-      userId: userId,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    
-    console.log(`[ONBOARDING] Created user course:`, {
-      id: userCourse.id,
-      userId: userCourse.userId,
-      title: userCourse.title
-    });
-    
-    // Add to courses table
-    db.data.courses.push(userCourse);
-    
-    await db.write();
-    console.log(`[ONBOARDING] Successfully assigned onboarding course to user ${userId}`);
-    
-  } catch (error) {
-    console.error(`[ONBOARDING] Failed to assign onboarding course to user ${userId}:`, error.message);
-    console.error(`[ONBOARDING] Error stack:`, error.stack);
-    // Don't throw error to avoid breaking user creation
-  }
-}
-
-/**
- * Clean up duplicate onboarding courses for a user
- * @param {string} userId - The ID of the user to clean up
- */
-async function cleanupDuplicateOnboardingCourses(userId) {
-  try {
-    const userOnboardingCourses = db.data.courses.filter(c => 
-      c.userId === userId && c.id.includes('discourse-ai-onboarding')
-    );
-    
-    if (userOnboardingCourses.length > 1) {
-      console.log(`[ONBOARDING] Found ${userOnboardingCourses.length} duplicate onboarding courses for user ${userId}, cleaning up...`);
-      
-      // Keep the first one, remove the rest
-      const [keepCourse, ...duplicates] = userOnboardingCourses;
-      
-      // Remove duplicates from the database
-      db.data.courses = db.data.courses.filter(c => !duplicates.includes(c));
-      
-      await db.write();
-      console.log(`[ONBOARDING] Cleaned up ${duplicates.length} duplicate onboarding courses for user ${userId}`);
-    }
-  } catch (error) {
-    console.error(`[ONBOARDING] Failed to cleanup duplicate onboarding courses for user ${userId}:`, error.message);
-  }
-}
 
 /**
  * Ensure an existing user has the onboarding course
