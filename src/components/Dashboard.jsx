@@ -770,39 +770,6 @@ const Dashboard = () => {
                 </p>
                 <div className="mt-2 space-x-2">
                   {/* SSE debug buttons removed */}
-                    onClick={async () => {
-                      try {
-                        const diagnostics = await courseNotificationService.getConnectionDiagnostics();
-                        console.log('🔗 [DASHBOARD] Connection diagnostics:', diagnostics);
-                        
-                        // Generate recommendations
-                        const recommendations = courseNotificationService.generateTroubleshootingRecommendations(diagnostics);
-                        
-                        // Create a formatted message
-                        let message = 'Connection Diagnostics:\n\n';
-                        message += `Status: ${courseNotificationService.isConnected ? 'Connected' : 'Disconnected'}\n`;
-                        message += `Browser: ${diagnostics.browserCompatibility.userAgent.split(' ').slice(0, 3).join(' ')}\n\n`;
-                        
-                        if (recommendations.length > 0) {
-                          message += 'Recommendations:\n';
-                          recommendations.forEach((rec, index) => {
-                            message += `${index + 1}. ${rec.title}\n`;
-                            message += `   ${rec.solution}\n\n`;
-                          });
-                        } else {
-                          message += 'No specific issues detected.\n';
-                        }
-                        
-                        alert(message);
-                      } catch (error) {
-                        console.error('🔗 [DASHBOARD] Diagnostics failed:', error);
-                        alert(`Diagnostics failed: ${error.message}`);
-                      }
-                    }}
-                    className="bg-orange-500 text-white px-2 py-1 rounded text-xs hover:bg-orange-600"
-                  >
-                    Full Diagnostics
-                  </button>
                 </div>
               </div>
               <button
@@ -814,9 +781,9 @@ const Dashboard = () => {
                     timestamp: new Date().toISOString()
                   });
                 }}
-                className="bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-700"
+                className="bg-gray-500 text-white px-2 py-1 rounded text-xs hover:bg-gray-600"
               >
-                Log Debug
+                Log Debug Info
               </button>
             </div>
           </div>
