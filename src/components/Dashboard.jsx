@@ -24,14 +24,10 @@ const Dashboard = () => {
   const hasAttemptedFetch = useRef(false);
   const [isLoadingCourses, setIsLoadingCourses] = useState(false);
   const api = useApiWrapper();
-  const [isBuying, setIsBuying] = useState(false);
-  const [credits, setCredits] = useState(0); // Default to 0 credits for all users
-  const [showConfetti, setShowConfetti] = useState(false);
-  const [showSuccessToast, setShowSuccessToast] = useState(false);
-  const [successMessage, setSuccessMessage] = useState('');
   const [isUpdatingCourseState, setIsUpdatingCourseState] = useState(false);
   const urlParams = new URLSearchParams(window.location.search);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
   // Settings modal state
   const [showSettings, setShowSettings] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState('');
@@ -389,10 +385,7 @@ const Dashboard = () => {
       // Clear the course to delete state immediately
       setCourseToDelete(null);
       
-      // Show success message
-      setSuccessMessage('Course deleted successfully! Refreshing course list...');
-      setShowSuccessToast(true);
-      setTimeout(() => setShowSuccessToast(false), 3000);
+
 
       // --- NEW: Force a refresh of the course list ---
       // await fetchSavedCourses(true); // `true` forces a refetch
@@ -410,54 +403,6 @@ const Dashboard = () => {
     }
   }, [api, fetchSavedCourses]);
 
-  const handlePaymentSuccess = async () => {
-    try {
-      logger.debug('💳 [PAYMENT] Processing payment success...');
-      
-      const token = localStorage.getItem('token');
-      
-      if (!token) {
-        logger.error('❌ [PAYMENT] No authentication token found');
-        alert('Authentication required. Please log in again.');
-        return;
-      }
-
-      // Debug API configuration
-      debugApiConfig();
-      logger.debug('📡 [PAYMENT] Making request to: /api/payment-success');
-
-      // Call backend to process payment success and add tokens
-      const response = await fetch('/api/payment-success', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Payment server responded with status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      logger.debug('✅ [PAYMENT] Payment success processed:', data);
-      
-      // Refresh user profile from backend to get the most up-to-date count
-      await fetchUserProfile();
-      
-      // Show success message with credit details
-      const message = `${data.message}\n\nCredits: ${data.previousCredits} → ${data.courseCredits} (+${data.creditsAdded})`;
-      alert(message);
-      
-      // Clean up URL parameters
-      window.history.replaceState({}, document.title, window.location.pathname);
-      
-    } catch (error) {
-      logger.error('❌ [PAYMENT] Error handling payment success:', error);
-      alert('Payment successful, but there was an issue adding tokens. Please contact support.');
-    }
-  };
-
   // Fetch user profile from backend
   const fetchUserProfile = useCallback(async () => {
     try {
@@ -468,24 +413,18 @@ const Dashboard = () => {
         logger.debug('✅ [DASHBOARD] User profile fetched:', {
           id: userData.id,
           name: userData.name,
-          email: userData.email,
-          courseCredits: userData.courseCredits
+          email: userData.email
         });
         setUserProfile(userData);
         
-        // Also update credits from the same response
-        if (userData.courseCredits !== undefined) {
-          setCredits(userData.courseCredits);
-        }
+
       } else {
         logger.warn('⚠️ [DASHBOARD] No user data in response:', userData);
         setUserProfile(null);
-        setCredits(0);
       }
     } catch (error) {
       logger.error('❌ [DASHBOARD] Error fetching user profile:', error);
       setUserProfile(null);
-      setCredits(0);
     }
   }, [api]);
 
@@ -504,24 +443,7 @@ const Dashboard = () => {
     }
   }, [api, user?.id]);
 
-  // Fetch user credits from backend (deprecated - now handled by fetchUserProfile)
-  const fetchUserCredits = useCallback(async () => {
-    try {
-      logger.debug('💳 [DASHBOARD] Fetching user credits from backend...');
-      const userData = await api.getCurrentUser();
-      
-      if (userData && userData.courseCredits !== undefined) {
-        logger.debug('✅ [DASHBOARD] User credits fetched:', userData.courseCredits);
-        setCredits(userData.courseCredits);
-      } else {
-        logger.warn('⚠️ [DASHBOARD] No credits data in user response:', userData);
-        setCredits(0);
-      }
-    } catch (error) {
-      logger.error('❌ [DASHBOARD] Error fetching user credits:', error);
-      setCredits(0);
-    }
-  }, [api]);
+
 
   useEffect(() => {
     // Fetch user profile when component mounts or user changes
@@ -546,16 +468,9 @@ const Dashboard = () => {
           fetchSavedCourses();
         }
         
-        // If returning from Stripe payment, refresh user info
-        if (urlParams.get('payment') === 'success') {
-          handlePaymentSuccess();
-        }
-        // If returning from onboarding completion, show toast and refresh status
+        
+        // If returning from onboarding completion, refresh status
         if (urlParams.get('onboarding') === 'completed') {
-          const msg = urlParams.get('msg') || 'Onboarding completed!';
-          setSuccessMessage(decodeURIComponent(msg));
-          setShowSuccessToast(true);
-          setTimeout(() => setShowSuccessToast(false), 4000);
           const cleanUrl = window.location.pathname;
           window.history.replaceState({}, document.title, cleanUrl);
           fetchOnboardingStatus();
@@ -567,24 +482,6 @@ const Dashboard = () => {
       }
     }
   }, [user]);
-
-  const handleBuyMore = async () => {
-    setIsBuying(true);
-    try {
-      logger.debug('🛒 [PAYMENT] Starting payment flow');
-      
-      // Redirect directly to the new Stripe checkout page
-      const successUrl = encodeURIComponent(`${window.location.origin}/dashboard?payment=success`);
-      const stripeCheckoutUrl = `https://buy.stripe.com/3cIaEWgNC6uZdzx2SJdby00?success_url=${successUrl}`;
-      logger.debug('🛒 [PAYMENT] Redirecting to Stripe checkout:', stripeCheckoutUrl);
-      window.location.href = stripeCheckoutUrl;
-    } catch (err) {
-      logger.error('🛒 [PAYMENT] Error redirecting to checkout:', err);
-      alert('Error redirecting to checkout: ' + err.message);
-    } finally {
-      setIsBuying(false);
-    }
-  };
 
   const handleStartOnboarding = async () => {
     try {
@@ -614,7 +511,7 @@ const Dashboard = () => {
     }
   };
 
-  return (
+    return (
     <div className="min-h-screen bg-gray-100">
       {/* Confetti Animation */}
       <ConfettiAnimation 
@@ -627,20 +524,9 @@ const Dashboard = () => {
           }, 100);
         }} 
       />
-      
-      {/* Success Toast Notification */}
-      {showSuccessToast && (
-        <div className="fixed top-4 right-4 z-50 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg transform transition-all duration-300 ease-in-out">
-          <div className="flex items-center space-x-2">
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-            </svg>
-            <span className="font-medium">{successMessage}</span>
-          </div>
-        </div>
-      )}
-      
-      {/* Remove problematic Stripe script tag */}
+
+        
+        {/* Remove problematic Stripe script tag */}
       
       <nav className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -678,38 +564,7 @@ const Dashboard = () => {
       </nav>
 
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        {/* Credits and Buy More */}
-        <div className="flex items-center justify-between mb-6 bg-white p-3 sm:p-4 rounded-lg shadow-sm wrap-on-mobile">
-          <div className="flex items-center space-x-2 sm:space-x-4 wrap-on-mobile">
-            <div className="text-sm sm:text-lg font-semibold text-gray-700">
-              Tokens: <span className={credits === 0 ? 'text-red-500' : 'text-green-600'}>{credits}</span>
-            </div>
-            <button
-              onClick={fetchUserProfile}
-              className="text-xs sm:text-sm text-gray-500 hover:text-gray-700 transition-colors duration-200"
-              title="Refresh user data"
-            >
-              <svg className="h-3 w-3 sm:h-4 sm:w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            </button>
-          </div>
-          <div className="flex items-center space-x-2 sm:space-x-3 wrap-on-mobile">
-            <button
-              onClick={handleBuyMore}
-              disabled={isBuying}
-              className="inline-flex items-center px-3 py-1.5 sm:px-4 sm:py-2 border border-transparent text-xs sm:text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed btn-sm"
-            >
-              {isBuying ? 'Processing...' : 'Buy Tokens'}
-            </button>
-          </div>
-        </div>
-        
-        {credits === 0 && (
-          <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4">
-            You have no course tokens left. Please buy more to generate new courses.
-          </div>
-        )}
+
         
         {/* Welcome Message for New Users */}
         {savedCourses.length === 0 && !hasCompletedOnboarding && (
@@ -739,23 +594,7 @@ const Dashboard = () => {
           </div>
         )}
         
-        {/* Payment Success Message */}
-        {urlParams.get('payment') === 'success' && (
-          <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <strong>Payment Successful!</strong>
-                <p className="text-sm mt-1">Thank you for your purchase. Your tokens should be added automatically.</p>
-              </div>
-              <button
-                onClick={handlePaymentSuccess}
-                className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700"
-              >
-                Add Tokens Now
-              </button>
-            </div>
-          </div>
-        )}
+
         
         {/* Debug Information */}
         {process.env.NODE_ENV === 'development' && (
@@ -820,7 +659,6 @@ const Dashboard = () => {
               <button
                 onClick={() => setShowNewCourseForm(true)}
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                disabled={credits === 0}
               >
                 Generate New Course
               </button>
@@ -910,7 +748,6 @@ const Dashboard = () => {
                     <button
                       onClick={() => setShowNewCourseForm(true)}
                       className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                      disabled={credits === 0}
                     >
                       Generate Your First Course
                     </button>
@@ -1192,8 +1029,6 @@ const Dashboard = () => {
                                       
                                       // Trigger confetti animation
                                       setShowConfetti(true);
-                                      setSuccessMessage('Course published successfully! 🎉');
-                                      setShowSuccessToast(true);
                                       setTimeout(() => setShowSuccessToast(false), 3000);
                                       
                                       // Reset state update flag after confetti completes
