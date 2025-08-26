@@ -1626,7 +1626,16 @@ class AIService {
   }
 
   async _makeApiRequest(prompt, intent, expectJsonResponse = true) {
+    console.log(`[AIService] Making API request for ${intent}:`, {
+      hasApiKey: !!this.apiKey,
+      apiKeyLength: this.apiKey ? this.apiKey.length : 0,
+      apiKeyPrefix: this.apiKey ? this.apiKey.substring(0, 10) + '...' : 'None',
+      promptLength: prompt.length,
+      expectJsonResponse
+    });
+    
     if (!this.apiKey) {
+      console.error(`[AIService] No API key available for ${intent} request`);
       throw new ApiError(500, 'MISTRAL_API_KEY is not configured on the server.');
     }
     let attempt = 0;
@@ -2659,6 +2668,14 @@ Return only the JSON array, no other text.`;
             
           } catch (lessonError) {
             console.error(`[AIService] Lesson generation failed for "${lesson.title}":`, lessonError.message);
+            console.error(`[AIService] Full error details:`, {
+              error: lessonError,
+              stack: lessonError.stack,
+              lessonTitle: lesson.title,
+              moduleTitle: module.title,
+              courseTitle: courseWithIds.title
+            });
+            
             // Create fallback content instead of failing completely
             lesson.content = {
               introduction: `Introduction to ${lesson.title}`,
@@ -8072,9 +8089,22 @@ async function startServer() {
 
 // --- AI SERVICE INIT ---
 const MISTRAL_KEY = process.env.MISTRAL_API_KEY || process.env.VITE_MISTRAL_API_KEY || '';
+console.log(`[SERVER] Environment check:`, {
+  MISTRAL_API_KEY: process.env.MISTRAL_API_KEY ? 'Set' : 'Not set',
+  VITE_MISTRAL_API_KEY: process.env.VITE_MISTRAL_API_KEY ? 'Set' : 'Not set',
+  MISTRAL_KEY: MISTRAL_KEY ? `${MISTRAL_KEY.substring(0, 10)}...` : 'Empty',
+  NODE_ENV: process.env.NODE_ENV
+});
+
 try {
   global.aiService = new AIService(MISTRAL_KEY);
   console.log(`[SERVER] AI service ${MISTRAL_KEY ? 'initialized with API key' : 'initialized without API key (image search only)'}`);
+  
+  // Test the AI service to make sure it's working
+  if (MISTRAL_KEY) {
+    console.log(`[SERVER] Testing AI service with a simple prompt...`);
+    // We'll test it when the first request comes in
+  }
 } catch (e) {
   console.error('[SERVER] Failed to initialize AI service:', e.message);
   global.aiService = new AIService('');
