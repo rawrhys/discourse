@@ -415,8 +415,25 @@ const Dashboard = () => {
         logger.debug('✅ [DASHBOARD] User profile fetched:', {
           id: userData.id,
           name: userData.name,
-          email: userData.email
+          email: userData.email,
+          courseCredits: userData.courseCredits,
+          hasCredits: userData.courseCredits !== undefined && userData.courseCredits !== null
         });
+        
+        // If courseCredits is missing, try to fetch it separately
+        if (userData.courseCredits === undefined || userData.courseCredits === null) {
+          logger.debug('⚠️ [DASHBOARD] courseCredits missing from profile, fetching separately...');
+          try {
+            const creditsData = await api.getUserCredits();
+            if (creditsData && creditsData.credits !== undefined) {
+              userData.courseCredits = creditsData.credits;
+              logger.debug('✅ [DASHBOARD] Credits fetched separately:', creditsData.credits);
+            }
+          } catch (creditsError) {
+            logger.warn('⚠️ [DASHBOARD] Failed to fetch credits separately:', creditsError);
+          }
+        }
+        
         setUserProfile(userData);
         
 
@@ -581,18 +598,24 @@ const Dashboard = () => {
         <div className="flex items-center justify-between mb-6 bg-white p-3 sm:p-4 rounded-lg shadow-sm wrap-on-mobile">
           <div className="flex items-center space-x-2 sm:space-x-4 wrap-on-mobile">
             <div className="text-sm sm:text-lg font-semibold text-gray-700">
-              Tokens: <span className={(userProfile?.courseCredits ?? 0) === 0 ? 'text-red-500' : 'text-green-600'}>{userProfile?.courseCredits ?? 0}</span>
+              Tokens: <span className={(userProfile?.courseCredits ?? 0) === 0 ? 'text-red-500' : 'text-green-600'}>{userProfile?.courseCredits ?? 'Loading...'}</span>
             </div>
             <button
               onClick={fetchUserProfile}
-              className="text-xs sm:text-sm text-gray-500 hover:text-gray-700 transition-colors duration-200"
-              title="Refresh user data"
+              className="text-xs sm:text-sm text-gray-500 hover:text-gray-700 transition-colors duration-200 flex items-center space-x-1"
+              title="Refresh user data and token count"
             >
               <svg className="h-3 w-3 sm:h-4 sm:w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
+              <span className="hidden sm:inline">Refresh</span>
             </button>
           </div>
+          {userProfile?.courseCredits === undefined && (
+            <div className="text-xs text-gray-500">
+              Token count loading...
+            </div>
+          )}
         </div>
         {/* Welcome Message for New Users */}
         {savedCourses.length === 0 && !hasCompletedOnboarding && (
@@ -633,10 +656,43 @@ const Dashboard = () => {
                 <p className="text-sm mt-1">
                   Courses: {savedCourses.length} | 
                   SSE: Disabled | 
-                  User ID: {user?.id}
+                  User ID: {user?.id} |
+                  Tokens: {userProfile?.courseCredits ?? 'undefined'} |
+                  Profile Loaded: {userProfile ? 'Yes' : 'No'}
                 </p>
                 <div className="mt-2 space-x-2">
-                  {/* SSE debug buttons removed */}
+                  <button
+                    onClick={async () => {
+                      try {
+                        logger.info('🧪 [DASHBOARD] Testing token count API...');
+                        const creditsData = await api.getUserCredits();
+                        logger.info('✅ [DASHBOARD] Credits API response:', creditsData);
+                        alert(`Credits API Response: ${JSON.stringify(creditsData, null, 2)}`);
+                      } catch (error) {
+                        logger.error('❌ [DASHBOARD] Credits API error:', error);
+                        alert(`Credits API Error: ${error.message}`);
+                      }
+                    }}
+                    className="bg-blue-500 text-white px-2 py-1 rounded text-xs hover:bg-blue-600"
+                  >
+                    Test Credits API
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        logger.info('🧪 [DASHBOARD] Testing user profile API...');
+                        const profileData = await api.getCurrentUser();
+                        logger.info('✅ [DASHBOARD] Profile API response:', profileData);
+                        alert(`Profile API Response: ${JSON.stringify(profileData, null, 2)}`);
+                      } catch (error) {
+                        logger.error('❌ [DASHBOARD] Profile API error:', error);
+                        alert(`Profile API Error: ${error.message}`);
+                      }
+                    }}
+                    className="bg-green-500 text-white px-2 py-1 rounded text-xs hover:bg-green-600"
+                  >
+                    Test Profile API
+                  </button>
                 </div>
               </div>
               <button
@@ -645,6 +701,8 @@ const Dashboard = () => {
                     coursesCount: savedCourses.length,
                     courses: savedCourses.map(c => ({ id: c.id, title: c.title, userId: c.userId })),
                     user: { id: user?.id, email: user?.email },
+                    userProfile: userProfile,
+                    courseCredits: userProfile?.courseCredits,
                     timestamp: new Date().toISOString()
                   });
                 }}
@@ -675,15 +733,6 @@ const Dashboard = () => {
                   </svg>
                 </button>
               </div>
-              {!hasCompletedOnboarding && (
-                <button
-                  onClick={handleStartOnboarding}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 mr-2"
-                  title="New here? Complete onboarding to learn the basics"
-                >
-                  🎓 Onboarding
-                </button>
-              )}
               <button
                 onClick={() => setShowNewCourseForm(true)}
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
@@ -779,15 +828,6 @@ const Dashboard = () => {
                     >
                       Generate Your First Course
                     </button>
-                    {!hasCompletedOnboarding && (
-                      <button
-                        onClick={handleStartOnboarding}
-                        className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-                        title="We recommend completing onboarding first"
-                      >
-                        🎓 Start Onboarding Course
-                      </button>
-                    )}
                   </div>
                 </div>
               </div>
