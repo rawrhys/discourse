@@ -92,7 +92,7 @@ export const AuthProvider = ({ children }) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const login = async (email, password) => {
+  const login = async (email, password, captchaToken) => {
     try {
       // Mandatory preflight check against backend deletion list (fail-closed)
       const resp = await fetch('/api/auth/can-login', {
@@ -111,6 +111,7 @@ export const AuthProvider = ({ children }) => {
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
+        options: captchaToken ? { captchaToken } : undefined,
       });
 
       if (error) {
@@ -145,7 +146,8 @@ export const AuthProvider = ({ children }) => {
             gdpr_policy_version: options.policyVersion || '1.0',
             gdpr_consent_at: new Date().toISOString()
           },
-          emailRedirectTo: window.location.origin
+          emailRedirectTo: window.location.origin,
+          ...(options.captchaToken ? { captchaToken: options.captchaToken } : {}),
         }
       });
 

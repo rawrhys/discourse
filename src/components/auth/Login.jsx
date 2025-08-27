@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
+import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -11,6 +12,8 @@ const Login = () => {
   const navigate = useNavigate();
   const [showTrialMsg, setShowTrialMsg] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState();
+  const captcha = useRef();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -18,7 +21,8 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      await login(email, password);
+      await login(email, password, captchaToken);
+      try { captcha.current?.resetCaptcha(); } catch {}
       navigate('/dashboard');
     } catch (error) {
       setError(error.message || 'Failed to log in. Please check your credentials.');
@@ -117,6 +121,14 @@ const Login = () => {
                 {showPassword ? 'Hide' : 'Show'}
               </button>
             </div>
+          </div>
+
+          <div className="mt-3">
+            <HCaptcha
+              ref={captcha}
+              sitekey={import.meta.env.VITE_HCAPTCHA_SITEKEY || '47c451f8-8dde-4b54-b3b8-3ac6d1c26874'}
+              onVerify={(token) => setCaptchaToken(token)}
+            />
           </div>
 
           <div>

@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
+import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 const Register = () => {
   const [name, setName] = useState('');
@@ -15,6 +16,8 @@ const Register = () => {
   const [isPaymentComplete, setIsPaymentComplete] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
+  const [captchaToken, setCaptchaToken] = useState();
+  const captcha = useRef();
 
   const handleFormSubmit = async (e) => {
     e.preventDefault();
@@ -65,7 +68,8 @@ const Register = () => {
         console.log('Account created successfully after payment:', data);
         
         // Now log in the user
-        await register(email, password, name, { gdprConsent: true, policyVersion: '1.0' });
+        await register(email, password, name, { gdprConsent: true, policyVersion: '1.0', captchaToken });
+        try { captcha.current?.resetCaptcha(); } catch {}
         navigate('/dashboard');
       } else {
         const errorData = await response.json();
@@ -82,7 +86,8 @@ const Register = () => {
   const createAccount = async () => {
     setIsLoading(true);
     try {
-      await register(email, password, name, { gdprConsent: true, policyVersion: '1.0' });
+      await register(email, password, name, { gdprConsent: true, policyVersion: '1.0', captchaToken });
+      try { captcha.current?.resetCaptcha(); } catch {}
       navigate('/dashboard');
     } catch (error) {
       setError(error?.message || 'Failed to create an account. Please try again.');
@@ -274,6 +279,14 @@ const Register = () => {
             <p className="mt-2 text-center text-sm text-gray-600">
               To create your account, please complete the payment below
             </p>
+          </div>
+
+          <div className="mt-3">
+            <HCaptcha
+              ref={captcha}
+              sitekey={import.meta.env.VITE_HCAPTCHA_SITEKEY || '47c451f8-8dde-4b54-b3b8-3ac6d1c26874'}
+              onVerify={(token) => setCaptchaToken(token)}
+            />
           </div>
 
           <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
