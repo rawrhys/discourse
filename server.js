@@ -4153,6 +4153,26 @@ app.post('/api/auth/login', async (req, res) => {
         return res.status(401).json({ error: 'Invalid credentials' });
     }
       
+    // --- Block login for deleted users (defense in depth) ---
+    try {
+      const wasDeleted = Array.isArray(db?.data?.deletedUsers) && (
+        db.data.deletedUsers.some(d => d.id === data.user.id) ||
+        db.data.deletedUsers.some(d => (d.email || '').toLowerCase() === (data.user.email || '').toLowerCase())
+      );
+      if (wasDeleted) {
+        // Best-effort hard delete from Supabase if admin client is available
+        if (supabaseAdmin && typeof supabaseAdmin.auth?.admin?.deleteUser === 'function') {
+          try {
+            await supabaseAdmin.auth.admin.deleteUser(data.user.id);
+            console.log('[LOGIN BLOCK] Deleted Supabase user during blocked login:', data.user.id);
+          } catch (e) {
+            console.warn('[LOGIN BLOCK] Failed to delete Supabase user during blocked login:', e?.message);
+          }
+        }
+        return res.status(403).json({ error: 'Account has been deleted. Please contact support if this is unexpected.', code: 'ACCOUNT_DELETED' });
+      }
+    } catch {}
+
     // --- Local User Sync ---
     // Ensure local user exists and has credits
     let localUser = db.data.users.find((u) => u.id === data.user.id);
@@ -7132,7 +7152,7 @@ app.post('/api/account/delete', authenticateToken, async (req, res) => {
     } catch {}
     await db.write();
 
-    // Optionally delete user from Supabase auth with admin key
+    // Hard delete user from Supabase auth with admin key (best effort)
     if (supabaseAdmin && typeof supabaseAdmin.auth?.admin?.deleteUser === 'function') {
       try {
         await supabaseAdmin.auth.admin.deleteUser(userId);
