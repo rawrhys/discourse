@@ -3121,7 +3121,7 @@ if (!fs.existsSync(dataDir)) {
 }
 
 const adapter = new JSONFile(dbFilePath);
-const defaultData = { users: [], courses: [], images: [], imageCache: [], onboardingCompletions: [], trialRecords: [] };
+const defaultData = { users: [], courses: [], images: [], imageCache: [], onboardingCompletions: [], trialRecords: [], deletedUsers: [] };
 const db = new Low(adapter, defaultData);
 
 async function initializeDatabase() {
@@ -3137,6 +3137,7 @@ async function initializeDatabase() {
     db.data.trialRecords = db.data.trialRecords || [];
     db.data.images = db.data.images || [];
     db.data.onboardingCompletions = db.data.onboardingCompletions || [];
+    db.data.deletedUsers = db.data.deletedUsers || [];
     
     // Load courses from individual files if they exist
     await loadCoursesFromFiles();
@@ -3546,6 +3547,13 @@ const authenticateToken = async (req, res, next) => {
         error: errorMessage,
         code: errorCode
       });
+    }
+
+    // Check deletion list first: if user was deleted locally, treat as 401
+    const isDeleted = Array.isArray(db?.data?.deletedUsers) && db.data.deletedUsers.some(d => d.id === user.id);
+    if (isDeleted) {
+      console.log('[AUTH] User was deleted locally, rejecting token:', user.id);
+      return res.status(401).json({ error: 'User not found in local database', code: 'USER_NOT_FOUND' });
     }
 
     // Find user in local database to ensure they exist and have current data
@@ -7116,8 +7124,12 @@ app.post('/api/account/delete', authenticateToken, async (req, res) => {
     }
     db.data.courses = (db.data.courses || []).filter(c => c.userId !== userId);
 
-    // Remove user
+    // Remove user and record deletion
     db.data.users = (db.data.users || []).filter(u => u.id !== userId);
+    try {
+      db.data.deletedUsers = Array.isArray(db.data.deletedUsers) ? db.data.deletedUsers : [];
+      db.data.deletedUsers.push({ id: userId, email: userEmail, deletedAt: new Date().toISOString() });
+    } catch {}
     await db.write();
 
     // Optionally delete user from Supabase auth with admin key
