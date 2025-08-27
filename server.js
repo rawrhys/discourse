@@ -3432,6 +3432,51 @@ if (!supabaseUrl || !supabaseAnonKey || supabaseUrl === 'your-supabase-url-here'
     }
 }
 
+// --- Supabase Edge Function config (preferred for admin ops) ---
+const EDGE_DELETE_USER_URL = process.env.SUPABASE_EDGE_DELETE_USER_URL
+  || process.env.EDGE_DELETE_USER_URL
+  || process.env.SUPABASE_FUNCTION_DELETE_USER_URL
+  || '';
+const EDGE_FUNCTION_SECRET = process.env.SUPABASE_EDGE_FUNCTION_SECRET
+  || process.env.EDGE_FUNCTION_SECRET
+  || '';
+
+// Helper: delete Supabase user via Edge Function if configured, else fallback to admin client
+async function deleteSupabaseUser(userId) {
+  try {
+    if (EDGE_DELETE_USER_URL) {
+      const headers = { 'Content-Type': 'application/json' };
+      if (EDGE_FUNCTION_SECRET) headers['x-function-secret'] = EDGE_FUNCTION_SECRET;
+      const resp = await fetch(EDGE_DELETE_USER_URL, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ user_id: userId })
+      });
+      if (!resp.ok) {
+        const txt = await resp.text();
+        console.warn('[SupabaseEdge] delete-user failed:', resp.status, txt);
+        return false;
+      }
+      console.log('[SupabaseEdge] delete-user succeeded for:', userId);
+      return true;
+    }
+    // Fallback to admin client if edge function not configured
+    if (supabaseAdmin && typeof supabaseAdmin.auth?.admin?.deleteUser === 'function') {
+      try {
+        await supabaseAdmin.auth.admin.deleteUser(userId);
+        console.log('[SupabaseAdmin] Deleted user:', userId);
+        return true;
+      } catch (e) {
+        console.warn('[SupabaseAdmin] Failed to delete user:', userId, e?.message);
+        return false;
+      }
+    }
+  } catch (e) {
+    console.warn('[SupabaseDelete] Unexpected error deleting user:', e?.message);
+  }
+  return false;
+}
+
 // Initialize optional Supabase admin client when service role key is provided
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (supabaseUrl && supabaseServiceRoleKey && supabaseServiceRoleKey !== 'your-supabase-service-role-key-here') {
@@ -4160,15 +4205,8 @@ app.post('/api/auth/login', async (req, res) => {
         db.data.deletedUsers.some(d => (d.email || '').toLowerCase() === (data.user.email || '').toLowerCase())
       );
       if (wasDeleted) {
-        // Best-effort hard delete from Supabase if admin client is available
-        if (supabaseAdmin && typeof supabaseAdmin.auth?.admin?.deleteUser === 'function') {
-          try {
-            await supabaseAdmin.auth.admin.deleteUser(data.user.id);
-            console.log('[LOGIN BLOCK] Deleted Supabase user during blocked login:', data.user.id);
-          } catch (e) {
-            console.warn('[LOGIN BLOCK] Failed to delete Supabase user during blocked login:', e?.message);
-          }
-        }
+        // Prefer Edge Function for hard delete; fallback to admin client
+        await deleteSupabaseUser(data.user.id);
         return res.status(403).json({ error: 'Account has been deleted. Please contact support if this is unexpected.', code: 'ACCOUNT_DELETED' });
       }
     } catch {}
@@ -7169,15 +7207,8 @@ app.post('/api/account/delete', authenticateToken, async (req, res) => {
     } catch {}
     await db.write();
 
-    // Hard delete user from Supabase auth with admin key (best effort)
-    if (supabaseAdmin && typeof supabaseAdmin.auth?.admin?.deleteUser === 'function') {
-      try {
-        await supabaseAdmin.auth.admin.deleteUser(userId);
-        console.log('[ACCOUNT DELETE] Deleted Supabase user:', userId);
-      } catch (e) {
-        console.warn('[ACCOUNT DELETE] Failed to delete Supabase user:', userId, e?.message);
-      }
-    }
+    // Prefer Edge Function for hard delete; fallback to admin client
+    await deleteSupabaseUser(userId);
 
     console.log('[ACCOUNT DELETE] Account deleted for:', { userId, userEmail });
     return res.json({ success: true });

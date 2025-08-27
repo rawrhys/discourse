@@ -15,10 +15,29 @@ export const AuthProvider = ({ children }) => {
         if (error) {
           console.error('Error getting session:', error);
         } else if (session) {
-          setUser(session.user);
-          // Store token for downstream services (e.g., SSE)
-          if (session.access_token) {
-            try { localStorage.setItem('token', session.access_token); } catch {}
+          // Preflight check with backend to ensure account wasn't deleted
+          try {
+            const resp = await fetch('/api/auth/can-login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: session.user?.email })
+            });
+            const data = resp.ok ? await resp.json() : { allowed: true };
+            if (data && data.allowed === false) {
+              await supabase.auth.signOut();
+              try { localStorage.removeItem('token'); } catch {}
+            } else {
+              setUser(session.user);
+              if (session.access_token) {
+                try { localStorage.setItem('token', session.access_token); } catch {}
+              }
+            }
+          } catch (e) {
+            // If preflight fails, keep user but backend will still enforce on API calls
+            setUser(session.user);
+            if (session.access_token) {
+              try { localStorage.setItem('token', session.access_token); } catch {}
+            }
           }
         } else {
           try { localStorage.removeItem('token'); } catch {}
@@ -38,10 +57,29 @@ export const AuthProvider = ({ children }) => {
         console.log('🔧 [AUTH] Auth state changed:', event, session?.user?.email);
         
         if (session) {
-          setUser(session.user);
-          // Persist token for clients that need it (SSE)
-          if (session.access_token) {
-            try { localStorage.setItem('token', session.access_token); } catch {}
+          try {
+            const resp = await fetch('/api/auth/can-login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: session.user?.email })
+            });
+            const data = resp.ok ? await resp.json() : { allowed: true };
+            if (data && data.allowed === false) {
+              await supabase.auth.signOut();
+              setUser(null);
+              try { localStorage.removeItem('token'); } catch {}
+            } else {
+              setUser(session.user);
+              if (session.access_token) {
+                try { localStorage.setItem('token', session.access_token); } catch {}
+              }
+            }
+          } catch (e) {
+            // On preflight failure, fall back to letting backend enforce
+            setUser(session.user);
+            if (session.access_token) {
+              try { localStorage.setItem('token', session.access_token); } catch {}
+            }
           }
         } else {
           setUser(null);
@@ -56,20 +94,19 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      // Preflight check against backend deletion list
-      try {
-        const resp = await fetch('/api/auth/can-login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email })
-        });
-        if (resp.ok) {
-          const data = await resp.json();
-          if (data && data.allowed === false) {
-            throw new Error('This account has been deleted.');
-          }
-        }
-      } catch (_) { /* non-fatal, continue to Supabase */ }
+      // Mandatory preflight check against backend deletion list (fail-closed)
+      const resp = await fetch('/api/auth/can-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      if (!resp.ok) {
+        throw new Error('Login temporarily unavailable. Please try again shortly.');
+      }
+      const pre = await resp.json();
+      if (!pre.allowed) {
+        throw new Error('This account has been deleted.');
+      }
 
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
