@@ -258,8 +258,12 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
 
     // STRONGER FILTERING: Immediate rejection for completely irrelevant content
     const completelyIrrelevantTerms = [
-      // Nature/plants (completely irrelevant to history)
-      'dinosaur', 'toy', 'bellflower', 'crocus', 'flower', 'bud', 'sprout', 'bloom', 'petal', 'tree', 'plant', 'garden', 'nature',
+      // Nature/plants (completely irrelevant to most history imagery)
+      // Expanded floral/plant list to aggressively filter flowers in historical contexts
+      'dinosaur', 'toy', 'bellflower', 'crocus', 'flower', 'flowers', 'bud', 'sprout', 'bloom', 'blossom', 'petal', 'petals',
+      'daisy', 'daisies', 'tulip', 'tulips', 'rose', 'roses', 'orchid', 'orchids', 'sunflower', 'sunflowers', 'lily', 'lilies',
+      'peony', 'peonies', 'gerbera', 'gerberas', 'marigold', 'marigolds', 'carnation', 'carnations', 'bouquet', 'bouquets',
+      'tree', 'trees', 'plant', 'plants', 'garden', 'gardens', 'nature',
       // Modern objects (completely irrelevant to ancient history)
       'car', 'vehicle', 'computer', 'phone', 'laptop', 'office', 'kitchen', 'bathroom', 'bedroom', 'furniture', 'building', 'house', 'apartment',
       // Generic landscape (completely irrelevant to history)
@@ -268,11 +272,18 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
       'sport', 'game', 'exercise', 'fitness', 'cooking', 'shopping', 'business', 'technology', 'digital', 'online', 'web', 'internet'
     ];
     
+    // If the course is clearly about art, be permissive with floral content (still-life, etc.)
+    const courseLooksLikeArt = /\bart(\s|$)|art history|painting|sculpture|still life|gallery|museum/i.test(`${courseTitle} ${courseSubject}`);
+
     for (const term of completelyIrrelevantTerms) {
       if (haystack.includes(term)) {
-        score -= 10000; // Immediate rejection for completely irrelevant terms
-        console.log(`[ImageScoring] IMMEDIATE REJECTION for completely irrelevant term "${term}": ${haystack.substring(0, 100)}`);
-        return score; // Return immediately to prevent further processing
+        // Allow florals only if course is art-related; otherwise reject in history contexts
+        if (!courseLooksLikeArt && isHistoricalContent) {
+          score -= 10000;
+          console.log(`[ImageScoring] IMMEDIATE REJECTION (historical) floral/irrelevant term "${term}" for ${courseTitle}`);
+          return score;
+        }
+        // For non-historical or art courses, fall through and continue normal scoring
       }
     }
 
@@ -584,6 +595,15 @@ function isBannedImageCandidate(candidate, courseId) {
             return true;
           }
           
+          // Additional floral filter for historical content (non-art)
+          const floralTerms = [
+            'flower','flowers','bud','sprout','bloom','blossom','petal','petals','daisy','daisies','tulip','tulips','rose','roses','orchid','orchids','sunflower','sunflowers','lily','lilies','peony','peonies','gerbera','gerberas','marigold','marigolds','carnation','carnations','bouquet','bouquets','garden','gardens'
+          ];
+          const subjectLooksLikeArt = subject.toLowerCase().includes('art') || subject.toLowerCase().includes('still life');
+          if (!subjectLooksLikeArt && containsAny(haystack, floralTerms)) {
+            return true;
+          }
+
           // Allow historical military terms for historical topics
           return false;
         }

@@ -54,6 +54,29 @@ const Dashboard = () => {
   // Report Problem modal state
   const [showReportProblem, setShowReportProblem] = useState(false);
   
+  // Helper function to show success toast with auto-dismiss
+  const showSuccessToastWithTimeout = useCallback((message, timeoutMs = 5000) => {
+    setSuccessMessage(message);
+    setShowSuccessToast(true);
+    
+    // Auto-dismiss after specified timeout
+    setTimeout(() => {
+      setShowSuccessToast(false);
+    }, timeoutMs);
+  }, []);
+
+  // Helper to refresh credits from backend and update state
+  const refreshCredits = useCallback(async () => {
+    try {
+      const creditsData = await api.getUserCredits();
+      if (creditsData && creditsData.credits !== undefined) {
+        setUserProfile(prev => ({ ...(prev || {}), courseCredits: creditsData.credits }));
+      }
+    } catch (e) {
+      logger.warn('⚠️ [DASHBOARD] Failed to refresh credits:', e?.message || e);
+    }
+  }, [api]);
+  
   // Get the user's name from backend profile data, fallback to auth context
   const userName = userProfile?.name || user?.name || user?.email || 'Guest';
   
@@ -135,13 +158,7 @@ const Dashboard = () => {
       
       if (recentCourses.length > 0) {
         logger.info('🎉 [DASHBOARD] Found recent courses, showing success message:', recentCourses.map(c => c.title));
-        setSuccessMessage(`Found ${recentCourses.length} recently generated course${recentCourses.length > 1 ? 's' : ''}!`);
-        setShowSuccessToast(true);
-        
-        // Hide success message after a delay
-        setTimeout(() => {
-          setShowSuccessToast(false);
-        }, 3000);
+        showSuccessToastWithTimeout(`Found ${recentCourses.length} recently generated course${recentCourses.length > 1 ? 's' : ''}!`, 3000);
       }
       
     } catch (error) {
@@ -223,8 +240,9 @@ const Dashboard = () => {
           if (Array.isArray(courses) && courses.length > currentCourseCount) {
             logger.info('🎉 [DASHBOARD] New course detected during monitoring!');
             setSavedCourses(courses);
-            setSuccessMessage('Course generation completed! New course found.');
-            setShowSuccessToast(true);
+            try { await refreshCredits(); } catch {}
+            showSuccessToastWithTimeout('Course generation completed! New course found.', 5000);
+            
             setError(null); // Clear any errors
             setIsGenerating(false); // Stop generation state just in case
             setIsMonitoring(false); // Stop monitoring
@@ -309,6 +327,7 @@ const Dashboard = () => {
     // Immediately update UI and start monitoring
     setShowNewCourseForm(false);
     setIsMonitoring(true);
+    try { await refreshCredits(); } catch {}
     setSuccessMessage(`Course generation for "${courseParams.prompt}" has started. It will appear on your dashboard shortly.`);
     setShowSuccessToast(true);
     
@@ -337,8 +356,15 @@ const Dashboard = () => {
         if (Array.isArray(newCourses) && newCourses.length > currentCount) {
           logger.info('🎉 [COURSE GENERATION] Second fallback refresh found new course!');
           setSavedCourses(newCourses);
+          try { await refreshCredits(); } catch {}
           setSuccessMessage('Course generation completed! New course found via fallback refresh.');
           setShowSuccessToast(true);
+          
+          // Auto-dismiss the success toast after 5 seconds
+          setTimeout(() => {
+            setShowSuccessToast(false);
+          }, 5000);
+          
           setIsGenerating(false);
           setIsMonitoring(false);
         }
@@ -348,6 +374,15 @@ const Dashboard = () => {
     }, 30000);
 
   }, [api, user?.id, savedCourses.length, fetchSavedCourses]);
+
+  // Periodic credits refresh (every 60s) to keep token count accurate while viewing dashboard
+  useEffect(() => {
+    if (!user) return;
+    const id = setInterval(() => {
+      try { refreshCredits(); } catch {}
+    }, 60000);
+    return () => clearInterval(id);
+  }, [user, refreshCredits]);
 
   // Drive ETA countdown while generating
   useEffect(() => {
@@ -591,6 +626,15 @@ const Dashboard = () => {
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
               </svg>
               <span className="font-medium">{successMessage}</span>
+              <button
+                onClick={() => setShowSuccessToast(false)}
+                className="ml-2 text-white hover:text-green-100 transition-colors duration-200"
+                title="Dismiss notification"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
           </div>
         )}
