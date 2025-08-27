@@ -18,6 +18,7 @@ const Register = () => {
   const navigate = useNavigate();
   const [captchaToken, setCaptchaToken] = useState();
   const captcha = useRef();
+  const [showCaptchaModal, setShowCaptchaModal] = useState(false);
 
   const handleFormSubmit = async (e) => {
     e.preventDefault();
@@ -35,6 +36,10 @@ const Register = () => {
       return setError('You must accept the User Agreement to create an account.');
     }
 
+    if (!captchaToken) {
+      setShowCaptchaModal(true);
+      return;
+    }
     // Move to payment step
     setCurrentStep(2);
   };
@@ -281,13 +286,7 @@ const Register = () => {
             </p>
           </div>
 
-          <div className="mt-3">
-            <HCaptcha
-              ref={captcha}
-              sitekey={import.meta.env.VITE_HCAPTCHA_SITEKEY || '47c451f8-8dde-4b54-b3b8-3ac6d1c26874'}
-              onVerify={(token) => setCaptchaToken(token)}
-            />
-          </div>
+          {/* Captcha is presented in a floating modal when needed */}
 
           <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
             <div className="text-center mb-6">
@@ -331,6 +330,33 @@ const Register = () => {
           </div>
         </div>
       </div>
+
+      {showCaptchaModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="relative bg-white rounded-lg shadow-lg p-6 w-full max-w-sm">
+            <button
+              type="button"
+              onClick={() => setShowCaptchaModal(false)}
+              className="absolute top-2 right-2 text-gray-500 hover:text-gray-700"
+              aria-label="Close captcha"
+              title="Close"
+            >
+              ×
+            </button>
+            <h3 className="text-lg font-semibold text-gray-900 mb-3 text-center">Verify you are human</h3>
+            <div className="flex justify-center">
+              <HCaptcha
+                ref={captcha}
+                sitekey={import.meta.env.VITE_HCAPTCHA_SITEKEY || '47c451f8-8dde-4b54-b3b8-3ac6d1c26874'}
+                onVerify={(token) => {
+                  setCaptchaToken(token);
+                  setShowCaptchaModal(false);
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     );
   }
 
