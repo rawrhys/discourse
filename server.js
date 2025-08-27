@@ -274,7 +274,7 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
     
     // If the course is clearly about art, be permissive with floral content (still-life, etc.)
     const courseLooksLikeArt = /\bart(\s|$)|art history|painting|sculpture|still life|gallery|museum/i.test(`${courseTitle} ${courseSubject}`);
-
+    
     for (const term of completelyIrrelevantTerms) {
       if (haystack.includes(term)) {
         // Allow florals only if course is art-related; otherwise reject in history contexts
@@ -603,7 +603,7 @@ function isBannedImageCandidate(candidate, courseId) {
           if (!subjectLooksLikeArt && containsAny(haystack, floralTerms)) {
             return true;
           }
-
+          
           // Allow historical military terms for historical topics
           return false;
         }
@@ -4210,7 +4210,7 @@ app.post('/api/auth/login', async (req, res) => {
         return res.status(403).json({ error: 'Account has been deleted. Please contact support if this is unexpected.', code: 'ACCOUNT_DELETED' });
       }
     } catch {}
-
+      
     // --- Local User Sync ---
     // Ensure local user exists and has credits
     let localUser = db.data.users.find((u) => u.id === data.user.id);
