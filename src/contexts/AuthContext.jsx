@@ -56,6 +56,21 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
+      // Preflight check against backend deletion list
+      try {
+        const resp = await fetch('/api/auth/can-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data && data.allowed === false) {
+            throw new Error('This account has been deleted.');
+          }
+        }
+      } catch (_) { /* non-fatal, continue to Supabase */ }
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,

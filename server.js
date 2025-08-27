@@ -4281,6 +4281,23 @@ app.get('/api/user/current', authenticateToken, (req, res) => {
   }
 });
 
+// Public endpoint: preflight check whether an email is allowed to login
+app.post('/api/auth/can-login', async (req, res) => {
+  try {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    if (!email) {
+      return res.status(400).json({ allowed: false, reason: 'MISSING_EMAIL' });
+    }
+    // Ensure deletedUsers array exists
+    db.data.deletedUsers = Array.isArray(db.data.deletedUsers) ? db.data.deletedUsers : [];
+    const isDeleted = db.data.deletedUsers.some(d => String(d?.email || '').toLowerCase() === email);
+    return res.json({ allowed: !isDeleted, reason: isDeleted ? 'ACCOUNT_DELETED' : 'OK' });
+  } catch (e) {
+    console.error('[AUTH] can-login check failed:', e?.message);
+    return res.status(200).json({ allowed: true, reason: 'ERROR_FALLBACK' });
+  }
+});
+
 // Debug endpoint to check user credits
 app.get('/api/debug/credits', authenticateToken, (req, res) => {
   const user = req.user;
