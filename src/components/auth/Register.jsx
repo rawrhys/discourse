@@ -121,6 +121,7 @@ const Register = () => {
   // Step 1: Registration Form
   if (currentStep === 1) {
     return (
+      <>
       <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full space-y-8">
           <div>
@@ -264,6 +265,36 @@ const Register = () => {
           </form>
         </div>
       </div>
+
+      {showCaptchaModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="relative bg-white rounded-lg shadow-lg p-6 w-full max-w-sm">
+            <button
+              type="button"
+              onClick={() => setShowCaptchaModal(false)}
+              className="absolute top-2 right-2 text-gray-500 hover:text-gray-700"
+              aria-label="Close captcha"
+              title="Close"
+            >
+              ×
+            </button>
+            <h3 className="text-lg font-semibold text-gray-900 mb-3 text-center">Verify you are human</h3>
+            <div className="flex justify-center">
+              <HCaptcha
+                ref={captcha}
+                sitekey={import.meta.env.VITE_HCAPTCHA_SITEKEY || '47c451f8-8dde-4b54-b3b8-3ac6d1c26874'}
+                onVerify={(token) => {
+                  setCaptchaToken(token);
+                  setShowCaptchaModal(false);
+                  // Advance to payment step immediately after verification
+                  setCurrentStep(2);
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+      </>
     );
   }
 
