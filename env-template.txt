@@ -24,6 +24,9 @@ STRIPE_SECRET_KEY=your-stripe-secret-key-here
 STRIPE_PUBLISHABLE_KEY=pk_test_your-stripe-publishable-key-here
 STRIPE_WEBHOOK_SECRET=your-stripe-webhook-secret-here
 
+# Frontend Stripe Configuration
+VITE_STRIPE_PUBLISHABLE_KEY=pk_test_your-stripe-publishable-key-here
+
 # Build path for static files
 BUILD_PATH=./dist
 

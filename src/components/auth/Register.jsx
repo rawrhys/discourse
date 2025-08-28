@@ -138,31 +138,47 @@ const Register = () => {
 
     try {
       // Load Stripe
-      const stripe = await loadStripe('sb_publishable__L8wUuiplUn-qz6ZBk29gw_DvVzzqu3'); // your publishable key
+      const stripe = await loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_...'); // Replace with your actual Stripe publishable key
       
-      // Call a tiny Supabase Edge Function that creates the session
-      // (you could also call a regular server, but an Edge Function is quick)
-      const resp = await fetch('https://gaapqvkjblqvpokmhlmh.functions.supabase.co/create-checkout-session', {
+      if (!stripe) {
+        throw new Error('Failed to load Stripe');
+      }
+      
+      console.log('[Registration] Creating checkout session for email:', email);
+      
+      // Call our local server endpoint to create the Stripe checkout session
+      const resp = await fetch('/api/auth/create-checkout-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
       });
       
+      console.log('[Registration] Server response status:', resp.status);
+      
       if (!resp.ok) {
-        throw new Error('Failed to create checkout session');
+        const errorText = await resp.text();
+        console.error('[Registration] Server error response:', errorText);
+        throw new Error(`Failed to create checkout session: ${resp.status} ${errorText}`);
       }
       
-      const { sessionId } = await resp.json();
+      const responseData = await resp.json();
+      console.log('[Registration] Server response data:', responseData);
+      
+      if (!responseData.sessionId) {
+        throw new Error('No session ID received from server');
+      }
       
       // Redirect to Stripe checkout
-      const result = await stripe.redirectToCheckout({ sessionId });
+      const result = await stripe.redirectToCheckout({ sessionId: responseData.sessionId });
       
       if (result.error) {
         throw new Error(result.error.message);
       }
+      
+      console.log('[Registration] Stripe redirect successful');
     } catch (error) {
-      console.error('Payment redirect error:', error);
-      setError('Failed to redirect to payment. Please try again.');
+      console.error('[Registration] Payment redirect error:', error);
+      setError(`Failed to redirect to payment: ${error.message}`);
     }
   };
 
@@ -414,6 +430,16 @@ const Register = () => {
               >
                 Back to Form
               </button>
+              
+              {/* Fallback for testing - remove in production */}
+              {process.env.NODE_ENV === 'development' && (
+                <button
+                  onClick={() => handlePaymentComplete()}
+                  className="w-full flex justify-center py-2 px-4 border border-orange-300 rounded-md shadow-sm text-sm font-medium text-orange-700 bg-orange-50 hover:bg-orange-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
+                >
+                  Skip Payment (Dev Only)
+                </button>
+              )}
             </div>
           </div>
         </div>

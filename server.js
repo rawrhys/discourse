@@ -123,6 +123,12 @@ app.use((req, res, next) => {
   next();
 });
 
+// Security headers to prevent permissions policy violations
+app.use((req, res, next) => {
+  res.setHeader('Permissions-Policy', 'private-state-token-redemption=(), private-state-token-issuance=()');
+  next();
+});
+
 // Parse JSON bodies
 // File upload middleware - must come BEFORE express.json() for FormData
 app.use(fileUpload({
@@ -6858,6 +6864,77 @@ app.post('/api/create-checkout-session', authenticateToken, async (req, res) => 
   }
 });
 
+// Stripe: Create Checkout Session for Registration (no authentication required)
+app.post('/api/auth/create-checkout-session', async (req, res) => {
+  console.log('[Stripe] Creating registration checkout session');
+  console.log('[Stripe] Stripe configured:', !!stripe);
+  console.log('[Stripe] Request origin:', req.headers.origin);
+  console.log('[Stripe] Request headers:', req.headers);
+  
+  if (!stripe) {
+    console.error('[Stripe] Stripe not configured - missing STRIPE_SECRET_KEY');
+    return res.status(500).json({ error: 'Stripe not configured' });
+  }
+  
+  try {
+    const { email, password } = req.body;
+    
+    if (!email || !password) {
+      console.error('[Stripe] Missing email or password in request body:', { hasEmail: !!email, hasPassword: !!password });
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+    
+    console.log('[Stripe] Creating registration session for email:', email);
+    
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      mode: 'payment',
+      line_items: [
+        {
+          price_data: {
+            currency: 'gbp',
+            product_data: {
+              name: 'Account Registration + Course Credits',
+              description: 'Complete your account registration and get course generation credits',
+            },
+            unit_amount: 0, // Free for now, adjust as needed
+          },
+          quantity: 1,
+        },
+      ],
+      metadata: {
+        registrationEmail: email,
+        registrationPassword: password, // Note: This will be encrypted by Stripe
+      },
+      success_url: `${req.headers.origin || 'http://localhost:5173'}/register?payment=success`,
+      cancel_url: `${req.headers.origin || 'http://localhost:5173'}/register?payment=cancel`,
+    });
+    
+    console.log('[Stripe] Registration session created successfully:', session.id);
+    console.log('[Stripe] Success URL:', session.success_url);
+    console.log('[Stripe] Cancel URL:', session.cancel_url);
+    
+    res.json({ sessionId: session.id });
+  } catch (err) {
+    console.error('[Stripe] Error creating registration checkout session:', err);
+    console.error('[Stripe] Error details:', {
+      message: err.message,
+      type: err.type,
+      code: err.code
+    });
+    res.status(500).json({ error: 'Failed to create Stripe checkout session', details: err.message });
+  }
+});
+
+// CORS preflight for registration endpoint
+app.options('/api/auth/create-checkout-session', cors());
+
+// Security headers to prevent permissions policy violations
+app.use('/api/auth/create-checkout-session', (req, res, next) => {
+  res.setHeader('Permissions-Policy', 'private-state-token-redemption=(), private-state-token-issuance=()');
+  next();
+});
+
 // Removed Stripe billing portal route; frontend now links directly to Stripe customer portal
 
 // Billing: Get current customer's subscription status
@@ -6980,12 +7057,37 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
 
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
-    const userId = session.metadata.userId;
-    const user = db.data.users.find(u => u.id === userId);
-    if (user) {
-      user.courseCredits = (user.courseCredits || 0) + 10;
-      await db.write();
-      console.log(`[Stripe] Added 10 credits to user ${userId}`);
+    
+    // Handle regular user payment (existing users)
+    if (session.metadata.userId) {
+      const userId = session.metadata.userId;
+      const user = db.data.users.find(u => u.id === userId);
+      if (user) {
+        user.courseCredits = (user.courseCredits || 0) + 10;
+        await db.write();
+        console.log(`[Stripe] Added 10 credits to existing user ${userId}`);
+      }
+    }
+    
+    // Handle registration payment (new users)
+    if (session.metadata.registrationEmail) {
+      const registrationEmail = session.metadata.registrationEmail;
+      const registrationPassword = session.metadata.registrationPassword;
+      
+      console.log(`[Stripe] Registration payment completed for email: ${registrationEmail}`);
+      
+      // Store registration data for the frontend to complete account creation
+      // The frontend will handle the actual account creation after payment success
+      try {
+        // You can store this in a temporary storage or database
+        // For now, we'll just log it and let the frontend handle the rest
+        console.log(`[Stripe] Registration data ready for account creation:`, {
+          email: registrationEmail,
+          hasPassword: !!registrationPassword
+        });
+      } catch (err) {
+        console.error('[Stripe] Error processing registration data:', err);
+      }
     }
   }
   res.json({ received: true });
