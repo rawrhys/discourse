@@ -79,10 +79,10 @@ const app = express();
 import publicCourseSessionService from './src/services/PublicCourseSessionService.js';
 
 // --- CORE MIDDLEWARE ---
-// Explicitly declare permissions policy to silence PST warnings and ensure predictable behavior
+// Removed Private State Token restrictions to avoid console violations and allow embedded widgets to operate
 app.use((req, res, next) => {
   try {
-    res.setHeader('Permissions-Policy', 'private-state-token-issuance=(), private-state-token-redemption=()');
+    // Intentionally omit PST directives; other security headers are managed elsewhere
   } catch {}
   next();
 });

@@ -19,6 +19,7 @@ const Register = () => {
   const [captchaToken, setCaptchaToken] = useState();
   const captcha = useRef();
   const [showCaptchaModal, setShowCaptchaModal] = useState(false);
+  const PENDING_REG_KEY = 'pendingRegistration';
 
   const handleFormSubmit = async (e) => {
     e.preventDefault();
@@ -54,6 +55,21 @@ const Register = () => {
   const createAccountAfterPayment = async () => {
     setIsLoading(true);
     try {
+      // Retrieve pending registration details saved before redirect
+      let pending = null;
+      try {
+        pending = JSON.parse(localStorage.getItem(PENDING_REG_KEY) || 'null');
+      } catch {}
+
+      const finalEmail = pending?.email || email;
+      const finalName = pending?.name || name;
+      const finalPassword = pending?.password || password;
+      const finalPolicyVersion = pending?.policyVersion || '1.0';
+
+      if (!finalEmail || !finalName || !finalPassword) {
+        throw new Error('Missing registration details after payment. Please try again.');
+      }
+
       // Use the complete-registration endpoint for users who have paid
       const response = await fetch('/api/auth/complete-registration', {
         method: 'POST',
@@ -61,10 +77,10 @@ const Register = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          email,
-          name,
-          password,
-          policyVersion: '1.0'
+          email: finalEmail,
+          name: finalName,
+          password: finalPassword,
+          policyVersion: finalPolicyVersion
         }),
       });
 
@@ -73,8 +89,10 @@ const Register = () => {
         console.log('Account created successfully after payment:', data);
         
         // Now log in the user
-        await register(email, password, name, { gdprConsent: true, policyVersion: '1.0', captchaToken });
+        await register(finalEmail, finalPassword, finalName, { gdprConsent: true, policyVersion: finalPolicyVersion, captchaToken });
         try { captcha.current?.resetCaptcha(); } catch {}
+        // Clear pending registration details
+        try { localStorage.removeItem(PENDING_REG_KEY); } catch {}
         navigate('/dashboard');
       } else {
         const errorData = await response.json();
@@ -103,9 +121,19 @@ const Register = () => {
   };
 
   const handlePaymentRedirect = () => {
+    // Persist registration details across Stripe redirect
+    try {
+      localStorage.setItem(PENDING_REG_KEY, JSON.stringify({
+        email,
+        name,
+        password,
+        policyVersion: '1.0'
+      }));
+    } catch {}
+
     // Redirect to Stripe checkout
-    // After payment success, send them directly to dashboard where credits are available
-    const successUrl = encodeURIComponent(`${window.location.origin}/dashboard?payment=success`);
+    // Return to the registration page so we can complete account creation
+    const successUrl = encodeURIComponent(`${window.location.origin}/register?payment=success`);
     const cancelUrl = encodeURIComponent(`${window.location.origin}/register`);
     const stripeCheckoutUrl = `https://buy.stripe.com/3cIaEWgNC6uZdzx2SJdby00?success_url=${successUrl}&cancel_url=${cancelUrl}`;
     window.location.href = stripeCheckoutUrl;

@@ -14,8 +14,9 @@ const ForgotPassword = () => {
     setMessage('');
     try {
       setIsSubmitting(true);
+      const redirectTo = import.meta.env.VITE_SUPABASE_REDIRECT_URL || (window.location.origin + '/reset-password');
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin + '/reset-password'
+        redirectTo
       });
       if (error) throw error;
       setMessage('If an account exists for this email, a reset link has been sent.');

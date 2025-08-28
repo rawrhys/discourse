@@ -14,6 +14,7 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [captchaToken, setCaptchaToken] = useState();
   const [showCaptchaModal, setShowCaptchaModal] = useState(false);
+  const requireCaptcha = (import.meta.env.VITE_REQUIRE_LOGIN_CAPTCHA ?? 'true') !== 'false';
   const captcha = useRef();
 
   const handleSubmit = async (e) => {
@@ -22,7 +23,7 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      if (!captchaToken) {
+      if (requireCaptcha && !captchaToken) {
         setShowCaptchaModal(true);
         setIsLoading(false);
         return;
@@ -147,7 +148,7 @@ const Login = () => {
           </div>
         </form>
       </div>
-      {showCaptchaModal && (
+      {requireCaptcha && showCaptchaModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
           <div className="relative bg-white rounded-lg shadow-lg p-6 w-full max-w-sm">
             <button
