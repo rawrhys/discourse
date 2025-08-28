@@ -6864,8 +6864,8 @@ app.post('/api/create-checkout-session', authenticateToken, async (req, res) => 
       metadata: {
         userId: req.user.id,
       },
-      success_url: `${req.headers.origin || 'http://localhost:5173'}/dashboard?payment=success`,
-      cancel_url: `${req.headers.origin || 'http://localhost:5173'}/register?payment=cancel`,
+      success_url: `${req.headers.origin || 'https://thediscourse.ai'}/dashboard?payment=success`,
+      cancel_url: `${req.headers.origin || 'https://thediscourse.ai'}/register?payment=cancel`,
     });
     
     console.log('[Stripe] Session created successfully:', session.id);
@@ -6925,8 +6925,8 @@ app.post('/api/auth/create-checkout-session', async (req, res) => {
         registrationEmail: email,
         registrationPassword: password, // Note: This will be encrypted by Stripe
       },
-      success_url: `${req.headers.origin || 'http://localhost:5173'}/register?payment=success`,
-      cancel_url: `${req.headers.origin || 'http://localhost:5173'}/register?payment=cancel`,
+      success_url: `${req.headers.origin || 'https://thediscourse.ai'}/register?payment=success`,
+      cancel_url: `${req.headers.origin || 'https://thediscourse.ai'}/register?payment=cancel`,
     });
     
     console.log('[Stripe] Registration session created successfully:', session.id);
