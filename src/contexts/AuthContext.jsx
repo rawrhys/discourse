@@ -158,6 +158,9 @@ export const AuthProvider = ({ children }) => {
 
       if (data.user) {
         setUser(data.user);
+        if (data.session?.access_token) {
+          try { localStorage.setItem('token', data.session.access_token); } catch {}
+        }
         return { user: data.user, session: data.session };
       } else {
         throw new Error('No user data returned');

@@ -104,7 +104,8 @@ const Register = () => {
 
   const handlePaymentRedirect = () => {
     // Redirect to Stripe checkout
-    const successUrl = encodeURIComponent(`${window.location.origin}/register?payment=success`);
+    // After payment success, send them directly to dashboard where credits are available
+    const successUrl = encodeURIComponent(`${window.location.origin}/dashboard?payment=success`);
     const cancelUrl = encodeURIComponent(`${window.location.origin}/register`);
     const stripeCheckoutUrl = `https://buy.stripe.com/3cIaEWgNC6uZdzx2SJdby00?success_url=${successUrl}&cancel_url=${cancelUrl}`;
     window.location.href = stripeCheckoutUrl;

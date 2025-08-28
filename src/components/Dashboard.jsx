@@ -500,6 +500,21 @@ const Dashboard = () => {
 
 
   useEffect(() => {
+    // Handle redirect after payment success
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('payment') === 'success') {
+        // refresh credits and clean URL
+        if (typeof refreshCredits === 'function') {
+          refreshCredits();
+        }
+        const clean = window.location.pathname;
+        window.history.replaceState({}, document.title, clean);
+        setSuccessMessage('Payment successful! Your credits are updated.');
+        setShowSuccessToast(true);
+        setTimeout(() => setShowSuccessToast(false), 5000);
+      }
+    } catch {}
     // Fetch user profile when component mounts or user changes
     if (user) {
       fetchUserProfile();

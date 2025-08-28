@@ -79,6 +79,13 @@ const app = express();
 import publicCourseSessionService from './src/services/PublicCourseSessionService.js';
 
 // --- CORE MIDDLEWARE ---
+// Explicitly declare permissions policy to silence PST warnings and ensure predictable behavior
+app.use((req, res, next) => {
+  try {
+    res.setHeader('Permissions-Policy', 'private-state-token-issuance=(), private-state-token-redemption=()');
+  } catch {}
+  next();
+});
 // Apply compression to all responses
 // app.use(compression());
 
@@ -6833,7 +6840,7 @@ app.post('/api/create-checkout-session', authenticateToken, async (req, res) => 
         userId: req.user.id,
       },
       success_url: `${req.headers.origin || 'http://localhost:5173'}/dashboard?payment=success`,
-      cancel_url: `${req.headers.origin || 'http://localhost:5173'}/dashboard?payment=cancel`,
+      cancel_url: `${req.headers.origin || 'http://localhost:5173'}/register?payment=cancel`,
     });
     
     console.log('[Stripe] Session created successfully:', session.id);
