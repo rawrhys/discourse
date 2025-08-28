@@ -123,9 +123,28 @@ app.use((req, res, next) => {
   next();
 });
 
-// Security headers to prevent permissions policy violations
+// Security headers to prevent permissions policy violations and resource blocking
 app.use((req, res, next) => {
-  res.setHeader('Permissions-Policy', 'private-state-token-redemption=(), private-state-token-issuance=()');
+  res.setHeader('Permissions-Policy', 'payment=(self), geolocation=(self), microphone=(self), camera=(self), private-state-token-redemption=(), private-state-token-issuance=()');
+  
+  // Content Security Policy to allow Stripe resources and prevent violations
+  res.setHeader('Content-Security-Policy', [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://r.stripe.com",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: https: http:",
+    "font-src 'self' data:",
+    "connect-src 'self' https://api.stripe.com https://r.stripe.com https://js.stripe.com",
+    "frame-src 'self' https://js.stripe.com https://hooks.stripe.com",
+    "object-src 'none'",
+    "base-uri 'self'"
+  ].join('; '));
+  
+  // Additional headers to prevent Stripe resource blocking
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  
   next();
 });
 
@@ -6931,7 +6950,7 @@ app.options('/api/auth/create-checkout-session', cors());
 
 // Security headers to prevent permissions policy violations
 app.use('/api/auth/create-checkout-session', (req, res, next) => {
-  res.setHeader('Permissions-Policy', 'private-state-token-redemption=(), private-state-token-issuance=()');
+  res.setHeader('Permissions-Policy', 'payment=(self), geolocation=(self), microphone=(self), camera=(self), private-state-token-redemption=(), private-state-token-issuance=()');
   next();
 });
 
@@ -8730,5 +8749,64 @@ This is an automated notification from The Discourse AI platform.
     res.status(500).json({ error: 'Failed to submit problem report' });
   }
 });
+
+// Special handler for registration page to ensure proper security headers
+app.get('/register', (req, res, next) => {
+  // Set specific headers for the registration page
+  res.setHeader('Permissions-Policy', 'payment=(self), geolocation=(self), microphone=(self), camera=(self), private-state-token-redemption=(), private-state-token-issuance=()');
+  res.setHeader('Content-Security-Policy', [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://r.stripe.com",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: https: http:",
+    "font-src 'self' data:",
+    "connect-src 'self' https://api.stripe.com https://r.stripe.com https://js.stripe.com",
+    "frame-src 'self' https://js.stripe.com https://hooks.stripe.com",
+    "object-src 'none'",
+    "base-uri 'self'"
+  ].join('; '));
+  
+  next();
+});
+
+// Special handler for root route to ensure proper security headers
+app.get('/', (req, res, next) => {
+  // Set specific headers for the main page
+  res.setHeader('Permissions-Policy', 'payment=(self), geolocation=(self), microphone=(self), camera=(self), private-state-token-redemption=(), private-state-token-issuance=()');
+  res.setHeader('Content-Security-Policy', [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://r.stripe.com",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: https: http:",
+    "font-src 'self' data:",
+    "connect-src 'self' https://api.stripe.com https://r.stripe.com https://js.stripe.com",
+    "frame-src 'self' https://js.stripe.com https://hooks.stripe.com",
+    "object-src 'none'",
+    "base-uri 'self'"
+  ].join('; '));
+  
+  next();
+});
+
+// Catch-all handler for any other routes to ensure proper security headers
+app.use('*', (req, res, next) => {
+  // Only apply to HTML routes, not API routes
+  if (!req.path.startsWith('/api/') && !req.path.startsWith('/assets/') && !req.path.startsWith('/data/')) {
+    res.setHeader('Permissions-Policy', 'payment=(self), geolocation=(self), microphone=(self), camera=(self), private-state-token-redemption=(), private-state-token-issuance=()');
+    res.setHeader('Content-Security-Policy', [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://r.stripe.com",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: https: http:",
+      "font-src 'self' data:",
+      "connect-src 'self' https://api.stripe.com https://r.stripe.com https://js.stripe.com",
+      "frame-src 'self' https://js.stripe.com https://hooks.stripe.com",
+      "object-src 'none'",
+      "base-uri 'self'"
+    ].join('; '));
+  }
+  next();
+});
+
 export { app, db, httpServer as server };
 
