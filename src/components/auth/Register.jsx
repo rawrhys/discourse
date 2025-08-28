@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
+import { loadStripe } from '@stripe/stripe-js';
 
 const Register = () => {
   const [name, setName] = useState('');
@@ -120,7 +121,11 @@ const Register = () => {
     }
   };
 
-  const handlePaymentRedirect = () => {
+  const handlePaymentRedirect = async () => {
+    // Store email/password in sessionStorage for the webhook
+    sessionStorage.setItem('reg_email', email);
+    sessionStorage.setItem('reg_password', password);
+    
     // Persist registration details across Stripe redirect
     try {
       localStorage.setItem(PENDING_REG_KEY, JSON.stringify({
@@ -131,12 +136,34 @@ const Register = () => {
       }));
     } catch {}
 
-    // Redirect to Stripe checkout
-    // Return to the registration page so we can complete account creation
-    const successUrl = encodeURIComponent(`${window.location.origin}/register?payment=success`);
-    const cancelUrl = encodeURIComponent(`${window.location.origin}/register`);
-    const stripeCheckoutUrl = `https://buy.stripe.com/3cIaEWgNC6uZdzx2SJdby00?success_url=${successUrl}&cancel_url=${cancelUrl}`;
-    window.location.href = stripeCheckoutUrl;
+    try {
+      // Load Stripe
+      const stripe = await loadStripe('sb_publishable__L8wUuiplUn-qz6ZBk29gw_DvVzzqu3'); // your publishable key
+      
+      // Call a tiny Supabase Edge Function that creates the session
+      // (you could also call a regular server, but an Edge Function is quick)
+      const resp = await fetch('https://gaapqvkjblqvpokmhlmh.functions.supabase.co/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      
+      if (!resp.ok) {
+        throw new Error('Failed to create checkout session');
+      }
+      
+      const { sessionId } = await resp.json();
+      
+      // Redirect to Stripe checkout
+      const result = await stripe.redirectToCheckout({ sessionId });
+      
+      if (result.error) {
+        throw new Error(result.error.message);
+      }
+    } catch (error) {
+      console.error('Payment redirect error:', error);
+      setError('Failed to redirect to payment. Please try again.');
+    }
   };
 
   // Check for payment success on component mount
