@@ -6689,7 +6689,7 @@ app.get('/api/captcha/verify/:courseId',
     }
     
     console.log(`[API] Generated CAPTCHA for course ${courseId}:`, { 
-      challenge: challengeData,
+      challenge: challengeData, 
       challengeKey: newChallengeKey,
       type: selectedType.type,
       answer: challengeInfo.answer
@@ -9204,5 +9204,18 @@ app.use('*', (req, res, next) => {
   next();
 });
 
-export { app, db, httpServer as server };
+export { app, db, httpServer as server, startServer };
+
+// Start the server if this file is run directly
+if (import.meta.url === `file://${process.argv[1]}`) {
+  startServer()
+    .then((httpServer) => {
+      console.log('✅ Server started successfully!');
+      console.log('🌐 Server is running and ready to accept connections');
+    })
+    .catch((error) => {
+      console.error('❌ Failed to start server:', error);
+      process.exit(1);
+    });
+}
 
