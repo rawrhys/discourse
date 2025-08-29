@@ -9,9 +9,18 @@ import logger from '../utils/logger';
 const apiClient = async (url, options = {}) => {
   const { onProgress, ...fetchOptions } = options;
   
-  // Get the current session from Supabase
-  const { data: { session } } = await supabase.auth.getSession();
-  const token = session?.access_token;
+  // Get token from localStorage (for local authentication) or Supabase session
+  let token = localStorage.getItem('token');
+  
+  // If no token in localStorage, try to get from Supabase session
+  if (!token) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      token = session?.access_token;
+    } catch (error) {
+      console.warn('Failed to get Supabase session:', error);
+    }
+  }
   
   const defaultHeaders = {
     'Content-Type': 'application/json',

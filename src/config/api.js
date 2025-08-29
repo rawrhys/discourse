@@ -7,11 +7,10 @@ const inferDefaultBaseUrl = () => {
       const hostname = window.location.hostname;
       const port = window.location.port;
       const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
-      const isDevServer = port === '5173' || port === '3000' || port === '8080';
       
-      if (isLocalhost && isDevServer) {
-        // In development, use the Vite dev server proxy
-        return ''; // Empty string means use relative URLs, which will be handled by Vite's proxy
+      // Always use local server when running on localhost (any port)
+      if (isLocalhost) {
+        return 'http://localhost:4003';
       }
       
       // For production, check if we're on the same domain as the API
@@ -20,11 +19,11 @@ const inferDefaultBaseUrl = () => {
         return ''; // Use relative URLs for same-domain deployment
       }
       
-      // For different domains or when frontend is not on theiscourse.ai, use the full API URL
-      return 'https://thediscourse.ai';
+      // For other cases, default to local server for development
+      return 'http://localhost:4003';
     }
   } catch (_) {}
-  return 'https://thediscourse.ai'; // Default to production API for better compatibility
+  return 'http://localhost:4003'; // Default to local server for development
 };
 
 export const API_BASE_URL = inferDefaultBaseUrl();
