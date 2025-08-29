@@ -6930,10 +6930,11 @@ app.post('/api/auth/create-checkout-session', async (req, res) => {
     });
     
     console.log('[Stripe] Registration session created successfully:', session.id);
+    console.log('[Stripe] Checkout URL:', session.url);
     console.log('[Stripe] Success URL:', session.success_url);
     console.log('[Stripe] Cancel URL:', session.cancel_url);
     
-    res.json({ sessionId: session.id });
+    res.json({ url: session.url });
   } catch (err) {
     console.error('[Stripe] Error creating registration checkout session:', err);
     console.error('[Stripe] Error details:', {

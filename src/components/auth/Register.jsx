@@ -157,12 +157,12 @@ const Register = () => {
       const responseData = await resp.json();
       console.log('[Registration] Server response data:', responseData);
       
-      if (!responseData.sessionId) {
-        throw new Error('No session ID received from server');
+      if (!responseData.url) {
+        throw new Error('No checkout URL received from server');
       }
       
-      // Redirect directly to Stripe checkout using the session ID
-      window.location = `https://checkout.stripe.com/pay/${responseData.sessionId}`;
+      // Redirect directly to Stripe checkout using the provided URL
+      window.location = responseData.url;
       
       console.log('[Registration] Stripe redirect successful');
     } catch (error) {
