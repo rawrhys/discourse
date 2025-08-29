@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Auth Fix Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; color: #155724; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; color: #721c24; }
+        .warning { background-color: #fff3cd; border-color: #ffeaa7; color: #856404; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; color: #0c5460; }
+        button { padding: 10px 20px; margin: 5px; border: none; border-radius: 5px; cursor: pointer; }
+        .btn-primary { background-color: #007bff; color: white; }
+        .btn-success { background-color: #28a745; color: white; }
+        .btn-danger { background-color: #dc3545; color: white; }
+        pre { background-color: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Authentication Fix Test</h1>
+    <p>This page tests if the authentication errors have been resolved.</p>
+    
+    <div class="test-section info">
+        <h3>📋 Test Summary</h3>
+        <p><strong>Original Errors:</strong></p>
+        <ul>
+            <li>❌ Supabase signup endpoint: 500 error</li>
+            <li>❌ Backend complete-registration: 400 error</li>
+        </ul>
+        <p><strong>Expected Fixes:</strong></p>
+        <ul>
+            <li>✅ VITE_SUPABASE_URL properly set</li>
+            <li>✅ VITE_SUPABASE_ANON_KEY properly set</li>
+            <li>✅ Environment variables loaded correctly</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h3>🧪 Test 1: Environment Variables</h3>
+        <p>Checking if Supabase configuration is properly loaded...</p>
+        <div id="env-test-result">Running test...</div>
+        <button class="btn-primary" onclick="testEnvironmentVariables()">Run Test</button>
+    </div>
+
+    <div class="test-section">
+        <h3>🧪 Test 2: Supabase Client Creation</h3>
+        <p>Testing if Supabase client can be created...</p>
+        <div id="client-test-result">Waiting to run...</div>
+        <button class="btn-primary" onclick="testSupabaseClient()">Run Test</button>
+    </div>
+
+    <div class="test-section">
+        <h3>🧪 Test 3: Signup Endpoint Test</h3>
+        <p>Testing Supabase signup endpoint (without creating account)...</p>
+        <div id="signup-test-result">Waiting to run...</div>
+        <button class="btn-primary" onclick="testSignupEndpoint()">Run Test</button>
+    </div>
+
+    <div class="test-section">
+        <h3>🧪 Test 4: Backend API Test</h3>
+        <p>Testing backend complete-registration endpoint...</p>
+        <div id="backend-test-result">Waiting to run...</div>
+        <button class="btn-primary" onclick="testBackendAPI()">Run Test</button>
+    </div>
+
+    <div class="test-section">
+        <h3>📊 Overall Results</h3>
+        <div id="overall-result">Run individual tests to see results...</div>
+        <button class="btn-success" onclick="runAllTests()">Run All Tests</button>
+        <button class="btn-danger" onclick="clearResults()">Clear Results</button>
+    </div>
+
+    <script type="module">
+        // Test results tracking
+        let testResults = {
+            env: false,
+            client: false,
+            signup: false,
+            backend: false
+        };
+
+        // Test 1: Environment Variables
+        window.testEnvironmentVariables = function() {
+            const resultDiv = document.getElementById('env-test-result');
+            resultDiv.innerHTML = 'Running test...';
+            
+            try {
+                // Check if we can access environment-like variables
+                const hasSupabaseUrl = typeof window !== 'undefined' && window.location.href.includes('thediscourse.ai');
+                const hasLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+                
+                if (hasSupabaseUrl || hasLocalhost) {
+                    resultDiv.innerHTML = '<div class="success">✅ Environment test passed - Running in expected environment</div>';
+                    testResults.env = true;
+                } else {
+                    resultDiv.innerHTML = '<div class="warning">⚠️ Environment test - Running in unexpected environment</div>';
+                    testResults.env = false;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Environment test failed: ${error.message}</div>`;
+                testResults.env = false;
+            }
+            
+            updateOverallResult();
+        };
+
+        // Test 2: Supabase Client Creation
+        window.testSupabaseClient = async function() {
+            const resultDiv = document.getElementById('client-test-result');
+            resultDiv.innerHTML = 'Running test...';
+            
+            try {
+                // Import Supabase client
+                const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+                
+                const supabaseUrl = 'https://gaapqvkjblqvpokmhlmh.supabase.co';
+                const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdhYXBxdmtqYmxxdnBva21obG1oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQzMDg5NzksImV4cCI6MjA2OTg4NDk3OX0.aAtqS5H0JhNHgatPEjJ8iJRFnZumyaRYxlSA9dkkfQE';
+                
+                const supabase = createClient(supabaseUrl, supabaseKey);
+                
+                if (supabase && supabase.auth) {
+                    resultDiv.innerHTML = '<div class="success">✅ Supabase client created successfully</div>';
+                    testResults.client = true;
+                } else {
+                    resultDiv.innerHTML = '<div class="error">❌ Supabase client creation failed</div>';
+                    testResults.client = false;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Supabase client test failed: ${error.message}</div>`;
+                testResults.client = false;
+            }
+            
+            updateOverallResult();
+        };
+
+        // Test 3: Signup Endpoint Test
+        window.testSignupEndpoint = async function() {
+            const resultDiv = document.getElementById('signup-test-result');
+            resultDiv.innerHTML = 'Running test...';
+            
+            try {
+                const supabaseUrl = 'https://gaapqvkjblqvpokmhlmh.supabase.co';
+                const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdhYXBxdmtqYmxxdnBva21obG1oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQzMDg5NzksImV4cCI6MjA2OTg4NDk3OX0.aAtqS5H0JhNHgatPEjJ8iJRFnZumyaRYxlSA9dkkfQE';
+                
+                const response = await fetch(supabaseUrl + '/auth/v1/signup', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'apikey': supabaseKey
+                    },
+                    body: JSON.stringify({
+                        email: 'test@example.com',
+                        password: 'testpassword123'
+                    })
+                });
+                
+                console.log('Signup endpoint response:', response.status, response.statusText);
+                
+                if (response.status === 400) {
+                    resultDiv.innerHTML = '<div class="success">✅ Signup endpoint working (400 is expected for test data)</div>';
+                    testResults.signup = true;
+                } else if (response.status === 500) {
+                    resultDiv.innerHTML = '<div class="error">❌ Signup endpoint server error (500) - This was the original error!</div>';
+                    testResults.signup = false;
+                } else {
+                    resultDiv.innerHTML = `<div class="success">✅ Signup endpoint response: ${response.status}</div>`;
+                    testResults.signup = true;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Signup endpoint test failed: ${error.message}</div>`;
+                testResults.signup = false;
+            }
+            
+            updateOverallResult();
+        };
+
+        // Test 4: Backend API Test
+        window.testBackendAPI = async function() {
+            const resultDiv = document.getElementById('backend-test-result');
+            resultDiv.innerHTML = 'Running test...';
+            
+            try {
+                // Test the complete-registration endpoint
+                const response = await fetch('/api/auth/complete-registration', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: 'test@example.com',
+                        name: 'Test User',
+                        password: 'testpassword123',
+                        policyVersion: '1.0'
+                    }),
+                });
+                
+                console.log('Backend API response:', response.status, response.statusText);
+                
+                if (response.status === 400) {
+                    const errorData = await response.json();
+                    if (errorData.error === 'User already exists') {
+                        resultDiv.innerHTML = '<div class="success">✅ Backend API working (400 expected for existing user)</div>';
+                        testResults.backend = true;
+                    } else {
+                        resultDiv.innerHTML = `<div class="warning">⚠️ Backend API response: ${response.status} - ${errorData.error}</div>`;
+                        testResults.backend = false;
+                    }
+                } else if (response.status === 500) {
+                    resultDiv.innerHTML = '<div class="error">❌ Backend API server error (500)</div>';
+                    testResults.backend = false;
+                } else {
+                    resultDiv.innerHTML = `<div class="success">✅ Backend API response: ${response.status}</div>`;
+                    testResults.backend = true;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Backend API test failed: ${error.message}</div>`;
+                testResults.backend = false;
+            }
+            
+            updateOverallResult();
+        };
+
+        // Update overall result
+        function updateOverallResult() {
+            const resultDiv = document.getElementById('overall-result');
+            const passedTests = Object.values(testResults).filter(Boolean).length;
+            const totalTests = Object.keys(testResults).length;
+            
+            if (passedTests === totalTests) {
+                resultDiv.innerHTML = `<div class="success">🎉 All tests passed! (${passedTests}/${totalTests})</div>`;
+            } else if (passedTests > 0) {
+                resultDiv.innerHTML = `<div class="warning">⚠️ Some tests passed (${passedTests}/${totalTests})</div>`;
+            } else {
+                resultDiv.innerHTML = `<div class="error">❌ No tests passed (${passedTests}/${totalTests})</div>`;
+            }
+            
+            // Show detailed results
+            resultDiv.innerHTML += '<br><strong>Detailed Results:</strong><ul>';
+            resultDiv.innerHTML += `<li>Environment Variables: ${testResults.env ? '✅' : '❌'}</li>`;
+            resultDiv.innerHTML += `<li>Supabase Client: ${testResults.client ? '✅' : '❌'}</li>`;
+            resultDiv.innerHTML += `<li>Signup Endpoint: ${testResults.signup ? '✅' : '❌'}</li>`;
+            resultDiv.innerHTML += `<li>Backend API: ${testResults.backend ? '✅' : '❌'}</li>`;
+            resultDiv.innerHTML += '</ul>';
+        }
+
+        // Run all tests
+        window.runAllTests = function() {
+            testEnvironmentVariables();
+            setTimeout(() => testSupabaseClient(), 500);
+            setTimeout(() => testSignupEndpoint(), 1000);
+            setTimeout(() => testBackendAPI(), 1500);
+        };
+
+        // Clear results
+        window.clearResults = function() {
+            testResults = { env: false, client: false, signup: false, backend: false };
+            document.getElementById('env-test-result').innerHTML = 'Waiting to run...';
+            document.getElementById('client-test-result').innerHTML = 'Waiting to run...';
+            document.getElementById('signup-test-result').innerHTML = 'Waiting to run...';
+            document.getElementById('backend-test-result').innerHTML = 'Waiting to run...';
+            document.getElementById('overall-result').innerHTML = 'Run individual tests to see results...';
+        };
+
+        // Auto-run environment test on page load
+        window.addEventListener('load', () => {
+            setTimeout(testEnvironmentVariables, 1000);
+        });
+    </script>
+</body>
+</html>

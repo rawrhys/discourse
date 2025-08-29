@@ -23,7 +23,7 @@ pm2 delete discourse-app 2>/dev/null
 
 # Start the application
 echo "🚀 Starting Discourse app..."
-pm2 start ecosystem.config.json
+pm2 start ecosystem.config.cjs
 
 # Show status
 echo

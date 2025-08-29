@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Auth Test</title>
+</head>
+<body>
+    <h1>Authentication Test</h1>
+    <div id="status">Testing...</div>
+    
+    <script type="module">
+        import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+        
+        const supabaseUrl = 'https://gaapqvkjblqvpokmhlmh.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdhYXBxdmtqYmxxdnBva21obG1oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQzMDg5NzksImV4cCI6MjA2OTg4NDk3OX0.aAtqS5H0JhNHgatPEjJ8iJRFnZumyaRYxlSA9dkkfQE';
+        
+        const supabase = createClient(supabaseUrl, supabaseKey);
+        
+        async function testAuth() {
+            try {
+                const statusDiv = document.getElementById('status');
+                
+                // Test 1: Check if Supabase client can be created
+                statusDiv.innerHTML = 'Testing Supabase client creation...';
+                if (supabase) {
+                    console.log('✅ Supabase client created successfully');
+                }
+                
+                // Test 2: Check if we can access auth methods
+                statusDiv.innerHTML = 'Testing auth methods...';
+                if (supabase.auth) {
+                    console.log('✅ Auth methods available');
+                }
+                
+                // Test 3: Test signup endpoint (without actually creating account)
+                statusDiv.innerHTML = 'Testing signup endpoint...';
+                try {
+                    const response = await fetch(supabaseUrl + '/auth/v1/signup', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'apikey': supabaseKey
+                        },
+                        body: JSON.stringify({
+                            email: 'test@example.com',
+                            password: 'testpassword123'
+                        })
+                    });
+                    
+                    console.log('Signup endpoint response:', response.status, response.statusText);
+                    
+                    if (response.status === 400) {
+                        statusDiv.innerHTML = '✅ Signup endpoint working (400 is expected for test data)';
+                    } else if (response.status === 500) {
+                        statusDiv.innerHTML = '❌ Signup endpoint server error (500)';
+                    } else {
+                        statusDiv.innerHTML = `✅ Signup endpoint response: ${response.status}`;
+                    }
+                } catch (error) {
+                    console.error('Signup test error:', error);
+                    statusDiv.innerHTML = '❌ Signup endpoint test failed: ' + error.message;
+                }
+                
+            } catch (error) {
+                console.error('Test error:', error);
+                document.getElementById('status').innerHTML = '❌ Test failed: ' + error.message;
+            }
+        }
+        
+        testAuth();
+    </script>
+</body>
+</html>

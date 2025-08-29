@@ -20,7 +20,7 @@ npx pm2 delete discourse-app >nul 2>&1
 
 REM Start the application
 echo 🚀 Starting Discourse app...
-npx pm2 start ecosystem.config.json
+npx pm2 start ecosystem.config.cjs
 
 REM Show status
 echo.
