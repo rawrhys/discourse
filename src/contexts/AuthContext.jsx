@@ -146,7 +146,7 @@ export const AuthProvider = ({ children }) => {
             gdpr_policy_version: options.policyVersion || '1.0',
             gdpr_consent_at: new Date().toISOString()
           },
-          emailRedirectTo: window.location.origin,
+          emailRedirectTo: `${window.location.origin}/verify-email`,
           ...(options.captchaToken ? { captchaToken: options.captchaToken } : {}),
         }
       });
@@ -157,11 +157,14 @@ export const AuthProvider = ({ children }) => {
       }
 
       if (data.user) {
-        setUser(data.user);
-        if (data.session?.access_token) {
-          try { localStorage.setItem('token', data.session.access_token); } catch {}
+        // Don't set user immediately if email confirmation is required
+        if (data.user.email_confirmed_at) {
+          setUser(data.user);
+          if (data.session?.access_token) {
+            try { localStorage.setItem('token', data.session.access_token); } catch {}
+          }
         }
-        return { user: data.user, session: data.session };
+        return { user: data.user, session: data.session, requiresEmailConfirmation: !data.user.email_confirmed_at };
       } else {
         throw new Error('No user data returned');
       }

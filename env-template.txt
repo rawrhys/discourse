@@ -1,5 +1,6 @@
 # Frontend API Configuration
 VITE_API_BASE_URL=https://thediscourse.ai
+FRONTEND_URL=https://thediscourse.ai
 
 # Backend Server Configuration
 PORT=4003

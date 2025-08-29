@@ -17,6 +17,39 @@ A modern React application template with Vite, Tailwind CSS, and more.
 3. Start development server: `npm run dev`
 4. Build for production: `npm run build`
 
+## Email Verification System
+
+The application now includes a comprehensive email verification system that requires users to verify their email address before accessing the platform.
+
+### Features
+
+- ✅ SMTP-based email delivery
+- ✅ Secure verification tokens
+- ✅ 24-hour token expiration
+- ✅ Resend verification functionality
+- ✅ Integration with Supabase authentication
+
+### Configuration
+
+1. Set up your SMTP server credentials
+2. Configure the following environment variables:
+   - `SMTP_HOST`: Your SMTP server address
+   - `SMTP_PORT`: SMTP port (usually 587 or 465)
+   - `SMTP_USER`: Your SMTP username
+   - `SMTP_PASS`: Your SMTP password
+   - `SMTP_FROM`: From email address
+   - `FRONTEND_URL`: Your frontend URL for verification links
+
+### How It Works
+
+1. User registers an account
+2. Verification email is sent via SMTP
+3. User clicks verification link in email
+4. Account is verified and user can log in
+5. Unverified users cannot access protected routes
+
+For detailed setup instructions, see `EMAIL_VERIFICATION_SETUP.md`.
+
 ## Stripe Integration
 
 The application includes Stripe payment integration for purchasing course credits.
