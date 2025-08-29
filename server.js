@@ -4523,36 +4523,36 @@ app.post('/api/auth/login', async (req, res) => {
       
     // --- Block login for deleted users (defense in depth) ---
 
-    let localUser = db.data.users.find((u) => u.id === data.user.id);
-    if (!localUser) {
-        localUser = {
+    let existingUser = db.data.users.find((u) => u.id === data.user.id);
+    if (!existingUser) {
+        existingUser = {
             id: data.user.id,
             email: data.user.email,
             name: data.user.user_metadata?.name || data.user.email.split('@')[0],
             createdAt: new Date().toISOString(),
             courseCredits: 0
         };
-        db.data.users.push(localUser);
+        db.data.users.push(existingUser);
         await db.write();
         
         // Assign onboarding course to new users
-        await assignOnboardingCourse(localUser.id);
+        await assignOnboardingCourse(existingUser.id);
     } else {
         // Only ensure credits exist, don't force minimum of 1
-        if (localUser.courseCredits === undefined || localUser.courseCredits === null) {
-            localUser.courseCredits = 0;
+        if (existingUser.courseCredits === undefined || existingUser.courseCredits === null) {
+            existingUser.courseCredits = 0;
             await db.write();
         }
         
         // Check if existing user needs onboarding course (only if they don't have one)
         const hasOnboardingCourse = db.data.courses.some(c => 
-          c.userId === localUser.id && c.id.includes('discourse-ai-onboarding')
+          c.userId === existingUser.id && c.id.includes('discourse-ai-onboarding')
         );
         if (!hasOnboardingCourse) {
-          await ensureOnboardingCourse(localUser.id);
+          await ensureOnboardingCourse(existingUser.id);
         } else {
                   // Clean up any duplicate onboarding courses
-        await cleanupDuplicateOnboardingCourses(localUser.id);
+        await cleanupDuplicateOnboardingCourses(existingUser.id);
       }
     }
 
@@ -4564,10 +4564,10 @@ app.post('/api/auth/login', async (req, res) => {
         message: 'Login successful',
         token: data.session.access_token,
         user: {
-            id: localUser.id,
-            email: localUser.email,
-            name: localUser.name,
-            courseCredits: localUser.courseCredits,
+            id: existingUser.id,
+            email: existingUser.email,
+            name: existingUser.name,
+            courseCredits: existingUser.courseCredits,
         }
     });
 
