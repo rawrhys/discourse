@@ -3853,6 +3853,31 @@ app.post('/api/ai/generate-bibliography', authenticateToken, async (req, res, ne
     }
 });
 
+// Main application health check
+app.get('/api/health', (req, res) => {
+  try {
+    const health = {
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      memory: process.memoryUsage(),
+      version: process.version,
+      platform: process.platform,
+      pid: process.pid
+    };
+    
+    console.log(`[HEALTH] Health check requested:`, health);
+    res.json(health);
+  } catch (error) {
+    console.error(`[HEALTH] Error in health check:`, error);
+    res.status(500).json({ 
+      status: 'unhealthy',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // AI service health check
 app.get('/api/ai/health', (req, res) => {
   try {

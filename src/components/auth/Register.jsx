@@ -46,6 +46,17 @@ const Register = () => {
     await handlePaymentRedirect();
   };
 
+  const resetCaptcha = () => {
+    setCaptchaToken(null);
+    if (captcha.current) {
+      try {
+        captcha.current.resetCaptcha();
+      } catch (error) {
+        console.log('Captcha reset error:', error);
+      }
+    }
+  };
+
   const handlePaymentComplete = () => {
     setIsPaymentComplete(true);
     setCurrentStep(3);
@@ -376,8 +387,16 @@ const Register = () => {
                 onVerify={(token) => {
                   setCaptchaToken(token);
                   setShowCaptchaModal(false);
-                  // Don't advance to step 2 - stay on form step
-                  // setCurrentStep(2);
+                }}
+                onError={(error) => {
+                  console.error('Captcha error:', error);
+                  setError('Captcha verification failed. Please try again.');
+                  resetCaptcha();
+                }}
+                onExpire={() => {
+                  console.log('Captcha expired');
+                  setError('Captcha expired. Please complete it again.');
+                  resetCaptcha();
                 }}
               />
             </div>
