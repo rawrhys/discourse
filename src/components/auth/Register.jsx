@@ -138,7 +138,7 @@ const Register = () => {
 
     try {
       // Load Stripe
-      const stripe = await loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_live_51RzaHbBTrJ3tlY9wZwFPhjGTB6hHdffJzR56mwOWAnH7hCr50Kdouy0ejZx4TyJxM9bE7IMh4lcUHUwVebKcr321009eGCqD2l'); // Live mode publishable key
+      const stripe = Stripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_live_51RzaHbBTrJ3tlY9wZwFPhjGTB6hHdffJzR56mwOWAnH7hCr50Kdouy0ejZx4TyJxM9bE7IMh4lcUHUwVebKcr321009eGCqD2l'); // Live mode publishable key
       
       if (!stripe) {
         throw new Error('Failed to load Stripe');

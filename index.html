@@ -10,6 +10,9 @@
   <!-- Permissions Policy to prevent console violations -->
   <meta http-equiv="Permissions-Policy" content="payment=(self), geolocation=(self), microphone=(self), camera=(self), private-state-token-redemption=(), private-state-token-issuance=()">
   
+  <!-- Stripe.js - Include before other scripts -->
+  <script src="https://js.stripe.com/v3/"></script>
+  
 
   
   <!-- Removed problematic Stripe script that was causing CSP violations -->
