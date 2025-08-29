@@ -13,7 +13,7 @@ const Register = () => {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [currentStep, setCurrentStep] = useState(1); // 1: form, 2: payment, 3: processing
+  const [currentStep, setCurrentStep] = useState(1); // 1: form, 3: processing
   const [isPaymentComplete, setIsPaymentComplete] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
@@ -102,7 +102,7 @@ const Register = () => {
       }
     } catch (error) {
       setError(error?.message || 'Failed to create an account. Please try again.');
-      setCurrentStep(2); // Go back to payment step if account creation fails
+      // No need to go back to payment step since we go directly to Stripe
     } finally {
       setIsLoading(false);
     }
@@ -116,7 +116,7 @@ const Register = () => {
       navigate('/dashboard');
     } catch (error) {
       setError(error?.message || 'Failed to create an account. Please try again.');
-      setCurrentStep(2); // Go back to payment step if account creation fails
+      // No need to go back to payment step since we go directly to Stripe
     } finally {
       setIsLoading(false);
     }
@@ -332,7 +332,7 @@ const Register = () => {
                 type="submit"
                 className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
-                {isLoading ? 'Processing...' : 'Proceed to Payment'}
+                {isLoading ? 'Processing...' : 'Create Account'}
               </button>
             </div>
           </form>
@@ -359,8 +359,8 @@ const Register = () => {
                 onVerify={(token) => {
                   setCaptchaToken(token);
                   setShowCaptchaModal(false);
-                  // Advance to payment step immediately after verification
-                  setCurrentStep(2);
+                  // Don't advance to step 2 - stay on form step
+                  // setCurrentStep(2);
                 }}
               />
             </div>
@@ -371,114 +371,7 @@ const Register = () => {
     );
   }
 
-  // Step 2: Payment Required (REMOVED - going directly to Stripe)
-  /*
-  if (currentStep === 2) {
-    return (
-      <>
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full space-y-8">
-          <div>
-            <img
-              src={"/assets/images/discourse-logo.png"}
-              alt="Discourse Logo"
-              style={{ width: '200px', margin: '0 auto', display: 'block' }}
-            />
-            <h2 className="mt-1 text-center text-3xl font-extrabold text-gray-900">
-              Complete Your Registration
-            </h2>
-            <p className="mt-2 text-center text-sm text-gray-600">
-              To create your account, please complete the payment below
-            </p>
-          </div>
 
-          {/* Captcha is presented in a floating modal when needed */}
-
-          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-            <div className="text-center mb-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Account Setup Required</h3>
-              <p className="text-sm text-gray-600">
-                Your account details have been saved. Complete your registration by purchasing course credits.
-              </p>
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
-                <span className="text-sm font-medium text-gray-900">Account Creation</span>
-                <span className="text-sm text-gray-600">Free</span>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
-                <span className="text-sm font-medium text-gray-900">Course Credits</span>
-                <span className="text-sm text-gray-600">Free for a limited time</span>
-              </div>
-              <div className="border-t pt-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-base font-medium text-gray-900">Total</span>
-                  <span className="text-base font-medium text-gray-900">Free for a limited time</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-6 space-y-3">
-              <button
-                onClick={handlePaymentRedirect}
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-              >
-                Proceed to Payment
-              </button>
-              <button
-                onClick={() => setCurrentStep(1)}
-                className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-              >
-                Back to Form
-              </button>
-              
-              {/* Fallback for testing - remove in production */}
-              {process.env.NODE_ENV === 'development' && (
-                <button
-                  onClick={() => handlePaymentComplete()}
-                  className="w-full flex justify-center py-2 px-4 border border-orange-300 rounded-md shadow-sm text-sm font-medium text-orange-700 bg-orange-50 hover:bg-orange-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
-                >
-                  Skip Payment (Dev Only)
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {showCaptchaModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="relative bg-white rounded-lg shadow-lg p-6 w-full max-w-sm">
-            <button
-              type="button"
-              onClick={() => setShowCaptchaModal(false)}
-              className="absolute top-2 right-2 text-gray-500 hover:text-gray-700"
-              aria-label="Close captcha"
-              title="Close"
-            >
-              ×
-            </button>
-            <h3 className="text-lg font-semibold text-gray-900 mb-3 text-center">Verify you are human</h3>
-            <div className="flex justify-center">
-              <HCaptcha
-                ref={captcha}
-                sitekey={import.meta.env.VITE_HCAPTCHA_SITEKEY || '47c451f8-8dde-4b54-b3b8-3ac6d1c26874'}
-                onVerify={(token) => {
-                  setCaptchaToken(token);
-                  setShowCaptchaModal(false);
-                  // Go directly to Stripe checkout after captcha verification
-                  handlePaymentRedirect();
-                }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-      </>
-    );
-  }
-  */
 
   // Step 3: Processing
   if (currentStep === 3) {
