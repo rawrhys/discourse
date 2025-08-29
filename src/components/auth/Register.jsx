@@ -42,8 +42,9 @@ const Register = () => {
       setShowCaptchaModal(true);
       return;
     }
-    // Move to payment step
-    setCurrentStep(2);
+    
+    // Go directly to Stripe checkout
+    await handlePaymentRedirect();
   };
 
   const handlePaymentComplete = () => {
@@ -146,8 +147,8 @@ const Register = () => {
       
       console.log('[Registration] Creating checkout session for email:', email);
       
-      // Call our local server endpoint to create the Stripe checkout session
-      const resp = await fetch('/api/auth/create-checkout-session', {
+      // Call Supabase Edge Function to create the Stripe checkout session
+      const resp = await fetch('https://gaapqvkjblqvpokmhlmh.supabase.co/functions/v1/create-checkout-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
@@ -331,7 +332,7 @@ const Register = () => {
                 type="submit"
                 className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
-                Complete Registration
+                {isLoading ? 'Processing...' : 'Proceed to Payment'}
               </button>
             </div>
           </form>
@@ -370,7 +371,8 @@ const Register = () => {
     );
   }
 
-  // Step 2: Payment Required
+  // Step 2: Payment Required (REMOVED - going directly to Stripe)
+  /*
   if (currentStep === 2) {
     return (
       <>
@@ -465,6 +467,8 @@ const Register = () => {
                 onVerify={(token) => {
                   setCaptchaToken(token);
                   setShowCaptchaModal(false);
+                  // Go directly to Stripe checkout after captcha verification
+                  handlePaymentRedirect();
                 }}
               />
             </div>
@@ -474,6 +478,7 @@ const Register = () => {
       </>
     );
   }
+  */
 
   // Step 3: Processing
   if (currentStep === 3) {
