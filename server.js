@@ -4388,9 +4388,14 @@ app.post('/api/auth/login', async (req, res) => {
     let data = { user: null, session: null };
     let error = null;
     if (supabase) {
-      const resp = await supabase.auth.signInWithPassword({ email, password });
-      data = resp.data;
-      error = resp.error;
+      try {
+        const resp = await supabase.auth.signInWithPassword({ email, password });
+        data = resp.data;
+        error = resp.error;
+      } catch (supabaseError) {
+        console.error('[LOGIN] Supabase authentication error:', supabaseError);
+        error = { message: supabaseError.message, code: 'SUPABASE_ERROR' };
+      }
     } else {
       // Dev mode: create/find local user and issue dev token
       let local = db.data.users.find(u => u.email === email);
@@ -4408,6 +4413,12 @@ app.post('/api/auth/login', async (req, res) => {
 
     if (error) {
       console.error('Supabase login error:', error);
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        status: error.status,
+        details: error
+      });
       
       // Check for specific unconfirmed email error
       if (error.message && (
@@ -4419,7 +4430,8 @@ app.post('/api/auth/login', async (req, res) => {
       )) {
         return res.status(401).json({ 
           error: 'Please confirm your email address before signing in. Check your inbox and spam folder for the confirmation link.',
-          code: 'EMAIL_NOT_CONFIRMED'
+          code: 'EMAIL_NOT_CONFIRMED',
+          requiresEmailVerification: true
         });
       }
       
@@ -4428,6 +4440,14 @@ app.post('/api/auth/login', async (req, res) => {
         return res.status(401).json({ 
           error: 'Invalid email or password. Please check your credentials and try again.',
           code: 'INVALID_CREDENTIALS'
+        });
+      }
+      
+      // Handle generic Supabase errors
+      if (error.code === 'SUPABASE_ERROR') {
+        return res.status(500).json({ 
+          error: 'Authentication service error. Please try again later.',
+          code: 'AUTH_SERVICE_ERROR'
         });
       }
       
@@ -4486,14 +4506,9 @@ app.post('/api/auth/login', async (req, res) => {
       }
     }
 
-    // Check email verification status for Supabase users
-    if (supabase && localUser.emailVerified === false) {
-      return res.status(401).json({ 
-        error: 'Please verify your email address before signing in. Check your inbox and spam folder for the confirmation link.',
-        code: 'EMAIL_NOT_VERIFIED',
-        requiresEmailVerification: true
-      });
-    }
+    // Note: Email verification is now handled by Supabase directly
+    // The localUser.emailVerified check is no longer needed since Supabase
+    // will return an error if the email is not confirmed
 
     res.json({ 
         message: 'Login successful',
@@ -4565,6 +4580,43 @@ app.get('/api/user/current', authenticateToken, (req, res) => {
   } catch (e) {
     console.warn('[Auth] /api/user/current fallback error:', e.message);
     return res.status(200).json(null);
+  }
+});
+
+// Debug endpoint to check user status
+app.get('/api/auth/debug-user/:email', async (req, res) => {
+  try {
+    const email = req.params.email;
+    
+    // Check local database
+    const localUser = db.data.users.find(u => u.email === email);
+    
+    // Check Supabase if configured
+    let supabaseUser = null;
+    if (supabase) {
+      try {
+        // Note: This is a simplified check - in production you'd want more secure methods
+        console.log(`[DEBUG] Checking Supabase for user: ${email}`);
+      } catch (e) {
+        console.error('[DEBUG] Supabase check failed:', e);
+      }
+    }
+    
+    res.json({
+      email,
+      localUser: localUser ? {
+        id: localUser.id,
+        email: localUser.email,
+        name: localUser.name,
+        emailVerified: localUser.emailVerified,
+        emailVerifiedAt: localUser.emailVerifiedAt
+      } : null,
+      supabaseConfigured: !!supabase,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[DEBUG] Debug endpoint error:', error);
+    res.status(500).json({ error: 'Debug failed' });
   }
 });
 

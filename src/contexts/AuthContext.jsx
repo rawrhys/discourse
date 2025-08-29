@@ -108,27 +108,41 @@ export const AuthProvider = ({ children }) => {
         throw new Error('This account has been deleted.');
       }
 
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-        options: captchaToken ? { captchaToken } : undefined,
+      // Use backend login endpoint instead of direct Supabase call
+      const loginResp = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, captchaToken })
       });
 
-      if (error) {
-        console.error('Login error:', error);
-        throw new Error(error.message);
+      if (!loginResp.ok) {
+        const errorData = await loginResp.json();
+        
+        // Handle email verification requirement
+        if (errorData.code === 'EMAIL_NOT_CONFIRMED') {
+          throw new Error('Please confirm your email address before signing in. Check your inbox and spam folder for the confirmation link.');
+        }
+        
+        throw new Error(errorData.error || 'Login failed');
       }
 
-      if (data.user) {
-        setUser(data.user);
-        // Store token from fresh login session if available
-        if (data.session?.access_token) {
-          try { localStorage.setItem('token', data.session.access_token); } catch {}
-        }
-        return { user: data.user, session: data.session };
-      } else {
-        throw new Error('No user data returned');
+      const loginData = await loginResp.json();
+      
+      // Create a user object that matches Supabase format
+      const user = {
+        id: loginData.user.id,
+        email: loginData.user.email,
+        user_metadata: { name: loginData.user.name }
+      };
+
+      setUser(user);
+      
+      // Store token
+      if (loginData.token) {
+        try { localStorage.setItem('token', loginData.token); } catch {}
       }
+      
+      return { user, session: { access_token: loginData.token } };
     } catch (error) {
       console.error('Login error:', error);
       throw error;
