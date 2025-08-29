@@ -1,0 +1,60 @@
+{
+  "apps": [
+    {
+      "name": "discourse-app",
+      "script": "./server.js",
+      "instances": 1,
+      "exec_mode": "fork",
+      "env": {
+        "NODE_ENV": "development",
+        "PORT": 4003
+      },
+      "env_production": {
+        "NODE_ENV": "production",
+        "PORT": 4003
+      },
+      "autorestart": true,
+      "watch": false,
+      "max_memory_restart": "1G",
+      "kill_timeout": 5000,
+      "wait_ready": true,
+      "log_file": "./logs/combined.log",
+      "out_file": "./logs/out.log",
+      "error_file": "./logs/error.log",
+      "log_date_format": "YYYY-MM-DD HH:mm:ss Z",
+      "min_uptime": "10s",
+      "max_restarts": 10,
+      "env_file": ".env",
+      "listen_timeout": 8000,
+      "shutdown_with_message": true,
+      "health_check_grace_period": 3000,
+      "node_args": "--max-old-space-size=4096",
+      "uid": null,
+      "gid": null,
+      "source_map_support": true,
+      "disable_source_map_support": false,
+      "pmx": true,
+      "vizion": false,
+      "merge_logs": true,
+      "ignore_watch": [
+        "node_modules",
+        "logs",
+        "dist",
+        ".git",
+        "*.log"
+      ]
+    }
+  ],
+  "deploy": {
+    "production": {
+      "user": "node",
+      "host": "localhost",
+      "ref": "origin/main",
+      "repo": "https://github.com/rawrhys/discourse.git",
+      "path": "/var/www/discourse",
+      "pre-deploy-local": "",
+      "post-deploy": "npm install && pm2 reload ecosystem.config.json --env production",
+      "pre-setup": ""
+    }
+  }
+}
