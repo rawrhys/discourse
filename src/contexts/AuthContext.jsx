@@ -151,6 +151,8 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (email, password, name, options = {}) => {
     try {
+      console.log('🔧 [AUTH] Starting registration for:', email);
+      
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -166,24 +168,38 @@ export const AuthProvider = ({ children }) => {
       });
 
       if (error) {
-        console.error('Registration error:', error);
+        console.error('🔧 [AUTH] Registration error:', error);
         throw new Error(error.message);
       }
 
       if (data.user) {
+        console.log('🔧 [AUTH] Registration successful, user:', data.user.id);
+        console.log('🔧 [AUTH] Email confirmed:', data.user.email_confirmed_at);
+        
         // Don't set user immediately if email confirmation is required
         if (data.user.email_confirmed_at) {
+          console.log('🔧 [AUTH] Email already confirmed, setting user immediately');
           setUser(data.user);
           if (data.session?.access_token) {
             try { localStorage.setItem('token', data.session.access_token); } catch {}
           }
+        } else {
+          console.log('🔧 [AUTH] Email confirmation required, user not set yet');
         }
-        return { user: data.user, session: data.session, requiresEmailConfirmation: !data.user.email_confirmed_at };
+        
+        const requiresEmailConfirmation = !data.user.email_confirmed_at;
+        console.log('🔧 [AUTH] Requires email confirmation:', requiresEmailConfirmation);
+        
+        return { 
+          user: data.user, 
+          session: data.session, 
+          requiresEmailConfirmation 
+        };
       } else {
-        throw new Error('No user data returned');
+        throw new Error('No user data returned from registration');
       }
     } catch (error) {
-      console.error('Registration error:', error);
+      console.error('🔧 [AUTH] Registration error:', error);
       throw error;
     }
   };

@@ -82,6 +82,28 @@ const Register = () => {
         throw new Error('Missing registration details after payment. Please try again.');
       }
 
+      // First, try to register with Supabase to get proper email verification
+      try {
+        const { data, error } = await register(finalEmail, finalPassword, finalName, { 
+          policyVersion: finalPolicyVersion 
+        });
+        
+        if (error) {
+          throw new Error(error.message);
+        }
+        
+        if (data && data.requiresEmailConfirmation) {
+          // Show email verification step
+          setCurrentStep(4);
+          return;
+        }
+        
+        // If no email confirmation needed, proceed with backend registration
+      } catch (regError) {
+        console.warn('Supabase registration failed, falling back to backend:', regError.message);
+        // Continue with backend registration as fallback
+      }
+
       // Use the complete-registration endpoint for users who have paid
       const response = await fetch('/api/auth/complete-registration', {
         method: 'POST',
@@ -116,8 +138,8 @@ const Register = () => {
         throw new Error(errorData.error || 'Failed to complete registration');
       }
     } catch (error) {
-      setError(error?.message || 'Failed to create an account. Please try again.');
-      // No need to go back to payment step since we go directly to Stripe
+      console.error('Account creation error:', error);
+      setError(error.message);
     } finally {
       setIsLoading(false);
     }
