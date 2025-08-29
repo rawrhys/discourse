@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
-import { loadStripe } from '@stripe/stripe-js';
 
 const Register = () => {
   const [name, setName] = useState('');
@@ -138,22 +137,12 @@ const Register = () => {
     } catch {}
 
     try {
-      // Load Stripe
-      const stripe = Stripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_live_51RzaHbBTrJ3tlY9wZwFPhjGTB6hHdffJzR56mwOWAnH7hCr50Kdouy0ejZx4TyJxM9bE7IMh4lcUHUwVebKcr321009eGCqD2l'); // Live mode publishable key
-      
-      if (!stripe) {
-        throw new Error('Failed to load Stripe');
-      }
-      
       console.log('[Registration] Creating checkout session for email:', email);
       
-      // Call Supabase Edge Function to create the Stripe checkout session
-      const resp = await fetch('https://gaapqvkjblqvpokmhlmh.supabase.co/functions/v1/create-checkout-session', {
+      // Call our own backend API to create the Stripe checkout session
+      const resp = await fetch('/api/auth/create-checkout-session', {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdhYXBxdmtqYmxxdnBva21obG1oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQzMDg5NzksImV4cCI6MjA2OTg4NDk3OX0.aAtqS5H0JhNHgatPEjJ8iJRFnZumyaRYxlSA9dkkfQE'}`
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
       });
       
@@ -172,12 +161,8 @@ const Register = () => {
         throw new Error('No session ID received from server');
       }
       
-      // Redirect to Stripe checkout
-      const result = await stripe.redirectToCheckout({ sessionId: responseData.sessionId });
-      
-      if (result.error) {
-        throw new Error(result.error.message);
-      }
+      // Redirect directly to Stripe checkout using the session ID
+      window.location = `https://checkout.stripe.com/pay/${responseData.sessionId}`;
       
       console.log('[Registration] Stripe redirect successful');
     } catch (error) {
