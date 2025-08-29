@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Captcha Auth Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; color: #155724; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; color: #721c24; }
+        .warning { background-color: #fff3cd; border-color: #ffeaa7; color: #856404; }
+        button { padding: 10px 20px; margin: 5px; border: none; border-radius: 5px; cursor: pointer; }
+        .btn-primary { background-color: #007bff; color: white; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Captcha Authentication Test</h1>
+    <p>This page tests the captcha authentication flow to identify the root cause of the 500/400 errors.</p>
+    
+    <div class="test-section">
+        <h3>🧪 Test 1: Environment Variables</h3>
+        <div id="env-test">Testing...</div>
+        <button class="btn-primary" onclick="testEnvironment()">Test Environment</button>
+    </div>
+
+    <div class="test-section">
+        <h3>🧪 Test 2: Supabase Client Creation</h3>
+        <div id="supabase-test">Waiting...</div>
+        <button class="btn-primary" onclick="testSupabase()">Test Supabase</button>
+    </div>
+
+    <div class="test-section">
+        <h3>🧪 Test 3: Captcha Integration</h3>
+        <div id="captcha-test">Waiting...</div>
+        <button class="btn-primary" onclick="testCaptcha()">Test Captcha</button>
+    </div>
+
+    <div class="test-section">
+        <h3>🧪 Test 4: Authentication Flow</h3>
+        <div id="auth-test">Waiting...</div>
+        <button class="btn-primary" onclick="testAuth()">Test Auth</button>
+    </div>
+
+    <div class="test-section">
+        <h3>📊 Results</h3>
+        <div id="results">Run tests to see results...</div>
+    </div>
+
+    <script type="module">
+        let testResults = { env: false, supabase: false, captcha: false, auth: false };
+
+        // Test 1: Environment Variables
+        window.testEnvironment = function() {
+            const resultDiv = document.getElementById('env-test');
+            resultDiv.innerHTML = 'Testing environment variables...';
+            
+            try {
+                // Check if we're in the right environment
+                const hasLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+                const hasDiscourse = window.location.href.includes('thediscourse.ai');
+                
+                if (hasLocalhost || hasDiscourse) {
+                    resultDiv.innerHTML = '<div class="success">✅ Environment test passed</div>';
+                    testResults.env = true;
+                } else {
+                    resultDiv.innerHTML = '<div class="warning">⚠️ Unexpected environment</div>';
+                    testResults.env = false;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = '<div class="error">❌ Environment test failed: ' + error.message + '</div>';
+                testResults.env = false;
+            }
+            
+            updateResults();
+        };
+
+        // Test 2: Supabase Client
+        window.testSupabase = async function() {
+            const resultDiv = document.getElementById('supabase-test');
+            resultDiv.innerHTML = 'Testing Supabase client...';
+            
+            try {
+                const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+                
+                const supabaseUrl = 'https://gaapqvkjblqvpokmhlmh.supabase.co';
+                const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdhYXBxdmtqYmxxdnBva21obG1oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQzMDg5NzksImV4cCI6MjA2OTg4NDk3OX0.aAtqS5H0JhNHgatPEjJ8iJRFnZumyaRYxlSA9dkkfQE';
+                
+                const supabase = createClient(supabaseUrl, supabaseKey);
+                
+                if (supabase && supabase.auth) {
+                    resultDiv.innerHTML = '<div class="success">✅ Supabase client created successfully</div>';
+                    testResults.supabase = true;
+                } else {
+                    resultDiv.innerHTML = '<div class="error">❌ Supabase client creation failed</div>';
+                    testResults.supabase = false;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = '<div class="error">❌ Supabase test failed: ' + error.message + '</div>';
+                testResults.supabase = false;
+            }
+            
+            updateResults();
+        };
+
+        // Test 3: Captcha
+        window.testCaptcha = function() {
+            const resultDiv = document.getElementById('captcha-test');
+            resultDiv.innerHTML = 'Testing captcha integration...';
+            
+            try {
+                // Check if hCaptcha script is available
+                if (typeof hcaptcha !== 'undefined') {
+                    resultDiv.innerHTML = '<div class="success">✅ hCaptcha script loaded</div>';
+                    testResults.captcha = true;
+                } else {
+                    resultDiv.innerHTML = '<div class="warning">⚠️ hCaptcha script not loaded (may need to be added)</div>';
+                    testResults.captcha = false;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = '<div class="error">❌ Captcha test failed: ' + error.message + '</div>';
+                testResults.captcha = false;
+            }
+            
+            updateResults();
+        };
+
+        // Test 4: Authentication
+        window.testAuth = async function() {
+            const resultDiv = document.getElementById('auth-test');
+            resultDiv.innerHTML = 'Testing authentication flow...';
+            
+            try {
+                const supabaseUrl = 'https://gaapqvkjblqvpokmhlmh.supabase.co';
+                const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdhYXBxdmtqYmxxdnBva21obG1oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQzMDg5NzksImV4cCI6MjA2OTg4NDk3OX0.aAtqS5H0JhNHgatPEjJ8iJRFnZumyaRYxlSA9dkkfQE';
+                
+                // Test signup endpoint (should return 400 for test data, not 500)
+                const response = await fetch(supabaseUrl + '/auth/v1/signup', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'apikey': supabaseKey
+                    },
+                    body: JSON.stringify({
+                        email: 'test@example.com',
+                        password: 'testpassword123'
+                    })
+                });
+                
+                console.log('Auth test response:', response.status, response.statusText);
+                
+                if (response.status === 400) {
+                    resultDiv.innerHTML = '<div class="success">✅ Authentication endpoint working (400 expected for test data)</div>';
+                    testResults.auth = true;
+                } else if (response.status === 500) {
+                    resultDiv.innerHTML = '<div class="error">❌ Authentication endpoint server error (500) - This is the original error!</div>';
+                    testResults.auth = false;
+                } else {
+                    resultDiv.innerHTML = '<div class="success">✅ Authentication endpoint response: ' + response.status + '</div>';
+                    testResults.auth = true;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = '<div class="error">❌ Auth test failed: ' + error.message + '</div>';
+                testResults.auth = false;
+            }
+            
+            updateResults();
+        };
+
+        // Update results
+        function updateResults() {
+            const resultsDiv = document.getElementById('results');
+            const passedTests = Object.values(testResults).filter(Boolean).length;
+            const totalTests = Object.keys(testResults).length;
+            
+            if (passedTests === totalTests) {
+                resultsDiv.innerHTML = '<div class="success">🎉 All tests passed! Authentication should work now.</div>';
+            } else if (passedTests > 0) {
+                resultsDiv.innerHTML = '<div class="warning">⚠️ Some tests passed (' + passedTests + '/' + totalTests + ')</div>';
+            } else {
+                resultsDiv.innerHTML = '<div class="error">❌ No tests passed (' + passedTests + '/' + totalTests + ')</div>';
+            }
+            
+            resultsDiv.innerHTML += '<br><strong>Detailed Results:</strong><ul>';
+            resultsDiv.innerHTML += '<li>Environment: ' + (testResults.env ? '✅' : '❌') + '</li>';
+            resultsDiv.innerHTML += '<li>Supabase: ' + (testResults.env ? '✅' : '❌') + '</li>';
+            resultsDiv.innerHTML += '<li>Captcha: ' + (testResults.captcha ? '✅' : '❌') + '</li>';
+            resultsDiv.innerHTML += '<li>Authentication: ' + (testResults.auth ? '✅' : '❌') + '</li>';
+            resultsDiv.innerHTML += '</ul>';
+        }
+
+        // Auto-run environment test
+        window.addEventListener('load', () => {
+            setTimeout(testEnvironment, 1000);
+        });
+    </script>
+</body>
+</html>
