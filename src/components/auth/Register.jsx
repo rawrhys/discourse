@@ -139,8 +139,8 @@ const Register = () => {
     try {
       console.log('[Registration] Creating checkout session for email:', email);
       
-      // Call our own backend API to create the Stripe checkout session
-      const resp = await fetch('/api/auth/create-checkout-session', {
+      // Call our production backend API to create the Stripe checkout session
+      const resp = await fetch('https://thediscourse.ai/api/auth/create-checkout-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
