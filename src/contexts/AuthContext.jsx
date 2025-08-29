@@ -110,24 +110,31 @@ export const AuthProvider = ({ children }) => {
         throw new Error('This account has been deleted.');
       }
 
-      // Try Supabase authentication first with proper form-encoded request
+      // Try Supabase authentication first with proper JSON request and captcha
       try {
         console.log('🔧 [AUTH] Attempting Supabase authentication...');
         
-        // Create form-encoded data as required by Supabase
-        const formData = new URLSearchParams({
+        // Supabase expects JSON data with captcha token
+        const jsonData = {
           email: email,
-          password: password,
-          grant_type: 'password'
-        });
+          password: password
+        };
 
-        const supabaseAuthResponse = await fetch(`${supabase.supabaseUrl}/auth/v1/token`, {
+        // Add captcha token if provided
+        if (captchaToken) {
+          jsonData.captchaToken = captchaToken;
+          console.log('🔧 [AUTH] Using captcha token for authentication');
+        } else {
+          console.log('🔧 [AUTH] No captcha token provided, may fail if captcha is required');
+        }
+
+        const supabaseAuthResponse = await fetch(`${supabase.supabaseUrl}/auth/v1/token?grant_type=password`, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
+            'Content-Type': 'application/json',
             'apikey': supabase.supabaseKey
           },
-          body: formData.toString()
+          body: JSON.stringify(jsonData)
         });
 
         if (supabaseAuthResponse.ok) {
@@ -159,6 +166,15 @@ export const AuthProvider = ({ children }) => {
               throw new Error('Please confirm your email address before signing in. Check your inbox and spam folder for the confirmation link.');
             } else if (errorData.error_description?.includes('Invalid login credentials')) {
               throw new Error('Invalid email or password. Please check your credentials and try again.');
+            }
+          }
+          
+          // Handle captcha-specific errors
+          if (errorData.error_code === 'unexpected_failure' && errorData.msg?.includes('captcha')) {
+            if (!captchaToken) {
+              throw new Error('Captcha verification required. Please complete the captcha and try again.');
+            } else {
+              throw new Error('Captcha verification failed. Please try again with a new captcha.');
             }
           }
           

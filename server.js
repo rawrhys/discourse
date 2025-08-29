@@ -4409,27 +4409,34 @@ app.post('/api/auth/login', async (req, res) => {
     console.log('[LOGIN] Login attempt for email:', email);
     console.log('[LOGIN] Supabase configured:', !!supabase);
 
-    // --- Supabase Login with proper form-encoded request ---
+    // --- Supabase Login with proper JSON request ---
     let data = { user: null, session: null };
     let error = null;
     if (supabase) {
       try {
-        console.log('[LOGIN] Attempting Supabase authentication with form-encoded request...');
+        console.log('[LOGIN] Attempting Supabase authentication with JSON request...');
         
-        // Create form-encoded data as required by Supabase
-        const formData = new URLSearchParams({
+        // Supabase expects JSON data with captcha token
+        const jsonData = {
           email: email,
-          password: password,
-          grant_type: 'password'
-        });
+          password: password
+        };
 
-        const supabaseAuthResponse = await fetch(`${supabaseUrl}/auth/v1/token`, {
+        // Add captcha token if provided
+        if (req.body.captchaToken) {
+          jsonData.captchaToken = req.body.captchaToken;
+          console.log('[LOGIN] Using captcha token for Supabase authentication');
+        } else {
+          console.log('[LOGIN] No captcha token provided, may fail if captcha is required');
+        }
+
+        const supabaseAuthResponse = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
+            'Content-Type': 'application/json',
             'apikey': supabaseAnonKey
           },
-          body: formData.toString()
+          body: JSON.stringify(jsonData)
         });
 
         if (supabaseAuthResponse.ok) {
@@ -4475,6 +4482,23 @@ app.post('/api/auth/login', async (req, res) => {
               code: errorData.error,
               status: 400
             };
+          }
+
+          // Handle captcha-specific errors
+          if (errorData.error_code === 'unexpected_failure' && errorData.msg?.includes('captcha')) {
+            if (!req.body.captchaToken) {
+              error = { 
+                message: 'Captcha verification required. Please complete the captcha and try again.', 
+                code: 'CAPTCHA_REQUIRED',
+                status: 400
+              };
+            } else {
+              error = { 
+                message: 'Captcha verification failed. Please try again with a new captcha.', 
+                code: 'CAPTCHA_FAILED',
+                status: 400
+              };
+            }
           }
         }
       } catch (supabaseError) {

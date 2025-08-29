@@ -52,22 +52,21 @@
             showResult('Testing authentication...', 'info');
 
             try {
-                // Test 1: Form-encoded request (correct format)
-                console.log('🧪 Testing form-encoded request...');
+                // Test 1: JSON request (correct format for Supabase)
+                console.log('🧪 Testing JSON request...');
                 
-                const formData = new URLSearchParams({
+                const jsonData = {
                     email: email,
-                    password: password,
-                    grant_type: 'password'
-                });
+                    password: password
+                };
 
-                const response = await fetch(`${SUPABASE_URL}/auth/v1/token`, {
+                const response = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'Content-Type': 'application/json',
                         'apikey': SUPABASE_ANON_KEY
                     },
-                    body: formData.toString()
+                    body: JSON.stringify(jsonData)
                 });
 
                 console.log('📡 Response status:', response.status);
