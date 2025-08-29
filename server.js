@@ -4005,392 +4005,57 @@ app.post('/api/auth/register', async (req, res) => {
     
     let data = { user: null, session: null };
     let error = null;
-    if (supabase) {
-      const resp = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { 
-            name,
-            gdpr_policy_version: policyVersion,
-            gdpr_consent_at: new Date().toISOString()
-          },
-          emailRedirectTo: supabaseRedirectUrl
-        }
-      });
-      data = resp.data;
-      error = resp.error;
-    }
-
-    if (error) {
-      // Enhanced error logging
-      console.error('[AUTH] Supabase registration error:', {
-        status: error.status,
-        code: error.code,
-        message: error.message,
-        email: email,
-        timestamp: new Date().toISOString()
-      });
-      
-      // Handle specific error types with better user feedback
-      if (error.code === 'email_address_invalid') {
-        return res.status(400).json({ 
-          error: 'Invalid email address. Please use a valid email from a real provider.',
-          code: error.code 
-        });
-      }
-      
-      if (error.code === 'email_exists' || error.message.includes('User already registered')) {
-        return res.status(400).json({ 
-          error: 'An account with this email already exists. Please try logging in instead.',
-          code: 'user_exists'
-        });
-      }
-      
-      if (error.code === 'signup_disabled') {
-        return res.status(400).json({ 
-          error: 'Account registration is currently disabled. Please contact support.',
-          code: error.code 
-        });
-      }
-      
-      if (error.status === 401) {
-        console.error('[AUTH] 401 Unauthorized - Possible Supabase configuration issue');
-        return res.status(500).json({ 
-          error: 'Authentication service configuration error. Please try again later.',
-          code: 'auth_config_error'
-        });
-      }
-      
-      // Generic error response
-      return res.status(500).json({ 
-        error: 'Failed to register user. Please try again later.',
-        code: error.code || 'registration_failed'
-      });
-    }
-
-    if (!data.user) {
-        console.error('[AUTH] Registration succeeded but no user data returned');
-        return res.status(500).json({ error: 'Registration failed: User data not returned' });
-    }
-    
-    console.log(`[AUTH] Registration successful for user: ${data.user.id}`);
-      
-    // --- Local DB User Creation (for credits) ---
-    // Check if user is coming from successful payment
-    const paymentSuccess = req.headers['x-payment-success'] === 'true' || req.query.payment === 'success';
-    
-    const localUser = {
-      id: data.user.id,
-      email: data.user.email,
-      name: name,
-      createdAt: new Date().toISOString(),
-      courseCredits: paymentSuccess ? 10 : 0, // Give credits if payment was successful
-      gdprConsent: {
-        accepted: true,
-        policyVersion: policyVersion,
-        acceptedAt: new Date().toISOString(),
-        ip: (req.headers['x-forwarded-for']?.toString().split(',')[0] || req.ip || '').trim(),
-        userAgent: req.headers['user-agent'] || ''
-      }
-    };
-    db.data.users.push(localUser);
-    await db.write();
-
-    // Record a trial claim marker to prevent re-use
+    // Local authentication logic
     try {
-      db.data.trialRecords = db.data.trialRecords || [];
-      db.data.trialRecords.push({
-        email: normalizedEmail,
-        ip: (req.headers['x-forwarded-for']?.toString().split(',')[0] || req.ip || '').trim(),
-        userAgent: String(req.headers['user-agent'] || '').slice(0, 300),
-        createdAt: new Date().toISOString()
-      });
-      await db.write();
-    } catch {}
-    
-    // Assign onboarding course to new users
-    await assignOnboardingCourse(localUser.id);
-
-    // Return a dev token when Supabase is not configured
-    const token = supabase ? data.session?.access_token : `dev:${localUser.id}`;
-    // Generate verification token for email verification
-    const verificationToken = crypto.randomBytes(32).toString('hex');
-    const verificationData = {
-      token: verificationToken,
-      userId: localUser.id,
-      createdAt: Date.now()
-    };
-    
-    // Store verification token (in-memory for now)
-    if (!global.emailVerificationTokens) {
-      global.emailVerificationTokens = new Map();
-    }
-    global.emailVerificationTokens.set(email, verificationData);
-
-    // Send verification email if SMTP is configured
-    if (supabase) {
-      try {
-        await sendVerificationEmail(email, verificationToken, name);
-      } catch (emailError) {
-        console.warn('[AUTH] Failed to send verification email:', emailError);
-        // Continue with registration even if email fails
-      }
-    }
-
-    res.status(201).json({ 
-        message: supabase ? 'Registration successful. Please check your email to confirm your account.' : 'Registration successful (dev mode).',
-        token,
-        user: {
-            id: localUser.id,
-            email: localUser.email,
-            name: localUser.name,
-            courseCredits: localUser.courseCredits,
-            gdprConsent: localUser.gdprConsent
-        },
-        requiresEmailVerification: supabase ? true : false
-    });
-
-  } catch (error) {
-    console.error('Registration process error:', error);
-    res.status(500).json({ error: 'An unexpected error occurred during registration' });
-  }
-});
-
-// Handle payment success for new registrations
-app.post('/api/auth/complete-registration', async (req, res) => {
-  try {
-    const { email, name, password, policyVersion = '1.0' } = req.body;
-    
-    if (!email || !name || !password) {
-      return res.status(400).json({ error: 'Email, name, and password are required' });
-    }
-
-    console.log(`[AUTH] Completing registration for user: ${email} after payment`);
-
-    // Check if user already exists
-    const existingUser = db.data.users.find(u => u.email === email);
-    if (existingUser) {
-      return res.status(400).json({ error: 'User already exists' });
-    }
-
-    // Create user with credits since payment was successful
-    const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
-    const localUser = {
-      id: userId,
-      email: email,
-      name: name,
-      createdAt: new Date().toISOString(),
-      courseCredits: 10, // Give credits since payment was successful
-      gdprConsent: {
-        accepted: true,
-        policyVersion: policyVersion,
-        acceptedAt: new Date().toISOString(),
-        ip: (req.headers['x-forwarded-for']?.toString().split(',')[0] || req.ip || '').trim(),
-        userAgent: req.headers['user-agent'] || ''
-      }
-    };
-
-    db.data.users.push(localUser);
-    await db.write();
-    
-    // Assign onboarding course
-    await assignOnboardingCourse(localUser.id);
-
-    console.log(`[AUTH] Registration completed successfully for user: ${userId}`);
-
-    res.status(201).json({ 
-      message: 'Registration completed successfully!',
-      user: {
-        id: localUser.id,
-        email: localUser.email,
-        name: localUser.name,
-        courseCredits: localUser.courseCredits
-      }
-    });
-
-  } catch (error) {
-    console.error('Complete registration error:', error);
-    res.status(500).json({ error: 'Failed to complete registration' });
-  }
-});
-
-// Email verification function
-async function sendVerificationEmail(email, token, name) {
-  if (!process.env.SMTP_HOST || !process.env.SMTP_PORT || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    console.warn('[EMAIL] SMTP not configured, skipping email verification');
-    return false;
-  }
-
-  try {
-    const transporter = nodemailer.createTransporter({
-      host: process.env.SMTP_HOST,
-      port: process.env.SMTP_PORT,
-      secure: process.env.SMTP_SECURE === 'true',
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS
-      }
-    });
-
-    const verificationUrl = `${process.env.FRONTEND_URL || 'https://thediscourse.ai'}/verify-email?token=${token}&email=${encodeURIComponent(email)}`;
-    
-    const mailOptions = {
-      from: process.env.SMTP_FROM || process.env.SMTP_USER,
-      to: email,
-      subject: 'Verify Your Email - Discourse Learning Platform',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #333;">Welcome to Discourse Learning Platform!</h2>
-          <p>Hi ${name},</p>
-          <p>Thank you for registering with us. To complete your account setup, please verify your email address by clicking the button below:</p>
+      console.log('[LOGIN] Attempting local authentication...');
+      
+      // Find user in local database
+      const localUser = db.data.users.find(u => u.email === email);
+      
+      if (!localUser) {
+        error = { 
+          message: 'Invalid email or password', 
+          code: 'invalid_credentials',
+          status: 401
+        };
+      } else {
+        // For now, we'll do a simple password check
+        // In production, you should hash passwords and compare hashes
+        if (localUser.password === password) {
+          console.log('[LOGIN] Local authentication successful');
           
-          <div style="text-align: center; margin: 30px 0;">
-            <a href="${verificationUrl}" 
-               style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
-              Verify Email Address
-            </a>
-          </div>
+          // Generate a simple token (in production, use JWT)
+          const token = `local_${localUser.id}_${Date.now()}`;
           
-          <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
-          <p style="word-break: break-all; color: #666;">${verificationUrl}</p>
-          
-          <p>This verification link will expire in 24 hours.</p>
-          
-          <p>If you didn't create this account, please ignore this email.</p>
-          
-          <p>Best regards,<br>The Discourse Team</p>
-        </div>
-      `,
-      text: `
-        Welcome to Discourse Learning Platform!
-        
-        Hi ${name},
-        
-        Thank you for registering with us. To complete your account setup, please verify your email address by visiting this link:
-        
-        ${verificationUrl}
-        
-        This verification link will expire in 24 hours.
-        
-        If you didn't create this account, please ignore this email.
-        
-        Best regards,
-        The Discourse Team
-      `
-    };
-
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`[EMAIL] Verification email sent to ${email}:`, info.messageId);
-    return true;
-  } catch (error) {
-    console.error(`[EMAIL] Failed to send verification email to ${email}:`, error);
-    return false;
-  }
-}
-
-// Email verification endpoint
-app.get('/api/auth/verify-email', async (req, res) => {
-  try {
-    const { token, email } = req.query;
-    
-    if (!token || !email) {
-      return res.status(400).json({ error: 'Missing verification token or email' });
-    }
-
-    // Find the verification token
-    const storedToken = global.emailVerificationTokens?.get(email);
-    if (!storedToken || storedToken.token !== token) {
-      return res.status(400).json({ error: 'Invalid or expired verification token' });
-    }
-
-    // Check if token is expired (24 hours)
-    if (Date.now() - storedToken.createdAt > 24 * 60 * 60 * 1000) {
-      global.emailVerificationTokens.delete(email);
-      return res.status(400).json({ error: 'Verification token has expired. Please request a new one.' });
-    }
-
-    // Verify email in Supabase
-    if (supabase) {
-      try {
-        // Update user's email_confirmed_at in Supabase
-        const { error } = await supabase.auth.admin.updateUserById(storedToken.userId, {
-          email_confirm: true
-        });
-        
-        if (error) {
-          console.error('[AUTH] Failed to update Supabase user email confirmation:', error);
-          // Continue with local verification as fallback
+          data = {
+            user: {
+              id: localUser.id,
+              email: localUser.email,
+              name: localUser.name,
+              user_metadata: { name: localUser.name }
+            },
+            session: {
+              access_token: token,
+              refresh_token: token,
+              expires_in: 3600
+            }
+          };
+        } else {
+          error = { 
+            message: 'Invalid email or password', 
+            code: 'invalid_credentials',
+            status: 401
+          };
         }
-      } catch (supabaseError) {
-        console.warn('[AUTH] Supabase email confirmation update failed, continuing with local verification:', supabaseError);
       }
-    }
-
-    // Mark email as verified in local database
-    const user = db.data.users.find(u => u.id === storedToken.userId);
-    if (user) {
-      user.emailVerified = true;
-      user.emailVerifiedAt = new Date().toISOString();
-      await db.write();
-    }
-
-    // Clean up verification token
-    global.emailVerificationTokens.delete(email);
-
-    console.log(`[AUTH] Email verified successfully for user: ${storedToken.userId}`);
-
-    res.json({ 
-      message: 'Email verified successfully! You can now log in to your account.',
-      verified: true
+    } catch (localError) {
+      console.warn('[LOGIN] Local authentication error:', localError.message);
+      error = { 
+        message: 'Local authentication error', 
+        code: 'LOCAL_AUTH_ERROR',
+        status: 500
+      };
     });
-
-  } catch (error) {
-    console.error('[AUTH] Email verification error:', error);
-    res.status(500).json({ error: 'Failed to verify email. Please try again.' });
-  }
-});
-
-// Resend verification email endpoint
-app.post('/api/auth/resend-verification', async (req, res) => {
-  try {
-    const { email } = req.body;
-    
-    if (!email) {
-      return res.status(400).json({ error: 'Email is required' });
-    }
-
-    // Check if user exists and needs verification
-    const user = db.data.users.find(u => u.email === email);
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    if (user.emailVerified) {
-      return res.status(400).json({ error: 'Email is already verified' });
-    }
-
-    // Generate new verification token
-    const token = crypto.randomBytes(32).toString('hex');
-    const verificationData = {
-      token,
-      userId: user.id,
-      createdAt: Date.now()
-    };
-
-    if (!global.emailVerificationTokens) {
-      global.emailVerificationTokens = new Map();
-    }
-    global.emailVerificationTokens.set(email, verificationData);
-
-    // Send verification email
-    const emailSent = await sendVerificationEmail(email, token, user.name);
-    
-    if (emailSent) {
-      res.json({ message: 'Verification email sent successfully. Please check your inbox.' });
-    } else {
-      res.status(500).json({ error: 'Failed to send verification email. Please try again later.' });
     }
 
   } catch (error) {
@@ -4407,12 +4072,13 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     console.log('[LOGIN] Login attempt for email:', email);
-    console.log('[LOGIN] Supabase configured:', !!supabase);
+    console.log('[LOGIN] Using local authentication (no captcha required)');
 
-    // --- Supabase Login with proper JSON request ---
+    // --- Local Authentication (No Captcha Required) ---
     let data = { user: null, session: null };
     let error = null;
-    if (supabase) {
+    // Local authentication logic
+    try {
       try {
         console.log('[LOGIN] Attempting Supabase authentication with JSON request...');
         
