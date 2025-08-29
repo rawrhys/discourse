@@ -24,7 +24,7 @@ pm2 delete discourse-app >nul 2>&1
 
 REM Start the application
 echo 🚀 Starting Discourse app...
-pm2 start ecosystem.config.cjs
+pm2 start ecosystem.config.js
 
 REM Show status
 echo.
