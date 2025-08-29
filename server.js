@@ -6907,24 +6907,33 @@ app.post('/api/auth/create-checkout-session', async (req, res) => {
     
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
-      mode: 'payment',
+      mode: 'subscription',
+      customer_email: email,
       line_items: [
         {
           price_data: {
             currency: 'gbp',
             product_data: {
-              name: 'Account Registration + Course Credits',
-              description: 'Complete your account registration and get course generation credits',
+              name: 'Discourse Learning Platform',
+              description: 'Access to course generation and learning tools',
             },
-            unit_amount: 0, // Free for now, adjust as needed
+            unit_amount: 2000, // £20.00 in pence
+            recurring: {
+              interval: 'month',
+            },
           },
           quantity: 1,
         },
       ],
-      metadata: {
-        registrationEmail: email,
-        registrationPassword: password, // Note: This will be encrypted by Stripe
+      subscription_data: {
+        trial_period_days: 14,
+        metadata: {
+          registrationEmail: email,
+          registrationPassword: password,
+        },
       },
+      payment_method_collection: 'always',
+      setup_future_usage: 'off_session',
       success_url: `${req.headers.origin || 'https://thediscourse.ai'}/register?payment=success`,
       cancel_url: `${req.headers.origin || 'https://thediscourse.ai'}/register?payment=cancel`,
     });
@@ -7089,27 +7098,51 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
       }
     }
     
-    // Handle registration payment (new users)
-    if (session.metadata.registrationEmail) {
-      const registrationEmail = session.metadata.registrationEmail;
-      const registrationPassword = session.metadata.registrationPassword;
+    // Handle registration subscription (new users)
+    if (session.subscription_data?.metadata?.registrationEmail) {
+      const registrationEmail = session.subscription_data.metadata.registrationEmail;
+      const registrationPassword = session.subscription_data.metadata.registrationPassword;
       
-      console.log(`[Stripe] Registration payment completed for email: ${registrationEmail}`);
+      console.log(`[Stripe] Registration subscription started for email: ${registrationEmail}`);
       
       // Store registration data for the frontend to complete account creation
-      // The frontend will handle the actual account creation after payment success
       try {
-        // You can store this in a temporary storage or database
-        // For now, we'll just log it and let the frontend handle the rest
         console.log(`[Stripe] Registration data ready for account creation:`, {
           email: registrationEmail,
-          hasPassword: !!registrationPassword
+          hasPassword: !!registrationPassword,
+          subscriptionId: session.subscription
         });
       } catch (err) {
         console.error('[Stripe] Error processing registration data:', err);
       }
     }
   }
+  
+  // Handle subscription events
+  if (event.type === 'customer.subscription.created') {
+    const subscription = event.data.object;
+    console.log(`[Stripe] New subscription created: ${subscription.id}`);
+  }
+  
+  if (event.type === 'customer.subscription.updated') {
+    const subscription = event.data.object;
+    console.log(`[Stripe] Subscription updated: ${subscription.id}, status: ${subscription.status}`);
+  }
+  
+  if (event.type === 'invoice.payment_succeeded') {
+    const invoice = event.data.object;
+    if (invoice.subscription) {
+      console.log(`[Stripe] Payment succeeded for subscription: ${invoice.subscription}`);
+    }
+  }
+  
+  if (event.type === 'invoice.payment_failed') {
+    const invoice = event.data.object;
+    if (invoice.subscription) {
+      console.error(`[Stripe] Payment failed for subscription: ${invoice.subscription}`);
+    }
+  }
+  
   res.json({ received: true });
 });
 

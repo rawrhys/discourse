@@ -89,12 +89,17 @@ const Register = () => {
         const data = await response.json();
         console.log('Account created successfully after payment:', data);
         
-        // Now log in the user
-        await register(finalEmail, finalPassword, finalName, { gdprConsent: true, policyVersion: finalPolicyVersion, captchaToken });
-        try { captcha.current?.resetCaptcha(); } catch {}
         // Clear pending registration details
         try { localStorage.removeItem(PENDING_REG_KEY); } catch {}
-        navigate('/dashboard');
+        
+        // Show success message and redirect to login
+        setError(''); // Clear any previous errors
+        setCurrentStep(3); // Show success step
+        
+        // Redirect to login after a short delay
+        setTimeout(() => {
+          navigate('/login');
+        }, 3000);
       } else {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to complete registration');
@@ -200,6 +205,24 @@ const Register = () => {
                 Sign in
               </Link>
             </p>
+            
+            <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mt-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-blue-800">Pricing Information</h3>
+                  <div className="mt-2 text-sm text-blue-700">
+                    <p>• 14-day free trial (no charge)</p>
+                    <p>• £20/month after trial period</p>
+                    <p>• Card verification required to start trial</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
           <form className="mt-8 space-y-6" onSubmit={handleFormSubmit}>
             {error && (
@@ -320,7 +343,7 @@ const Register = () => {
                 type="submit"
                 className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
-                {isLoading ? 'Processing...' : 'Create Account'}
+                {isLoading ? 'Processing...' : 'Continue to Payment'}
               </button>
             </div>
           </form>
@@ -361,7 +384,7 @@ const Register = () => {
 
 
 
-  // Step 3: Processing
+  // Step 3: Success
   if (currentStep === 3) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -373,18 +396,37 @@ const Register = () => {
               style={{ width: '200px', margin: '0 auto', display: 'block' }}
             />
             <h2 className="mt-1 text-center text-3xl font-extrabold text-gray-900">
-              Creating Your Account
+              Account Created Successfully!
             </h2>
             <p className="mt-2 text-center text-sm text-gray-600">
-              Please wait while we set up your account...
+              Your account has been created and your subscription is active.
             </p>
           </div>
 
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-            <p className="mt-4 text-sm text-gray-600">
-              {isLoading ? 'Creating your account...' : 'Setting up your learning environment...'}
-            </p>
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+            <div className="text-center mb-4">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
+                <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h3 className="mt-2 text-lg font-medium text-gray-900">Subscription Active</h3>
+              <p className="mt-1 text-sm text-gray-600">
+                You're now on a 14-day free trial, then £20/month thereafter.
+              </p>
+            </div>
+            
+            <div className="mt-4 text-sm text-gray-600">
+              <p>✅ 14-day free trial activated</p>
+              <p>✅ Card verification completed</p>
+              <p>✅ Account ready to use</p>
+            </div>
+            
+            <div className="mt-6">
+              <p className="text-xs text-gray-500 text-center">
+                Redirecting to login in a few seconds...
+              </p>
+            </div>
           </div>
 
           {error && (
