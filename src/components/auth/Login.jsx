@@ -1,7 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
-import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -12,10 +11,7 @@ const Login = () => {
   const navigate = useNavigate();
   const [showTrialMsg, setShowTrialMsg] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
-  const [captchaToken, setCaptchaToken] = useState();
-  const [showCaptchaModal, setShowCaptchaModal] = useState(false);
-  const requireCaptcha = (import.meta.env.VITE_REQUIRE_LOGIN_CAPTCHA ?? 'true') !== 'false';
-  const captcha = useRef();
+  // Captcha not required for login - only for registration
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -23,13 +19,7 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      if (requireCaptcha && !captchaToken) {
-        setShowCaptchaModal(true);
-        setIsLoading(false);
-        return;
-      }
-      await login(email, password, captchaToken);
-      try { captcha.current?.resetCaptcha(); } catch {}
+      await login(email, password); // No captcha token needed for login
       navigate('/dashboard');
     } catch (error) {
       setError(error.message || 'Failed to log in. Please check your credentials.');
@@ -148,43 +138,7 @@ const Login = () => {
           </div>
         </form>
       </div>
-      {requireCaptcha && showCaptchaModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="relative bg-white rounded-lg shadow-lg p-6 w-full max-w-sm">
-            <button
-              type="button"
-              onClick={() => setShowCaptchaModal(false)}
-              className="absolute top-2 right-2 text-gray-500 hover:text-gray-700"
-              aria-label="Close captcha"
-              title="Close"
-            >
-              ×
-            </button>
-            <h3 className="text-lg font-semibold text-gray-900 mb-3 text-center">Verify you are human</h3>
-            <div className="flex justify-center">
-              <HCaptcha
-                ref={captcha}
-                sitekey={import.meta.env.VITE_HCAPTCHA_SITEKEY || '47c451f8-8dde-4b54-b3b8-3ac6d1c26874'}
-                onVerify={async (token) => {
-                  try {
-                    setCaptchaToken(token);
-                    setError('');
-                    setIsLoading(true);
-                    await login(email, password, token);
-                    try { captcha.current?.resetCaptcha(); } catch {}
-                    setShowCaptchaModal(false);
-                    navigate('/dashboard');
-                  } catch (e) {
-                    setError(e?.message || 'Login failed after captcha.');
-                  } finally {
-                    setIsLoading(false);
-                  }
-                }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Captcha not required for login - only for registration */}
     </div>
   );
 };
