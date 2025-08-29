@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auth Debug</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .error { color: red; }
+        .success { color: green; }
+        .info { color: blue; }
+        button { margin: 5px; padding: 10px; }
+        pre { background: #f5f5f5; padding: 10px; border-radius: 3px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Authentication Debug Tool</h1>
+    
+    <div class="section">
+        <h3>1. Login Test</h3>
+        <input type="email" id="email" placeholder="Email" value="test@example.com" style="width: 200px; margin: 5px;">
+        <input type="password" id="password" placeholder="Password" value="testpassword123" style="width: 200px; margin: 5px;">
+        <button onclick="testLogin()">Test Login</button>
+        <div id="loginResult"></div>
+    </div>
+
+    <div class="section">
+        <h3>2. Token Status</h3>
+        <button onclick="checkToken()">Check Token</button>
+        <div id="tokenResult"></div>
+    </div>
+
+    <div class="section">
+        <h3>3. API Test</h3>
+        <button onclick="testAPI()">Test /api/auth/me</button>
+        <button onclick="testOnboarding()">Test /api/onboarding/status</button>
+        <button onclick="testCourses()">Test /api/courses/saved</button>
+        <div id="apiResult"></div>
+    </div>
+
+    <div class="section">
+        <h3>4. Manual API Call</h3>
+        <input type="text" id="manualToken" placeholder="Paste token here" style="width: 400px; margin: 5px;">
+        <button onclick="testManualAPI()">Test with Manual Token</button>
+        <div id="manualResult"></div>
+    </div>
+
+    <script>
+                 // Use the same API logic as the main app
+         const API_BASE = (() => {
+           const hostname = window.location.hostname;
+           const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+           
+           if (isLocalhost) {
+             return 'http://localhost:4003';
+           } else if (hostname === 'thediscourse.ai' || hostname === 'api.thediscourse.ai') {
+             return ''; // Use relative URLs for same-domain deployment
+           } else {
+             return 'http://localhost:4003'; // Default to local server
+           }
+         })();
+         
+         // Debug: Show which API endpoint we're using
+         console.log('🔍 [DEBUG] Using API endpoint:', API_BASE || 'relative URLs');
+         console.log('🔍 [DEBUG] Current hostname:', window.location.hostname);
+         console.log('🔍 [DEBUG] Full API URL example:', `${API_BASE || ''}/api/auth/login`);
+
+        async function testLogin() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const resultDiv = document.getElementById('loginResult');
+            
+            resultDiv.innerHTML = '<div class="info">Logging in...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <div class="success">✅ Login successful!</div>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                    // Store token for testing
+                    localStorage.setItem('token', data.token);
+                    document.getElementById('manualToken').value = data.token;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="error">❌ Login failed: ${data.error}</div>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        function checkToken() {
+            const token = localStorage.getItem('token');
+            const resultDiv = document.getElementById('tokenResult');
+            
+            if (token) {
+                resultDiv.innerHTML = `
+                    <div class="success">✅ Token found in localStorage</div>
+                    <div class="info">Token: ${token.substring(0, 30)}...</div>
+                    <div class="info">Length: ${token.length}</div>
+                    <div class="info">Type: ${token.startsWith('dev:') ? 'Dev Token' : token.startsWith('local:') ? 'Local Token' : 'Unknown'}</div>
+                `;
+            } else {
+                resultDiv.innerHTML = '<div class="error">❌ No token found in localStorage</div>';
+            }
+        }
+
+        async function testAPI() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                document.getElementById('apiResult').innerHTML = '<div class="error">❌ No token available. Please login first.</div>';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/auth/me`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.text();
+                let result;
+                
+                try {
+                    result = JSON.parse(data);
+                } catch (e) {
+                    result = { raw: data };
+                }
+                
+                if (response.ok) {
+                    document.getElementById('apiResult').innerHTML = `
+                        <div class="success">✅ /api/auth/me successful!</div>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    `;
+                } else {
+                    document.getElementById('apiResult').innerHTML = `
+                        <div class="error">❌ /api/auth/me failed (${response.status})</div>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                document.getElementById('apiResult').innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        async function testOnboarding() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                document.getElementById('apiResult').innerHTML = '<div class="error">❌ No token available. Please login first.</div>';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/onboarding/status`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.text();
+                let result;
+                
+                try {
+                    result = JSON.parse(data);
+                } catch (e) {
+                    result = { raw: data };
+                }
+                
+                if (response.ok) {
+                    document.getElementById('apiResult').innerHTML = `
+                        <div class="success">✅ /api/onboarding/status successful!</div>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    `;
+                } else {
+                    document.getElementById('apiResult').innerHTML = `
+                        <div class="error">❌ /api/onboarding/status failed (${response.status})</div>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                document.getElementById('apiResult').innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        async function testCourses() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                document.getElementById('apiResult').innerHTML = '<div class="error">❌ No token available. Please login first.</div>';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/courses/saved`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.text();
+                let result;
+                
+                try {
+                    result = JSON.parse(data);
+                } catch (e) {
+                    result = { raw: data };
+                }
+                
+                if (response.ok) {
+                    document.getElementById('apiResult').innerHTML = `
+                        <div class="success">✅ /api/courses/saved successful!</div>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    `;
+                } else {
+                    document.getElementById('apiResult').innerHTML = `
+                        <div class="error">❌ /api/courses/saved failed (${response.status})</div>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                document.getElementById('apiResult').innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        async function testManualAPI() {
+            const token = document.getElementById('manualToken').value;
+            if (!token) {
+                document.getElementById('manualResult').innerHTML = '<div class="error">❌ Please enter a token</div>';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/auth/me`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.text();
+                let result;
+                
+                try {
+                    result = JSON.parse(data);
+                } catch (e) {
+                    result = { raw: data };
+                }
+                
+                if (response.ok) {
+                    document.getElementById('manualResult').innerHTML = `
+                        <div class="success">✅ Manual API call successful!</div>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    `;
+                } else {
+                    document.getElementById('manualResult').innerHTML = `
+                        <div class="error">❌ Manual API call failed (${response.status})</div>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                document.getElementById('manualResult').innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        // Auto-check token on page load
+        window.onload = function() {
+            checkToken();
+        };
+    </script>
+</body>
+</html>

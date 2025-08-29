@@ -74,6 +74,119 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000); // 5 minutes
 
+// Email verification and password reset functionality
+const createTransporter = () => {
+  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    console.warn('[EMAIL] SMTP not configured, email functionality disabled');
+    return null;
+  }
+  
+  return nodemailer.createTransporter({
+    host: process.env.SMTP_HOST,
+    port: process.env.SMTP_PORT || 587,
+    secure: process.env.SMTP_SECURE === 'true',
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS
+    }
+  });
+};
+
+// Generate verification token
+const generateVerificationToken = () => {
+  return crypto.randomBytes(32).toString('hex');
+};
+
+// Generate password reset token
+const generatePasswordResetToken = () => {
+  return crypto.randomBytes(32).toString('hex');
+};
+
+// Send verification email
+const sendVerificationEmail = async (email, token, name) => {
+  const transporter = createTransporter();
+  if (!transporter) {
+    throw new Error('SMTP not configured');
+  }
+  
+  const verificationUrl = `${process.env.FRONTEND_URL || 'https://thediscourse.ai'}/verify-email?token=${token}`;
+  
+  const mailOptions = {
+    from: process.env.SMTP_FROM || 'noreply@thediscourse.ai',
+    to: email,
+    subject: 'Verify Your Email - Discourse AI',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333;">Welcome to Discourse AI, ${name}!</h2>
+        <p>Thank you for registering. Please verify your email address to complete your account setup.</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${verificationUrl}" 
+             style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+            Verify Email Address
+          </a>
+        </div>
+        <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+        <p style="word-break: break-all; color: #666;">${verificationUrl}</p>
+        <p>This link will expire in 24 hours.</p>
+        <p>If you didn't create this account, please ignore this email.</p>
+      </div>
+    `
+  };
+  
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`[EMAIL] Verification email sent to ${email}`);
+    return true;
+  } catch (error) {
+    console.error('[EMAIL] Failed to send verification email:', error);
+    throw new Error('Failed to send verification email');
+  }
+};
+
+// Send password reset email
+const sendPasswordResetEmail = async (email, token, name) => {
+  const transporter = createTransporter();
+  if (!transporter) {
+    throw new Error('SMTP not configured');
+    return;
+  }
+  
+  const resetUrl = `${process.env.FRONTEND_URL || 'https://thediscourse.ai'}/reset-password?token=${token}`;
+  
+  const mailOptions = {
+    from: process.env.SMTP_FROM || 'noreply@thediscourse.ai',
+    to: email,
+    subject: 'Reset Your Password - Discourse AI',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333;">Password Reset Request</h2>
+        <p>Hello ${name},</p>
+        <p>We received a request to reset your password. Click the button below to create a new password:</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${resetUrl}" 
+             style="background-color: #DC2626; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+            Reset Password
+          </a>
+        </div>
+        <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+        <p style="word-break: break-all; color: #666;">${resetUrl}</p>
+        <p>This link will expire in 1 hour.</p>
+        <p>If you didn't request a password reset, please ignore this email.</p>
+        <p>Your password will remain unchanged.</p>
+      </div>
+    `
+  };
+  
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`[EMAIL] Password reset email sent to ${email}`);
+    return true;
+  } catch (error) {
+    console.error('[EMAIL] Failed to send password reset email:', error);
+    throw new Error('Failed to send password reset email');
+  }
+};
+
 const app = express();
 
 
@@ -3998,68 +4111,274 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(400).json({ error: 'Too many trial signups from this device recently. Please contact support.', code: 'trial_device_rate_limited' });
     }
 
-    // --- Supabase Registration ---
-    console.log(`[AUTH] Attempting Supabase registration for: ${email}`);
-    console.log(`[AUTH] Supabase URL: ${supabaseUrl}`);
-    console.log(`[AUTH] Supabase Key configured: ${supabaseAnonKey ? 'YES' : 'NO'}`);
+    // --- Local Registration with Email Verification ---
+    console.log(`[AUTH] Attempting local registration for: ${email}`);
     
-    let data = { user: null, session: null };
-    let error = null;
-    // Local authentication logic
-    try {
-      console.log('[LOGIN] Attempting local authentication...');
-      
-      // Find user in local database
-      const localUser = db.data.users.find(u => u.email === email);
-      
-      if (!localUser) {
-        error = { 
-          message: 'Invalid email or password', 
-          code: 'invalid_credentials',
-          status: 401
-        };
-      } else {
-        // For now, we'll do a simple password check
-        // In production, you should hash passwords and compare hashes
-        if (localUser.password === password) {
-          console.log('[LOGIN] Local authentication successful');
-          
-          // Generate a simple token (in production, use JWT)
-          const token = `local_${localUser.id}_${Date.now()}`;
-          
-          data = {
-            user: {
-              id: localUser.id,
-              email: localUser.email,
-              name: localUser.name,
-              user_metadata: { name: localUser.name }
-            },
-            session: {
-              access_token: token,
-              refresh_token: token,
-              expires_in: 3600
-            }
-          };
-        } else {
-          error = { 
-            message: 'Invalid email or password', 
-            code: 'invalid_credentials',
-            status: 401
-          };
-        }
-      }
-    } catch (localError) {
-      console.warn('[LOGIN] Local authentication error:', localError.message);
-      error = { 
-        message: 'Local authentication error', 
-        code: 'LOCAL_AUTH_ERROR',
-        status: 500
-      };
+    // Check if user already exists
+    const existingUser = db.data.users.find(u => u.email === email);
+    if (existingUser) {
+      return res.status(400).json({ 
+        error: 'An account with this email already exists',
+        code: 'EMAIL_ALREADY_EXISTS'
+      });
     }
+
+    // Create new user with email verification
+    const userId = `local_${Date.now()}`;
+    const verificationToken = generateVerificationToken();
+    
+    const newUser = {
+      id: userId,
+      email: email.toLowerCase(),
+      name: name,
+      password: password, // In production, hash this password
+      createdAt: new Date().toISOString(),
+      emailVerified: false,
+      verificationToken: verificationToken,
+      verificationTokenCreatedAt: new Date().toISOString(),
+      courseCredits: 0,
+      gdprConsent: gdprConsent,
+      policyVersion: policyVersion
+    };
+
+    // Add user to database
+    db.data.users.push(newUser);
+    await db.write();
+
+    // Send verification email
+    try {
+      await sendVerificationEmail(email, verificationToken, name);
+      console.log(`[AUTH] Registration successful, verification email sent to: ${email}`);
+    } catch (emailError) {
+      console.error('[AUTH] Failed to send verification email:', emailError);
+      // Remove user if email failed
+      db.data.users = db.data.users.filter(u => u.id !== userId);
+      await db.write();
+      return res.status(500).json({ 
+        error: 'Account created but verification email failed to send. Please contact support.',
+        code: 'VERIFICATION_EMAIL_FAILED'
+      });
+    }
+
+    // Record trial usage
+    db.data.trialRecords.push({
+      email: email.toLowerCase(),
+      ip: clientIp,
+      userAgent: userAgent,
+      createdAt: new Date().toISOString()
+    });
+    await db.write();
+
+    return res.json({
+      success: true,
+      message: 'Account created successfully. Please check your email to verify your account.',
+      user: {
+        id: newUser.id,
+        email: newUser.email,
+        name: newUser.name,
+        emailVerified: newUser.emailVerified
+      },
+      requiresEmailVerification: true
+    });
 
   } catch (error) {
     console.error('[AUTH] Resend verification error:', error);
     res.status(500).json({ error: 'Failed to resend verification email. Please try again.' });
+  }
+});
+
+// Email verification endpoint
+app.post('/api/auth/verify-email', async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) {
+      return res.status(400).json({ error: 'Verification token is required' });
+    }
+
+    console.log('[EMAIL VERIFY] Attempting to verify email with token:', token.substring(0, 10) + '...');
+
+    // Find user with this verification token
+    const user = db.data.users.find(u => u.verificationToken === token && !u.emailVerified);
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid or expired verification token' });
+    }
+
+    // Check if token is expired (24 hours)
+    const tokenAge = Date.now() - new Date(user.verificationTokenCreatedAt).getTime();
+    const tokenExpiry = 24 * 60 * 60 * 1000; // 24 hours
+    if (tokenAge > tokenExpiry) {
+      return res.status(400).json({ error: 'Verification token has expired' });
+    }
+
+    // Mark email as verified
+    user.emailVerified = true;
+    user.emailVerifiedAt = new Date().toISOString();
+    user.verificationToken = null;
+    user.verificationTokenCreatedAt = null;
+
+    await db.write();
+
+    console.log('[EMAIL VERIFY] Email verified successfully for:', user.email);
+    return res.json({ 
+      success: true, 
+      message: 'Email verified successfully',
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        emailVerified: user.emailVerified
+      }
+    });
+  } catch (error) {
+    console.error('[EMAIL VERIFY] Error:', error);
+    return res.status(500).json({ error: 'Failed to verify email' });
+  }
+});
+
+// Request password reset
+app.post('/api/auth/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    console.log('[PASSWORD RESET] Password reset requested for:', email);
+
+    // Find user by email
+    const user = db.data.users.find(u => u.email === email);
+    if (!user) {
+      // Don't reveal if user exists or not for security
+      console.log('[PASSWORD RESET] Password reset requested for non-existent email:', email);
+      return res.json({ 
+        success: true, 
+        message: 'If an account with this email exists, a password reset link has been sent' 
+      });
+    }
+
+    // Generate password reset token
+    const resetToken = generatePasswordResetToken();
+    user.passwordResetToken = resetToken;
+    user.passwordResetTokenCreatedAt = new Date().toISOString();
+
+    await db.write();
+
+    // Send password reset email
+    try {
+      await sendPasswordResetEmail(email, resetToken, user.name);
+      console.log('[PASSWORD RESET] Password reset email sent to:', email);
+    } catch (emailError) {
+      console.error('[PASSWORD RESET] Failed to send email:', emailError);
+      // Remove the token if email failed
+      user.passwordResetToken = null;
+      user.passwordResetTokenCreatedAt = null;
+      await db.write();
+      return res.status(500).json({ error: 'Failed to send password reset email' });
+    }
+
+    return res.json({ 
+      success: true, 
+      message: 'If an account with this email exists, a password reset link has been sent' 
+    });
+  } catch (error) {
+    console.error('[PASSWORD RESET] Error:', error);
+    return res.status(500).json({ error: 'Failed to process password reset request' });
+  }
+});
+
+// Reset password with token
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword) {
+      return res.status(400).json({ error: 'Token and new password are required' });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters long' });
+    }
+
+    console.log('[PASSWORD RESET] Attempting to reset password with token:', token.substring(0, 10) + '...');
+
+    // Find user with this reset token
+    const user = db.data.users.find(u => u.passwordResetToken === token);
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid or expired reset token' });
+    }
+
+    // Check if token is expired (1 hour)
+    const tokenAge = Date.now() - new Date(user.passwordResetTokenCreatedAt).getTime();
+    const tokenExpiry = 60 * 60 * 1000; // 1 hour
+    if (tokenAge > tokenExpiry) {
+      return res.status(400).json({ error: 'Reset token has expired' });
+    }
+
+    // Update password and clear reset token
+    user.password = newPassword; // In production, hash this password
+    user.passwordResetToken = null;
+    user.passwordResetTokenCreatedAt = null;
+    user.passwordUpdatedAt = new Date().toISOString();
+
+    await db.write();
+
+    console.log('[PASSWORD RESET] Password reset successfully for:', user.email);
+    return res.json({ 
+      success: true, 
+      message: 'Password reset successfully' 
+    });
+  } catch (error) {
+    console.error('[PASSWORD RESET] Error:', error);
+    return res.status(500).json({ error: 'Failed to reset password' });
+  }
+});
+
+// Resend verification email
+app.post('/api/auth/resend-verification', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    console.log('[RESEND VERIFICATION] Resend verification requested for:', email);
+
+    // Find user by email
+    const user = db.data.users.find(u => u.email === email);
+    if (!user) {
+      return res.status(400).json({ error: 'User not found' });
+    }
+
+    if (user.emailVerified) {
+      return res.status(400).json({ error: 'Email is already verified' });
+    }
+
+    // Generate new verification token
+    const verificationToken = generateVerificationToken();
+    user.verificationToken = verificationToken;
+    user.verificationTokenCreatedAt = new Date().toISOString();
+
+    await db.write();
+
+    // Send verification email
+    try {
+      await sendVerificationEmail(email, verificationToken, user.name);
+      console.log('[RESEND VERIFICATION] Verification email resent to:', email);
+    } catch (emailError) {
+      console.error('[RESEND VERIFICATION] Failed to send email:', emailError);
+      // Remove the token if email failed
+      user.verificationToken = null;
+      user.verificationTokenCreatedAt = null;
+      await db.write();
+      return res.status(500).json({ error: 'Failed to send verification email' });
+    }
+
+    return res.json({ 
+      success: true, 
+      message: 'Verification email has been resent' 
+    });
+  } catch (error) {
+    console.error('[RESEND VERIFICATION] Error:', error);
+    return res.status(500).json({ error: 'Failed to resend verification email' });
   }
 });
 
@@ -4076,136 +4395,52 @@ app.post('/api/auth/login', async (req, res) => {
     // --- Local Authentication (No Captcha Required) ---
     let data = { user: null, session: null };
     let error = null;
-    // Check if Supabase is properly configured (not using test/default values)
-    if (supabaseUrl && supabaseAnonKey && 
-        supabaseUrl !== 'https://test.supabase.co' && 
-        supabaseAnonKey !== 'test-key' && 
-        supabaseUrl !== 'your-supabase-url-here' && 
-        supabaseAnonKey !== 'your-supabase-anon-key-here' &&
-        process.env.SUPABASE_URL && 
-        process.env.SUPABASE_ANON_KEY) {
-      try {
-        console.log('[LOGIN] Attempting Supabase authentication with JSON request...');
-        
-        // Supabase expects JSON data with captcha token
-        const jsonData = {
-          email: email,
-          password: password
-        };
-
-        // Add captcha token if provided
-        if (req.body.captchaToken) {
-          jsonData.captchaToken = req.body.captchaToken;
-          console.log('[LOGIN] Using captcha token for Supabase authentication');
-        } else {
-          console.log('[LOGIN] No captcha token provided, may fail if captcha is required');
-        }
-
-        const supabaseAuthResponse = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': supabaseAnonKey
-          },
-          body: JSON.stringify(jsonData)
-        });
-
-        if (supabaseAuthResponse.ok) {
-          const authData = await supabaseAuthResponse.json();
-          console.log('[LOGIN] Supabase authentication successful');
-          
-          data = {
-            user: authData.user,
-            session: {
-              access_token: authData.access_token,
-              refresh_token: authData.refresh_token,
-              expires_in: authData.expires_in
-            }
-          };
-        } else {
-          const errorData = await supabaseAuthResponse.json();
-          console.log('[LOGIN] Supabase authentication failed:', errorData);
-          
-          // Handle specific Supabase errors
-          if (errorData.error === 'invalid_grant') {
-            if (errorData.error_description?.includes('Email not confirmed')) {
-              error = { 
-                message: 'Email not confirmed', 
-                code: 'EMAIL_NOT_CONFIRMED',
-                status: 401
-              };
-            } else if (errorData.error_description?.includes('Invalid login credentials')) {
-              error = { 
-                message: 'Invalid login credentials', 
-                code: 'invalid_credentials',
-                status: 401
-              };
-            } else {
-              error = { 
-                message: errorData.error_description || 'Authentication failed', 
-                code: errorData.error,
-                status: 400
-              };
-            }
-          } else {
-            error = { 
-              message: errorData.error_description || 'Authentication failed', 
-              code: errorData.error,
-              status: 400
-            };
-          }
-
-          // Handle captcha-specific errors - bypass captcha requirement for now
-          if (errorData.error_code === 'unexpected_failure' && errorData.msg?.includes('captcha')) {
-            console.log('[LOGIN] Captcha required by Supabase, falling back to local authentication...');
-            // Instead of failing, fall back to local authentication
-            let local = db.data.users.find(u => u.email === email);
-            if (!local) {
-              local = { id: `local_${Date.now()}`, email, name: email.split('@')[0], createdAt: new Date().toISOString(), courseCredits: 0 };
-              db.data.users.push(local);
-              await db.write();
-              
-              // Assign onboarding course to new users
-              await assignOnboardingCourse(local.id);
-            }
-            data.user = { id: local.id, email: local.email, user_metadata: { name: local.name } };
-            data.session = { access_token: `local:${local.id}` };
-            error = null; // Clear the error since we're using local auth
-          } else if (errorData.error === 'invalid_grant' && errorData.error_description?.includes('captcha')) {
-            // For login, captcha is not required - fall back to local authentication
-            console.log('[LOGIN] Captcha verification required, falling back to local authentication...');
-            let local = db.data.users.find(u => u.email === email);
-            if (!local) {
-              local = { id: `local_${Date.now()}`, email, name: email.split('@')[0], createdAt: new Date().toISOString(), courseCredits: 0 };
-              db.data.users.push(local);
-              await db.write();
-              
-              // Assign onboarding course to new users
-              await assignOnboardingCourse(local.id);
-            }
-            data.user = { id: local.id, email: local.email, user_metadata: { name: local.name } };
-            data.session = { access_token: `local:${local.id}` };
-            error = null; // Clear the error since we're using local auth
-          }
-        }
-      } catch (supabaseError) {
-        console.error('[LOGIN] Supabase authentication error:', supabaseError);
-        error = { message: supabaseError.message, code: 'SUPABASE_ERROR', status: 500 };
-      }
+    // --- Local Authentication with Email Verification Check ---
+    console.log('[LOGIN] Using local authentication...');
+    
+    // Find user in local database
+    const localUser = db.data.users.find(u => u.email === email);
+    
+    if (!localUser) {
+      error = { 
+        message: 'Invalid email or password', 
+        code: 'invalid_credentials',
+        status: 401
+      };
     } else {
-      // Dev mode: create/find local user and issue dev token
-      console.log('[LOGIN] Supabase not configured, using dev mode...');
-      let local = db.data.users.find(u => u.email === email);
-      if (!local) {
-        local = { id: `dev_${Date.now()}`, email, name: email.split('@')[0], createdAt: new Date().toISOString(), courseCredits: 0 };
-        db.data.users.push(local);
-        await db.write();
+      // Check if email is verified
+      if (!localUser.emailVerified) {
+        error = { 
+          message: 'Please verify your email address before signing in. Check your inbox and spam folder for the verification link.',
+          code: 'EMAIL_NOT_CONFIRMED',
+          status: 401
+        };
+      } else if (localUser.password === password) { // In production, compare hashed passwords
+        console.log('[LOGIN] Local authentication successful');
         
-        // Assign onboarding course to new dev users
-        await assignOnboardingCourse(local.id);
+        // Generate local token
+        const token = `local:${localUser.id}`;
+        
+        data = {
+          user: {
+            id: localUser.id,
+            email: localUser.email,
+            name: localUser.name,
+            user_metadata: { name: localUser.name }
+          },
+          session: {
+            access_token: token,
+            refresh_token: token,
+            expires_in: 3600
+          }
+        };
+      } else {
+        error = { 
+          message: 'Invalid email or password', 
+          code: 'invalid_credentials',
+          status: 401
+        };
       }
-      data.user = { id: local.id, email: local.email, user_metadata: { name: local.name } };
-      data.session = { access_token: `dev:${local.id}` };
     }
 
     if (error) {
@@ -7383,7 +7618,7 @@ app.post('/api/admin/trials/clear', authenticateToken, requireAdminIfConfigured,
   }
 });
 
-// Delete user account and their data
+// Delete user account and their data - Enhanced local service purging
 app.post('/api/account/delete', authenticateToken, async (req, res) => {
   try {
     const { confirm } = req.body || {};
@@ -7394,8 +7629,12 @@ app.post('/api/account/delete', authenticateToken, async (req, res) => {
     const userId = req.user.id;
     const userEmail = req.user.email;
 
-    // Remove user's courses
+    console.log('[ACCOUNT DELETE] Starting account deletion for:', { userId, userEmail });
+
+    // 1. Remove user's courses and course files
     const userCourses = (db.data.courses || []).filter(c => c.userId === userId);
+    console.log(`[ACCOUNT DELETE] Found ${userCourses.length} courses to delete`);
+    
     for (const course of userCourses) {
       try {
         // Remove JSON file if present
@@ -7403,6 +7642,7 @@ app.post('/api/account/delete', authenticateToken, async (req, res) => {
         const courseFilePath = path.join(coursesDir, `${course.id}.json`);
         if (fs.existsSync(courseFilePath)) {
           fs.unlinkSync(courseFilePath);
+          console.log(`[ACCOUNT DELETE] Deleted course file: ${course.id}`);
         }
       } catch (e) {
         console.warn('[ACCOUNT DELETE] Failed to delete course file:', course?.id, e?.message);
@@ -7410,19 +7650,113 @@ app.post('/api/account/delete', authenticateToken, async (req, res) => {
     }
     db.data.courses = (db.data.courses || []).filter(c => c.userId !== userId);
 
-    // Remove user and record deletion
+    // 2. Remove user's images and image files
+    const userImages = (db.data.images || []).filter(img => img.userId === userId);
+    console.log(`[ACCOUNT DELETE] Found ${userImages.length} images to delete`);
+    
+    for (const image of userImages) {
+      try {
+        // Remove image file if present
+        const imagesDir = path.join(__dirname, 'data', 'images');
+        const imageFilePath = path.join(imagesDir, `${image.id}.jpg`);
+        if (fs.existsSync(imageFilePath)) {
+          fs.unlinkSync(imageFilePath);
+          console.log(`[ACCOUNT DELETE] Deleted image file: ${image.id}`);
+        }
+      } catch (e) {
+        console.warn('[ACCOUNT DELETE] Failed to delete image file:', image?.id, e?.message);
+      }
+    }
+    db.data.images = (db.data.images || []).filter(img => img.userId !== userId);
+
+    // 3. Remove user's quizzes and quiz data
+    const userQuizzes = (db.data.quizzes || []).filter(q => q.userId === userId);
+    console.log(`[ACCOUNT DELETE] Found ${userQuizzes.length} quizzes to delete`);
+    db.data.quizzes = (db.data.quizzes || []).filter(q => q.userId !== userId);
+
+    // 4. Remove user's trial records
+    db.data.trialRecords = (db.data.trialRecords || []).filter(t => t.email !== userEmail);
+
+    // 5. Remove user from database and record deletion
     db.data.users = (db.data.users || []).filter(u => u.id !== userId);
+    
+    // Add to deleted users list for future reference
     try {
       db.data.deletedUsers = Array.isArray(db.data.deletedUsers) ? db.data.deletedUsers : [];
-      db.data.deletedUsers.push({ id: userId, email: userEmail, deletedAt: new Date().toISOString() });
-    } catch {}
+      db.data.deletedUsers.push({ 
+        id: userId, 
+        email: userEmail, 
+        deletedAt: new Date().toISOString(),
+        coursesDeleted: userCourses.length,
+        imagesDeleted: userImages.length,
+        quizzesDeleted: userQuizzes.length
+      });
+    } catch (e) {
+      console.warn('[ACCOUNT DELETE] Failed to record deletion:', e?.message);
+    }
+
+    // 6. Clear any cached data for this user
+    if (global.aiService && global.aiService.clearCache) {
+      try {
+        const cacheKeysToClear = [
+          `user_courses_${userId}`,
+          `user_images_${userId}`,
+          `user_quizzes_${userId}`
+        ];
+        
+        for (const cacheKey of cacheKeysToClear) {
+          global.aiService.clearCache(cacheKey);
+        }
+        console.log(`[ACCOUNT DELETE] Cleared cache for user: ${userId}`);
+      } catch (cacheError) {
+        console.warn(`[ACCOUNT DELETE] Failed to clear cache for user ${userId}:`, cacheError.message);
+      }
+    }
+
+    // 7. Clear SSE connections for this user
+    if (global.sseConnections && global.sseConnections.has(userId)) {
+      try {
+        const connection = global.sseConnections.get(userId);
+        if (connection && connection.res) {
+          connection.res.end();
+        }
+        global.sseConnections.delete(userId);
+        console.log(`[ACCOUNT DELETE] Closed SSE connection for user: ${userId}`);
+      } catch (e) {
+        console.warn('[ACCOUNT DELETE] Failed to close SSE connection:', e?.message);
+      }
+    }
+
+    // 8. Save all changes to database
     await db.write();
 
-    // Prefer Edge Function for hard delete; fallback to admin client
-    await deleteSupabaseUser(userId);
+    // 9. Try to delete from Supabase if still configured (legacy cleanup)
+    try {
+      if (typeof deleteSupabaseUser === 'function') {
+        await deleteSupabaseUser(userId);
+        console.log(`[ACCOUNT DELETE] Supabase user deleted: ${userId}`);
+      }
+    } catch (e) {
+      console.warn('[ACCOUNT DELETE] Supabase cleanup failed (expected if not configured):', e?.message);
+    }
 
-    console.log('[ACCOUNT DELETE] Account deleted for:', { userId, userEmail });
-    return res.json({ success: true });
+    console.log('[ACCOUNT DELETE] Account fully purged for:', { 
+      userId, 
+      userEmail, 
+      coursesDeleted: userCourses.length,
+      imagesDeleted: userImages.length,
+      quizzesDeleted: userQuizzes.length
+    });
+    
+    return res.json({ 
+      success: true, 
+      message: 'Account and all associated data have been permanently deleted',
+      dataDeleted: {
+        courses: userCourses.length,
+        images: userImages.length,
+        quizzes: userQuizzes.length
+      }
+    });
   } catch (e) {
     console.error('[ACCOUNT DELETE] Failed to delete account:', e);
     return res.status(500).json({ error: 'Failed to delete account' });
