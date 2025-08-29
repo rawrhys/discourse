@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { supabase } from '../../config/supabase';
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState('');
@@ -14,12 +13,22 @@ const ForgotPassword = () => {
     setMessage('');
     try {
       setIsSubmitting(true);
-      const redirectTo = import.meta.env.VITE_SUPABASE_REDIRECT_URL || (window.location.origin + '/reset-password');
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo
+      
+      const response = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
       });
-      if (error) throw error;
-      setMessage('If an account exists for this email, a reset link has been sent.');
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to send reset link');
+      }
+      
+      setMessage(data.message || 'If an account exists for this email, a reset link has been sent.');
     } catch (err) {
       setError(err?.message || 'Failed to send reset link');
     } finally {

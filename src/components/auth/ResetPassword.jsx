@@ -1,43 +1,63 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '../../config/supabase';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 
 const ResetPassword = () => {
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const token = searchParams.get('token');
 
   useEffect(() => {
-    // Supabase v2 sends a session when navigating from the reset link
-    const init = async () => {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      if (error) {
-        setError('Password reset session error. Try the link again.');
-      }
-      if (!session) {
-        // Attempt to exchange from URL (hash params)
-        try {
-          const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(window.location.href);
-          if (exchangeError) {
-            setError('Password reset link invalid or expired.');
-          }
-        } catch (e) {
-          // Ignore
-        }
-      }
-    };
-    init();
-  }, []);
+    if (!token) {
+      setError('Invalid reset link. Please request a new password reset.');
+    }
+  }, [token]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setMessage('');
+    
+    if (!token) {
+      setError('Invalid reset link. Please request a new password reset.');
+      return;
+    }
+
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters long');
+      return;
+    }
+
     try {
       setIsSubmitting(true);
-      const { error } = await supabase.auth.updateUser({ password });
-      if (error) throw error;
-      setMessage('Your password has been updated. You can now log in.');
+      
+      const response = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          token, 
+          newPassword: password 
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to reset password');
+      }
+      
+      setMessage('Your password has been updated successfully. You can now log in.');
+      
+      // Redirect to login after a short delay
+      setTimeout(() => {
+        navigate('/login');
+      }, 3000);
+      
     } catch (err) {
       setError(err?.message || 'Failed to reset password');
     } finally {

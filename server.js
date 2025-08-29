@@ -110,12 +110,16 @@ const sendVerificationEmail = async (email, token, name) => {
   }
   
   const verificationUrl = `${process.env.FRONTEND_URL || 'https://thediscourse.ai'}/verify-email?token=${token}`;
+  const currentYear = new Date().getFullYear();
   
-  const mailOptions = {
-    from: process.env.SMTP_FROM || 'noreply@thediscourse.ai',
-    to: email,
-    subject: 'Verify Your Email - Discourse AI',
-    html: `
+  // Read and render the signup confirmation email template
+  let emailTemplate;
+  try {
+    emailTemplate = await fs.promises.readFile('./server/email-templates/signup-confirmation.html', 'utf8');
+  } catch (error) {
+    console.error('[EMAIL] Failed to read signup confirmation template:', error);
+    // Fallback to basic template
+    emailTemplate = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #333;">Welcome to Discourse AI, ${name}!</h2>
         <p>Thank you for registering. Please verify your email address to complete your account setup.</p>
@@ -130,7 +134,20 @@ const sendVerificationEmail = async (email, token, name) => {
         <p>This link will expire in 24 hours.</p>
         <p>If you didn't create this account, please ignore this email.</p>
       </div>
-    `
+    `;
+  }
+  
+  // Replace template variables
+  const htmlContent = emailTemplate
+    .replace(/\{\{ \.Email \}\}/g, email)
+    .replace(/\{\{ \.ConfirmationURL \}\}/g, verificationUrl)
+    .replace(/\{\{ \.CurrentYear \}\}/g, currentYear.toString());
+  
+  const mailOptions = {
+    from: process.env.SMTP_FROM || 'noreply@thediscourse.ai',
+    to: email,
+    subject: 'Verify Your Email - Discourse AI',
+    html: htmlContent
   };
   
   try {
@@ -152,12 +169,16 @@ const sendPasswordResetEmail = async (email, token, name) => {
   }
   
   const resetUrl = `${process.env.FRONTEND_URL || 'https://thediscourse.ai'}/reset-password?token=${token}`;
+  const currentYear = new Date().getFullYear();
   
-  const mailOptions = {
-    from: process.env.SMTP_FROM || 'noreply@thediscourse.ai',
-    to: email,
-    subject: 'Reset Your Password - Discourse AI',
-    html: `
+  // Read and render the password reset email template
+  let emailTemplate;
+  try {
+    emailTemplate = await fs.promises.readFile('./server/email-templates/password-reset.html', 'utf8');
+  } catch (error) {
+    console.error('[EMAIL] Failed to read password reset template:', error);
+    // Fallback to basic template
+    emailTemplate = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #333;">Password Reset Request</h2>
         <p>Hello ${name},</p>
@@ -174,7 +195,20 @@ const sendPasswordResetEmail = async (email, token, name) => {
         <p>If you didn't request a password reset, please ignore this email.</p>
         <p>Your password will remain unchanged.</p>
       </div>
-    `
+    `;
+  }
+  
+  // Replace template variables
+  const htmlContent = emailTemplate
+    .replace(/\{\{ \.Email \}\}/g, email)
+    .replace(/\{\{ \.ResetURL \}\}/g, resetUrl)
+    .replace(/\{\{ \.CurrentYear \}\}/g, currentYear.toString());
+  
+  const mailOptions = {
+    from: process.env.SMTP_FROM || 'noreply@thediscourse.ai',
+    to: email,
+    subject: 'Reset Your Password - Discourse AI',
+    html: htmlContent
   };
   
   try {
