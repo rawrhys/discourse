@@ -30,6 +30,7 @@ import { compressImage, getOptimalFormat, getFileExtension, formatFileSize } fro
 import sharp from 'sharp';
 import imageProxyHandler from './server/utils/proxy.js';
 import enhancedImageProxy from './server/utils/enhancedImageProxy.js';
+import publicCourseSessionService from './src/services/PublicCourseSessionService.js';
 import {
   publicCourseRateLimit,
   publicCourseSlowDown,
@@ -75,8 +76,7 @@ setInterval(() => {
 
 const app = express();
 
-// Import PublicCourseSessionService singleton instance
-import publicCourseSessionService from './src/services/PublicCourseSessionService.js';
+
 
 // --- CORE MIDDLEWARE ---
 // Removed Private State Token restrictions to avoid console violations and allow embedded widgets to operate
@@ -4055,7 +4055,6 @@ app.post('/api/auth/register', async (req, res) => {
         code: 'LOCAL_AUTH_ERROR',
         status: 500
       };
-    });
     }
 
   } catch (error) {
@@ -4077,8 +4076,14 @@ app.post('/api/auth/login', async (req, res) => {
     // --- Local Authentication (No Captcha Required) ---
     let data = { user: null, session: null };
     let error = null;
-    // Local authentication logic
-    try {
+    // Check if Supabase is properly configured (not using test/default values)
+    if (supabaseUrl && supabaseAnonKey && 
+        supabaseUrl !== 'https://test.supabase.co' && 
+        supabaseAnonKey !== 'test-key' && 
+        supabaseUrl !== 'your-supabase-url-here' && 
+        supabaseAnonKey !== 'your-supabase-anon-key-here' &&
+        process.env.SUPABASE_URL && 
+        process.env.SUPABASE_ANON_KEY) {
       try {
         console.log('[LOGIN] Attempting Supabase authentication with JSON request...');
         
