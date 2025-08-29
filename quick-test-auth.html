@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supabase Auth Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        button { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .result { margin-top: 20px; padding: 15px; border-radius: 4px; }
+        .success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .error { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+        .info { background: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Supabase Authentication Test</h1>
+    <p>This page tests the fixed authentication flow with proper form-encoded requests.</p>
+    
+    <div class="form-group">
+        <label for="email">Email:</label>
+        <input type="email" id="email" value="test@example.com" placeholder="Enter email">
+    </div>
+    
+    <div class="form-group">
+        <label for="password">Password:</label>
+        <input type="password" id="password" value="testpassword123" placeholder="Enter password">
+    </div>
+    
+    <button onclick="testAuth()">Test Authentication</button>
+    
+    <div id="result"></div>
+
+    <script>
+        const SUPABASE_URL = 'https://gaapqvkjblqvpokmhlmh.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdhYXBxdmtqYmxxdnBva21obG1oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQzMDg5NzksImV4cCI6MjA2OTg4NDk3OX0.aAtqS5H0JhNHgatPEjJ8iJRFnZumyaRYxlSA9dkkfQE';
+
+        async function testAuth() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const resultDiv = document.getElementById('result');
+            
+            if (!email || !password) {
+                showResult('Please enter both email and password', 'error');
+                return;
+            }
+
+            showResult('Testing authentication...', 'info');
+
+            try {
+                // Test 1: Form-encoded request (correct format)
+                console.log('🧪 Testing form-encoded request...');
+                
+                const formData = new URLSearchParams({
+                    email: email,
+                    password: password,
+                    grant_type: 'password'
+                });
+
+                const response = await fetch(`${SUPABASE_URL}/auth/v1/token`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'apikey': SUPABASE_ANON_KEY
+                    },
+                    body: formData.toString()
+                });
+
+                console.log('📡 Response status:', response.status);
+                console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
+
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('✅ Authentication successful:', data);
+                    showResult(`
+                        <strong>✅ Authentication Successful!</strong><br>
+                        <strong>User ID:</strong> ${data.user?.id || 'N/A'}<br>
+                        <strong>Email:</strong> ${data.user?.email || 'N/A'}<br>
+                        <strong>Access Token:</strong> ${data.access_token ? 'Present' : 'Missing'}<br>
+                        <strong>Token Type:</strong> ${data.token_type || 'N/A'}<br>
+                        <strong>Expires In:</strong> ${data.expires_in || 'N/A'} seconds
+                    `, 'success');
+                } else {
+                    const errorText = await response.text();
+                    console.log('❌ Authentication failed:', errorText);
+                    
+                    let errorMessage = 'Authentication failed';
+                    try {
+                        const errorData = JSON.parse(errorText);
+                        errorMessage = `
+                            <strong>❌ Authentication Failed</strong><br>
+                            <strong>Error:</strong> ${errorData.error || 'Unknown'}<br>
+                            <strong>Description:</strong> ${errorData.error_description || 'No description'}<br>
+                            <strong>Hint:</strong> ${errorData.hint || 'No hint provided'}
+                        `;
+                    } catch (e) {
+                        errorMessage = `<strong>❌ Authentication Failed</strong><br>Raw error: ${errorText}`;
+                    }
+                    
+                    showResult(errorMessage, 'error');
+                }
+
+            } catch (error) {
+                console.error('❌ Test error:', error);
+                showResult(`<strong>❌ Test Error:</strong> ${error.message}`, 'error');
+            }
+        }
+
+        function showResult(message, type) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = message;
+            resultDiv.className = `result ${type}`;
+        }
+
+        // Auto-test on page load
+        window.addEventListener('load', () => {
+            console.log('🧪 Page loaded, ready for testing');
+            console.log('🔧 Supabase URL:', SUPABASE_URL);
+            console.log('🔧 Anon Key configured:', SUPABASE_ANON_KEY ? 'Yes' : 'No');
+        });
+    </script>
+</body>
+</html>

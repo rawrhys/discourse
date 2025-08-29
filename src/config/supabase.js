@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://gaapqvkjblqvpokmh.supabase.co';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://gaapqvkjblqvpokmhlmh.supabase.co';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdhYXBxdmtqYmxxdnBva21obG1oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQzMDg5NzksImV4cCI6MjA2OTg4NDk3OX0.aAtqS5H0JhNHgatPEjJ8iJRFnZumyaRYxlSA9dkkfQE';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -15,6 +15,10 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     // confirmEmailRedirectTo: `${window.location.origin}/verify-email`
   }
 });
+
+// Expose URL and key for direct API calls
+supabase.supabaseUrl = supabaseUrl;
+supabase.supabaseKey = supabaseAnonKey;
 
 // Debug logging
 console.log('🔧 [SUPABASE] Client initialized with URL:', supabaseUrl);

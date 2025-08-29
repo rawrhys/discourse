@@ -4409,20 +4409,81 @@ app.post('/api/auth/login', async (req, res) => {
     console.log('[LOGIN] Login attempt for email:', email);
     console.log('[LOGIN] Supabase configured:', !!supabase);
 
-    // --- Supabase Login (or dev fallback) ---
+    // --- Supabase Login with proper form-encoded request ---
     let data = { user: null, session: null };
     let error = null;
     if (supabase) {
       try {
-        const resp = await supabase.auth.signInWithPassword({ email, password });
-        data = resp.data;
-        error = resp.error;
+        console.log('[LOGIN] Attempting Supabase authentication with form-encoded request...');
+        
+        // Create form-encoded data as required by Supabase
+        const formData = new URLSearchParams({
+          email: email,
+          password: password,
+          grant_type: 'password'
+        });
+
+        const supabaseAuthResponse = await fetch(`${supabaseUrl}/auth/v1/token`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'apikey': supabaseAnonKey
+          },
+          body: formData.toString()
+        });
+
+        if (supabaseAuthResponse.ok) {
+          const authData = await supabaseAuthResponse.json();
+          console.log('[LOGIN] Supabase authentication successful');
+          
+          data = {
+            user: authData.user,
+            session: {
+              access_token: authData.access_token,
+              refresh_token: authData.refresh_token,
+              expires_in: authData.expires_in
+            }
+          };
+        } else {
+          const errorData = await supabaseAuthResponse.json();
+          console.log('[LOGIN] Supabase authentication failed:', errorData);
+          
+          // Handle specific Supabase errors
+          if (errorData.error === 'invalid_grant') {
+            if (errorData.error_description?.includes('Email not confirmed')) {
+              error = { 
+                message: 'Email not confirmed', 
+                code: 'EMAIL_NOT_CONFIRMED',
+                status: 401
+              };
+            } else if (errorData.error_description?.includes('Invalid login credentials')) {
+              error = { 
+                message: 'Invalid login credentials', 
+                code: 'invalid_credentials',
+                status: 401
+              };
+            } else {
+              error = { 
+                message: errorData.error_description || 'Authentication failed', 
+                code: errorData.error,
+                status: 400
+              };
+            }
+          } else {
+            error = { 
+              message: errorData.error_description || 'Authentication failed', 
+              code: errorData.error,
+              status: 400
+            };
+          }
+        }
       } catch (supabaseError) {
         console.error('[LOGIN] Supabase authentication error:', supabaseError);
-        error = { message: supabaseError.message, code: 'SUPABASE_ERROR' };
+        error = { message: supabaseError.message, code: 'SUPABASE_ERROR', status: 500 };
       }
     } else {
       // Dev mode: create/find local user and issue dev token
+      console.log('[LOGIN] Supabase not configured, using dev mode...');
       let local = db.data.users.find(u => u.email === email);
       if (!local) {
         local = { id: `dev_${Date.now()}`, email, name: email.split('@')[0], createdAt: new Date().toISOString(), courseCredits: 0 };
@@ -4446,13 +4507,7 @@ app.post('/api/auth/login', async (req, res) => {
       });
       
       // Check for specific unconfirmed email error
-      if (error.message && (
-        error.message.includes('Email not confirmed') ||
-        error.message.includes('not confirmed') ||
-        error.message.includes('confirm your email') ||
-        error.message.includes('email_confirmed_at') ||
-        error.message.includes('unconfirmed')
-      )) {
+      if (error.code === 'EMAIL_NOT_CONFIRMED' || error.message.includes('Email not confirmed')) {
         return res.status(401).json({ 
           error: 'Please confirm your email address before signing in. Check your inbox and spam folder for the confirmation link.',
           code: 'EMAIL_NOT_CONFIRMED',
@@ -4476,7 +4531,10 @@ app.post('/api/auth/login', async (req, res) => {
         });
       }
       
-      return res.status(401).json({ error: 'Invalid credentials', details: error.message });
+      return res.status(error.status || 401).json({ 
+        error: error.message || 'Invalid credentials', 
+        code: error.code 
+      });
     }
 
     if (!data.user || !data.session) {
@@ -4484,20 +4542,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
       
     // --- Block login for deleted users (defense in depth) ---
-    try {
-      const wasDeleted = Array.isArray(db?.data?.deletedUsers) && (
-        db.data.deletedUsers.some(d => d.id === data.user.id) ||
-        db.data.deletedUsers.some(d => (d.email || '').toLowerCase() === (data.user.email || '').toLowerCase())
-      );
-      if (wasDeleted) {
-        // Prefer Edge Function for hard delete; fallback to admin client
-        await deleteSupabaseUser(data.user.id);
-        return res.status(403).json({ error: 'Account has been deleted. Please contact support if this is unexpected.', code: 'ACCOUNT_DELETED' });
-      }
-    } catch {}
-      
-    // --- Local User Sync ---
-    // Ensure local user exists and has credits
+
     let localUser = db.data.users.find((u) => u.id === data.user.id);
     if (!localUser) {
         localUser = {
@@ -6620,7 +6665,7 @@ app.get('/api/captcha/verify/:courseId',
     }
     
     console.log(`[API] Generated CAPTCHA for course ${courseId}:`, { 
-      challenge: challengeData, 
+      challenge: challengeData,
       challengeKey: newChallengeKey,
       type: selectedType.type,
       answer: challengeInfo.answer

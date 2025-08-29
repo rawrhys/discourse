@@ -94,6 +94,8 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password, captchaToken) => {
     try {
+      console.log('🔧 [AUTH] Starting login for:', email);
+      
       // Mandatory preflight check against backend deletion list (fail-closed)
       const resp = await fetch('/api/auth/can-login', {
         method: 'POST',
@@ -108,7 +110,68 @@ export const AuthProvider = ({ children }) => {
         throw new Error('This account has been deleted.');
       }
 
-      // Use backend login endpoint instead of direct Supabase call
+      // Try Supabase authentication first with proper form-encoded request
+      try {
+        console.log('🔧 [AUTH] Attempting Supabase authentication...');
+        
+        // Create form-encoded data as required by Supabase
+        const formData = new URLSearchParams({
+          email: email,
+          password: password,
+          grant_type: 'password'
+        });
+
+        const supabaseAuthResponse = await fetch(`${supabase.supabaseUrl}/auth/v1/token`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'apikey': supabase.supabaseKey
+          },
+          body: formData.toString()
+        });
+
+        if (supabaseAuthResponse.ok) {
+          const authData = await supabaseAuthResponse.json();
+          console.log('🔧 [AUTH] Supabase authentication successful');
+          
+          // Create user object from Supabase response
+          const user = {
+            id: authData.user.id,
+            email: authData.user.email,
+            user_metadata: authData.user.user_metadata || {}
+          };
+
+          setUser(user);
+          
+          // Store token
+          if (authData.access_token) {
+            try { localStorage.setItem('token', authData.access_token); } catch {}
+          }
+          
+          return { user, session: { access_token: authData.access_token } };
+        } else {
+          const errorData = await supabaseAuthResponse.json();
+          console.log('🔧 [AUTH] Supabase authentication failed:', errorData);
+          
+          // Handle specific Supabase errors
+          if (errorData.error === 'invalid_grant') {
+            if (errorData.error_description?.includes('Email not confirmed')) {
+              throw new Error('Please confirm your email address before signing in. Check your inbox and spam folder for the confirmation link.');
+            } else if (errorData.error_description?.includes('Invalid login credentials')) {
+              throw new Error('Invalid email or password. Please check your credentials and try again.');
+            }
+          }
+          
+          // Fall back to backend authentication
+          console.log('🔧 [AUTH] Falling back to backend authentication...');
+        }
+      } catch (supabaseError) {
+        console.warn('🔧 [AUTH] Supabase authentication error, falling back to backend:', supabaseError.message);
+        // Continue with backend authentication as fallback
+      }
+
+      // Use backend login endpoint as fallback
+      console.log('🔧 [AUTH] Using backend authentication...');
       const loginResp = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -144,7 +207,7 @@ export const AuthProvider = ({ children }) => {
       
       return { user, session: { access_token: loginData.token } };
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('🔧 [AUTH] Login error:', error);
       throw error;
     }
   };
