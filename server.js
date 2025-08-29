@@ -6933,7 +6933,6 @@ app.post('/api/auth/create-checkout-session', async (req, res) => {
         },
       },
       payment_method_collection: 'always',
-      setup_future_usage: 'off_session',
       success_url: `${req.headers.origin || 'https://thediscourse.ai'}/register?payment=success`,
       cancel_url: `${req.headers.origin || 'https://thediscourse.ai'}/register?payment=cancel`,
     });
