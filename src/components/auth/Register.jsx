@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 
@@ -12,9 +11,8 @@ const Register = () => {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [currentStep, setCurrentStep] = useState(1); // 1: form, 2: payment, 3: processing, 4: email verification
+  const [currentStep, setCurrentStep] = useState(1); // 1: form, 2: payment, 3: success
   const [isPaymentComplete, setIsPaymentComplete] = useState(false);
-  const { register } = useAuth();
   const navigate = useNavigate();
   const [captchaToken, setCaptchaToken] = useState();
   const captcha = useRef();
@@ -67,14 +65,23 @@ const Register = () => {
       sessionStorage.removeItem('reg_password');
     } catch {}
     
+    console.log('[Payment] Payment complete, starting redirect countdown...');
+    
     // Redirect to login after a short delay to show success message
     setTimeout(() => {
-      navigate('/login', { 
-        state: { 
-          message: 'Payment successful! Please log in and verify your email to complete your account setup.',
-          email: email // Pass email to pre-fill login form
-        }
-      });
+      console.log('[Payment] Attempting redirect to login...');
+      try {
+        navigate('/login', { 
+          state: { 
+            message: 'Payment successful! Please log in and verify your email to complete your account setup.',
+            email: email // Pass email to pre-fill login form
+          }
+        });
+      } catch (redirectError) {
+        console.error('[Payment] Redirect failed, using window.location:', redirectError);
+        // Fallback to window.location if navigate fails
+        window.location.href = '/login';
+      }
     }, 3000);
   };
 
@@ -85,23 +92,10 @@ const Register = () => {
   };
 
   const createAccount = async () => {
-    setIsLoading(true);
-    try {
-      const result = await register(email, password, name, { gdprConsent: true, policyVersion: '1.0', captchaToken });
-      try { captcha.current?.resetCaptcha(); } catch {}
-      
-      if (result.requiresEmailConfirmation) {
-        setCurrentStep(4); // Show email verification step
-        setError('');
-      } else {
-        navigate('/dashboard');
-      }
-    } catch (error) {
-      setError(error?.message || 'Failed to create an account. Please try again.');
-      // No need to go back to payment step since we go directly to Stripe
-    } finally {
-      setIsLoading(false);
-    }
+    // This function is no longer needed since we're using Stripe webhook for account creation
+    console.log('Account creation now handled by Stripe webhook');
+    // Just redirect to payment step
+    await handlePaymentRedirect();
   };
 
   const handlePaymentRedirect = async () => {
@@ -404,85 +398,30 @@ const Register = () => {
             </div>
             
             <div className="mt-6">
-              <p className="text-xs text-gray-500 text-center">
+              <p className="text-xs text-gray-500 text-center mb-4">
                 Redirecting to login in a few seconds...
               </p>
-            </div>
-          </div>
-
-          {error && (
-            <div className="rounded-md bg-red-50 p-4">
-              <div className="text-sm text-red-700">{error}</div>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // Step 4: Email Verification Required
-  if (currentStep === 4) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full space-y-8">
-          <div>
-            <img
-              src={"/assets/images/discourse-logo.png"}
-              alt="Discourse Logo"
-              style={{ width: '200px', margin: '0 auto', display: 'block' }}
-            />
-            <h2 className="mt-1 text-center text-3xl font-extrabold text-gray-900">
-              Check Your Email
-            </h2>
-            <p className="mt-2 text-center text-sm text-gray-600">
-              We've sent a verification link to <strong>{email}</strong>
-            </p>
-          </div>
-
-          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-            <div className="text-center mb-4">
-              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100">
-                <svg className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                </svg>
-              </div>
-              <h3 className="mt-2 text-lg font-medium text-gray-900">Email Verification Required</h3>
-              <p className="mt-1 text-sm text-gray-600">
-                To complete your registration, please click the verification link in your email.
-              </p>
-            </div>
-            
-            <div className="mt-4 text-sm text-gray-600">
-              <p>📧 Check your inbox (and spam folder)</p>
-              <p>🔗 Click the verification link</p>
-              <p>✅ Complete your account setup</p>
-            </div>
-            
-            <div className="mt-6 space-y-3">
+              
+              {/* Manual redirect button as fallback */}
               <button
                 onClick={() => {
-                  // Resend verification email
-                  fetch('/api/auth/resend-verification', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email })
-                  }).then(() => {
-                    alert('Verification email resent!');
-                  }).catch(() => {
-                    alert('Failed to resend verification email. Please try again.');
-                  });
+                  console.log('[Payment] Manual redirect to login clicked');
+                  try {
+                    navigate('/login', { 
+                      state: { 
+                        message: 'Payment successful! Please log in and verify your email to complete your account setup.',
+                        email: email
+                      }
+                    });
+                  } catch (redirectError) {
+                    console.error('[Payment] Manual redirect failed, using window.location:', redirectError);
+                    window.location.href = '/login';
+                  }
                 }}
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
-                Resend Verification Email
+                Go to Login Now
               </button>
-              
-              <Link
-                to="/login"
-                className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                Back to Login
-              </Link>
             </div>
           </div>
 
@@ -495,6 +434,9 @@ const Register = () => {
       </div>
     );
   }
+
+  // Email verification step removed - now handled by Stripe webhook
+  // Users are redirected to login after payment success
 
   return null;
 };
