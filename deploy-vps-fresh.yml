@@ -1,0 +1,140 @@
+name: Deploy to VPS - Fresh Build
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Build frontend
+      run: npm run build
+      
+    - name: Deploy to VPS
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USERNAME }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        port: ${{ secrets.VPS_PORT }}
+        script: |
+          # Navigate to discourse directory
+          cd /root/discourse
+          
+          # Backup current files
+          if [ -d "backup-$(date +%Y%m%d-%H%M%S)" ]; then
+            rm -rf backup-$(date +%Y%m%d-%H%M%S)
+          fi
+          mkdir -p backup-$(date +%Y%m%d-%H%M%S)
+          
+          # Backup existing files (excluding git and node_modules)
+          if [ -f "server.js" ]; then
+            cp server.js backup-$(date +%Y%m%d-%H%M%S)/
+          fi
+          if [ -d "dist" ]; then
+            cp -r dist backup-$(date +%Y%m%d-%H%M%S)/
+          fi
+          if [ -f "package.json" ]; then
+            cp package.json backup-$(date +%Y%m%d-%H%M%S)/
+          fi
+          if [ -f "package-lock.json" ]; then
+            cp package-lock.json backup-$(date +%Y%m%d-%H%M%S)/
+          fi
+          if [ -f "ecosystem.config.js" ]; then
+            cp ecosystem.config.js backup-$(date +%Y%m%d-%H%M%S)/
+          fi
+          
+          echo "Backup created in backup-$(date +%Y%m%d-%H%M%S)"
+          
+    - name: Copy files to VPS
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USERNAME }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        port: ${{ secrets.VPS_PORT }}
+        source: "."
+        target: "/root/discourse"
+        strip_components: 0
+        overwrite: true
+        
+    - name: Setup and build on VPS
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USERNAME }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        port: ${{ secrets.VPS_PORT }}
+        script: |
+          cd /root/discourse
+          
+          # Set proper permissions
+          chmod 755 .
+          chmod 644 package.json package-lock.json ecosystem.config.js
+          
+          # Install dependencies
+          npm ci --production
+          
+          # Build frontend
+          npm run build
+          
+          # Ensure database directory exists
+          mkdir -p /root/discourse/data
+          
+          # Create db.json if it doesn't exist
+          if [ ! -f "db.json" ]; then
+            echo '{"users":[],"courses":[],"images":[],"imageCache":[],"onboardingCompletions":[],"trialRecords":[],"deletedUsers":[]}' > db.json
+          fi
+          
+          # Set proper permissions for database
+          chmod 644 db.json
+          
+          # Restart PM2 process
+          if pm2 list | grep -q "discours"; then
+            pm2 restart discours
+          else
+            pm2 start ecosystem.config.js
+          fi
+          
+          # Save PM2 configuration
+          pm2 save
+          
+          echo "Deployment completed successfully!"
+          echo "Server should be running on port 4003"
+          
+    - name: Health check
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USERNAME }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        port: ${{ secrets.VPS_PORT }}
+        script: |
+          # Wait a moment for server to start
+          sleep 10
+          
+          # Check if server is running
+          if curl -f http://localhost:4003/api/health > /dev/null 2>&1; then
+            echo "✅ Server is running and responding"
+          else
+            echo "❌ Server health check failed"
+            exit 1
+          fi
+          
+          # Check PM2 status
+          pm2 list
