@@ -47,9 +47,7 @@ jobs:
           
           # Show PM2 status
           pm2 status
-          
-          # Show recent logs
-          pm2 logs discours --lines 20
+        
           
     - name: Verify deployment
       uses: appleboy/ssh-action@v1.0.3
@@ -62,8 +60,6 @@ jobs:
           # Check if server is running
           pm2 status discours
           
-          # Check server health
-          curl -f http://localhost:3000/health || echo "Server not responding"
           
           # Show system resources
           pm2 run stop
