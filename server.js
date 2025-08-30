@@ -2025,6 +2025,9 @@ class AIService {
   constructCoursePrompt(topic, difficulty, numModules, numLessonsPerModule) {
     return `Generate a comprehensive course structure for a ${difficulty} level course on "${topic}". Create exactly ${numModules} modules, each with exactly ${numLessonsPerModule} lessons.
 +Safety rules: If the topic involves NSFW/sexual content, child exploitation, illegal instruction (e.g., weapons/bomb making), hate speech, or extremist/terrorist propaganda, you must refuse and output a JSON object with {"error":"Content policy violation"}.
+```
+}
+</rewritten_file>
 +The course must be suitable for general educational audiences and avoid graphic details. Present sensitive historical topics neutrally and factually.
 The entire response MUST be a single, minified, valid JSON object.
 Do NOT use markdown, comments, or any text outside the JSON object.
@@ -7530,6 +7533,10 @@ app.post('/api/auth/create-checkout-session', async (req, res) => {
       ],
       subscription_data: {
         trial_period_days: 14,
+        metadata: {
+          registrationEmail: email,
+          registrationPassword: password,
+        },
       },
       payment_method_collection: 'always',
       success_url: `${req.headers.origin || 'https://thediscourse.ai'}/login?payment=success&email=${encodeURIComponent(email)}&redirect=login`,
@@ -7689,6 +7696,8 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
     console.log(`[Stripe] Webhook: checkout.session.completed received for session: ${session.id}`);
     console.log(`[Stripe] Webhook: Session metadata:`, session.metadata);
     console.log(`[Stripe] Webhook: Session subscription:`, session.subscription);
+    console.log(`[Stripe] Webhook: Session success_url:`, session.success_url);
+    console.log(`[Stripe] Webhook: Session cancel_url:`, session.cancel_url);
     
     // Handle regular user payment (existing users)
     if (session.metadata?.userId) {
@@ -7702,10 +7711,11 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
     }
     
     // Handle registration subscription (new users)
-    if (session.metadata?.registrationEmail) {
-      const registrationEmail = session.metadata.registrationEmail;
-      const registrationPassword = session.metadata.registrationPassword;
-      
+    // Check both session metadata and subscription metadata for registration details
+    const registrationEmail = session.metadata?.registrationEmail || session.subscription_data?.metadata?.registrationEmail;
+    const registrationPassword = session.metadata?.registrationPassword || session.subscription_data?.metadata?.registrationPassword;
+    
+    if (registrationEmail && registrationPassword) {
       console.log(`[Stripe] Registration subscription started for email: ${registrationEmail}`);
       
       // Create the user account immediately after successful payment
@@ -7714,11 +7724,19 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
         let existingUser = db.data.users.find(u => u.email === registrationEmail);
         if (existingUser) {
           console.log(`[Stripe] User already exists: ${registrationEmail}`);
-          // Update existing user with subscription info
+          // Update existing user with subscription info and mark as verified
           existingUser.stripeSubscriptionId = session.subscription;
           existingUser.subscriptionStatus = 'active';
           existingUser.trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(); // 14 days from now
           existingUser.updatedAt = new Date().toISOString();
+          existingUser.emailVerified = true; // Mark as verified since they completed payment
+          existingUser.emailVerifiedAt = new Date().toISOString();
+          existingUser.courseCredits = (existingUser.courseCredits || 0) + 10; // Add credits
+          // Update password if provided
+          if (registrationPassword) {
+            existingUser.password = registrationPassword;
+          }
+          console.log(`[Stripe] Updated existing user: ${registrationEmail} with subscription and verification`);
         } else {
           // Create new user account
           const newUser = {
@@ -7730,7 +7748,7 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
             emailVerified: false,
             stripeSubscriptionId: session.subscription,
             subscriptionStatus: 'active',
-            trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(), // 14 days from now
+            trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(); // 14 days from now
             courseCredits: 10, // Give initial credits
             gdprConsent: true,
             policyVersion: '1.0',
@@ -7744,20 +7762,28 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
         await db.write();
         console.log(`[Stripe] User account setup completed for: ${registrationEmail}`);
         
-        // Send email verification email
-        try {
-          const verificationToken = generateVerificationToken();
-          await sendVerificationEmail(registrationEmail, verificationToken, registrationEmail.split('@')[0]);
-          console.log(`[Stripe] Email verification sent to: ${registrationEmail}`);
-        } catch (emailError) {
-          console.error('[Stripe] Failed to send email verification:', emailError);
+        // For existing users who are now verified, no need to send verification email
+        if (!existingUser || existingUser.emailVerified) {
+          console.log(`[Stripe] User ${registrationEmail} is verified, no verification email needed`);
+        } else {
+          // Send email verification email only for new users
+          try {
+            const verificationToken = generateVerificationToken();
+            await sendVerificationEmail(registrationEmail, verificationToken, registrationEmail.split('@')[0]);
+            console.log(`[Stripe] Email verification sent to: ${registrationEmail}`);
+          } catch (emailError) {
+            console.error('[Stripe] Failed to send email verification:', emailError);
+          }
         }
         
       } catch (err) {
         console.error('[Stripe] Error creating user account:', err);
       }
     } else {
-      console.log(`[Stripe] Webhook: No registrationEmail found in metadata:`, session.metadata);
+      console.log(`[Stripe] Webhook: No registrationEmail or registrationPassword found in metadata:`, {
+        sessionMetadata: session.metadata,
+        subscriptionMetadata: session.subscription_data?.metadata
+      });
     }
   }
   
@@ -7966,6 +7992,69 @@ app.get('/api/admin/trials', authenticateToken, requireAdminIfConfigured, async 
   }
 });
 
+// Test endpoint to check if webhook is working
+app.post('/api/test-webhook', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password required' });
+    }
+    
+    // Simulate what the webhook would do
+    let existingUser = db.data.users.find(u => u.email === email);
+    if (existingUser) {
+      console.log(`[TEST] User already exists: ${email}`);
+      // Update existing user with subscription info and mark as verified
+      existingUser.stripeSubscriptionId = 'test_subscription_123';
+      existingUser.subscriptionStatus = 'active';
+      existingUser.trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+      existingUser.updatedAt = new Date().toISOString();
+      existingUser.emailVerified = true; // Mark as verified since they completed payment
+      existingUser.emailVerifiedAt = new Date().toISOString();
+      existingUser.courseCredits = (existingUser.courseCredits || 0) + 10; // Add credits
+      // Update password if provided
+      if (password) {
+        existingUser.password = password;
+      }
+      console.log(`[TEST] Updated existing user: ${email} with subscription and verification`);
+    } else {
+      // Create new user account
+      const newUser = {
+        id: generateId(),
+        email: email.toLowerCase(),
+        password: password,
+        name: email.split('@')[0],
+        createdAt: new Date().toISOString(),
+        emailVerified: true,
+        stripeSubscriptionId: 'test_subscription_123',
+        subscriptionStatus: 'active',
+        trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+        courseCredits: 10,
+        gdprConsent: true,
+        policyVersion: '1.0',
+        source: 'test_webhook'
+      };
+      
+      db.data.users.push(newUser);
+      console.log(`[TEST] Created new user account: ${email} with ID: ${newUser.id}`);
+    }
+    
+    await db.write();
+    console.log(`[TEST] User account setup completed for: ${email}`);
+    
+    res.json({
+      success: true,
+      message: 'Test webhook executed successfully',
+      user: existingUser || db.data.users.find(u => u.email === email)
+    });
+    
+  } catch (error) {
+    console.error('[TEST] Error in test webhook:', error);
+    res.status(500).json({ error: 'Test webhook failed' });
+  }
+});
+
 // Admin: Clear trial records
 app.post('/api/admin/trials/clear', authenticateToken, requireAdminIfConfigured, async (req, res) => {
   try {
@@ -7974,6 +8063,33 @@ app.post('/api/admin/trials/clear', authenticateToken, requireAdminIfConfigured,
     return res.json({ success: true });
   } catch (e) {
     return res.status(500).json({ error: 'Failed to clear trials' });
+  }
+});
+
+// Debug endpoint to check current users (no auth required)
+app.get('/api/debug/users', async (req, res) => {
+  try {
+    const users = db.data.users.map(u => ({
+      id: u.id,
+      email: u.email,
+      name: u.name,
+      emailVerified: u.emailVerified,
+      emailVerifiedAt: u.emailVerifiedAt,
+      stripeSubscriptionId: u.stripeSubscriptionId,
+      subscriptionStatus: u.subscriptionStatus,
+      courseCredits: u.courseCredits,
+      createdAt: u.createdAt,
+      updatedAt: u.updatedAt,
+      source: u.source
+    }));
+    
+    res.json({
+      totalUsers: users.length,
+      users: users
+    });
+  } catch (error) {
+    console.error('[DEBUG] Error getting users:', error);
+    res.status(500).json({ error: 'Failed to get users' });
   }
 });
 
