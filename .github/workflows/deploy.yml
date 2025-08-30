@@ -1,107 +1,75 @@
-name: Deploy to VPS and Shared Hosting
+name: Deploy to VPS
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  deploy-vps:
+  deploy:
     runs-on: ubuntu-latest
+    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Build project
+      run: npm run build
+      
+    - name: Deploy to VPS
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USERNAME }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        port: ${{ secrets.VPS_PORT || 22 }}
+        script: |
+          # Navigate to project directory
+          cd /path/to/your/project
+          
+          # Pull latest changes
+          git pull origin main
+          
+          # Install dependencies
+          npm ci --production
+          
+          # Restart server using PM2
+          pm2 restart discours || pm2 start server.js --name discours
+          
+          # Show PM2 status
+          pm2 status
+          
+          # Show recent logs
+          pm2 logs discours --lines 20
+          
+    - name: Verify deployment
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USERNAME }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        port: ${{ secrets.VPS_PORT || 22 }}
+        script: |
+          # Check if server is running
+          pm2 status discours
+          
+          # Check server health
+          curl -f http://localhost:3000/health || echo "Server not responding"
+          
+          # Show system resources
+          pm2 monit --no-daemon &
+          sleep 5
+          pkill -f "pm2 monit"
 
-      - name: Deploy to VPS
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USERNAME }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            echo "=== Starting VPS deployment ==="
-            
-            # Navigate to the git repository
-            cd /root/discourse
-            
-            # Handle local changes that might conflict with git pull
-            echo "Checking for local changes..."
-            if [ -n "$(git status --porcelain)" ]; then
-              echo "Local changes detected. Stashing them..."
-              git stash push -m "Auto-stash before deployment $(date)"
-            fi
-            
-            # Remove any untracked files that might conflict
-            echo "Cleaning untracked files..."
-            git clean -fd
-            
-            echo "Pulling latest changes from main branch..."
-            git pull origin main
-            
-            # Verify critical files are updated
-            echo "Verifying critical files are updated..."
-            echo "server.js last modified: $(stat -c %y server.js)"
-            echo "TTSService.js last modified: $(stat -c %y src/services/TTSService.js)"
-            
-            # Copy updated server.js to the application directory (if it exists)
-            echo "Copying server.js to application directory..."
-            if [ -d "/root/discourse" ]; then
-              cp server.js /root/discourse/
-              echo "Application server.js last modified: $(stat -c %y /root/discourse/server.js)"
-            else
-              echo "Warning: /root/discourse directory does not exist, skipping copy"
-            fi
-            
-            # Clear any cached files
-            echo "Clearing cache..."
-            if [ -d "/root/discourse" ]; then
-              rm -rf /root/discourse/node_modules/.cache 2>/dev/null || true
-            fi
-            
-            # Clear image search cache to ensure duplicate fix takes effect
-            echo "Clearing image search cache..."
-            curl -s -X POST https://thediscourse.ai/api/image/clear-search-cache || echo "Image cache clear failed (server may not be running yet)"
-            
-            # Stop any existing Node.js server processes
-            echo "Stopping existing Node.js server processes..."
-            pkill -f "node server.js" || echo "No existing server processes found"
-            
-            # Wait a moment for processes to stop
-            sleep 2
-            
-            # Start the Node.js server in the background
-            echo "Starting Node.js server..."
-            cd /root/discourse
-            nohup node server.js > server.log 2>&1 &
-            
-            # Wait for server to start up
-            echo "Waiting for server to start..."
-            sleep 5
-            
-            # Check if server is running
-            if curl -s -f http://localhost:4003/api/health > /dev/null; then
-              echo "Server is running successfully on port 4003"
-            else
-              echo "Warning: Server may not be fully started yet"
-            fi
-            
-            # Clear image search cache after restart to ensure duplicate fix takes effect
-            echo "Clearing image search cache after restart..."
-            curl -s -X POST https://thediscourse.ai/api/image/clear-search-cache || echo "Image cache clear failed"
-            
-            # Show server process status
-            echo "Server process status:"
-            ps aux | grep "node server.js" | grep -v grep || echo "No server processes found"
-            
-            # Show recent server logs
-            echo "Recent server logs:"
-            if [ -f server.log ]; then
-              tail -20 server.log || echo "No server logs found"
-            else
-              echo "Server log file not found"
-            fi
-            
-            echo "=== VPS deployment completed ==="
 
   deploy-shared-hosting:
     runs-on: ubuntu-latest

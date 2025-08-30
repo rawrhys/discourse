@@ -1,71 +1,192 @@
-name: Deploy to VPS
+name: Deploy to VPS and Shared Hosting
 
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch:
+    branches:
+      - main
 
 jobs:
-  deploy:
+  deploy-vps:
     runs-on: ubuntu-latest
-    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script: |
+            # Navigate to project directory
+            cd /root/discourse
+            
+            # Pull latest changes
+            git pull origin main
+            
+            # Install dependencies
+            npm ci --production
+            
+            # Restart server using PM2
+            pm2 restart discours || pm2 start server.js --name discours
+            
+            # Show PM2 status
+            pm2 status
+            
+            # Show recent logs
+            pm2 logs discours --lines 20
+
+      - name: Verify deployment
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script: |
+            # Check if server is running
+            pm2 status discours
+            
+            # Check server health
+            curl -f http://localhost:3000/api/health || echo "Server not responding"
+            
+            # Show system resources
+            pm2 monit --no-daemon &
+            sleep 5
+            pkill -f "pm2 monit"
+
+  deploy-shared-hosting:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Clean previous build
+        run: rm -rf dist/* public/*
+
+      - name: Build project
+        run: |
+          npm run build
+          date > dist/build-timestamp.txt
+          echo "Build completed at $(date)" > dist/build-info.txt
       
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
+      - name: Backup critical files before deployment
+        run: |
+          echo "Backing up db.json..."
+          curl -s -o db.json.backup "https://${{ secrets.FTP_SERVER }}/db.json" || echo "db.json not found or backup failed"
+          echo "Backing up api-proxy.php..."
+          curl -s -o api-proxy.php.backup "https://${{ secrets.FTP_SERVER }}/api-proxy.php" || echo "api-proxy.php not found or backup failed"
+          echo "Backing up .htaccess..."
+          curl -s -o .htaccess.backup "https://${{ secrets.FTP_SERVER }}/.htaccess" || echo ".htaccess not found or backup failed"
+          echo "Backing up sw.js..."
+          curl -s -o sw.js.backup "https://${{ secrets.FTP_SERVER }}/sw.js" || echo "sw.js not found or backup failed"
+          echo "Backing up manifest.json..."
+          curl -s -o manifest.json.backup "https://${{ secrets.FTP_SERVER }}/manifest.json" || echo "manifest.json not found or backup failed"
+      
+      - name: Deploy to Shared Hosting via FTP (excluding critical files)
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: ./dist/
+          server-dir: /domains/thediscourse.ai/public_html/
+          dangerous-clean-slate: false
+          exclude: |
+            **/db.json
+            **/db.json.backup
+            **/api-proxy.php
+            **/.htaccess
+            **/sw.js
+            **/manifest.json
+      
+      - name: Restore critical files after deployment
+        run: |
+          echo "Restoring db.json..."
+          if [ -f db.json.backup ]; then
+            curl -T db.json.backup "ftp://${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}@${{ secrets.FTP_SERVER }}/domains/thediscourse.ai/public_html/db.json" || echo "Failed to restore db.json"
+          else
+            echo "No db.json backup found to restore"
+          fi
+          echo "Restoring api-proxy.php..."
+          if [ -f api-proxy.php.backup ]; then
+            curl -T api-proxy.php.backup "ftp://${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}@${{ secrets.FTP_SERVER }}/domains/thediscourse.ai/public_html/api-proxy.php" || echo "Failed to restore api-proxy.php"
+          else
+            echo "No api-proxy.php backup found to restore"
+          fi
+          echo "Restoring .htaccess..."
+          if [ -f .htaccess.backup ]; then
+            curl -T .htaccess.backup "ftp://${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}@${{ secrets.FTP_SERVER }}/domains/thediscourse.ai/public_html/.htaccess" || echo "Failed to restore .htaccess"
+          else
+            echo "No .htaccess backup found to restore"
+          fi
+          echo "Restoring sw.js..."
+          if [ -f sw.js.backup ]; then
+            curl -T sw.js.backup "ftp://${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}@${{ secrets.FTP_SERVER }}/domains/thediscourse.ai/public_html/sw.js" || echo "Failed to restore sw.js"
+          else
+            echo "No sw.js backup found to restore"
+          fi
+          echo "Restoring manifest.json..."
+          if [ -f manifest.json.backup ]; then
+            curl -T manifest.json.backup "ftp://${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}@${{ secrets.FTP_SERVER }}/domains/thediscourse.ai/public_html/manifest.json" || echo "Failed to restore manifest.json"
+          else
+            echo "No manifest.json backup found to restore"
+          fi
+
+      - name: Deploy src folder to Shared Hosting
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: ./src/
+          server-dir: /domains/thediscourse.ai/public_html/src/
+
+      - name: Verify deployed build (optional)
+        run: curl -s https://${{ secrets.FTP_SERVER }}/build-timestamp.txt || echo "Timestamp not found"
         
-    - name: Install dependencies
-      run: npm ci
-      
-    - name: Build project
-      run: npm run build
-      
-    - name: Deploy to VPS
-      uses: appleboy/ssh-action@v1.0.3
-      with:
-        host: ${{ secrets.VPS_HOST }}
-        username: ${{ secrets.VPS_USERNAME }}
-        key: ${{ secrets.VPS_SSH_KEY }}
-        port: ${{ secrets.VPS_PORT || 22 }}
-        script: |
-          # Navigate to project directory
-          cd /path/to/your/project
+      - name: Clear browser cache headers
+        run: |
+          echo "=== Adding cache-busting headers ==="
+          # Create a .htaccess addition for cache busting
+          cat >> public/.htaccess << 'EOF'
           
-          # Pull latest changes
-          git pull origin main
-          
-          # Install dependencies
-          npm ci --production
-          
-          # Restart server using PM2
-          pm2 restart discours || pm2 start server.js --name discours
-          
-          # Show PM2 status
-          pm2 status
-          
-          # Show recent logs
-          pm2 logs discours --lines 20
-          
-    - name: Verify deployment
-      uses: appleboy/ssh-action@v1.0.3
-      with:
-        host: ${{ secrets.VPS_HOST }}
-        username: ${{ secrets.VPS_USERNAME }}
-        key: ${{ secrets.VPS_SSH_KEY }}
-        port: ${{ secrets.VPS_PORT || 22 }}
-        script: |
-          # Check if server is running
-          pm2 status discours
-          
-          # Check server health
-          curl -f http://localhost:3000/api/health || echo "Server not responding"
-          
-          # Show system resources
-          pm2 monit --no-daemon &
-          sleep 5
-          pkill -f "pm2 monit"
+          # Force cache refresh for development
+          <IfModule mod_headers.c>
+            <FilesMatch "\.(html|htm)$">
+              Header always set Cache-Control "no-cache, no-store, must-revalidate"
+              Header always set Pragma "no-cache"
+              Header always set Expires "0"
+            </FilesMatch>
+          </IfModule>
+          EOF
+
+      - name: Clear cache headers (optional)
+        run: |
+          echo "=== Clearing cache for main assets ==="
+          curl -X PURGE https://${{ secrets.FTP_SERVER }}/index.html || echo "PURGE not supported"
+          curl -X PURGE https://${{ secrets.FTP_SERVER }}/assets/ || echo "PURGE not supported"
