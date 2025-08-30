@@ -4263,6 +4263,16 @@ app.post('/api/auth/register', async (req, res) => {
       });
     }
 
+    // Check if user was previously deleted and allow re-registration
+    db.data.deletedUsers = db.data.deletedUsers || [];
+    const wasDeleted = db.data.deletedUsers.find(d => String(d?.email || '').toLowerCase() === email.toLowerCase());
+    if (wasDeleted) {
+      console.log(`[AUTH] Allowing re-registration for previously deleted user: ${email}`);
+      // Remove from deleted users list to allow re-registration
+      db.data.deletedUsers = db.data.deletedUsers.filter(d => String(d?.email || '').toLowerCase() !== email.toLowerCase());
+      await db.write();
+    }
+
     // Create new user with email verification
     const userId = `local_${Date.now()}`;
     const verificationToken = generateVerificationToken();
@@ -7522,7 +7532,7 @@ app.post('/api/auth/create-checkout-session', async (req, res) => {
         },
       },
       payment_method_collection: 'always',
-      success_url: `${req.headers.origin || 'https://thediscourse.ai'}/login?payment=success&email=${encodeURIComponent(email)}`,
+      success_url: `${req.headers.origin || 'https://thediscourse.ai'}/login?payment=success&email=${encodeURIComponent(email)}&redirect=login`,
       cancel_url: `${req.headers.origin || 'https://thediscourse.ai'}/register?payment=cancel`,
     });
     
@@ -7687,9 +7697,9 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
     }
     
     // Handle registration subscription (new users)
-    if (session.subscription_data?.metadata?.registrationEmail) {
-      const registrationEmail = session.subscription_data.metadata.registrationEmail;
-      const registrationPassword = session.subscription_data.metadata.registrationPassword;
+    if (session.metadata?.registrationEmail) {
+      const registrationEmail = session.metadata.registrationEmail;
+      const registrationPassword = session.metadata.registrationPassword;
       
       console.log(`[Stripe] Registration subscription started for email: ${registrationEmail}`);
       
@@ -7703,11 +7713,12 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
           existingUser.stripeSubscriptionId = session.subscription;
           existingUser.subscriptionStatus = 'active';
           existingUser.trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(); // 14 days from now
+          existingUser.updatedAt = new Date().toISOString();
         } else {
           // Create new user account
           const newUser = {
             id: generateId(),
-            email: registrationEmail,
+            email: registrationEmail.toLowerCase(),
             password: registrationPassword, // Note: In production, this should be hashed
             name: registrationEmail.split('@')[0], // Use email prefix as name
             createdAt: new Date().toISOString(),
@@ -7717,7 +7728,8 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
             trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(), // 14 days from now
             courseCredits: 10, // Give initial credits
             gdprConsent: true,
-            policyVersion: '1.0'
+            policyVersion: '1.0',
+            source: 'stripe_registration'
           };
           
           db.data.users.push(newUser);
