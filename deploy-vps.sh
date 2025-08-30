@@ -87,7 +87,7 @@ print_status "Recent logs:"
 pm2 logs $PM2_APP_NAME --lines 20
 
 print_status "Checking application health..."
-if curl -f http://localhost:3000/health &> /dev/null; then
+if curl -f http://localhost:3000/api/health &> /dev/null; then
     print_success "Application is responding to health check!"
 else
     print_warning "Health check failed, but application might still be starting..."

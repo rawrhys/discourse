@@ -64,7 +64,7 @@ echo [INFO] Recent logs:
 pm2 logs %PM2_APP_NAME% --lines 20
 
 echo [INFO] Checking application health...
-curl -f http://localhost:3000/health >nul 2>&1
+curl -f http://localhost:3000/api/health >nul 2>&1
 if errorlevel 1 (
     echo [WARNING] Health check failed, but application might still be starting...
 ) else (

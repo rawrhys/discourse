@@ -132,7 +132,7 @@ pm2 restart discours && pm2 logs discours
 
 ### **Health Check**
 The deployment scripts check if your server responds to:
-- `http://localhost:3000/health`
+- `http://localhost:3000/api/health`
 
 Make sure your server has a health endpoint or update the URL in the scripts.
 

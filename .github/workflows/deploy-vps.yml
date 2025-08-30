@@ -63,7 +63,7 @@ jobs:
           pm2 status discours
           
           # Check server health
-          curl -f http://localhost:3000/health || echo "Server not responding"
+          curl -f http://localhost:3000/api/health || echo "Server not responding"
           
           # Show system resources
           pm2 monit --no-daemon &
