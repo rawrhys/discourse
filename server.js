@@ -48,6 +48,18 @@ import {
 // Load environment variables from .env file
 dotenv.config();
 
+// Debug environment variables
+console.log('[SERVER] Environment check:');
+console.log('[SERVER] SMTP_HOST:', process.env.SMTP_HOST ? 'Set' : 'Not set');
+console.log('[SERVER] SMTP_USER:', process.env.SMTP_USER ? 'Set' : 'Not set');
+console.log('[SERVER] SMTP_PASS:', process.env.SMTP_PASS ? 'Set' : 'Not set');
+console.log('[SERVER] SMTP_PORT:', process.env.SMTP_PORT || 'Default (587)');
+console.log('[SERVER] SMTP_SECURE:', process.env.SMTP_SECURE || 'Default (false)');
+console.log('[SERVER] FRONTEND_URL:', process.env.FRONTEND_URL || 'Default (https://thediscourse.ai)');
+console.log('[SERVER] JWT_SECRET:', process.env.JWT_SECRET ? 'Set' : 'Not set');
+console.log('[SERVER] PORT:', process.env.PORT || 'Default (4003)');
+console.log('[SERVER] NODE_ENV:', process.env.NODE_ENV || 'Not set');
+
 // Initialize global CAPTCHA challenges map
 global.captchaChallenges = new Map();
 
@@ -76,20 +88,35 @@ setInterval(() => {
 
 // Email verification and password reset functionality
 const createTransporter = () => {
+  console.log('[EMAIL] createTransporter called with SMTP config:', {
+    host: process.env.SMTP_HOST ? 'SET' : 'NOT SET',
+    user: process.env.SMTP_USER ? 'SET' : 'NOT SET',
+    pass: process.env.SMTP_PASS ? 'SET' : 'NOT SET',
+    port: process.env.SMTP_PORT || 587,
+    secure: process.env.SMTP_SECURE === 'true'
+  });
+  
   if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
     console.warn('[EMAIL] SMTP not configured, email functionality disabled');
     return null;
   }
   
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: process.env.SMTP_PORT || 587,
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS
-    }
-  });
+  try {
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: process.env.SMTP_PORT || 587,
+      secure: process.env.SMTP_SECURE === 'true',
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS
+      }
+    });
+    console.log('[EMAIL] Transporter created successfully');
+    return transporter;
+  } catch (error) {
+    console.error('[EMAIL] Failed to create transporter:', error);
+    return null;
+  }
 };
 
 // Generate verification token
@@ -165,7 +192,6 @@ const sendPasswordResetEmail = async (email, token, name) => {
   const transporter = createTransporter();
   if (!transporter) {
     throw new Error('SMTP not configured');
-    return;
   }
   
   const resetUrl = `${process.env.FRONTEND_URL || 'https://thediscourse.ai'}/reset-password?token=${token}`;
@@ -4278,6 +4304,20 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     }
 
     console.log('[PASSWORD RESET] Password reset requested for:', email);
+    
+    // Debug SMTP configuration
+    console.log('[PASSWORD RESET] SMTP Configuration:', {
+      host: process.env.SMTP_HOST ? 'Set' : 'Not set',
+      user: process.env.SMTP_USER ? 'Set' : 'Not set',
+      pass: process.env.SMTP_PASS ? 'Set' : 'Not set',
+      port: process.env.SMTP_PORT || 'Default (587)',
+      secure: process.env.SMTP_SECURE || 'Default (false)'
+    });
+    console.log('[PASSWORD RESET] SMTP config check:', {
+      host: process.env.SMTP_HOST ? 'SET' : 'NOT SET',
+      user: process.env.SMTP_USER ? 'SET' : 'NOT SET',
+      pass: process.env.SMTP_PASS ? 'SET' : 'NOT SET'
+    });
 
     // Find user by email
     const user = db.data.users.find(u => u.email === email);
