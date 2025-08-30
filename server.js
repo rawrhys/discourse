@@ -96,14 +96,31 @@ const createTransporter = () => {
     secure: process.env.SMTP_SECURE === 'true'
   });
   
+  // Debug: Show exact values (be careful with sensitive data)
+  console.log('[EMAIL] Raw SMTP values:', {
+    host: process.env.SMTP_HOST ? `"${process.env.SMTP_HOST}"` : 'NOT SET',
+    user: process.env.SMTP_USER ? `"${process.env.SMTP_USER}"` : 'NOT SET',
+    pass: process.env.SMTP_PASS ? '***SET***' : 'NOT SET',
+    port: process.env.SMTP_PORT || 'Default (587)',
+    secure: process.env.SMTP_SECURE || 'Default (false)'
+  });
+  
   if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
     console.warn('[EMAIL] SMTP not configured, email functionality disabled');
     return null;
   }
   
+  // Validate SMTP_HOST format - check for .env parsing issues
+  const smtpHost = process.env.SMTP_HOST.trim();
+  if (smtpHost.includes('=')) {
+    console.error('[EMAIL] ERROR: SMTP_HOST contains invalid characters (likely .env format issue):', smtpHost);
+    console.error('[EMAIL] This usually means your .env file has incorrect formatting');
+    return null;
+  }
+  
   try {
     const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
+      host: smtpHost,
       port: process.env.SMTP_PORT || 587,
       secure: process.env.SMTP_SECURE === 'true',
       auth: {
@@ -166,7 +183,7 @@ const sendVerificationEmail = async (email, token, name) => {
   
   // Replace template variables
   const htmlContent = emailTemplate
-    .replace(/\{\{ \.Email \}\}/g, email)
+    .replace(/\{\{ \.Name \}\}/g, name)
     .replace(/\{\{ \.ConfirmationURL \}\}/g, verificationUrl)
     .replace(/\{\{ \.CurrentYear \}\}/g, currentYear.toString());
   
@@ -226,7 +243,7 @@ const sendPasswordResetEmail = async (email, token, name) => {
   
   // Replace template variables
   const htmlContent = emailTemplate
-    .replace(/\{\{ \.Email \}\}/g, email)
+    .replace(/\{\{ \.Name \}\}/g, name)
     .replace(/\{\{ \.ResetURL \}\}/g, resetUrl)
     .replace(/\{\{ \.CurrentYear \}\}/g, currentYear.toString());
   
@@ -3233,8 +3250,6 @@ Example format:
 
 Return only the JSON array, no other text.`;
 
-      const generatedReferences = await this._makeApiRequest(referencePrompt, 'bibliography', true);
-      
       if (!Array.isArray(generatedReferences) || generatedReferences.length === 0) {
         console.warn(`[AIService] AI failed to generate authentic references, falling back to static references`);
         return this.generateBibliography(topic, subject, numReferences);
@@ -4419,40 +4434,44 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     // Find user by email
     const user = db.data.users.find(u => u.email === email);
     if (!user) {
-      return res.status(400).json({ error: 'User not found' });
+      // Don't reveal if user exists or not for security
+      return res.json({ 
+        success: true, 
+        message: 'If an account with this email exists, a verification email has been sent' 
+      });
     }
 
+    // Check if email is already verified
     if (user.emailVerified) {
-      return res.status(400).json({ error: 'Email is already verified' });
+      return res.json({ 
+        success: true, 
+        message: 'Email is already verified' 
+      });
     }
 
-    // Generate new verification token
-    const verificationToken = generateVerificationToken();
-    user.verificationToken = verificationToken;
-    user.verificationTokenCreatedAt = new Date().toISOString();
-
-    await db.write();
+    // Generate new verification token if needed
+    if (!user.verificationToken) {
+      user.verificationToken = generateVerificationToken();
+      user.verificationTokenCreatedAt = new Date().toISOString();
+      await db.write();
+    }
 
     // Send verification email
     try {
-      await sendVerificationEmail(email, verificationToken, user.name);
-      console.log('[RESEND VERIFICATION] Verification email resent to:', email);
+      await sendVerificationEmail(email, user.verificationToken, user.name);
+      console.log('[RESEND VERIFICATION] Verification email sent to:', email);
     } catch (emailError) {
       console.error('[RESEND VERIFICATION] Failed to send email:', emailError);
-      // Remove the token if email failed
-      user.verificationToken = null;
-      user.verificationTokenCreatedAt = null;
-      await db.write();
       return res.status(500).json({ error: 'Failed to send verification email' });
     }
 
     return res.json({ 
       success: true, 
-      message: 'Verification email has been resent' 
+      message: 'Verification email sent successfully' 
     });
   } catch (error) {
     console.error('[RESEND VERIFICATION] Error:', error);
-    return res.status(500).json({ error: 'Failed to resend verification email' });
+    return res.status(500).json({ error: 'Failed to process resend verification request' });
   }
 });
 
@@ -4484,8 +4503,24 @@ app.post('/api/auth/login', async (req, res) => {
     } else {
       // Check if email is verified
       if (!localUser.emailVerified) {
+        // Automatically resend verification email
+        try {
+          console.log('[LOGIN] Email not verified, resending verification email to:', email);
+          await sendVerificationEmail(email, localUser.verificationToken || generateVerificationToken(), localUser.name);
+          
+          // Update user with new verification token if needed
+          if (!localUser.verificationToken) {
+            localUser.verificationToken = generateVerificationToken();
+            await db.write();
+          }
+          
+          console.log('[LOGIN] Verification email resent successfully');
+        } catch (emailError) {
+          console.error('[LOGIN] Failed to resend verification email:', emailError);
+        }
+        
         error = { 
-          message: 'Please verify your email address before signing in. Check your inbox and spam folder for the verification link.',
+          message: 'Please verify your email address before signing in. A new verification email has been sent to your inbox.',
           code: 'EMAIL_NOT_CONFIRMED',
           status: 401
         };
@@ -6685,7 +6720,7 @@ app.get('/api/captcha/verify/:courseId',
     }
     
     console.log(`[API] Generated CAPTCHA for course ${courseId}:`, { 
-      challenge: challengeData, 
+      challenge: challengeData,
       challengeKey: newChallengeKey,
       type: selectedType.type,
       answer: challengeInfo.answer
@@ -7748,7 +7783,7 @@ app.post('/api/account/delete', authenticateToken, async (req, res) => {
     console.log(`[ACCOUNT DELETE] Found ${userQuizzes.length} quizzes to delete`);
     db.data.quizzes = (db.data.quizzes || []).filter(q => q.userId !== userId);
 
-    // 4. Remove user's trial records
+    // 4. Remove user from trial records
     db.data.trialRecords = (db.data.trialRecords || []).filter(t => t.email !== userEmail);
 
     // 5. Remove user from database and record deletion
