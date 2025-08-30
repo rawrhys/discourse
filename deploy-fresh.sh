@@ -48,9 +48,9 @@ cd /root/discourse
 chmod 755 .
 chmod 644 package.json package-lock.json ecosystem.config.js
 
-# Install dependencies
+# Install dependencies (including dev dependencies for build)
 echo "Installing dependencies..."
-npm ci --production
+npm ci
 
 # Build frontend
 echo "Building frontend..."

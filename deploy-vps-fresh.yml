@@ -87,8 +87,8 @@ jobs:
           chmod 755 .
           chmod 644 package.json package-lock.json ecosystem.config.js
           
-          # Install dependencies
-          npm ci --production
+          # Install dependencies (including dev dependencies for build)
+          npm ci
           
           # Build frontend
           npm run build
