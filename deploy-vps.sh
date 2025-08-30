@@ -10,7 +10,7 @@ echo "🚀 Starting VPS deployment..."
 # Configuration
 PROJECT_DIR="/path/to/your/project"  # Update this path
 BRANCH="main"
-PM2_APP_NAME="discours"
+PM2_APP_NAME="discourse-app"
 NODE_VERSION="18"
 
 # Colors for output
@@ -84,7 +84,7 @@ print_status "PM2 Status:"
 pm2 status
 
 print_status "Recent logs:"
-pm2 logs $PM2_APP_NAME --lines 20
+pm2 logs $PM2_APP_NAME --lines 20 --nostream
 
 print_status "Checking application health..."
 if curl -f http://localhost:3000/api/health &> /dev/null; then
@@ -100,6 +100,6 @@ sleep 10
 kill $MONIT_PID 2>/dev/null || true
 
 print_success "Deployment completed successfully!"
-print_status "Use 'pm2 logs discours' to view logs"
+print_status "Use 'pm2 logs discourse-app' to view logs"
 print_status "Use 'pm2 monit' to monitor resources"
-print_status "Use 'pm2 restart discours' to restart manually"
+print_status "Use 'pm2 restart discourse-app' to restart manually"

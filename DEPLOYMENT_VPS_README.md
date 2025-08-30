@@ -52,19 +52,19 @@ VPS_PORT=22  # Optional, defaults to 22
 ### **Basic PM2 Operations**
 ```bash
 # Start application
-pm2 start server.js --name discours
+pm2 start server.js --name discourse-app
 
 # Restart application
-pm2 restart discours
+pm2 restart discourse-app
 
 # Stop application
-pm2 stop discours
+pm2 stop discourse-app
 
 # View status
 pm2 status
 
 # View logs
-pm2 logs discours
+pm2 logs discourse-app
 
 # Monitor resources
 pm2 monit
@@ -121,13 +121,13 @@ module.exports = {
 pm2 status
 
 # View detailed logs
-pm2 logs discours --lines 100
+pm2 logs discourse-app --lines 100
 
 # Check system resources
 pm2 monit
 
 # Restart with fresh logs
-pm2 restart discours && pm2 logs discours
+pm2 restart discourse-app && pm2 logs discourse-app
 ```
 
 ### **Health Check**

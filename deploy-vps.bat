@@ -9,7 +9,7 @@ echo 🚀 Starting VPS deployment...
 REM Configuration
 set PROJECT_DIR=C:\path\to\your\project
 set BRANCH=main
-set PM2_APP_NAME=discours
+set PM2_APP_NAME=discourse-app
 set NODE_VERSION=18
 
 REM Check if we're in the right directory
@@ -72,8 +72,8 @@ if errorlevel 1 (
 )
 
 echo [SUCCESS] Deployment completed successfully!
-echo [INFO] Use 'pm2 logs discours' to view logs
+echo [INFO] Use 'pm2 logs discourse-app' to view logs
 echo [INFO] Use 'pm2 monit' to monitor resources
-echo [INFO] Use 'pm2 restart discours' to restart manually
+echo [INFO] Use 'pm2 restart discourse-app' to restart manually
 
 pause
