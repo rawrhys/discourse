@@ -64,7 +64,7 @@ jobs:
             
             # Stop any existing Node.js server processes
             echo "Stopping existing Node.js server processes..."
-            pkill -f "node server.js" || echo "No existing server processes found"
+            npm stop all || echo "No existing server processes found"
             
             # Wait a moment for processes to stop
             sleep 2
@@ -72,14 +72,14 @@ jobs:
             # Start the Node.js server in the background
             echo "Starting Node.js server..."
             cd /root/discourse
-            nohup node server.js > server.log 2>&1 &
+            npm start all 2>&1 &
             
             # Wait for server to start up
             echo "Waiting for server to start..."
             sleep 5
             
             # Check if server is running
-            if curl -s -f http://localhost:4003/api/health > /dev/null; then
+            if curl -s -f http://thediscourse.ai/api/health > /dev/null; then
               echo "Server is running successfully on port 4003"
             else
               echo "Warning: Server may not be fully started yet"
