@@ -7508,6 +7508,10 @@ app.post('/api/auth/create-checkout-session', async (req, res) => {
       payment_method_types: ['card'],
       mode: 'subscription',
       customer_email: email,
+      metadata: {
+        registrationEmail: email,
+        registrationPassword: password,
+      },
       line_items: [
         {
           price_data: {
@@ -7526,10 +7530,6 @@ app.post('/api/auth/create-checkout-session', async (req, res) => {
       ],
       subscription_data: {
         trial_period_days: 14,
-        metadata: {
-          registrationEmail: email,
-          registrationPassword: password,
-        },
       },
       payment_method_collection: 'always',
       success_url: `${req.headers.origin || 'https://thediscourse.ai'}/login?payment=success&email=${encodeURIComponent(email)}&redirect=login`,
@@ -7682,11 +7682,16 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
+  console.log(`[Stripe] Webhook: Received event type: ${event.type}`);
+  
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
+    console.log(`[Stripe] Webhook: checkout.session.completed received for session: ${session.id}`);
+    console.log(`[Stripe] Webhook: Session metadata:`, session.metadata);
+    console.log(`[Stripe] Webhook: Session subscription:`, session.subscription);
     
     // Handle regular user payment (existing users)
-    if (session.metadata.userId) {
+    if (session.metadata?.userId) {
       const userId = session.metadata.userId;
       const user = db.data.users.find(u => u.id === userId);
       if (user) {
@@ -7751,6 +7756,8 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
       } catch (err) {
         console.error('[Stripe] Error creating user account:', err);
       }
+    } else {
+      console.log(`[Stripe] Webhook: No registrationEmail found in metadata:`, session.metadata);
     }
   }
   
