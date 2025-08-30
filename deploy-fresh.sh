@@ -35,9 +35,29 @@ if [ -f "db.json" ]; then cp db.json $BACKUP_DIR/; fi
 echo "Backup created in $BACKUP_DIR"
 EOF
 
-# Copy all files to VPS
+# Copy all files to VPS (ensuring index.html and other essential files are included)
 echo "📁 Copying files to VPS..."
-rsync -avz --progress --exclude='node_modules' --exclude='.git' --exclude='.github' --exclude='logs' --exclude='*.log' $LOCAL_PATH/ $VPS_USER@$VPS_HOST:$VPS_PATH/
+rsync -avz --progress \
+  --exclude='node_modules' \
+  --exclude='.git' \
+  --exclude='.github' \
+  --exclude='logs' \
+  --exclude='*.log' \
+  --exclude='db.json' \
+  --exclude='backup-*' \
+  $LOCAL_PATH/ $VPS_USER@$VPS_HOST:$VPS_PATH/
+
+# Verify essential files were copied
+echo "🔍 Verifying essential files on VPS..."
+ssh $VPS_USER@$VPS_HOST << 'EOF'
+cd /root/discourse
+echo "Checking for essential files:"
+ls -la index.html
+ls -la package.json
+ls -la vite.config.js
+ls -la src/
+echo "Essential files check complete"
+EOF
 
 # Setup and build on VPS
 echo "🔧 Setting up and building on VPS..."
@@ -52,8 +72,22 @@ chmod 644 package.json package-lock.json ecosystem.config.js
 echo "Installing dependencies..."
 npm ci
 
-# Build frontend
-echo "Building frontend..."
+# Verify build prerequisites before building
+echo "🔍 Verifying build prerequisites..."
+if [ ! -f "index.html" ]; then
+    echo "❌ ERROR: index.html not found! Cannot build frontend."
+    exit 1
+fi
+if [ ! -f "vite.config.js" ]; then
+    echo "❌ ERROR: vite.config.js not found! Cannot build frontend."
+    exit 1
+fi
+if [ ! -d "src" ]; then
+    echo "❌ ERROR: src directory not found! Cannot build frontend."
+    exit 1
+fi
+
+echo "✅ All build prerequisites found. Building frontend..."
 npm run build
 
 # Ensure database directory exists
