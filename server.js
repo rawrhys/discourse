@@ -1,4 +1,4 @@
-import express from 'express';
+﻿import express from 'express';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import axios from 'axios';
@@ -2848,7 +2848,7 @@ Context: "${context.substring(0, 1000)}..."`;
                   message: `Completed Lesson: ${lesson.title}`,
                   details: [...(session.progress.details || []), {
                     timestamp: new Date().toISOString(),
-                    message: `✅ Completed: ${lesson.title}`
+                    message: `âœ… Completed: ${lesson.title}`
                   }]
                 };
               }
@@ -3340,7 +3340,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // --- DATABASE SETUP ---
-const dbFilePath = path.join(__dirname, 'db.json');
+const dbFilePath = '/root/discourse/db.json';
 
 // Ensure the data directory exists
 const dataDir = path.resolve(__dirname, 'data');
@@ -6698,8 +6698,8 @@ app.get('/api/captcha/verify/:courseId',
           .replace(/\s+/g, ' ') // Normalize multiple spaces to single space
           .replace(/\s*\+\s*/g, ' + ') // Normalize spaces around plus
           .replace(/\s*-\s*/g, ' - ') // Normalize spaces around minus
-          .replace(/\s*×\s*/g, ' × ') // Normalize spaces around multiplication
-          .replace(/\s*÷\s*/g, ' ÷ ') // Normalize spaces around division
+          .replace(/\s*Ã—\s*/g, ' Ã— ') // Normalize spaces around multiplication
+          .replace(/\s*Ã·\s*/g, ' Ã· ') // Normalize spaces around division
           .trim();
       };
       const normalizedReceived = normalizeChallenge(challenge);
@@ -6736,8 +6736,8 @@ app.get('/api/captcha/verify/:courseId',
           } else {
             // Fallback: try to calculate from the stored challenge (not the URL-encoded one)
             const storedChallengeText = storedChallenge.challenge;
-            const sanitizedChallenge = storedChallengeText.replace(/[×÷]/g, (match) => {
-              return match === '×' ? '*' : '/';
+            const sanitizedChallenge = storedChallengeText.replace(/[Ã—Ã·]/g, (match) => {
+              return match === 'Ã—' ? '*' : '/';
             });
             // Use Function constructor instead of eval for safer execution
             expectedAnswer = new Function(`return ${sanitizedChallenge}`)();
@@ -6839,16 +6839,16 @@ app.get('/api/captcha/verify/:courseId',
         const num2 = Math.floor(Math.random() * (num1 - 1)) + 1; // 1 to num1-1
         return { num1, num2, operator: '-', answer: num1 - num2 };
       }},
-      { type: 'easy_multiplication', operator: '×', generate: () => {
+      { type: 'easy_multiplication', operator: 'Ã—', generate: () => {
         const num1 = Math.floor(Math.random() * 6) + 1; // 1-6
         const num2 = Math.floor(Math.random() * 6) + 1; // 1-6
-        return { num1, num2, operator: '×', answer: num1 * num2 };
+        return { num1, num2, operator: 'Ã—', answer: num1 * num2 };
       }},
-      { type: 'simple_division', operator: '÷', generate: () => {
+      { type: 'simple_division', operator: 'Ã·', generate: () => {
         const num2 = Math.floor(Math.random() * 6) + 2; // 2-7
         const answer = Math.floor(Math.random() * 6) + 1; // 1-6
         const num1 = answer * num2; // Calculate num1 based on answer and num2
-        return { num1, num2, operator: '÷', answer: answer };
+        return { num1, num2, operator: 'Ã·', answer: answer };
       }}
       // Removed sequence, word count, and letter count challenges - keeping only simple math
     ];
@@ -6993,16 +6993,16 @@ app.get('/api/captcha/new/:courseId',
         const num2 = Math.floor(Math.random() * (num1 - 1)) + 1; // 1 to num1-1
         return { num1, num2, operator: '-', answer: num1 - num2 };
       }},
-      { type: 'easy_multiplication', operator: '×', generate: () => {
+      { type: 'easy_multiplication', operator: 'Ã—', generate: () => {
         const num1 = Math.floor(Math.random() * 6) + 1; // 1-6
         const num2 = Math.floor(Math.random() * 6) + 1; // 1-6
-        return { num1, num2, operator: '×', answer: num1 * num2 };
+        return { num1, num2, operator: 'Ã—', answer: num1 * num2 };
       }},
-      { type: 'simple_division', operator: '÷', generate: () => {
+      { type: 'simple_division', operator: 'Ã·', generate: () => {
         const num2 = Math.floor(Math.random() * 6) + 2; // 2-7
         const answer = Math.floor(Math.random() * 6) + 1; // 1-6
         const num1 = answer * num2; // Calculate num1 based on answer and num2
-        return { num1, num2, operator: '÷', answer: answer };
+        return { num1, num2, operator: 'Ã·', answer: answer };
       }}
       // Removed sequence, word count, and letter count challenges - keeping only simple math
     ];
@@ -7434,7 +7434,7 @@ app.get('/api/public/courses/:courseId/quiz-scores',
   }
 });
 
-// Stripe: Create Checkout Session for £20 (10 credits)
+// Stripe: Create Checkout Session for Â£20 (10 credits)
 app.post('/api/create-checkout-session', authenticateToken, async (req, res) => {
   console.log('[Stripe] Creating checkout session for user:', req.user.id);
   console.log('[Stripe] Stripe configured:', !!stripe);
@@ -7458,7 +7458,7 @@ app.post('/api/create-checkout-session', authenticateToken, async (req, res) => 
               name: '10 Course Generations',
               description: 'Generate up to 10 courses on the platform',
             },
-            unit_amount: 2000, // £20.00 in pence
+            unit_amount: 2000, // Â£20.00 in pence
           },
           quantity: 1,
         },
@@ -7523,7 +7523,7 @@ app.post('/api/auth/create-checkout-session', async (req, res) => {
               name: 'Discourse Learning Platform',
               description: 'Access to course generation and learning tools',
             },
-            unit_amount: 2000, // £20.00 in pence
+            unit_amount: 2000, // Â£20.00 in pence
             recurring: {
               interval: 'month',
             },
@@ -9501,25 +9501,25 @@ This is an automated notification from The Discourse AI platform.
       `;
 
       // Send email notification to admin
-      console.log('📧 [PROBLEM_REPORT] Email notification to admin@thediscourse.ai:');
+      console.log('ðŸ“§ [PROBLEM_REPORT] Email notification to admin@thediscourse.ai:');
       console.log(emailContent);
       
       // Debug: Check environment variables
-      console.log('📧 [PROBLEM_REPORT] Environment variables check:');
-      console.log('📧 [PROBLEM_REPORT] SMTP_HOST:', process.env.SMTP_HOST ? 'SET' : 'NOT SET');
-      console.log('📧 [PROBLEM_REPORT] SMTP_PORT:', process.env.SMTP_PORT ? 'SET' : 'NOT SET');
-      console.log('📧 [PROBLEM_REPORT] SMTP_USER:', process.env.SMTP_USER ? 'SET' : 'NOT SET');
-      console.log('📧 [PROBLEM_REPORT] SMTP_PASS:', process.env.SMTP_PASS ? 'SET' : 'NOT SET');
-      console.log('📧 [PROBLEM_REPORT] EMAIL_WEBHOOK_URL:', process.env.EMAIL_WEBHOOK_URL ? 'SET' : 'NOT SET');
-      console.log('📧 [PROBLEM_REPORT] EMAIL_API_KEY:', process.env.EMAIL_API_KEY ? 'SET' : 'NOT SET');
-      console.log('📧 [PROBLEM_REPORT] EMAILJS_SERVICE_ID:', process.env.EMAILJS_SERVICE_ID ? 'SET' : 'NOT SET');
+      console.log('ðŸ“§ [PROBLEM_REPORT] Environment variables check:');
+      console.log('ðŸ“§ [PROBLEM_REPORT] SMTP_HOST:', process.env.SMTP_HOST ? 'SET' : 'NOT SET');
+      console.log('ðŸ“§ [PROBLEM_REPORT] SMTP_PORT:', process.env.SMTP_PORT ? 'SET' : 'NOT SET');
+      console.log('ðŸ“§ [PROBLEM_REPORT] SMTP_USER:', process.env.SMTP_USER ? 'SET' : 'NOT SET');
+      console.log('ðŸ“§ [PROBLEM_REPORT] SMTP_PASS:', process.env.SMTP_PASS ? 'SET' : 'NOT SET');
+      console.log('ðŸ“§ [PROBLEM_REPORT] EMAIL_WEBHOOK_URL:', process.env.EMAIL_WEBHOOK_URL ? 'SET' : 'NOT SET');
+      console.log('ðŸ“§ [PROBLEM_REPORT] EMAIL_API_KEY:', process.env.EMAIL_API_KEY ? 'SET' : 'NOT SET');
+      console.log('ðŸ“§ [PROBLEM_REPORT] EMAILJS_SERVICE_ID:', process.env.EMAILJS_SERVICE_ID ? 'SET' : 'NOT SET');
       
       // Simple email sending using fetch to a webhook or email service
       // You can replace this with your preferred email service
       try {
         // Option 1: Send via SMTP server
         if (process.env.SMTP_HOST && process.env.SMTP_PORT && process.env.SMTP_USER && process.env.SMTP_PASS) {
-          console.log('📧 [PROBLEM_REPORT] Attempting to send email via SMTP...');
+          console.log('ðŸ“§ [PROBLEM_REPORT] Attempting to send email via SMTP...');
           
           const transporter = nodemailer.createTransport({
             host: process.env.SMTP_HOST,
@@ -9540,7 +9540,7 @@ This is an automated notification from The Discourse AI platform.
           };
           
           const info = await transporter.sendMail(mailOptions);
-          console.log('📧 [PROBLEM_REPORT] Email sent via SMTP:', info.messageId);
+          console.log('ðŸ“§ [PROBLEM_REPORT] Email sent via SMTP:', info.messageId);
         }
         
         // Option 2: Send to a webhook (e.g., Zapier, Make.com, etc.)
@@ -9555,7 +9555,7 @@ This is an automated notification from The Discourse AI platform.
               from: 'noreply@thediscourse.ai'
             })
           });
-          console.log('📧 [PROBLEM_REPORT] Email sent via webhook');
+          console.log('ðŸ“§ [PROBLEM_REPORT] Email sent via webhook');
         }
         
         // Option 3: Send to a simple email API service
@@ -9575,9 +9575,9 @@ This is an automated notification from The Discourse AI platform.
           });
           
           if (emailResponse.ok) {
-            console.log('📧 [PROBLEM_REPORT] Email sent via Resend API');
+            console.log('ðŸ“§ [PROBLEM_REPORT] Email sent via Resend API');
           } else {
-            console.error('📧 [PROBLEM_REPORT] Failed to send email via Resend API');
+            console.error('ðŸ“§ [PROBLEM_REPORT] Failed to send email via Resend API');
           }
         }
         
@@ -9601,25 +9601,25 @@ This is an automated notification from The Discourse AI platform.
           });
           
           if (emailResponse.ok) {
-            console.log('📧 [PROBLEM_REPORT] Email sent via EmailJS');
+            console.log('ðŸ“§ [PROBLEM_REPORT] Email sent via EmailJS');
           } else {
-            console.error('📧 [PROBLEM_REPORT] Failed to send email via EmailJS');
+            console.error('ðŸ“§ [PROBLEM_REPORT] Failed to send email via EmailJS');
           }
         }
         
         // Option 5: Log to console for development (current fallback)
         else {
-          console.log('📧 [PROBLEM_REPORT] Email would be sent to admin@thediscourse.ai');
-          console.log('📧 [PROBLEM_REPORT] Subject:', `New Problem Report - ${problemReport.id}`);
-          console.log('📧 [PROBLEM_REPORT] Content:', emailContent);
-          console.log('📧 [PROBLEM_REPORT] To enable email sending, set one of these environment variables:');
-          console.log('📧 [PROBLEM_REPORT] - SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS (for SMTP server)');
-          console.log('📧 [PROBLEM_REPORT] - EMAIL_WEBHOOK_URL (for webhook-based email services)');
-          console.log('📧 [PROBLEM_REPORT] - EMAIL_API_KEY (for Resend API)');
-          console.log('📧 [PROBLEM_REPORT] - EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_USER_ID (for EmailJS)');
+          console.log('ðŸ“§ [PROBLEM_REPORT] Email would be sent to admin@thediscourse.ai');
+          console.log('ðŸ“§ [PROBLEM_REPORT] Subject:', `New Problem Report - ${problemReport.id}`);
+          console.log('ðŸ“§ [PROBLEM_REPORT] Content:', emailContent);
+          console.log('ðŸ“§ [PROBLEM_REPORT] To enable email sending, set one of these environment variables:');
+          console.log('ðŸ“§ [PROBLEM_REPORT] - SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS (for SMTP server)');
+          console.log('ðŸ“§ [PROBLEM_REPORT] - EMAIL_WEBHOOK_URL (for webhook-based email services)');
+          console.log('ðŸ“§ [PROBLEM_REPORT] - EMAIL_API_KEY (for Resend API)');
+          console.log('ðŸ“§ [PROBLEM_REPORT] - EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_USER_ID (for EmailJS)');
         }
       } catch (emailSendError) {
-        console.error('📧 [PROBLEM_REPORT] Email sending failed:', emailSendError);
+        console.error('ðŸ“§ [PROBLEM_REPORT] Email sending failed:', emailSendError);
       }
 
     } catch (emailError) {
