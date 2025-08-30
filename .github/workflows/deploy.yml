@@ -66,9 +66,9 @@ jobs:
           curl -f http://localhost:3000/health || echo "Server not responding"
           
           # Show system resources
-          pm2 monit --no-daemon &
+          pm2 run stop
           sleep 5
-          pkill -f "pm2 monit"
+          pm2 run start
 
 
   deploy-shared-hosting:
