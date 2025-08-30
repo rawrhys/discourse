@@ -160,50 +160,60 @@ export const AuthProvider = ({ children }) => {
     try {
       console.log('🔧 [AUTH] Starting registration for:', email);
       
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { 
-            name,
-            gdpr_policy_version: options.policyVersion || '1.0',
-            gdpr_consent_at: new Date().toISOString()
-          },
-          emailRedirectTo: `${window.location.origin}/verify-email`,
-          ...(options.captchaToken ? { captchaToken: options.captchaToken } : {}),
-        }
+      // Use backend registration instead of Supabase directly
+      console.log('🔧 [AUTH] Using backend registration...');
+      const registerResp = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          email, 
+          password, 
+          name, 
+          gdprConsent: options.gdprConsent || true,
+          policyVersion: options.policyVersion || '1.0',
+          captchaToken: options.captchaToken
+        })
       });
 
-      if (error) {
-        console.error('🔧 [AUTH] Registration error:', error);
-        throw new Error(error.message);
+      if (!registerResp.ok) {
+        const errorData = await registerResp.json();
+        throw new Error(errorData.error || 'Registration failed');
       }
 
-      if (data.user) {
-        console.log('🔧 [AUTH] Registration successful, user:', data.user.id);
-        console.log('🔧 [AUTH] Email confirmed:', data.user.email_confirmed_at);
+      const registerData = await registerResp.json();
+      
+      if (registerData.success) {
+        console.log('🔧 [AUTH] Registration successful via backend');
         
+        // Create a user object that matches Supabase format
+        const user = {
+          id: registerData.user.id,
+          email: registerData.user.email,
+          user_metadata: { name: registerData.user.name },
+          email_confirmed_at: registerData.user.emailVerified ? new Date().toISOString() : null
+        };
+
         // Don't set user immediately if email confirmation is required
-        if (data.user.email_confirmed_at) {
-          console.log('🔧 [AUTH] Email already confirmed, setting user immediately');
-          setUser(data.user);
-          if (data.session?.access_token) {
-            try { localStorage.setItem('token', data.session.access_token); } catch {}
+        if (registerData.user.emailVerified) {
+          console.log('🔧 [AUTH] Email already verified, setting user immediately');
+          setUser(user);
+          if (registerData.token) {
+            try { localStorage.setItem('token', registerData.token); } catch {}
           }
         } else {
-          console.log('🔧 [AUTH] Email confirmation required, user not set yet');
+          console.log('🔧 [AUTH] Email verification required, user not set yet');
         }
         
-        const requiresEmailConfirmation = !data.user.email_confirmed_at;
+        const requiresEmailConfirmation = !registerData.user.emailVerified;
         console.log('🔧 [AUTH] Requires email confirmation:', requiresEmailConfirmation);
         
         return { 
-          user: data.user, 
-          session: data.session, 
+          user, 
+          session: { access_token: registerData.token }, 
           requiresEmailConfirmation 
         };
       } else {
-        throw new Error('No user data returned from registration');
+        throw new Error(registerData.error || 'Registration failed');
       }
     } catch (error) {
       console.error('🔧 [AUTH] Registration error:', error);

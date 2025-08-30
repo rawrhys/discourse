@@ -4425,6 +4425,86 @@ app.post('/api/auth/verify-email', async (req, res) => {
   }
 });
 
+// Complete registration endpoint for Supabase users
+app.post('/api/auth/complete-registration', async (req, res) => {
+  try {
+    const { email, name, gdprConsent, policyVersion } = req.body;
+    
+    if (!email || !name) {
+      return res.status(400).json({ error: 'Email and name are required' });
+    }
+
+    // Require explicit GDPR consent and a policy version
+    if (gdprConsent !== true || !policyVersion) {
+      return res.status(400).json({ 
+        error: 'You must accept the Privacy Policy to complete registration.',
+        code: 'GDPR_CONSENT_REQUIRED'
+      });
+    }
+
+    console.log('[COMPLETE_REGISTRATION] Completing registration for:', email);
+
+    // Check if user already exists in local database
+    const existingUser = db.data.users.find(u => u.email === email);
+    if (existingUser) {
+      // Update existing user with additional information
+      existingUser.name = name;
+      existingUser.gdprConsent = gdprConsent;
+      existingUser.policyVersion = policyVersion;
+      existingUser.updatedAt = new Date().toISOString();
+      
+      await db.write();
+      
+      console.log('[COMPLETE_REGISTRATION] Updated existing user:', email);
+      return res.json({
+        success: true,
+        message: 'Registration completed successfully',
+        user: {
+          id: existingUser.id,
+          email: existingUser.email,
+          name: existingUser.name,
+          emailVerified: existingUser.emailVerified
+        }
+      });
+    }
+
+    // Create new user if doesn't exist
+    const userId = `supabase_${Date.now()}`;
+    const newUser = {
+      id: userId,
+      email: email.toLowerCase(),
+      name: name,
+      createdAt: new Date().toISOString(),
+      emailVerified: true, // Supabase users are already verified
+      emailVerifiedAt: new Date().toISOString(),
+      courseCredits: 0,
+      gdprConsent: gdprConsent,
+      policyVersion: policyVersion,
+      source: 'supabase'
+    };
+
+    // Add user to database
+    db.data.users.push(newUser);
+    await db.write();
+
+    console.log('[COMPLETE_REGISTRATION] Created new user:', email);
+    return res.json({
+      success: true,
+      message: 'Registration completed successfully',
+      user: {
+        id: newUser.id,
+        email: newUser.email,
+        name: newUser.name,
+        emailVerified: newUser.emailVerified
+      }
+    });
+
+  } catch (error) {
+    console.error('[COMPLETE_REGISTRATION] Error:', error);
+    return res.status(500).json({ error: 'Failed to complete registration' });
+  }
+});
+
 // Request password reset
 app.post('/api/auth/forgot-password', async (req, res) => {
   try {

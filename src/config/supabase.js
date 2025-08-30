@@ -3,18 +3,22 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://gaapqvkjblqvpokmhlmh.supabase.co';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdhYXBxdmtqYmxxdnBva21obG1oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQzMDg5NzksImV4cCI6MjA2OTg4NDk3OX0.aAtqS5H0JhNHgatPEjJ8iJRFnZumyaRYxlSA9dkkfQE';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+// Create a mock Supabase client since we're using backend authentication
+export const supabase = {
   auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true,
-    flowType: 'pkce',
-    // Add these options to handle email confirmation better
-    emailRedirectTo: `${window.location.origin}/verify-email`,
-    // Disable auto-confirm for development if needed
-    // confirmEmailRedirectTo: `${window.location.origin}/verify-email`
-  }
-});
+    getSession: async () => ({ data: { session: null }, error: null }),
+    onAuthStateChange: (callback) => {
+      // Return a mock subscription
+      return { data: { subscription: { unsubscribe: () => {} } } };
+    },
+    signOut: async () => ({ error: null }),
+    signUp: async () => {
+      throw new Error('Supabase signup is disabled. Use backend registration instead.');
+    }
+  },
+  supabaseUrl,
+  supabaseKey: supabaseAnonKey
+};
 
 // Expose URL and key for direct API calls
 supabase.supabaseUrl = supabaseUrl;
