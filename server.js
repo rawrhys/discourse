@@ -1,37 +1,36 @@
-import express from 'express';
-import cookieParser from 'cookie-parser';
-import cors from 'cors';
-import axios from 'axios';
-import dotenv from 'dotenv';
-import fileUpload from 'express-fileupload';
+const express = require('express');
+const cookieParser = require('cookie-parser');
+const cors = require('cors');
+const axios = require('axios');
+const dotenv = require('dotenv');
+const fileUpload = require('express-fileupload');
 
-import path from 'path';
-import { fileURLToPath } from 'url';
-import fs from 'fs';
-import https from 'https';
-import http from 'http';
-import compression from 'compression';
-import net from 'net';
-import { WebSocketServer } from 'ws';
-import { Low } from 'lowdb';
-import { JSONFile } from 'lowdb/node';
-import Stripe from 'stripe';
-import { createClient } from '@supabase/supabase-js';
-import fetch from 'node-fetch';
-import nodemailer from 'nodemailer';
-import ApiError from './src/utils/ApiError.js';
-// import { execSync } from 'child_process';
-import { createServer as createHttpsServer } from 'https';
-import { createServer as createHttpServer } from 'http';
-import { exec } from 'child_process';
-import selfsigned from 'selfsigned';
-import crypto from 'crypto';
-import { compressImage, getOptimalFormat, getFileExtension, formatFileSize } from './server/utils/imageCompression.js';
-import sharp from 'sharp';
-import imageProxyHandler from './server/utils/proxy.js';
-import enhancedImageProxy from './server/utils/enhancedImageProxy.js';
-import publicCourseSessionService from './src/services/PublicCourseSessionService.js';
-import {
+const path = require('path');
+const fs = require('fs');
+const https = require('https');
+const http = require('http');
+const compression = require('compression');
+const net = require('net');
+const { WebSocketServer } = require('ws');
+const { Low } = require('lowdb');
+const { JSONFile } = require('lowdb/node');
+const Stripe = require('stripe');
+const { createClient } = require('@supabase/supabase-js');
+const fetch = require('node-fetch');
+const nodemailer = require('nodemailer');
+const ApiError = require('./src/utils/ApiError.js');
+// const { execSync } = require('child_process');
+const { createServer: createHttpsServer } = require('https');
+const { createServer: createHttpServer } = require('http');
+const { exec } = require('child_process');
+const selfsigned = require('selfsigned');
+const crypto = require('crypto');
+const { compressImage, getOptimalFormat, getFileExtension, formatFileSize } = require('./server/utils/imageCompression.js');
+const sharp = require('sharp');
+const imageProxyHandler = require('./server/utils/proxy.js');
+const enhancedImageProxy = require('./server/utils/enhancedImageProxy.js');
+const publicCourseSessionService = require('./src/services/PublicCourseSessionService.js');
+const {
   publicCourseRateLimit,
   publicCourseSlowDown,
   botDetection,
@@ -40,7 +39,7 @@ import {
   checkCaptcha,
   securityHeaders,
   securityLogging
-} from './server/middleware/security.js';
+} = require('./server/middleware/security.js');
 // import { isValidFlashcardTerm } from './src/utils/flashcardUtils.js';
 
 
@@ -8746,5 +8745,6 @@ app.use('*', (req, res, next) => {
   next();
 });
 
-export { app, db, httpServer as server, startServer };
+// Export for testing purposes only - remove in production
+// export { app, db, httpServer as server, startServer };
 
