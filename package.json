@@ -1,7 +1,7 @@
 {
   "name": "discourse",
   "version": "1.0.0",
-  // "type": "module", // Removed to use CommonJS for server compatibility
+  "type": "module",
   "description": "Discourse Learning Management System",
   "main": "server.js",
   "scripts": {

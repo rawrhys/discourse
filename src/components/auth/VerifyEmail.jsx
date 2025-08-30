@@ -14,21 +14,15 @@ const VerifyEmail = () => {
       const token = searchParams.get('token');
       const email = searchParams.get('email');
 
-      console.log('[VERIFY EMAIL] Starting verification with:', { token: token ? token.substring(0, 10) + '...' : 'none', email });
-
       if (!token || !email) {
-        console.error('[VERIFY EMAIL] Missing token or email:', { token: !!token, email: !!email });
         setVerificationStatus('error');
         setError('Invalid verification link. Please check your email and try again.');
         return;
       }
 
       try {
-        console.log('[VERIFY EMAIL] Calling verification API...');
-        const response = await fetch(`https://thediscourse.ai/api/auth/verify-email?token=${token}&email=${encodeURIComponent(email)}`);
+        const response = await fetch(`/api/auth/verify-email?token=${token}&email=${encodeURIComponent(email)}`);
         const data = await response.json();
-
-        console.log('[VERIFY EMAIL] API response:', { status: response.status, data });
 
         if (response.ok) {
           setVerificationStatus('success');
@@ -39,12 +33,10 @@ const VerifyEmail = () => {
             navigate('/login');
           }, 3000);
         } else {
-          console.error('[VERIFY EMAIL] Verification failed:', data.error);
           setVerificationStatus('error');
           setError(data.error || 'Verification failed. Please try again.');
         }
       } catch (error) {
-        console.error('[VERIFY EMAIL] Network error:', error);
         setVerificationStatus('error');
         setError('Network error. Please check your connection and try again.');
       }
@@ -61,7 +53,7 @@ const VerifyEmail = () => {
     }
 
     try {
-      const response = await fetch('https://thediscourse.ai/api/auth/resend-verification', {
+      const response = await fetch('/api/auth/resend-verification', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

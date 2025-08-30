@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -11,6 +11,29 @@ const Login = () => {
   const navigate = useNavigate();
   const [showTrialMsg, setShowTrialMsg] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const location = useLocation();
+  
+  // Handle payment success and pre-fill email
+  useEffect(() => {
+    const urlParams = new URLSearchParams(location.search);
+    if (urlParams.get('payment') === 'success') {
+      const emailParam = urlParams.get('email');
+      if (emailParam) {
+        setEmail(decodeURIComponent(emailParam));
+        setSuccessMessage('Payment successful! Please log in and verify your email to complete your account setup.');
+      }
+    }
+    
+    // Check for state message from navigation
+    if (location.state?.message) {
+      setSuccessMessage(location.state.message);
+      if (location.state.email) {
+        setEmail(location.state.email);
+      }
+    }
+  }, [location]);
+  
   // Captcha not required for login - only for registration
 
   const handleSubmit = async (e) => {
@@ -70,6 +93,24 @@ const Login = () => {
             </div>
           </div>
         )}
+        
+        {successMessage && (
+          <div className="rounded-md bg-blue-50 p-4 border border-blue-200 mb-4">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-blue-800">
+                  {successMessage}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+        
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && (
             <div className="rounded-md bg-red-50 p-4">

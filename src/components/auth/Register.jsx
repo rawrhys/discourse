@@ -60,89 +60,28 @@ const Register = () => {
   const handlePaymentComplete = () => {
     setIsPaymentComplete(true);
     setCurrentStep(3);
-    // Proceed with account creation using the complete-registration endpoint
-    createAccountAfterPayment();
+    // Clear any pending registration details
+    try { 
+      localStorage.removeItem(PENDING_REG_KEY); 
+      sessionStorage.removeItem('reg_email');
+      sessionStorage.removeItem('reg_password');
+    } catch {}
+    
+    // Redirect to login after a short delay to show success message
+    setTimeout(() => {
+      navigate('/login', { 
+        state: { 
+          message: 'Payment successful! Please log in and verify your email to complete your account setup.',
+          email: email // Pass email to pre-fill login form
+        }
+      });
+    }, 3000);
   };
 
   const createAccountAfterPayment = async () => {
-    setIsLoading(true);
-    try {
-      // Retrieve pending registration details saved before redirect
-      let pending = null;
-      try {
-        pending = JSON.parse(localStorage.getItem(PENDING_REG_KEY) || 'null');
-      } catch {}
-
-      const finalEmail = pending?.email || email;
-      const finalName = pending?.name || name;
-      const finalPassword = pending?.password || password;
-      const finalPolicyVersion = pending?.policyVersion || '1.0';
-
-      if (!finalEmail || !finalName || !finalPassword) {
-        throw new Error('Missing registration details after payment. Please try again.');
-      }
-
-      // First, try to register with Supabase to get proper email verification
-      try {
-        const { data, error } = await register(finalEmail, finalPassword, finalName, { 
-          policyVersion: finalPolicyVersion 
-        });
-        
-        if (error) {
-          throw new Error(error.message);
-        }
-        
-        if (data && data.requiresEmailConfirmation) {
-          // Show email verification step
-          setCurrentStep(4);
-          return;
-        }
-        
-        // If no email confirmation needed, proceed with backend registration
-      } catch (regError) {
-        console.warn('Supabase registration failed, falling back to backend:', regError.message);
-        // Continue with backend registration as fallback
-      }
-
-      // Use the complete-registration endpoint for users who have paid
-      const response = await fetch('/api/auth/complete-registration', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: finalEmail,
-          name: finalName,
-          password: finalPassword,
-          policyVersion: finalPolicyVersion
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Account created successfully after payment:', data);
-        
-        // Clear pending registration details
-        try { localStorage.removeItem(PENDING_REG_KEY); } catch {}
-        
-        // Show success message and redirect to login
-        setError(''); // Clear any previous errors
-        setCurrentStep(3); // Show success step
-        
-        // Redirect to login after a short delay
-        setTimeout(() => {
-          navigate('/login');
-        }, 3000);
-      } else {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to complete registration');
-      }
-    } catch (error) {
-      console.error('Account creation error:', error);
-      setError(error.message);
-    } finally {
-      setIsLoading(false);
-    }
+    // This function is no longer needed - payment success should redirect to login
+    // The account creation happens in the Stripe webhook
+    console.log('Payment completed - redirecting to login for account setup');
   };
 
   const createAccount = async () => {
@@ -215,13 +154,8 @@ const Register = () => {
     }
   };
 
-  // Check for payment success on component mount
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('payment') === 'success') {
-      handlePaymentComplete();
-    }
-  }, []);
+  // Payment success is now handled by Stripe webhook and redirects to login
+  // No need to check for payment success here anymore
 
   // Step 1: Registration Form
   if (currentStep === 1) {

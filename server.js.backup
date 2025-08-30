@@ -1,37 +1,36 @@
-import express from 'express';
-import cookieParser from 'cookie-parser';
-import cors from 'cors';
-import axios from 'axios';
-import dotenv from 'dotenv';
-import fileUpload from 'express-fileupload';
+const express = require('express');
+const cookieParser = require('cookie-parser');
+const cors = require('cors');
+const axios = require('axios');
+const dotenv = require('dotenv');
+const fileUpload = require('express-fileupload');
 
-import path from 'path';
-import { fileURLToPath } from 'url';
-import fs from 'fs';
-import https from 'https';
-import http from 'http';
-import compression from 'compression';
-import net from 'net';
-import { WebSocketServer } from 'ws';
-import { Low } from 'lowdb';
-import { JSONFile } from 'lowdb/node';
-import Stripe from 'stripe';
-import { createClient } from '@supabase/supabase-js';
-import fetch from 'node-fetch';
-import nodemailer from 'nodemailer';
-import ApiError from './src/utils/ApiError.js';
-// import { execSync } from 'child_process';
-import { createServer as createHttpsServer } from 'https';
-import { createServer as createHttpServer } from 'http';
-import { exec } from 'child_process';
-import selfsigned from 'selfsigned';
-import crypto from 'crypto';
-import { compressImage, getOptimalFormat, getFileExtension, formatFileSize } from './server/utils/imageCompression.js';
-import sharp from 'sharp';
-import imageProxyHandler from './server/utils/proxy.js';
-import enhancedImageProxy from './server/utils/enhancedImageProxy.js';
-import publicCourseSessionService from './src/services/PublicCourseSessionService.js';
-import {
+const path = require('path');
+const fs = require('fs');
+const https = require('https');
+const http = require('http');
+const compression = require('compression');
+const net = require('net');
+const { WebSocketServer } = require('ws');
+const { Low } = require('lowdb');
+const { JSONFile } = require('lowdb/node');
+const Stripe = require('stripe');
+const { createClient } = require('@supabase/supabase-js');
+const fetch = require('node-fetch');
+const nodemailer = require('nodemailer');
+const ApiError = require('./src/utils/ApiError.js');
+// const { execSync } = require('child_process');
+const { createServer: createHttpsServer } = require('https');
+const { createServer: createHttpServer } = require('http');
+const { exec } = require('child_process');
+const selfsigned = require('selfsigned');
+const crypto = require('crypto');
+const { compressImage, getOptimalFormat, getFileExtension, formatFileSize } = require('./server/utils/imageCompression.js');
+const sharp = require('sharp');
+const imageProxyHandler = require('./server/utils/proxy.js');
+const enhancedImageProxy = require('./server/utils/enhancedImageProxy.js');
+const publicCourseSessionService = require('./src/services/PublicCourseSessionService.js');
+const {
   publicCourseRateLimit,
   publicCourseSlowDown,
   botDetection,
@@ -40,7 +39,7 @@ import {
   checkCaptcha,
   securityHeaders,
   securityLogging
-} from './server/middleware/security.js';
+} = require('./server/middleware/security.js');
 // import { isValidFlashcardTerm } from './src/utils/flashcardUtils.js';
 
 
@@ -85,11 +84,6 @@ setInterval(() => {
     }
   }
 }, 5 * 60 * 1000); // 5 minutes
-
-// Utility function to generate unique IDs
-const generateId = () => {
-  return Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
-};
 
 // Email verification and password reset functionality
 const createTransporter = () => {
@@ -3255,704 +3249,6 @@ Example format:
 
 Return only the JSON array, no other text.`;
 
-      if (!Array.isArray(generatedReferences) || generatedReferences.length === 0) {
-        console.warn(`[AIService] AI failed to generate authentic references, falling back to static references`);
-        return this.generateBibliography(topic, subject, numReferences);
-      }
-
-      // Validate and clean up the generated references
-      const validatedReferences = generatedReferences
-        .filter(ref => ref && ref.author && ref.title && ref.publisher && ref.year)
-        .map((ref, index) => ({
-          id: index + 1,
-          author: ref.author.trim(),
-          year: ref.year.toString(),
-          title: ref.title.trim(),
-          publisher: ref.publisher.trim(),
-          type: ref.type || 'book',
-          relevance: ref.relevance || `Relevant to ${topic}`,
-          verified: true, // Mark as verified since they're AI-generated authentic references
-          citationNumber: index + 1
-        }))
-        .slice(0, numReferences);
-
-      console.log(`[AIService] Generated ${validatedReferences.length} authentic references for "${topic}"`);
-      return validatedReferences;
-
-    } catch (error) {
-      console.error(`[AIService] Error generating authentic bibliography for "${topic}":`, error.message);
-      // Fall back to static bibliography generation
-      return this.generateBibliography(topic, subject, numReferences);
-    }
-  }
-
-  /**
-   * Shuffle array for variety in reference selection
-   * @param {Array} array - Array to shuffle
-   * @returns {Array} Shuffled array
-   */
-  shuffleArray(array) {
-    const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
-  }
-
-  /**
-   * Verify that all references are authentic
-   * @param {Array} bibliography - Bibliography array to verify
-   * @returns {boolean} True if all references are verified
-   */
-  verifyBibliography(bibliography) {
-    return bibliography.every(ref => ref.verified === true);
-  }
-
-  /**
-   * Clean up malformed References sections in content
-   * @param {string} content - Content that might contain malformed References
-   * @returns {string} Cleaned content
-   */
-  cleanupMalformedReferences(content) {
-    if (!content || typeof content !== 'string') {
-      return content;
-    }
-
-    return content
-      // Fix the specific problematic pattern: "## References [1] ... [2] ..."
-      .replace(/## References\s*\[(\d+)\]/g, '\n## References\n\n[$1]')
-      // Ensure each citation is on its own line
-      .replace(/\]\s*\[(\d+)\]/g, '.\n\n[$1]')
-      // Add proper line breaks between citations
-      .replace(/\.\s*\[(\d+)\]/g, '.\n\n[$1]')
-      // Clean up any remaining issues
-      .replace(/\n{3,}/g, '\n\n'); // Normalize multiple line breaks
-  }
-}
-
-// --- SETUP AND CONFIGURATION ---
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// --- DATABASE SETUP ---
-const dbFilePath = path.join(__dirname, 'db.json');
-
-// Ensure the data directory exists
-const dataDir = path.resolve(__dirname, 'data');
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
-
-const adapter = new JSONFile(dbFilePath);
-const defaultData = { users: [], courses: [], images: [], imageCache: [], onboardingCompletions: [], trialRecords: [], deletedUsers: [] };
-const db = new Low(adapter, defaultData);
-
-async function initializeDatabase() {
-  try {
-    // read() will create the file with defaultData if it doesn't exist or load existing data.
-    await db.read();
-    console.log(`[DB Debug] db.read() completed. File exists: ${fs.existsSync(dbFilePath)}`);
-    // Belt-and-suspenders: ensure data object and arrays are present after read.
-    db.data = db.data || defaultData;
-    db.data.users = db.data.users || [];
-    db.data.courses = db.data.courses || [];
-    db.data.imageCache = db.data.imageCache || [];
-    db.data.trialRecords = db.data.trialRecords || [];
-    db.data.images = db.data.images || [];
-    db.data.onboardingCompletions = db.data.onboardingCompletions || [];
-    db.data.deletedUsers = db.data.deletedUsers || [];
-    
-    // Load courses from individual files if they exist
-    await loadCoursesFromFiles();
-    
-    // Clean up orphaned course files
-    await cleanupOrphanedCourseFiles();
-    
-    // Migrate existing users to have required email verification fields
-    await migrateExistingUsers();
-    
-    console.log('[DB] Database initialized successfully at:', dbFilePath);
-    console.log('[DB] Users in database:', db.data.users.map(u => ({ id: u.id, email: u.email, courseCredits: u.courseCredits, emailVerified: u.emailVerified })));
-  } catch (error) {
-    console.error('[DB_ERROR] Could not initialize database:', error);
-    process.exit(1);
-  }
-}
-
-async function loadCoursesFromFiles() {
-  try {
-    const coursesDir = path.join(__dirname, 'data', 'courses');
-    if (!fs.existsSync(coursesDir)) {
-      console.log('[DB] No courses directory found, skipping course loading');
-      return;
-    }
-
-    const courseFiles = fs.readdirSync(coursesDir).filter(file => file.endsWith('.json') && file !== 'undefined.json');
-    console.log(`[DB] Found ${courseFiles.length} course files to load:`, courseFiles);
-
-    for (const file of courseFiles) {
-      try {
-        const filePath = path.join(coursesDir, file);
-        const courseData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-        
-        // Check if course already exists in database
-        const existingCourse = db.data.courses.find(c => c.id === courseData.id);
-        if (!existingCourse) {
-          db.data.courses.push(courseData);
-          console.log(`[DB] Loaded course: ${courseData.title} (${courseData.id})`);
-        } else {
-          console.log(`[DB] Course already exists: ${courseData.title} (${courseData.id})`);
-        }
-      } catch (error) {
-        console.error(`[DB_ERROR] Failed to load course file ${file}:`, error.message);
-      }
-    }
-
-    console.log(`[DB] Total courses in database: ${db.data.courses.length}`);
-    console.log(`[DB] Course IDs:`, db.data.courses.map(c => c.id));
-  } catch (error) {
-    console.error('[DB_ERROR] Failed to load courses from files:', error);
-  }
-}
-
-/**
- * Save a course to an individual JSON file
- * @param {Object} course - The course object to save
- */
-async function saveCourseToFile(course) {
-  try {
-    const coursesDir = path.join(__dirname, 'data', 'courses');
-    
-    // Ensure courses directory exists
-    if (!fs.existsSync(coursesDir)) {
-      fs.mkdirSync(coursesDir, { recursive: true });
-    }
-    
-    const courseFileName = `${course.id}.json`;
-    const courseFilePath = path.join(coursesDir, courseFileName);
-    
-    // Save course to file
-    fs.writeFileSync(courseFilePath, JSON.stringify(course, null, 2));
-    console.log(`[DB] Saved course to file: ${courseFileName}`);
-    
-  } catch (error) {
-    console.error(`[DB_ERROR] Failed to save course file for ${course.id}:`, error.message);
-    // Don't throw error to avoid breaking course creation
-  }
-}
-
-/**
- * Clean up orphaned course files (files that exist but don't have corresponding database entries)
- */
-async function cleanupOrphanedCourseFiles() {
-  try {
-    const coursesDir = path.join(__dirname, 'data', 'courses');
-    
-    if (!fs.existsSync(coursesDir)) {
-      return;
-    }
-    
-    const courseFiles = fs.readdirSync(coursesDir).filter(file => file.endsWith('.json') && file !== 'undefined.json');
-    const databaseCourseIds = db.data.courses.map(c => c.id);
-    
-    let orphanedCount = 0;
-    
-    for (const file of courseFiles) {
-      const courseId = file.replace('.json', '');
-      
-      if (!databaseCourseIds.includes(courseId)) {
-        const filePath = path.join(coursesDir, file);
-        try {
-          fs.unlinkSync(filePath);
-          console.log(`[DB] Cleaned up orphaned course file: ${file}`);
-          orphanedCount++;
-        } catch (error) {
-          console.error(`[DB_ERROR] Failed to delete orphaned file ${file}:`, error.message);
-        }
-      }
-    }
-    
-    if (orphanedCount > 0) {
-      console.log(`[DB] Cleaned up ${orphanedCount} orphaned course files`);
-    }
-    
-  } catch (error) {
-    console.error('[DB_ERROR] Failed to cleanup orphaned course files:', error.message);
-  }
-}
-
-/**
- * Migrate existing users to have required email verification fields
- */
-async function migrateExistingUsers() {
-  try {
-    let migrationCount = 0;
-    
-    for (const user of db.data.users) {
-      let needsMigration = false;
-      
-      // Check if user needs email verification fields
-      if (user.emailVerified === undefined) {
-        user.emailVerified = true; // Mark existing users as verified
-        needsMigration = true;
-      }
-      
-      // Check if user needs verification token fields
-      if (user.verificationToken === undefined) {
-        user.verificationToken = null;
-        needsMigration = true;
-      }
-      
-      if (user.verificationTokenCreatedAt === undefined) {
-        user.verificationTokenCreatedAt = null;
-        needsMigration = true;
-      }
-      
-      // Check if user needs emailVerifiedAt field
-      if (user.emailVerifiedAt === undefined) {
-        user.emailVerifiedAt = user.emailVerified ? new Date().toISOString() : null;
-        needsMigration = true;
-      }
-      
-      // Check if user needs password field for local users
-      if (user.password === undefined && user.id.startsWith('local_')) {
-        user.password = null; // Will need to be set on next login
-        needsMigration = true;
-      }
-      
-      if (needsMigration) {
-        migrationCount++;
-        console.log(`[DB_MIGRATION] Migrated user: ${user.email} (${user.id})`);
-      }
-    }
-    
-    if (migrationCount > 0) {
-      await db.write();
-      console.log(`[DB_MIGRATION] Successfully migrated ${migrationCount} users`);
-    } else {
-      console.log('[DB_MIGRATION] No users needed migration');
-    }
-  } catch (error) {
-    console.error('[DB_ERROR] Failed to migrate existing users:', error);
-    // Don't throw error to avoid breaking server startup
-  }
-}
-
-/**
- * Assign the onboarding course to a new user
- * @param {string} userId - The ID of the user to assign the course to
- */
-async function assignOnboardingCourse(userId) {
-  try {
-    console.log(`[ONBOARDING] Starting assignment for user ${userId}`);
-    
-    // Find the onboarding course
-    const onboardingCourse = db.data.courses.find(c => c.id === 'discourse-ai-onboarding');
-    
-    if (!onboardingCourse) {
-      console.log('[ONBOARDING] Onboarding course not found, skipping assignment');
-      console.log('[ONBOARDING] Available courses:', db.data.courses.map(c => c.id));
-      return;
-    }
-    
-    console.log(`[ONBOARDING] Found onboarding template:`, {
-      id: onboardingCourse.id,
-      title: onboardingCourse.title,
-      hasModules: !!onboardingCourse.modules,
-      modulesCount: onboardingCourse.modules?.length
-    });
-    
-    // Check if user already has the onboarding course (more robust check)
-    const existingCourse = db.data.courses.find(c => 
-      c.userId === userId && c.id.includes('discourse-ai-onboarding')
-    );
-    
-    if (existingCourse) {
-      console.log(`[ONBOARDING] User ${userId} already has onboarding course:`, existingCourse.id);
-      return;
-    }
-    
-    // Additional safety check - look for any course with similar title
-    const hasSimilarCourse = db.data.courses.some(c => 
-      c.userId === userId && 
-      (c.title.toLowerCase().includes('welcome to discourse ai') || 
-       c.title.toLowerCase().includes('onboarding') ||
-       c.title.toLowerCase().includes('learning journey begins'))
-    );
-    
-    if (hasSimilarCourse) {
-      console.log(`[ONBOARDING] User ${userId} already has similar course, skipping onboarding assignment`);
-      return;
-    }
-    
-    // Create a copy of the onboarding course for the user
-    const userCourse = {
-      ...onboardingCourse,
-      id: `onboarding_${userId}_${Date.now()}`,
-      userId: userId,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    
-    console.log(`[ONBOARDING] Created user course:`, {
-      id: userCourse.id,
-      userId: userCourse.userId,
-      title: userCourse.title
-    });
-    
-    // Add to courses table
-    db.data.courses.push(userCourse);
-    
-    await db.write();
-    console.log(`[ONBOARDING] Successfully assigned onboarding course to user ${userId}`);
-    
-  } catch (error) {
-    console.error(`[ONBOARDING] Failed to assign onboarding course to user ${userId}:`, error.message);
-    console.error(`[ONBOARDING] Error stack:`, error.stack);
-    // Don't throw error to avoid breaking user creation
-  }
-}
-
-/**
- * Clean up duplicate onboarding courses for a user
- * @param {string} userId - The ID of the user to clean up
- */
-async function cleanupDuplicateOnboardingCourses(userId) {
-  try {
-    const userOnboardingCourses = db.data.courses.filter(c => 
-      c.userId === userId && c.id.includes('discourse-ai-onboarding')
-    );
-    
-    if (userOnboardingCourses.length > 1) {
-      console.log(`[ONBOARDING] Found ${userOnboardingCourses.length} duplicate onboarding courses for user ${userId}, cleaning up...`);
-      
-      // Keep the first one, remove the rest
-      const [keepCourse, ...duplicates] = userOnboardingCourses;
-      
-      // Remove duplicates from the database
-      db.data.courses = db.data.courses.filter(c => !duplicates.includes(c));
-      
-      await db.write();
-      console.log(`[ONBOARDING] Cleaned up ${duplicates.length} duplicate onboarding courses for user ${userId}`);
-    }
-  } catch (error) {
-    console.error(`[ONBOARDING] Failed to cleanup duplicate onboarding courses for user ${userId}:`, error.message);
-  }
-}
-
-/**
- * Ensure an existing user has the onboarding course
- * @param {string} userId - The ID of the user to check
- */
-async function ensureOnboardingCourse(userId) {
-  try {
-    // Check if user already has the onboarding course (more robust check)
-    const existingCourse = db.data.courses.find(c => 
-      c.userId === userId && c.id.includes('discourse-ai-onboarding')
-    );
-    
-    if (existingCourse) {
-      console.log(`[ONBOARDING] User ${userId} already has onboarding course:`, existingCourse.id);
-      return; // User already has the course
-    }
-    
-    // Additional safety check - look for any course with similar title
-    const hasSimilarCourse = db.data.courses.some(c => 
-      c.userId === userId && 
-      (c.title.toLowerCase().includes('welcome to discourse ai') || 
-       c.title.toLowerCase().includes('onboarding') ||
-       c.title.toLowerCase().includes('learning journey begins'))
-    );
-    
-    if (hasSimilarCourse) {
-      console.log(`[ONBOARDING] User ${userId} already has similar course, skipping onboarding assignment`);
-      return;
-    }
-    
-    // User doesn't have the course, assign it
-    await assignOnboardingCourse(userId);
-    
-  } catch (error) {
-    console.error(`[ONBOARDING] Failed to ensure onboarding course for user ${userId}:`, error.message);
-    // Don't throw error to avoid breaking login flow
-  }
-}
-
-const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
-const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
-
-// Supabase client
-const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://test.supabase.co';
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'test-key';
-const supabaseRedirectUrl = process.env.SUPABASE_REDIRECT_URL || 'https://thediscourse.ai';
-
-let supabase = null;
-let supabaseAdmin = null; // Optional admin client for privileged operations (e.g., deleting users)
-
-if (!supabaseUrl || !supabaseAnonKey || supabaseUrl === 'your-supabase-url-here' || supabaseAnonKey === 'your-supabase-anon-key-here') {
-    console.warn('[SERVER_WARN] Supabase configuration is missing or invalid. Authentication will be disabled.');
-    console.warn('[SERVER_WARN] Please check your environment variables or .env file.');
-    console.warn(`[SERVER_DEBUG] SUPABASE_URL: ${supabaseUrl ? 'SET' : 'NOT SET'}`);
-    console.warn(`[SERVER_DEBUG] VITE_SUPABASE_URL: ${process.env.VITE_SUPABASE_URL ? 'SET' : 'NOT SET'}`);
-    console.warn(`[SERVER_DEBUG] SUPABASE_ANON_KEY: ${supabaseAnonKey ? 'SET' : 'NOT SET'}`);
-    console.warn(`[SERVER_DEBUG] VITE_SUPABASE_ANON_KEY: ${process.env.VITE_SUPABASE_ANON_KEY ? 'SET' : 'NOT SET'}`);
-    console.warn(`[SERVER_DEBUG] SUPABASE_REDIRECT_URL: ${supabaseRedirectUrl}`);
-} else {
-    try {
-        supabase = createClient(supabaseUrl, supabaseAnonKey, {
-            auth: {
-                autoRefreshToken: false,
-                persistSession: false,
-                redirectTo: supabaseRedirectUrl,
-            },
-        });
-        console.log('[SERVER] Supabase client initialized successfully');
-        console.log(`[SERVER] Supabase redirect URL: ${supabaseRedirectUrl}`);
-    } catch (error) {
-        console.error('[SERVER_ERROR] Failed to initialize Supabase client:', error.message);
-        supabase = null;
-    }
-}
-
-// --- Supabase Edge Function config (preferred for admin ops) ---
-const EDGE_DELETE_USER_URL = process.env.SUPABASE_EDGE_DELETE_USER_URL
-  || process.env.EDGE_DELETE_USER_URL
-  || process.env.SUPABASE_FUNCTION_DELETE_USER_URL
-  || '';
-const EDGE_FUNCTION_SECRET = process.env.SUPABASE_EDGE_FUNCTION_SECRET
-  || process.env.EDGE_FUNCTION_SECRET
-  || '';
-
-// Helper: delete Supabase user via Edge Function if configured, else fallback to admin client
-async function deleteSupabaseUser(userId) {
-  try {
-    if (EDGE_DELETE_USER_URL) {
-      const headers = { 'Content-Type': 'application/json' };
-      if (EDGE_FUNCTION_SECRET) headers['x-function-secret'] = EDGE_FUNCTION_SECRET;
-      const resp = await fetch(EDGE_DELETE_USER_URL, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ user_id: userId })
-      });
-      if (!resp.ok) {
-        const txt = await resp.text();
-        console.warn('[SupabaseEdge] delete-user failed:', resp.status, txt);
-        return false;
-      }
-      console.log('[SupabaseEdge] delete-user succeeded for:', userId);
-      return true;
-    }
-    // Fallback to admin client if edge function not configured
-    if (supabaseAdmin && typeof supabaseAdmin.auth?.admin?.deleteUser === 'function') {
-      try {
-        await supabaseAdmin.auth.admin.deleteUser(userId);
-        console.log('[SupabaseAdmin] Deleted user:', userId);
-        return true;
-      } catch (e) {
-        console.warn('[SupabaseAdmin] Failed to delete user:', userId, e?.message);
-        return false;
-      }
-    }
-  } catch (e) {
-    console.warn('[SupabaseDelete] Unexpected error deleting user:', e?.message);
-  }
-  return false;
-}
-
-// Initialize optional Supabase admin client when service role key is provided
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (supabaseUrl && supabaseServiceRoleKey && supabaseServiceRoleKey !== 'your-supabase-service-role-key-here') {
-  try {
-    supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
-    console.log('[SERVER] Supabase admin client initialized');
-  } catch (e) {
-    console.warn('[SERVER_WARN] Failed to initialize Supabase admin client:', e?.message);
-    supabaseAdmin = null;
-    }
-}
-
-// Helper to get user by id
-// This function is no longer needed as we use req.user from the middleware.
-
-// --- MIDDLEWARE ---
-
-// Enhanced authentication middleware with Supabase token verification
-const authenticateToken = async (req, res, next) => {
-  try {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-
-    console.log('[AUTH] Authentication attempt:', {
-      path: req.path,
-      hasAuthHeader: !!authHeader,
-      hasToken: !!token,
-      tokenLength: token ? token.length : 0,
-      tokenPrefix: token ? token.substring(0, 10) + '...' : 'none'
-    });
-
-    if (!token) {
-      // Fallback 1: authenticate via HttpOnly cookie containing user id
-      const cookieUserId = req.cookies?.sse_user_id;
-      if (cookieUserId) {
-        const dbUser = db.data.users.find(u => u.id === cookieUserId);
-        if (dbUser) {
-          console.log('[AUTH] Cookie-based authentication successful for user:', cookieUserId);
-          req.user = dbUser;
-          return next();
-        } else {
-          console.log('[AUTH] Cookie user id not found in local database:', cookieUserId);
-          return res.status(401).json({ 
-            error: 'User not found in local database',
-            code: 'USER_NOT_FOUND'
-          });
-        }
-      }
-
-      // Fallback 2: if a Supabase access token is stored in cookie, verify it
-      const cookieToken = req.cookies?.sse_token;
-      if (cookieToken && supabase) {
-        try {
-          const { data: { user }, error } = await supabase.auth.getUser(cookieToken);
-          if (user && !error) {
-            const dbUser = db.data.users.find(u => u.id === user.id);
-            if (!dbUser) {
-              return res.status(401).json({ error: 'User not found in local database', code: 'USER_NOT_FOUND' });
-            }
-            console.log('[AUTH] Cookie token verification successful for:', user.id);
-            req.user = dbUser;
-            return next();
-          }
-        } catch (e) {
-          console.warn('[AUTH] Cookie token verification failed:', e?.message);
-        }
-      }
-
-      console.log('[AUTH] No token provided for:', req.path);
-      return res.status(401).json({ 
-        error: 'Access token required',
-        code: 'TOKEN_MISSING'
-      });
-    }
-
-    // Handle local tokens (dev: and local: prefixes)
-    if (token.startsWith('dev:') || token.startsWith('local:')) {
-      const userId = token.includes(':') ? token.split(':')[1] : token;
-      const dbUser = db.data.users.find(u => u.id === userId);
-      if (!dbUser) {
-        return res.status(401).json({ error: 'User not found in local database', code: 'USER_NOT_FOUND' });
-      }
-      req.user = dbUser;
-      return next();
-    }
-
-    // Verify token using Supabase (only for non-local tokens)
-    if (!supabase) {
-      console.error('[AUTH_ERROR] Supabase client not initialized');
-      return res.status(500).json({ 
-        error: 'Authentication service not configured',
-        code: 'AUTH_SERVICE_ERROR'
-      });
-    }
-
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-
-    if (error || !user) {
-      console.log('[AUTH] Supabase token verification failed for:', req.path, 'Error:', error?.message || 'No user data');
-      
-      let errorMessage = 'Invalid or expired token';
-      let errorCode = 'TOKEN_INVALID';
-      
-      if (error?.message?.includes('expired')) {
-        errorMessage = 'Token has expired. Please log in again.';
-        errorCode = 'TOKEN_EXPIRED';
-      } else if (error?.message?.includes('invalid')) {
-        errorMessage = 'Invalid token. Please log in again.';
-        errorCode = 'TOKEN_SIGNATURE_INVALID';
-      }
-      
-      return res.status(401).json({ 
-        error: errorMessage,
-        code: errorCode
-      });
-    }
-
-    // Check deletion list first: if user was deleted locally, treat as 401
-    const isDeleted = Array.isArray(db?.data?.deletedUsers) && db.data.deletedUsers.some(d => d.id === user.id);
-    if (isDeleted) {
-      console.log('[AUTH] User was deleted locally, rejecting token:', user.id);
-      return res.status(401).json({ error: 'User not found in local database', code: 'USER_NOT_FOUND' });
-    }
-
-    // Find user in local database to ensure they exist and have current data
-    const dbUser = db.data.users.find(u => u.id === user.id);
-    if (!dbUser) {
-      console.log('[AUTH] User not found in local database:', user.id);
-      return res.status(401).json({ 
-        error: 'User not found in local database',
-        code: 'USER_NOT_FOUND'
-      });
-    }
-
-    // Update req.user with fresh data from database
-    req.user = dbUser;
-    
-    // Add debugging for course access
-    if (req.path.includes('/api/courses/') && req.params.courseId) {
-      console.log('[AUTH] Course access authentication:', {
-        userId: dbUser.id,
-        userEmail: dbUser.email,
-        courseId: req.params.courseId,
-        path: req.path,
-        timestamp: new Date().toISOString()
-      });
-    }
-    
-    if (SHOULD_LOG_AUTH) {
-      console.log('[AUTH] User authenticated:', {
-        id: dbUser.id,
-        email: dbUser.email,
-        path: req.path,
-        credits: dbUser.courseCredits
-      });
-    }
-    next();
-  } catch (error) {
-    console.error('[AUTH_ERROR] Unexpected error in authenticateToken:', error);
-    return res.status(500).json({ 
-      error: 'Authentication service error',
-      code: 'AUTH_SERVICE_ERROR'
-    });
-  }
-};
-
-// Admin guard (if ADMIN_EMAILS is empty, allow any authenticated user)
-const requireAdminIfConfigured = (req, res, next) => {
-  if (ADMIN_EMAILS.size === 0) return next();
-  const email = req.user?.email?.toLowerCase();
-  if (!email || !ADMIN_EMAILS.has(email)) {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
-  next();
-};
-
-// --- API ROUTES ---
-
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.status(200).json({ 
-    status: 'ok', 
-    timestamp: new Date().toISOString(),
-    aiService: {
-      configured: !!global.aiService,
-      hasApiKey: !!(process.env.MISTRAL_API_KEY || process.env.VITE_MISTRAL_API_KEY),
-      ready: !!(global.aiService && global.aiService.apiKey)
-    }
-  });
-});
-
 // AI service test endpoint
 app.get('/api/test-ai', async (req, res) => {
   if (!global.aiService) {
@@ -4335,12 +3631,12 @@ app.get('/api/auth/verify-email', async (req, res) => {
       return res.status(400).json({ error: 'Verification token is required' });
     }
 
-    console.log('[EMAIL VERIFY] GET: Attempting to verify email with token:', token.substring(0, 10) + '...', 'for email:', email);
+    console.log('[EMAIL VERIFY] Attempting to verify email with token:', token.substring(0, 10) + '...', 'for email:', email);
 
     // Find user with this verification token
     const user = db.data.users.find(u => u.verificationToken === token && !u.emailVerified);
     if (!user) {
-      console.log('[EMAIL VERIFY] GET: No user found with token or email already verified');
+      console.log('[EMAIL VERIFY] No user found with token or email already verified');
       return res.status(400).json({ error: 'Invalid or expired verification token' });
     }
 
@@ -4348,7 +3644,7 @@ app.get('/api/auth/verify-email', async (req, res) => {
     const tokenAge = Date.now() - new Date(user.verificationTokenCreatedAt).getTime();
     const tokenExpiry = 24 * 60 * 60 * 1000; // 24 hours
     if (tokenAge > tokenExpiry) {
-      console.log('[EMAIL VERIFY] GET: Token expired for user:', user.email);
+      console.log('[EMAIL VERIFY] Token expired for user:', user.email);
       return res.status(400).json({ error: 'Verification token has expired' });
     }
 
@@ -4360,7 +3656,7 @@ app.get('/api/auth/verify-email', async (req, res) => {
 
     await db.write();
 
-    console.log('[EMAIL VERIFY] GET: Email verified successfully for:', user.email);
+    console.log('[EMAIL VERIFY] Email verified successfully for:', user.email);
     return res.json({ 
       success: true, 
       message: 'Email verified successfully',
@@ -4372,12 +3668,12 @@ app.get('/api/auth/verify-email', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('[EMAIL VERIFY] GET Error:', error);
+    console.error('[EMAIL VERIFY] Error:', error);
     return res.status(500).json({ error: 'Failed to verify email' });
   }
 });
 
-// Email verification endpoint - POST method for backward compatibility
+// Keep POST endpoint for backward compatibility
 app.post('/api/auth/verify-email', async (req, res) => {
   try {
     const { token } = req.body;
@@ -7442,7 +6738,7 @@ app.post('/api/auth/create-checkout-session', async (req, res) => {
         },
       },
       payment_method_collection: 'always',
-      success_url: `${req.headers.origin || 'https://thediscourse.ai'}/login?payment=success&email=${encodeURIComponent(email)}`,
+      success_url: `${req.headers.origin || 'https://thediscourse.ai'}/register?payment=success`,
       cancel_url: `${req.headers.origin || 'https://thediscourse.ai'}/register?payment=cancel`,
     });
     
@@ -7613,51 +6909,15 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
       
       console.log(`[Stripe] Registration subscription started for email: ${registrationEmail}`);
       
-      // Create the user account immediately after successful payment
+      // Store registration data for the frontend to complete account creation
       try {
-        // Check if user already exists
-        let existingUser = db.data.users.find(u => u.email === registrationEmail);
-        if (existingUser) {
-          console.log(`[Stripe] User already exists: ${registrationEmail}`);
-          // Update existing user with subscription info
-          existingUser.stripeSubscriptionId = session.subscription;
-          existingUser.subscriptionStatus = 'active';
-          existingUser.trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(); // 14 days from now
-        } else {
-          // Create new user account
-          const newUser = {
-            id: generateId(),
-            email: registrationEmail,
-            password: registrationPassword, // Note: In production, this should be hashed
-            name: registrationEmail.split('@')[0], // Use email prefix as name
-            createdAt: new Date().toISOString(),
-            emailVerified: false,
-            stripeSubscriptionId: session.subscription,
-            subscriptionStatus: 'active',
-            trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(), // 14 days from now
-            courseCredits: 10, // Give initial credits
-            gdprConsent: true,
-            policyVersion: '1.0'
-          };
-          
-          db.data.users.push(newUser);
-          console.log(`[Stripe] Created new user account: ${registrationEmail} with ID: ${newUser.id}`);
-        }
-        
-        await db.write();
-        console.log(`[Stripe] User account setup completed for: ${registrationEmail}`);
-        
-        // Send email verification email
-        try {
-          const verificationToken = generateVerificationToken();
-          await sendVerificationEmail(registrationEmail, verificationToken, registrationEmail.split('@')[0]);
-          console.log(`[Stripe] Email verification sent to: ${registrationEmail}`);
-        } catch (emailError) {
-          console.error('[Stripe] Failed to send email verification:', emailError);
-        }
-        
+        console.log(`[Stripe] Registration data ready for account creation:`, {
+          email: registrationEmail,
+          hasPassword: !!registrationPassword,
+          subscriptionId: session.subscription
+        });
       } catch (err) {
-        console.error('[Stripe] Error creating user account:', err);
+        console.error('[Stripe] Error processing registration data:', err);
       }
     }
   }
@@ -9485,5 +8745,6 @@ app.use('*', (req, res, next) => {
   next();
 });
 
-export { app, db, httpServer as server, startServer };
+// Export for testing purposes only - remove in production
+// export { app, db, httpServer as server, startServer };
 
