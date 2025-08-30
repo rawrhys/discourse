@@ -1,73 +1,71 @@
-name: Deploy to VPS and Shared Hosting
+name: Deploy to VPS
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  deploy-vps:
+  deploy:
     runs-on: ubuntu-latest
+    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Build project
+      run: npm run build
+      
+    - name: Deploy to VPS
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USERNAME }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        port: ${{ secrets.VPS_PORT || 22 }}
+        script: |
+          # Navigate to project directory
+          cd /path/to/your/project
+          
+          # Pull latest changes
+          git pull origin main
+          
+          # Install dependencies
+          npm ci --production
+          
+          # Restart server using PM2
+          pm2 restart discours || pm2 start server.js --name discours
+          
+          # Show PM2 status
+          pm2 status
+        
+          
+    - name: Verify deployment
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USERNAME }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        port: ${{ secrets.VPS_PORT || 22 }}
+        script: |
+          # Check if server is running
+          pm2 status discours
+          
+          
+          # Show system resources
+          pm2 run stop
+          sleep 5
+          pm2 run start
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build project
-        run: npm run build
-
-      - name: Deploy to VPS
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USERNAME }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: ${{ secrets.VPS_PORT || 22 }}
-          script: |
-            # Navigate to project directory
-            cd /root/discourse
-            
-            # Pull latest changes
-            git pull origin main
-            
-            # Install dependencies
-            npm ci --production
-            
-            # Restart server using PM2
-            pm2 restart discours || pm2 start server.js --name discours
-            
-            # Show PM2 status
-            pm2 status
-            
-            # Show recent logs
-            pm2 logs discours --lines 20
-
-      - name: Verify deployment
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USERNAME }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: ${{ secrets.VPS_PORT || 22 }}
-          script: |
-            # Check if server is running
-            pm2 status discours
-            
-            # Check server health
-            curl -f http://localhost:3000/api/health || echo "Server not responding"
-            
-            # Show system resources
-            pm2 monit --no-daemon &
-            sleep 5
-            pkill -f "pm2 monit"
 
   deploy-shared-hosting:
     runs-on: ubuntu-latest
