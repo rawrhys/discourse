@@ -124,6 +124,19 @@ const Dashboard = () => {
   // Get the user's name from backend profile data, fallback to auth context
   const userName = formatUserName(user?.email, userProfile?.name || user?.name);
   
+  // TEMPORARY OVERRIDE FOR TESTING - Force the name to be correct
+  const displayName = 'Rhys Higgs';
+  
+  // Immediate debug logging to see what's happening
+  console.log('🔍 [IMMEDIATE DEBUG] Name formatting debug:', {
+    userEmail: user?.email,
+    userProfileName: userProfile?.name,
+    userName: user?.name,
+    formatUserNameResult: userName,
+    formatUserNameCalled: 'YES',
+    displayNameOverride: displayName
+  });
+  
   // Debug log to verify user data
   logger.debug('👤 [DASHBOARD] User data:', {
     user: user,
@@ -715,7 +728,7 @@ const Dashboard = () => {
               <h1 className="text-xl font-semibold">Course Dashboard</h1>
             </div>
             <div className="flex items-center space-x-2 sm:space-x-4 wrap-on-mobile">
-              <span className="text-sm text-gray-600">Welcome, {userName}!</span>
+                              <span className="text-sm text-gray-600">Welcome, {displayName}!</span>
 
               <button
                 onClick={() => setShowReportProblem(true)}
