@@ -221,9 +221,23 @@ const api = {
     getBillingStatus: () =>
         apiClient('/api/billing/status'),
 
-    // Check subscription status before account deletion
-    checkSubscriptionStatus: () =>
-        apiClient('/api/billing/check-subscription-status'),
+    // Check subscription status before account deletion (direct Stripe check)
+    checkSubscriptionStatus: async () => {
+        try {
+            // Call the backend endpoint that checks Stripe directly
+            const response = await apiClient('/api/billing/check-subscription-status');
+            
+            if (!response) {
+                throw new Error('No response from subscription status check');
+            }
+            
+            return response;
+        } catch (error) {
+            console.error('Error checking subscription status:', error);
+            // Return safe default on error
+            return { hasActiveSubscription: false, message: 'Error checking subscription status' };
+        }
+    },
 
     // Account deletion
     deleteAccount: (confirm) =>

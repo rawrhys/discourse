@@ -359,17 +359,17 @@ const Dashboard = () => {
         const thirtyMinutesAgo = Date.now() - 30 * 60 * 1000;
         
         if (!lastShown || parseInt(lastShown) < thirtyMinutesAgo) {
-          logger.info('🎉 [DASHBOARD] Found recently generated courses on dashboard load:', recentCourses.map(c => c.title));
-          setSuccessMessage(`Welcome back! You have ${recentCourses.length} recently generated course${recentCourses.length > 1 ? 's' : ''} available.`);
-          setShowSuccessToast(true);
+        logger.info('🎉 [DASHBOARD] Found recently generated courses on dashboard load:', recentCourses.map(c => c.title));
+        setSuccessMessage(`Welcome back! You have ${recentCourses.length} recently generated course${recentCourses.length > 1 ? 's' : ''} available.`);
+        setShowSuccessToast(true);
           
           // Mark as shown
           localStorage.setItem(lastShownKey, Date.now().toString());
-          
-          // Hide success message after a delay
+        
+        // Hide success message after a delay
           const timeoutId = setTimeout(() => {
-            setShowSuccessToast(false);
-          }, 5000);
+          setShowSuccessToast(false);
+        }, 5000);
           
           // Cleanup timeout on unmount or dependency change
           return () => {
@@ -760,7 +760,7 @@ const Dashboard = () => {
               <h1 className="text-xl font-semibold">Course Dashboard</h1>
             </div>
             <div className="flex items-center space-x-2 sm:space-x-4 wrap-on-mobile">
-                              <span className="text-sm text-gray-600">Welcome, {userName}!</span>
+              <span className="text-sm text-gray-600">Welcome, {userName}!</span>
 
               <button
                 onClick={() => setShowReportProblem(true)}

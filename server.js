@@ -7812,7 +7812,7 @@ app.get('/api/billing/status', authenticateToken, async (req, res) => {
 
 
 
-// Check subscription status before account deletion
+// Check subscription status before account deletion (direct Stripe check)
 app.get('/api/billing/check-subscription-status', authenticateToken, async (req, res) => {
   try {
     if (!stripe) {
@@ -7834,7 +7834,7 @@ app.get('/api/billing/check-subscription-status', authenticateToken, async (req,
       return res.json({ hasActiveSubscription: false, message: 'No Stripe customer found' });
     }
 
-    // Check for active subscriptions
+    // Check for active subscriptions directly from Stripe
     const subscriptions = await stripe.subscriptions.list({
       customer: customerId,
       status: 'all',
@@ -9737,6 +9737,8 @@ app.use('*', (req, res, next) => {
   }
   next();
 });
+
+// Note: Internal webhook endpoint removed - now using direct Stripe API calls
 
 export { app, db, httpServer as server, startServer };
 
