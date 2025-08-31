@@ -590,11 +590,24 @@ const Dashboard = () => {
         }
         
         
-        // If returning from onboarding completion, refresh status
+        // If returning from onboarding completion, refresh status and courses
         if (urlParams.get('onboarding') === 'completed') {
+          console.log('🎓 [DASHBOARD] Onboarding completed, refreshing data...');
           const cleanUrl = window.location.pathname;
           window.history.replaceState({}, document.title, cleanUrl);
-          fetchOnboardingStatus();
+          
+          // Refresh onboarding status first
+          await fetchOnboardingStatus();
+          console.log('🎓 [DASHBOARD] Onboarding status refreshed');
+          
+          // Then refresh courses to hide the onboarding course
+          await fetchSavedCourses(true);
+          console.log('🎓 [DASHBOARD] Courses refreshed after onboarding completion');
+          
+          // Show success message
+          setSuccessMessage('🎉 Congratulations! You have completed the onboarding course. Welcome to Discourse AI!');
+          setShowSuccessToast(true);
+          setTimeout(() => setShowSuccessToast(false), 8000);
         }
         
       } catch (error) {
@@ -602,7 +615,7 @@ const Dashboard = () => {
         // Don't let errors propagate - just log them
       }
     }
-  }, [user]);
+  }, [user, fetchSavedCourses]);
 
   const handleStartOnboarding = async () => {
     try {

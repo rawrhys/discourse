@@ -5284,6 +5284,12 @@ app.get('/api/courses/saved', authenticateToken, async (req, res) => {
     const hasCompletedOnboarding = Array.isArray(db.data.onboardingCompletions)
       && db.data.onboardingCompletions.some(c => c.userId === userId);
 
+    console.log(`[API] Onboarding completion check for user ${userId}:`, {
+      hasCompletedOnboarding,
+      onboardingCompletionsCount: db.data.onboardingCompletions.length,
+      userCompletions: db.data.onboardingCompletions.filter(c => c.userId === userId)
+    });
+
     if (hasCompletedOnboarding) {
       const isOnboardingCourse = (c) => {
         const id = String(c.id || '');
@@ -5315,6 +5321,9 @@ app.post('/api/onboarding/complete', authenticateToken, async (req, res) => {
     const userId = req.user.id;
     
     console.log(`[ONBOARDING_COMPLETE] Marking onboarding as completed for user ${userId}`);
+    console.log(`[ONBOARDING_COMPLETE] Request headers:`, req.headers);
+    console.log(`[ONBOARDING_COMPLETE] Request body:`, req.body);
+    console.log(`[ONBOARDING_COMPLETE] User object:`, req.user);
     
     // Check if user already has onboarding completion recorded
     const existingCompletion = db.data.onboardingCompletions.find(c => c.userId === userId);
@@ -5322,6 +5331,7 @@ app.post('/api/onboarding/complete', authenticateToken, async (req, res) => {
     if (existingCompletion) {
       console.log(`[ONBOARDING_COMPLETE] User ${userId} already has onboarding completion recorded`);
       return res.json({ 
+        success: true,
         message: 'Onboarding already marked as completed',
         completedAt: existingCompletion.completedAt
       });
@@ -5335,11 +5345,20 @@ app.post('/api/onboarding/complete', authenticateToken, async (req, res) => {
     };
     
     db.data.onboardingCompletions.push(completion);
+    console.log(`[ONBOARDING_COMPLETE] Added completion to array, current count:`, db.data.onboardingCompletions.length);
+    
     await db.write();
+    console.log(`[ONBOARDING_COMPLETE] Database write completed successfully`);
     
     console.log(`[ONBOARDING_COMPLETE] Successfully marked onboarding as completed for user ${userId}`);
+    console.log(`[ONBOARDING_COMPLETE] Sending response:`, { 
+      success: true,
+      message: 'Onboarding marked as completed successfully',
+      completedAt: completion.completedAt
+    });
     
     res.json({ 
+      success: true,
       message: 'Onboarding marked as completed successfully',
       completedAt: completion.completedAt
     });
@@ -5355,12 +5374,22 @@ app.get('/api/onboarding/status', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     
+    console.log(`[ONBOARDING_STATUS] Checking status for user ${userId}`);
+    console.log(`[ONBOARDING_STATUS] Total completions in DB:`, db.data.onboardingCompletions.length);
+    console.log(`[ONBOARDING_STATUS] All completions:`, db.data.onboardingCompletions);
+    
     const completion = db.data.onboardingCompletions.find(c => c.userId === userId);
     
-    res.json({ 
+    console.log(`[ONBOARDING_STATUS] Found completion for user:`, completion);
+    
+    const response = { 
       completed: !!completion,
       completedAt: completion?.completedAt || null
-    });
+    };
+    
+    console.log(`[ONBOARDING_STATUS] Sending response:`, response);
+    
+    res.json(response);
     
   } catch (error) {
     console.error(`[ONBOARDING_STATUS] Error getting onboarding status:`, error.message);
@@ -9720,4 +9749,12 @@ app.use('*', (req, res, next) => {
 });
 
 export { app, db, httpServer as server, startServer };
+
+// Start the server if this file is run directly
+if (import.meta.url === `file://${process.argv[1]}`) {
+  startServer().catch(error => {
+    console.error('[SERVER] Failed to start server:', error);
+    process.exit(1);
+  });
+}
 

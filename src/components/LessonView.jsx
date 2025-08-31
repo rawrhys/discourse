@@ -1947,18 +1947,38 @@ const LessonView = ({
             <button
               onClick={async () => {
                 try {
+                  console.log('🎓 [LessonView] Completing onboarding...');
+                  console.log('🎓 [LessonView] API base URL:', window.location.origin);
+                  console.log('🎓 [LessonView] User:', user);
+                  console.log('🎓 [LessonView] Auth token exists:', !!localStorage.getItem('token'));
+                  
+                  // Check if user is authenticated
+                  if (!user || !localStorage.getItem('token')) {
+                    alert('You must be logged in to complete onboarding. Please log in and try again.');
+                    return;
+                  }
+                  
                   const response = await api.completeOnboarding();
-                  if (response.success) {
+                  console.log('🎓 [LessonView] Onboarding completion response:', response);
+                  
+                  if (response && response.success) {
                     // Show success message
                     alert('🎉 Congratulations! You have completed the onboarding course. You will now have access to all platform features.');
                     // Redirect to dashboard
                     window.location.href = '/dashboard?onboarding=completed';
                   } else {
-                    alert('Failed to complete onboarding. Please try again.');
+                    console.error('🎓 [LessonView] Onboarding completion failed:', response);
+                    const errorMsg = response?.message || 'Unknown error occurred';
+                    alert(`Failed to complete onboarding: ${errorMsg}. Please try again.`);
                   }
                 } catch (error) {
-                  console.error('Error completing onboarding:', error);
-                  alert('Error completing onboarding. Please try again.');
+                  console.error('🎓 [LessonView] Error completing onboarding:', error);
+                  console.error('🎓 [LessonView] Error details:', {
+                    message: error.message,
+                    stack: error.stack,
+                    name: error.name
+                  });
+                  alert(`Error completing onboarding: ${error.message}. Please try again.`);
                 }
               }}
               className="px-8 py-4 bg-green-600 text-white font-bold text-lg rounded-lg hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-300 focus:ring-offset-2 transition-all duration-200 shadow-lg transform hover:scale-105"
@@ -2077,21 +2097,41 @@ const LessonView = ({
               <button
                 onClick={async () => {
                   try {
+                    console.log('🎓 [LessonView] Completing onboarding from footer...');
+                    console.log('🎓 [LessonView] Footer API base URL:', window.location.origin);
+                    console.log('🎓 [LessonView] Footer User:', user);
+                    console.log('🎓 [LessonView] Footer Auth token exists:', !!localStorage.getItem('token'));
+                    
+                    // Check if user is authenticated
+                    if (!user || !localStorage.getItem('token')) {
+                      alert('You must be logged in to complete onboarding. Please log in and try again.');
+                      return;
+                    }
+                    
                     const response = await api.completeOnboarding();
-                    if (response.success) {
+                    console.log('🎓 [LessonView] Footer onboarding completion response:', response);
+                    
+                    if (response && response.success) {
                       // Show success message
                       alert('🎉 Congratulations! You have completed the onboarding course. You will now have access to all platform features.');
                       // Redirect to dashboard
                       window.location.href = '/dashboard?onboarding=completed';
                     } else {
-                      alert('Failed to complete onboarding. Please try again.');
+                      console.error('🎓 [LessonView] Footer onboarding completion failed:', response);
+                      const errorMsg = response?.message || 'Unknown error occurred';
+                      alert(`Failed to complete onboarding: ${errorMsg}. Please try again.`);
                     }
                   } catch (error) {
-                    console.error('Error completing onboarding:', error);
-                    alert('Error completing onboarding. Please try again.');
+                    console.error('🎓 [LessonView] Footer error completing onboarding:', error);
+                    console.error('🎓 [LessonView] Footer error details:', {
+                      message: error.message,
+                      stack: error.stack,
+                      name: error.name
+                    });
+                    alert(`Error completing onboarding: ${error.message}. Please try again.`);
                   }
                 }}
-                className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors duration-200"
+                className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors duration-200"
               >
                 🎓 Complete Onboarding
               </button>
