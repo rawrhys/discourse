@@ -1602,11 +1602,36 @@ const Dashboard = () => {
 
                 <div className="border-t pt-4">
                   <h4 className="text-sm font-medium text-gray-900 mb-2">Delete Account</h4>
+                  
+                  {/* Active Subscription Warning */}
+                  {userProfile?.hasActiveSubscription && (
+                    <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-md">
+                      <div className="flex items-start">
+                        <div className="flex-shrink-0">
+                          <svg className="h-5 w-5 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                        <div className="ml-3">
+                          <h3 className="text-sm font-medium text-amber-800">
+                            Active Subscription Detected
+                          </h3>
+                          <div className="mt-2 text-sm text-amber-700">
+                            <p>
+                              You cannot delete your account while you have an active subscription ({userProfile.subscriptionStatus || 'active'}).
+                              Please cancel your subscription first using the "Manage Payments & Subscription" button above.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
                   <p className="text-sm text-gray-600 mb-3">
-                    Type <span className="font-semibold">Delete</span> to confirm. This will remove your account and all courses.
+                    Type <span className="font-semibold">Delete</span> to confirm. This will remove your account and all courses permanently.
                     {userProfile?.hasActiveSubscription && (
                       <span className="block mt-2 text-amber-600 font-medium">
-                        ⚠️ You have an active subscription. Cancel it first before deleting your account.
+                        ⚠️ Account deletion is blocked due to active subscription.
                       </span>
                     )}
                   </p>
@@ -1616,6 +1641,7 @@ const Dashboard = () => {
                     onChange={(e) => setDeleteConfirm(e.target.value)}
                     placeholder="Type Delete to confirm"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md mb-3"
+                    disabled={userProfile?.hasActiveSubscription}
                   />
                   <div className="flex justify-end gap-3">
                     <button
@@ -1634,39 +1660,36 @@ const Dashboard = () => {
                         try {
                           setIsDeletingAccount(true);
                           
-                          // Check if user has active subscription before allowing deletion
-                          console.log('🔍 [ACCOUNT_DELETION] Checking subscription status...');
-                          const subscriptionStatus = await api.checkSubscriptionStatus();
+                          // Proceed with account deletion - backend will check subscription status
+                          console.log('🔍 [ACCOUNT_DELETION] Proceeding with account deletion...');
                           
-                          if (subscriptionStatus?.hasActiveSubscription) {
-                            setIsDeletingAccount(false);
-                            alert(
-                              `⚠️ Cannot delete account with active subscription!\n\n` +
-                              `You have an active subscription (${subscriptionStatus.status}). ` +
-                              `Please cancel your subscription first through the "Manage Payments & Subscription" button above.\n\n` +
-                              `After canceling your subscription, you can delete your account.`
-                            );
-                            return;
-                          }
-                          
-                          console.log('✅ [ACCOUNT_DELETION] No active subscription, proceeding with account deletion...');
-                          
-                          // Proceed with account deletion
                           await api.deleteAccount('Delete');
                           await logout();
                           navigate('/login');
                           
                         } catch (e) {
                           console.error('❌ [ACCOUNT_DELETION] Error during account deletion:', e);
-                          alert('Failed to delete account: ' + (e?.message || 'Unknown error'));
+                          
+                          // Check if the error is due to active subscription
+                          if (e?.status === 403 && e?.error === 'Cannot delete account with active subscription') {
+                            const errorData = e;
+                            alert(
+                              `⚠️ Cannot delete account with active subscription!\n\n` +
+                              `You have an active subscription (${errorData.status || 'active'}). ` +
+                              `Please cancel your subscription first through the "Manage Payments & Subscription" button above.\n\n` +
+                              `After canceling your subscription, you can delete your account.`
+                            );
+                          } else {
+                            alert('Failed to delete account: ' + (e?.message || 'Unknown error'));
+                          }
                         } finally {
                           setIsDeletingAccount(false);
                         }
                       }}
-                      disabled={deleteConfirm !== 'Delete' || isDeletingAccount}
+                      disabled={deleteConfirm !== 'Delete' || isDeletingAccount || userProfile?.hasActiveSubscription}
                       className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md disabled:opacity-50"
                     >
-                      {isDeletingAccount ? 'Checking Subscription...' : 'Delete Account'}
+                      {isDeletingAccount ? 'Deleting Account...' : 'Delete Account'}
                     </button>
                   </div>
                 </div>

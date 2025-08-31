@@ -403,12 +403,19 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
     console.log(`[Stripe] Webhook: checkout.session.completed received for session: ${session.id}`);
     console.log(`[Stripe] Webhook: Session metadata:`, session.metadata);
     console.log(`[Stripe] Webhook: Session subscription:`, session.subscription);
+    console.log(`[Stripe] Webhook: Session customer:`, session.customer);
     
     // Handle regular user payment (existing users)
     if (session.metadata?.userId) {
       const userId = session.metadata.userId;
       const user = db.data.users.find(u => u.id === userId);
       if (user) {
+        // Store Stripe customer ID if not already present
+        if (session.customer && !user.stripeCustomerId) {
+          user.stripeCustomerId = session.customer;
+          console.log(`[Stripe] Stored Stripe customer ID ${session.customer} for user ${userId}`);
+        }
+        
         user.courseCredits = (user.courseCredits || 0) + 10;
         await db.write();
         console.log(`[Stripe] Added 10 credits to existing user ${userId}`);
@@ -433,6 +440,13 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
           existingUser.subscriptionStatus = 'active';
           existingUser.trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(); // 14 days from now
           existingUser.updatedAt = new Date().toISOString();
+          
+          // Store Stripe customer ID if not already present
+          if (session.customer && !existingUser.stripeCustomerId) {
+            existingUser.stripeCustomerId = session.customer;
+            console.log(`[Stripe] Stored Stripe customer ID ${session.customer} for existing user ${existingUser.id}`);
+          }
+          
           await db.write();
         } else {
           // Create new user account with proper verification token
@@ -447,6 +461,1161 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
             verificationToken: verificationToken,
             verificationTokenCreatedAt: new Date().toISOString(),
             stripeSubscriptionId: session.subscription,
+            stripeCustomerId: session.customer, // Store Stripe customer ID
+            subscriptionStatus: 'active',
+            trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+            courseCredits: 10,
+            gdprConsent: true,
+            policyVersion: '1.0',
+            source: 'stripe_registration'
+          };
+          
+          db.data.users.push(newUser);
+          console.log(`[Stripe] Created new user account: ${registrationEmail} with ID: ${newUser.id} and Stripe customer ID: ${session.customer}`);
+          
+          // Save to database first
+          await db.write();
+          console.log(`[Stripe] User saved to database: ${registrationEmail}`);
+          
+          // Send email verification email
+          try {
+            console.log(`[Stripe] Attempting to send verification email to: ${registrationEmail}`);
+            await sendVerificationEmail(registrationEmail, verificationToken, newUser.name);
+            console.log(`[Stripe] Email verification sent successfully to: ${registrationEmail}`);
+            
+            // Update user record to confirm email was sent
+            newUser.verificationEmailSent = true;
+            newUser.verificationEmailSentAt = new Date().toISOString();
+            await db.write();
+            
+          } catch (emailError) {
+            console.error('[Stripe] Failed to send email verification:', emailError);
+            newUser.verificationEmailSent = false;
+            newUser.verificationEmailError = emailError.message;
+            await db.write();
+          }
+        }
+      } catch (err) {
+        console.error('[Stripe] Error creating user account:', err);
+      }
+    } else {
+      console.log(`[Stripe] Webhook: No registrationEmail found in metadata:`, session.metadata);
+    }
+  }
+
+  // Handle subscription events to keep database in sync
+  if (event.type === 'customer.subscription.created') {
+    const subscription = event.data.object;
+    console.log(`[Stripe] New subscription created: ${subscription.id} for customer: ${subscription.customer}`);
+    
+    // Update user record with subscription info
+    try {
+      const user = db.data.users.find(u => u.stripeCustomerId === subscription.customer);
+      if (user) {
+        user.stripeSubscriptionId = subscription.id;
+        user.subscriptionStatus = subscription.status;
+        user.subscriptionCreatedAt = new Date(subscription.created * 1000).toISOString();
+        user.currentPeriodEnd = subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null;
+        user.updatedAt = new Date().toISOString();
+        await db.write();
+        console.log(`[Stripe] Updated user ${user.id} with subscription ${subscription.id}`);
+      } else {
+        console.log(`[Stripe] No user found with Stripe customer ID: ${subscription.customer}`);
+      }
+    } catch (err) {
+      console.error('[Stripe] Error updating user with subscription:', err);
+    }
+  }
+
+  if (event.type === 'customer.subscription.updated') {
+    const subscription = event.data.object;
+    console.log(`[Stripe] Subscription updated: ${subscription.id}, status: ${subscription.status}`);
+    
+    // Update user record with subscription status changes
+    try {
+      const user = db.data.users.find(u => u.stripeCustomerId === subscription.customer);
+      if (user) {
+        user.subscriptionStatus = subscription.status;
+        user.currentPeriodEnd = subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null;
+        user.updatedAt = new Date().toISOString();
+        
+        // If subscription is canceled, update the status
+        if (subscription.canceled_at) {
+          user.subscriptionCanceledAt = new Date(subscription.canceled_at * 1000).toISOString();
+        }
+        
+        await db.write();
+        console.log(`[Stripe] Updated user ${user.id} subscription status to: ${subscription.status}`);
+      }
+    } catch (err) {
+      console.error('[Stripe] Error updating user subscription status:', err);
+    }
+  }
+
+  if (event.type === 'customer.subscription.deleted') {
+    const subscription = event.data.object;
+    console.log(`[Stripe] Subscription deleted: ${subscription.id} for customer: ${subscription.customer}`);
+    
+    // Update user record to reflect subscription deletion
+    try {
+      const user = db.data.users.find(u => u.stripeCustomerId === subscription.customer);
+      if (user) {
+        user.subscriptionStatus = 'canceled';
+        user.subscriptionCanceledAt = new Date().toISOString();
+        user.updatedAt = new Date().toISOString();
+        await db.write();
+        console.log(`[Stripe] Marked subscription as canceled for user ${user.id}`);
+      }
+    } catch (err) {
+      console.error('[Stripe] Error updating user subscription deletion:', err);
+    }
+  }
+
+  if (event.type === 'invoice.payment_succeeded') {
+    const invoice = event.data.object;
+    if (invoice.subscription) {
+      console.log(`[Stripe] Payment succeeded for subscription: ${invoice.subscription}`);
+    }
+  }
+
+  if (event.type === 'invoice.payment_failed') {
+    const invoice = event.data.object;
+    if (invoice.subscription) {
+      console.log(`[Stripe] Payment failed for subscription: ${invoice.subscription}`);
+      
+      // Update user subscription status to reflect payment failure
+      try {
+        const user = db.data.users.find(u => u.stripeSubscriptionId === invoice.subscription);
+        if (user) {
+          user.subscriptionStatus = 'past_due';
+          user.updatedAt = new Date().toISOString();
+          await db.write();
+          console.log(`[Stripe] Updated user ${user.id} subscription status to past_due due to payment failure`);
+        }
+      } catch (err) {
+        console.error('[Stripe] Error updating user payment failure status:', err);
+      }
+    }
+  }
+
+  res.json({ received: true });
+});
+
+// Parse JSON bodies
+// File upload middleware - must come BEFORE express.json() for FormData
+app.use(fileUpload({
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  abortOnLimit: true,
+  createParentPath: true,
+  useTempFiles: true,
+  tempFileDir: '/tmp/',
+  debug: process.env.NODE_ENV === 'development'
+}));
+
+// JSON and URL-encoded middleware - must come AFTER fileUpload
+app.use(express.json());
+app.use(cookieParser());
+app.use(express.urlencoded({ extended: true }));
+
+// Logging flags
+const SHOULD_LOG_AUTH = String(process.env.AUTH_LOG || '').toLowerCase() === 'true';
+
+// Admin emails allowed to hit maintenance endpoints (comma-separated)
+const ADMIN_EMAILS = new Set(
+  String(process.env.ADMIN_EMAILS || '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean)
+);
+
+// --- IMAGE SEARCH SETTINGS & HELPERS (top-level) ---
+const FETCH_TIMEOUT_MS = Number(process.env.IMAGE_SEARCH_TIMEOUT_MS || 8000);
+const DISALLOWED_IMAGE_URL_SUBSTRINGS = [
+  'e613b3a12ea22955fd9868b841af153a79db6a07',
+  'api-proxy.php/cached-images/',
+  // Explicitly block this Wikipedia image from appearing in results
+  'upload.wikimedia.org/wikipedia/commons/8/8a/PGM-19A_Jupiter_missile-02.jpg'
+];
+const EXTRA_NEGATIVE_TERMS = [
+  'orchestra','symphony','concert','conductor','musician','music','band','choir',
+  'violin','cello','piano','guitar','stage','auditorium',
+  // Finance/markets/modern economy terms to avoid when subject is historical
+  'stock','stocks','stock market','market','markets','trader','traders','trading','broker','brokers','wall street','dow','nasdaq','nyse','finance','financial','economy','economic','bank','banking','banker','money','currency','currencies','dollar','euro','pound','yen','chart','graph','candlestick','ticker','exchange','bond','bonds','forex','cryptocurrency','bitcoin','ethereum','ftse','s&p','sp500','gold price','oil price','ipo','merger','acquisition','bankruptcy','bailout','recession',
+  // Modern conflicts and contemporary military-specific terms (blocked unless present in subject)
+  'world war i','world war 1','ww1','wwi',
+  'world war ii','world war 2','ww2','wwii','nazi','nazis','hitler','swastika',
+  'cold war','berlin wall','cuban missile crisis',
+  'vietnam war','korean war','gulf war','iraq war','war in iraq','afghanistan war','war in afghanistan',
+  'falklands war','yom kippur war','six-day war','six day war','bosnian war','kosovo war','syrian civil war','ukraine war','russian invasion','donbas','crimea','chechen war','chechnya',
+  'american civil war','us civil war','spanish civil war','napoleonic wars','napoleonic war','crimean war','boer war','anglo-boer war',
+  // Modern weaponry, platforms, and gear
+  'tank','tanks','machine gun','assault rifle','ak-47','ak47','m16','m4','missile','missiles','rocket','rockets','icbm','warhead','ballistic',
+  'nuclear','nuclear bomb','atomic bomb','hydrogen bomb','thermonuclear','hiroshima','nagasaki',
+  'bomber','fighter jet','jet fighter','fighter','jet','stealth','helicopter','attack helicopter','apache','black hawk','uav','drone','drones',
+  'howitzer','artillery gun','grenade','grenades','rocket launcher','bazooka','rpg',
+  'submarine','submarines','aircraft carrier','carrier strike group','destroyer','frigate','battleship',
+  'navy seals','special forces','camo','camouflage','kevlar','night vision',
+  // Seasonal/ambiguous terms to avoid when subject implies historical events
+  'autumn','fall season','fall foliage','autumn foliage','autumn leaves','fall leaves','leaf','leaves','pumpkin','halloween','thanksgiving','maple leaves','autumn colors','autumnal','scarecrow','harvest festival','corn maze'
+];
+
+const normalizeForCompare = (str) => String(str || '').toLowerCase().trim();
+
+const normalizeUrlForCompare = (url) => {
+    try {
+        if (!url) return '';
+        return String(url).toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '').trim();
+    } catch {
+        return String(url || '').trim();
+    }
+};
+
+function containsAny(text, terms) {
+  const lower = (text || '').toLowerCase();
+  return terms.some(t => lower.includes(t));
+}
+
+function getDynamicExtraNegatives(subject) {
+  const subj = (subject || '').toLowerCase();
+  return EXTRA_NEGATIVE_TERMS.filter(term => !subj.includes(term));
+}
+
+async function fetchWithTimeout(resource, options = {}, timeoutMs = FETCH_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(resource, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// Extract the main text from lesson content
+function extractMainLessonText(content) {
+  try {
+    if (!content) return '';
+    if (typeof content === 'string') return content;
+    const parts = [content.introduction, content.main_content, content.conclusion]
+      .filter(Boolean)
+      .map((s) => String(s))
+      .join(' ');
+    return parts;
+  } catch {
+    return '';
+  }
+}
+
+// Enhanced heuristic to score image candidates for relevance with full course context
+function computeImageRelevanceScore(subject, mainText, meta, courseContext = {}) {
+  try {
+    const subj = String(subject || '').toLowerCase();
+    const text = String(mainText || '').toLowerCase();
+    const title = String(meta?.title || '').toLowerCase();
+    const desc = String(meta?.description || '').toLowerCase();
+    const page = String(meta?.pageURL || '').toLowerCase();
+    const uploader = String(meta?.uploader || '').toLowerCase();
+
+    // Extract course context information
+    const courseTitle = String(courseContext?.title || '').toLowerCase();
+    const courseSubject = String(courseContext?.subject || '').toLowerCase();
+    const allLessonTitles = Array.isArray(courseContext?.lessonTitles) 
+      ? courseContext.lessonTitles.map(t => String(t || '').toLowerCase())
+      : [];
+
+    let score = 0;
+
+    const haystack = `${title} ${desc} ${page} ${uploader}`;
+    
+    // Create comprehensive context text for better relevance scoring
+    const contextText = `${subj} ${text} ${courseTitle} ${courseSubject} ${allLessonTitles.join(' ')}`.toLowerCase();
+
+    // Check if this is historical/educational content
+    const isHistoricalContent = /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(subj) || 
+                               /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(text) ||
+                               /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(courseTitle) ||
+                               /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(courseSubject);
+
+    // Check if this is art-related content
+    const isArtContent = /\b(art|artist|painting|sculpture|drawing|artwork|gallery|museum|canvas|oil|watercolor|acrylic|fresco|mosaic|relief|statue|bust|portrait|landscape|still life|abstract|realistic|impressionist|modern|classical|renaissance|baroque|romantic|neoclassical|medieval|ancient|prehistoric|cave|temple|architecture|design|composition|color|form|line|texture|perspective|lighting|shadow|brush|palette|easel|studio|exhibition|masterpiece|masterwork|iconic|famous|renowned|celebrated|influential|pioneering|revolutionary|innovative|traditional|contemporary|classical|antique|vintage|heritage|cultural|historical|archaeological|anthropological|ethnographic|decorative|ornamental|ceremonial|ritual|religious|sacred|secular|profane|domestic|public|private|monumental|intimate|grand|delicate|bold|subtle|dramatic|peaceful|dynamic|static|flowing|rigid|organic|geometric|naturalistic|stylized|symbolic|narrative|allegorical|mythological|biblical|historical|portrait|landscape|genre|still life|abstract|non-objective|figurative|non-figurative)\b/i.test(subj) || 
+                        /\b(art|artist|painting|sculpture|drawing|artwork|gallery|museum|canvas|oil|watercolor|acrylic|fresco|mosaic|relief|statue|bust|portrait|landscape|still life|abstract|realistic|impressionist|modern|classical|renaissance|baroque|romantic|neoclassical|medieval|ancient|prehistoric|cave|temple|architecture|design|composition|color|form|line|texture|perspective|lighting|shadow|brush|palette|easel|studio|exhibition|masterpiece|masterwork|iconic|famous|renowned|celebrated|influential|pioneering|revolutionary|innovative|traditional|contemporary|classical|antique|vintage|heritage|cultural|historical|archaeological|anthropological|ethnographic|decorative|ornamental|ceremonial|ritual|religious|sacred|secular|profane|domestic|public|private|monumental|intimate|grand|delicate|bold|subtle|dramatic|peaceful|dynamic|static|flowing|rigid|organic|geometric|naturalistic|stylized|symbolic|narrative|allegorical|mythological|biblical|historical|portrait|landscape|genre|still life|abstract|non-objective|figurative|non-figurative)\b/i.test(text) ||
+                        /\b(art|artist|painting|sculpture|drawing|artwork|gallery|museum|canvas|oil|watercolor|acrylic|fresco|mosaic|relief|statue|bust|portrait|landscape|still life|abstract|realistic|impressionist|modern|classical|renaissance|baroque|romantic|neoclassical|medieval|ancient|prehistoric|cave|temple|architecture|design|composition|color|form|line|texture|perspective|lighting|shadow|brush|palette|easel|studio|exhibition|masterpiece|masterwork|iconic|famous|renowned|celebrated|influential|pioneering|revolutionary|innovative|traditional|contemporary|classical|antique|vintage|heritage|cultural|historical|archaeological|anthropological|ethnographic|decorative|ornamental|ceremonial|ritual|religious|sacred|secular|profane|domestic|public|private|monumental|intimate|grand|delicate|bold|subtle|dramatic|peaceful|dynamic|static|flowing|rigid|organic|geometric|naturalistic|stylized|symbolic|narrative|allegorical|mythological|biblical|historical|portrait|landscape|genre|still life|abstract|non-objective|figurative|non-figurative)\b/i.test(courseTitle) ||
+                        /\b(art|artist|painting|sculpture|drawing|artwork|gallery|museum|canvas|oil|watercolor|acrylic|fresco|mosaic|relief|statue|bust|portrait|landscape|still life|abstract|realistic|impressionist|modern|classical|renaissance|baroque|romantic|neoclassical|medieval|ancient|prehistoric|cave|temple|architecture|design|composition|color|form|line|texture|perspective|lighting|shadow|brush|palette|easel|studio|exhibition|masterpiece|masterwork|iconic|famous|renowned|celebrated|influential|pioneering|revolutionary|innovative|traditional|contemporary|classical|antique|vintage|heritage|cultural|historical|archaeological|anthropological|ethnographic|decorative|ornamental|ceremonial|ritual|religious|sacred|secular|profane|domestic|public|private|monumental|intimate|grand|delicate|bold|subtle|dramatic|peaceful|dynamic|static|flowing|rigid|organic|geometric|naturalistic|stylized|symbolic|narrative|allegorical|mythological|biblical|historical|portrait|landscape|genre|still life|abstract|non-objective|figurative|non-figurative)\b/i.test(courseSubject);
+
+    // STRONGER FILTERING: Immediate rejection for completely irrelevant content
+    const completelyIrrelevantTerms = [
+      // Nature/plants (completely irrelevant to most history imagery)
+      // Expanded floral/plant list to aggressively filter flowers in historical contexts
+      'dinosaur', 'toy', 'bellflower', 'crocus', 'flower', 'flowers', 'bud', 'sprout', 'bloom', 'blossom', 'petal', 'petals',
+      'daisy', 'daisies', 'tulip', 'tulips', 'rose', 'roses', 'orchid', 'orchids', 'sunflower', 'sunflowers', 'lily', 'lilies',
+      'peony', 'peonies', 'gerbera', 'gerberas', 'marigold', 'marigolds', 'carnation', 'carnations', 'bouquet', 'bouquets',
+      'tree', 'trees', 'plant', 'plants', 'garden', 'gardens', 'nature',
+      // Modern objects (completely irrelevant to ancient history)
+      'car', 'vehicle', 'computer', 'phone', 'laptop', 'office', 'kitchen', 'bathroom', 'bedroom', 'furniture', 'building', 'house', 'apartment',
+      // Generic landscape (completely irrelevant to history)
+      'dawn', 'ocean', 'sky', 'sunrise', 'sunset', 'landscape', 'early morning', 'boating', 'intercoastal', 'marsh', 'mountain', 'forest',
+      // Modern activities (completely irrelevant to history)
+      'sport', 'game', 'exercise', 'fitness', 'cooking', 'shopping', 'business', 'technology', 'digital', 'online', 'web', 'internet'
+    ];
+    
+    // If the course is clearly about art, be permissive with floral content (still-life, etc.)
+    const courseLooksLikeArt = /\bart(\s|$)|art history|painting|sculpture|still life|gallery|museum/i.test(`${courseTitle} ${courseSubject}`);
+    
+    for (const term of completelyIrrelevantTerms) {
+      if (haystack.includes(term)) {
+        // Allow florals only if course is art-related; otherwise reject in history contexts
+        if (!courseLooksLikeArt && isHistoricalContent) {
+          score -= 10000;
+          console.log(`[ImageScoring] IMMEDIATE REJECTION (historical) floral/irrelevant term "${term}" for ${courseTitle}`);
+          return score;
+        }
+        // For non-historical or art courses, fall through and continue normal scoring
+      }
+    }
+
+    // STRONGER CULTURAL MISMATCH DETECTION
+    const culturalMismatches = {
+      'egypt': ['mesopotamia', 'sumerian', 'babylonian', 'assyrian', 'akkadian', 'hittite', 'hittites', 'norse', 'viking', 'germanic', 'north germanic', 'scandinavian', 'roman', 'greek', 'hellenistic', 'persian', 'achaemenid', 'sassanid', 'byzantine', 'ottoman', 'arabic', 'islamic', 'medieval europe', 'renaissance', 'feudal', 'crusader', 'thor', 'hammer', 'mjolnir', 'nordic', 'scandinavian', 'germanic', 'north germanic', 'old norse', 'norse religion', 'norse mythology', 'norse gods', 'norse pantheon', 'norse tradition', 'norse culture', 'early dynastic period mesopotamia', 'mesopotamian', 'mesopotamian civilization', 'mesopotamian culture'],
+      'rome': ['egyptian', 'pharaoh', 'pyramid', 'nile', 'mesopotamia', 'sumerian', 'babylonian', 'assyrian', 'akkadian', 'hittite', 'hittites', 'norse', 'viking', 'germanic', 'north germanic', 'scandinavian', 'greek', 'hellenistic', 'persian', 'achaemenid', 'sassanid', 'byzantine', 'ottoman', 'arabic', 'islamic', 'medieval europe', 'renaissance', 'feudal', 'crusader', 'thor', 'hammer', 'mjolnir', 'nordic'],
+      'greek': ['egyptian', 'pharaoh', 'pyramid', 'nile', 'mesopotamia', 'sumerian', 'babylonian', 'assyrian', 'akkadian', 'hittite', 'hittites', 'norse', 'viking', 'germanic', 'north germanic', 'scandinavian', 'roman', 'persian', 'achaemenid', 'sassanid', 'byzantine', 'ottoman', 'arabic', 'islamic', 'medieval europe', 'renaissance', 'feudal', 'crusader', 'thor', 'hammer', 'mjolnir', 'nordic']
+    };
+    
+    // Check for cultural mismatches based on course context
+    const courseTopic = courseTitle + ' ' + courseSubject;
+    for (const [culture, mismatches] of Object.entries(culturalMismatches)) {
+      if (courseTopic.toLowerCase().includes(culture)) {
+        for (const mismatch of mismatches) {
+          if (haystack.includes(mismatch)) {
+            score -= 10000; // Immediate rejection for cultural mismatches
+            console.log(`[ImageScoring] IMMEDIATE REJECTION for cultural mismatch "${mismatch}" in ${culture} course`);
+            return score; // Return immediately to prevent further processing
+          }
+        }
+      }
+    }
+
+    // Heavy penalty for colonization-related content (often irrelevant to historical lessons)
+    const colonizationTerms = ['colonization', 'colonial', 'colony', 'colonist', 'settler', 'colonialism'];
+    for (const term of colonizationTerms) {
+      if (haystack.includes(term)) {
+        if (isArtContent) {
+          score -= 10; // Light penalty for colonization terms in art content
+          console.log(`[ImageScoring] Light penalty for colonization term "${term}" in art content`);
+        } else {
+          score -= 100; // Heavy penalty for colonization-related content
+          console.log(`[ImageScoring] Heavy penalty for colonization term "${term}"`);
+        }
+      }
+    }
+
+    // Immediate rejection for Norse/Thor content in non-Norse courses
+    const norseTerms = ['thor', 'hammer', 'mjolnir', 'norse', 'viking', 'germanic', 'scandinavian', 'nordic'];
+    const isNorseContent = norseTerms.some(term => haystack.includes(term));
+    if (isNorseContent && !courseTitle.toLowerCase().includes('norse') && !courseTitle.toLowerCase().includes('viking')) {
+      score -= 10000; // Immediate rejection for Norse content in non-Norse courses
+      console.log(`[ImageScoring] Immediate rejection for Norse content: "${haystack.substring(0, 100)}"`);
+    }
+
+    // Immediate rejection for Mesopotamia content in Egypt courses
+    const mesopotamiaTerms = ['mesopotamia', 'mesopotamian', 'sumerian', 'babylonian', 'assyrian', 'akkadian'];
+    const isMesopotamiaContent = mesopotamiaTerms.some(term => haystack.includes(term));
+    if (isMesopotamiaContent && courseTitle.toLowerCase().includes('egypt')) {
+      score -= 10000; // Immediate rejection for Mesopotamia content in Egypt courses
+      console.log(`[ImageScoring] Immediate rejection for Mesopotamia content in Egypt course: "${haystack.substring(0, 100)}"`);
+    }
+
+    // Additional immediate rejection for any Norse content in Egypt courses
+    if (isNorseContent && courseTitle.toLowerCase().includes('egypt')) {
+      score -= 10000; // Immediate rejection for Norse content in Egypt courses
+      console.log(`[ImageScoring] Immediate rejection for Norse content in Egypt course: "${haystack.substring(0, 100)}"`);
+    }
+
+    // STRONGER SUBJECT RELEVANCE CHECKING
+    // The image must contain terms related to the actual subject being studied
+    const subjectTerms = subj.split(/\s+/).filter(term => term.length > 2);
+    let hasSubjectRelevance = false;
+    
+    for (const term of subjectTerms) {
+      if (haystack.includes(term)) {
+        hasSubjectRelevance = true;
+        score += 100; // Strong bonus for subject relevance
+        break;
+      }
+    }
+    
+    // If no subject relevance found, heavily penalize
+    if (!hasSubjectRelevance) {
+      score -= 5000; // Heavy penalty for no subject relevance
+      console.log(`[ImageScoring] HEAVY PENALTY for no subject relevance: "${subj}" not found in image metadata`);
+    }
+
+    // Enhanced token-based matching using full course context
+    const subjectTokens = extractSearchKeywords(subj, null, 6);
+    const contentTokens = extractSearchKeywords(text, null, 6);
+    const courseTokens = extractSearchKeywords(courseTitle + ' ' + courseSubject, null, 6);
+    const allTokens = [...new Set([...subjectTokens, ...contentTokens, ...courseTokens])];
+    
+    for (const tok of allTokens) {
+      if (tok.length < 3) continue;
+      if (haystack.includes(tok)) score += 8;
+    }
+
+    // Course context relevance scoring - strict cultural matching
+
+    // Course context relevance scoring - strict cultural matching
+    if (courseTitle || courseSubject) {
+      const courseTopic = courseTitle + ' ' + courseSubject;
+      const courseContextTerms = extractSearchKeywords(courseTopic, null, 10);
+      
+      // Check for cultural relevance based on course topic
+      let hasCulturalMatch = false;
+      let culturalBonus = 0;
+      let isSpecificCulturalCourse = false;
+      
+      if (courseTopic.toLowerCase().includes('egypt')) {
+        isSpecificCulturalCourse = true;
+        const egyptianTerms = ['egypt', 'egyptian', 'pharaoh', 'pyramid', 'nile', 'dynasty', 'kingdom', 'ancient egypt', 'egyptian civilization', 'egyptian empire', 'egyptian kingdom', 'egyptian dynasty', 'egyptian pharaoh', 'egyptian pyramid', 'egyptian temple', 'egyptian tomb', 'egyptian artifact', 'egyptian hieroglyph', 'egyptian mummy', 'egyptian sphinx', 'egyptian obelisk', 'egyptian papyrus', 'egyptian scroll', 'egyptian statue', 'egyptian relief', 'egyptian painting', 'egyptian architecture', 'egyptian burial', 'egyptian religion', 'egyptian god', 'egyptian goddess', 'egyptian mythology'];
+        hasCulturalMatch = egyptianTerms.some(term => haystack.includes(term));
+        if (hasCulturalMatch) {
+          culturalBonus = 100; // Heavy bonus for Egyptian content in Egyptian course
+        }
+      } else if (courseTopic.toLowerCase().includes('rome')) {
+        isSpecificCulturalCourse = true;
+        const romanTerms = ['rome', 'roman', 'roman empire', 'roman republic', 'roman civilization', 'roman architecture', 'roman temple', 'roman forum', 'roman colosseum', 'roman aqueduct', 'roman road', 'roman legion', 'roman emperor', 'roman senate', 'roman law', 'roman art', 'roman sculpture', 'roman mosaic', 'roman fresco', 'roman bath', 'roman villa', 'roman city', 'roman province', 'roman conquest', 'roman military', 'roman government'];
+        hasCulturalMatch = romanTerms.some(term => haystack.includes(term));
+        if (hasCulturalMatch) {
+          culturalBonus = 100; // Heavy bonus for Roman content in Roman course
+        }
+      } else if (courseTopic.toLowerCase().includes('greek')) {
+        isSpecificCulturalCourse = true;
+        const greekTerms = ['greek', 'greece', 'greek civilization', 'greek empire', 'greek city-state', 'greek temple', 'greek architecture', 'greek art', 'greek sculpture', 'greek pottery', 'greek mythology', 'greek god', 'greek goddess', 'greek philosophy', 'greek democracy', 'greek theater', 'greek olympics', 'greek warfare', 'greek colony', 'greek trade', 'greek culture', 'greek history', 'greek classical', 'greek hellenistic'];
+        hasCulturalMatch = greekTerms.some(term => haystack.includes(term));
+        if (hasCulturalMatch) {
+          culturalBonus = 100; // Heavy bonus for Greek content in Greek course
+        }
+      } else if (courseTopic.toLowerCase().includes('art history') || courseTopic.toLowerCase().includes('art')) {
+        // For art history courses, accept any art-related content
+        const artTerms = ['art', 'painting', 'sculpture', 'drawing', 'artwork', 'artist', 'artistic', 'gallery', 'museum', 'canvas', 'oil', 'watercolor', 'acrylic', 'fresco', 'mosaic', 'relief', 'statue', 'bust', 'portrait', 'landscape', 'still life', 'abstract', 'realistic', 'impressionist', 'modern', 'classical', 'renaissance', 'baroque', 'romantic', 'neoclassical', 'medieval', 'ancient', 'prehistoric', 'cave', 'temple', 'architecture', 'design', 'composition', 'color', 'form', 'line', 'texture', 'perspective', 'lighting', 'shadow', 'brush', 'palette', 'easel', 'studio', 'exhibition', 'masterpiece', 'masterwork', 'iconic', 'famous', 'renowned', 'celebrated', 'influential', 'pioneering', 'revolutionary', 'innovative', 'traditional', 'contemporary', 'classical', 'antique', 'vintage', 'heritage', 'cultural', 'historical', 'archaeological', 'anthropological', 'ethnographic', 'decorative', 'ornamental', 'ceremonial', 'ritual', 'religious', 'sacred', 'secular', 'profane', 'domestic', 'public', 'private', 'monumental', 'intimate', 'grand', 'delicate', 'bold', 'subtle', 'dramatic', 'peaceful', 'dynamic', 'static', 'flowing', 'rigid', 'organic', 'geometric', 'naturalistic', 'stylized', 'symbolic', 'narrative', 'allegorical', 'mythological', 'biblical', 'historical', 'portrait', 'landscape', 'genre', 'still life', 'abstract', 'non-objective', 'figurative', 'non-figurative'];
+        hasCulturalMatch = artTerms.some(term => haystack.includes(term));
+        if (hasCulturalMatch) {
+          culturalBonus = 50; // Bonus for art-related content in art history course
+        }
+      }
+      
+      // Apply cultural bonus or penalty only for specific cultural courses
+      if (hasCulturalMatch) {
+        score += culturalBonus;
+        console.log(`[ImageScoring] Cultural match bonus: +${culturalBonus} for ${courseTopic}`);
+      } else if (isSpecificCulturalCourse && !isArtContent) {
+        // Heavy penalty for specific cultural courses that don't match
+        score -= 5000; // Increased penalty for cultural mismatch
+        console.log(`[ImageScoring] HEAVY cultural mismatch penalty: -5000 for ${courseTopic}`);
+      }
+    }
+
+    // STRONGER HISTORICAL CONTEXT CHECKING
+    if (isHistoricalContent) {
+      // The image must contain historical terms to be considered relevant
+      const historicalTerms = ['ancient', 'historical', 'archaeological', 'classical', 'antiquity', 'rome', 'roman', 'greek', 'egypt', 'medieval', 'renaissance', 'dynasty', 'empire', 'kingdom', 'civilization', 'temple', 'ruins', 'artifact', 'monument', 'statue', 'sculpture', 'mosaic', 'fresco', 'tomb', 'pyramid', 'colosseum', 'forum', 'aqueduct', 'road', 'legion', 'emperor', 'senate', 'pharaoh', 'hieroglyph', 'mummy', 'sphinx', 'obelisk', 'papyrus', 'scroll', 'relief', 'painting', 'architecture', 'burial', 'religion', 'god', 'goddess', 'mythology'];
+      
+      let hasHistoricalRelevance = false;
+      for (const term of historicalTerms) {
+        if (haystack.includes(term)) {
+          hasHistoricalRelevance = true;
+          score += 25; // Bonus for historical relevance
+          break;
+        }
+      }
+      
+      // If no historical relevance found, heavily penalize
+      if (!hasHistoricalRelevance) {
+        score -= 3000; // Heavy penalty for no historical relevance in historical content
+        console.log(`[ImageScoring] HEAVY PENALTY for no historical relevance in historical content`);
+      }
+    }
+
+    // STRONGER ART CONTEXT CHECKING
+    if (isArtContent) {
+      // The image must contain art-related terms to be considered relevant
+      const artTerms = ['art', 'artist', 'painting', 'sculpture', 'drawing', 'artwork', 'gallery', 'museum', 'canvas', 'oil', 'watercolor', 'acrylic', 'fresco', 'mosaic', 'relief', 'statue', 'bust', 'portrait', 'landscape', 'still life', 'abstract', 'realistic', 'impressionist', 'modern', 'classical', 'renaissance', 'baroque', 'romantic', 'neoclassical', 'medieval', 'ancient', 'prehistoric', 'cave', 'temple', 'architecture', 'design', 'composition', 'color', 'form', 'line', 'texture', 'perspective', 'lighting', 'shadow', 'brush', 'palette', 'easel', 'studio', 'exhibition', 'masterpiece', 'masterwork', 'iconic', 'famous', 'renowned', 'celebrated', 'influential', 'pioneering', 'revolutionary', 'innovative', 'traditional', 'contemporary', 'classical', 'antique', 'vintage', 'heritage', 'cultural', 'historical', 'archaeological', 'anthropological', 'ethnographic', 'decorative', 'ornamental', 'ceremonial', 'ritual', 'religious', 'sacred', 'secular', 'profane', 'domestic', 'public', 'private', 'monumental', 'intimate', 'grand', 'delicate', 'bold', 'subtle', 'dramatic', 'peaceful', 'dynamic', 'static', 'flowing', 'rigid', 'organic', 'geometric', 'naturalistic', 'stylized', 'symbolic', 'narrative', 'allegorical', 'mythological', 'biblical', 'historical', 'portrait', 'landscape', 'genre', 'still life', 'abstract', 'non-objective', 'figurative', 'non-figurative'];
+      
+      let hasArtRelevance = false;
+      for (const term of artTerms) {
+        if (haystack.includes(term)) {
+          hasArtRelevance = true;
+          score += 30; // Bonus for art relevance
+          break;
+        }
+      }
+      
+      // If no art relevance found, heavily penalize
+      if (!hasArtRelevance) {
+        score -= 3000; // Heavy penalty for no art relevance in art content
+        console.log(`[ImageScoring] HEAVY PENALTY for no art relevance in art content`);
+      }
+    }
+
+    // Check if this is historical/educational content that should be more permissive
+    const isHistorical = subj.includes('history') || 
+                        subj.includes('ancient') || 
+                        subj.includes('rome') || 
+                        subj.includes('greek') || 
+                        subj.includes('egypt') ||
+                        subj.includes('medieval') ||
+                        subj.includes('renaissance');
+
+    // Penalize dynamic negatives for the subject, but be more lenient for historical content
+    const dynamicNegs = getDynamicExtraNegatives(subject || '');
+    if (containsAny(haystack, dynamicNegs)) {
+      if (isHistorical) {
+        // For historical content, only apply heavy penalties for extreme terms
+        const extremeTerms = ['nazi', 'hitler', 'swastika', 'holocaust', 'genocide', 'terrorism', 'nsfw', 'porn'];
+        if (containsAny(haystack, extremeTerms)) {
+          score -= 50; // Heavy penalty for extreme terms
+        } else {
+          score -= 5; // Light penalty for other terms in historical context
+        }
+      } else {
+        score -= 25; // Full penalty for non-historical content
+      }
+    }
+
+    // Prefer larger images when available
+    const w = Number(meta?.imageWidth || 0);
+    const h = Number(meta?.imageHeight || 0);
+    if (w * h > 600 * 400) score += 5;
+    if (w * h > 1000 * 700) score += 5;
+
+    // Bonus for Wikipedia images in historical contexts
+    if (isHistoricalContent && page.includes('wikimedia.org')) {
+      score += 25; // Bonus for Wikipedia images in historical content
+      console.log(`[ImageScoring] Bonus for Wikipedia image in historical content`);
+    }
+
+    // Bonus for Wikipedia images in art contexts
+    if (isArtContent && page.includes('wikimedia.org')) {
+      score += 30; // Bonus for Wikipedia images in art content
+      console.log(`[ImageScoring] Bonus for Wikipedia image in art content: +30`);
+    }
+
+    // Final validation: ensure minimum relevance for historical content
+    if (isHistoricalContent && score < 50) {
+      score -= 5000; // Heavy penalty for low-scoring historical content
+      console.log(`[ImageScoring] HEAVY penalty for low-scoring historical content: ${score} < 50`);
+    }
+
+    console.log(`[ImageScoring] Final score for "${subj}": ${score}`);
+    return Math.max(0, score);
+  } catch {
+    return 0;
+  }
+}
+
+// Ban candidates that are known-bad or contextually inappropriate
+function isBannedImageCandidate(candidate, courseId) {
+  try {
+    const url = String(candidate?.imageUrl || candidate?.url || '').toLowerCase();
+    const pageURL = String(candidate?.pageURL || '').toLowerCase();
+    const title = String(candidate?.imageTitle || candidate?.title || '').toLowerCase();
+    const desc = String(candidate?.description || '').toLowerCase();
+    const uploader = String(candidate?.uploader || '').toLowerCase();
+
+    // Disallow data/blob schemes and explicitly disallowed substrings
+    if (!url.startsWith('http://') && !url.startsWith('https://')) return true;
+    if (DISALLOWED_IMAGE_URL_SUBSTRINGS.some((s) => url.includes(s))) return true;
+    if (DISALLOWED_IMAGE_URL_SUBSTRINGS.some((s) => pageURL.includes(s))) return true;
+
+    // If we have course context, apply dynamic negatives using the course title as subject
+    try {
+      if (courseId && Array.isArray(db?.data?.courses)) {
+        const course = db.data.courses.find((c) => c.id === courseId);
+        const subject = course?.title || '';
+        const haystack = `${title} ${desc} ${pageURL} ${uploader}`;
+        
+        // Get dynamic negatives but be more lenient for historical/educational content
+        const dynamicNegs = getDynamicExtraNegatives(subject);
+        
+        // Check if this is historical/educational content that should be more permissive
+        const isHistorical = subject.toLowerCase().includes('history') || 
+                           subject.toLowerCase().includes('ancient') || 
+                           subject.toLowerCase().includes('rome') || 
+                           subject.toLowerCase().includes('greek') || 
+                           subject.toLowerCase().includes('egypt') ||
+                           subject.toLowerCase().includes('medieval') ||
+                           subject.toLowerCase().includes('renaissance');
+        
+        // Check if this is art-related content that should be very permissive
+        const isArtContent = subject.toLowerCase().includes('art') || 
+                           subject.toLowerCase().includes('artist') || 
+                           subject.toLowerCase().includes('painting') || 
+                           subject.toLowerCase().includes('sculpture') || 
+                           subject.toLowerCase().includes('drawing') ||
+                           subject.toLowerCase().includes('gallery') ||
+                           subject.toLowerCase().includes('museum');
+        
+        // For art content, only ban extremely inappropriate terms
+        if (isArtContent) {
+          const extremeNegatives = [
+            'nazi', 'hitler', 'swastika', 'holocaust', 'genocide',
+            'terrorism', 'extremist', 'radical', 'nsfw', 'porn',
+            'explicit', 'adult content', 'violence', 'gore'
+          ];
+          
+          if (containsAny(haystack, extremeNegatives)) {
+            return true;
+          }
+          
+          // Allow most content for art topics
+          return false;
+        }
+        
+        // For historical content, only ban extremely inappropriate terms
+        if (isHistorical) {
+          const extremeNegatives = [
+            'nazi', 'hitler', 'swastika', 'holocaust', 'genocide',
+            'terrorism', 'extremist', 'radical', 'nsfw', 'porn',
+            'explicit', 'adult content', 'violence', 'gore'
+          ];
+          
+          if (containsAny(haystack, extremeNegatives)) {
+            return true;
+          }
+          
+          // Additional floral filter for historical content (non-art)
+          const floralTerms = [
+            'flower','flowers','bud','sprout','bloom','blossom','petal','petals','daisy','daisies','tulip','tulips','rose','roses','orchid','orchids','sunflower','sunflowers','lily','lilies','peony','peonies','gerbera','gerberas','marigold','marigolds','carnation','carnations','bouquet','bouquets','garden','gardens'
+          ];
+          const subjectLooksLikeArt = subject.toLowerCase().includes('art') || subject.toLowerCase().includes('still life');
+          if (!subjectLooksLikeArt && containsAny(haystack, floralTerms)) {
+            return true;
+          }
+          
+          // Allow historical military terms for historical topics
+          return false;
+        }
+        
+        // For non-historical content, apply full moderation
+        if (containsAny(haystack, dynamicNegs)) return true;
+
+        // Duplicate ban: prevent same image title/url from reappearing within the course
+        if (course) {
+          const seenTitles = new Set();
+          const seenUrls = new Set();
+          for (const mod of course.modules || []) {
+            for (const lsn of mod.lessons || []) {
+              const t = normalizeForCompare(lsn?.image?.imageTitle || lsn?.image?.title);
+              const u = normalizeUrlForCompare(lsn?.image?.imageUrl || lsn?.image?.url);
+              if (t) seenTitles.add(t);
+              if (u) seenUrls.add(u);
+            }
+          }
+          if (seenTitles.has(normalizeForCompare(candidate?.imageTitle || candidate?.title))) return true;
+          if (seenUrls.has(normalizeUrlForCompare(candidate?.imageUrl || candidate?.url))) return true;
+        }
+      } catch {}
+
+      return false;
+    } catch {
+      return false;
+    }
+  }
+
+  // Single-keyword extraction for image search
+  function extractSearchKeywords(subject, content, maxKeywords = 4) {
+    const simpleNormalize = (str) => (String(str || '')
+      .toLowerCase()
+      .replace(/\([^)]*\)/g, ' ')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim());
+    const STOPWORDS = new Set(['the','a','an','and','or','of','in','on','to','for','by','with','at','from','as','is','are','was','were','be','being','been','this','that','these','those','it','its','into','about','over','under','between','through','during','before','after','above','below','up','down','out','off','than','introduction','overview','lesson','chapter','period','era','history','modern']);
+    const simpleTokenize = (str) => simpleNormalize(str).split(/\s+/).filter(t => t && t.length > 2 && !STOPWORDS.has(t));
+
+    const keywords = [];
+
+    // 1) Try the full subject phrase first (most likely to be relevant)
+    const subjectPhrase = String(subject || '').trim();
+    if (subjectPhrase) {
+      keywords.push(subjectPhrase);
+      const normalizedPhrase = simpleNormalize(subjectPhrase);
+      if (normalizedPhrase && normalizedPhrase !== subjectPhrase.toLowerCase()) {
+        keywords.push(normalizedPhrase);
+      }
+    }
+
+    // 2) Add a couple of subject tokens
+    const subjectTokens = simpleTokenize(subjectPhrase);
+    for (const tok of subjectTokens) {
+      if (!keywords.includes(tok)) keywords.push(tok);
+      if (keywords.length >= maxKeywords) break;
+    }
+
+    // 3) Optionally add 1-2 content tokens for breadth
+    if (keywords.length < maxKeywords) {
+      let contentText = '';
+      if (content && typeof content === 'object') {
+import express from 'express';
+import cookieParser from 'cookie-parser';
+import cors from 'cors';
+import axios from 'axios';
+import dotenv from 'dotenv';
+import fileUpload from 'express-fileupload';
+
+import path from 'path';
+import { fileURLToPath } from 'url';
+import fs from 'fs';
+import https from 'https';
+import http from 'http';
+import compression from 'compression';
+import net from 'net';
+import { WebSocketServer } from 'ws';
+import { Low } from 'lowdb';
+import { JSONFile } from 'lowdb/node';
+import Stripe from 'stripe';
+import { createClient } from '@supabase/supabase-js';
+import fetch from 'node-fetch';
+import nodemailer from 'nodemailer';
+import ApiError from './src/utils/ApiError.js';
+// import { execSync } from 'child_process';
+import { createServer as createHttpsServer } from 'https';
+import { createServer as createHttpServer } from 'http';
+import { exec } from 'child_process';
+import selfsigned from 'selfsigned';
+import crypto from 'crypto';
+import { compressImage, getOptimalFormat, getFileExtension, formatFileSize } from './server/utils/imageCompression.js';
+import sharp from 'sharp';
+import imageProxyHandler from './server/utils/proxy.js';
+import enhancedImageProxy from './server/utils/enhancedImageProxy.js';
+import publicCourseSessionService from './src/services/PublicCourseSessionService.js';
+import {
+  publicCourseRateLimit,
+  publicCourseSlowDown,
+  botDetection,
+  captchaChallenge,
+  verifySession,
+  checkCaptcha,
+  securityHeaders,
+  securityLogging
+} from './server/middleware/security.js';
+// import { isValidFlashcardTerm } from './src/utils/flashcardUtils.js';
+
+
+
+// Load environment variables from .env file
+dotenv.config();
+
+// Debug environment variables
+console.log('[SERVER] Environment check:');
+console.log('[SERVER] SMTP_HOST:', process.env.SMTP_HOST ? 'Set' : 'Not set');
+console.log('[SERVER] SMTP_USER:', process.env.SMTP_USER ? 'Set' : 'Not set');
+console.log('[SERVER] SMTP_PASS:', process.env.SMTP_PASS ? 'Set' : 'Not set');
+console.log('[SERVER] SMTP_PORT:', process.env.SMTP_PORT || 'Default (587)');
+console.log('[SERVER] SMTP_SECURE:', process.env.SMTP_SECURE || 'Default (false)');
+console.log('[SERVER] FRONTEND_URL:', process.env.FRONTEND_URL || 'Default (https://thediscourse.ai)');
+console.log('[SERVER] JWT_SECRET:', process.env.JWT_SECRET ? 'Set' : 'Not set');
+console.log('[SERVER] STRIPE_WEBHOOK_SECRET:', process.env.STRIPE_WEBHOOK_SECRET ? 'Set' : 'Not set');
+console.log('[SERVER] STRIPE_SECRET_KEY:', process.env.STRIPE_SECRET_KEY ? 'Set' : 'Not set');
+console.log('[SERVER] PORT:', process.env.PORT || 'Default (4003)');
+console.log('[SERVER] NODE_ENV:', process.env.NODE_ENV || 'Not set');
+
+// Initialize global CAPTCHA challenges map
+global.captchaChallenges = new Map();
+
+// Initialize global image search cache
+global.imageSearchCache = new Map();
+
+// Initialize global image cache for better performance
+global.imageCache = new Map();
+global.imageCacheTimeout = 30 * 60 * 1000; // 30 minutes
+
+// Initialize global SSE connections for real-time updates
+global.sseConnections = new Map();
+global.generationSessions = new Map();
+
+// Clean up old cache entries every 5 minutes
+setInterval(() => {
+  if (global.imageCache) {
+    const now = Date.now();
+    for (const [key, value] of global.imageCache.entries()) {
+      if (now - value.timestamp > global.imageCacheTimeout) {
+        global.imageCache.delete(key);
+      }
+    }
+  }
+}, 5 * 60 * 1000); // 5 minutes
+
+// Utility function to generate unique IDs
+const generateId = () => {
+  return Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+};
+
+// Email verification and password reset functionality
+const createTransporter = () => {
+  console.log('[EMAIL] createTransporter called with SMTP config:', {
+    host: process.env.SMTP_HOST ? 'SET' : 'NOT SET',
+    user: process.env.SMTP_USER ? 'SET' : 'NOT SET',
+    pass: process.env.SMTP_PASS ? 'SET' : 'NOT SET',
+    port: process.env.SMTP_PORT || 587,
+    secure: process.env.SMTP_SECURE === 'true'
+  });
+  
+  // Debug: Show exact values (be careful with sensitive data)
+  console.log('[EMAIL] Raw SMTP values:', {
+    host: process.env.SMTP_HOST ? `"${process.env.SMTP_HOST}"` : 'NOT SET',
+    user: process.env.SMTP_USER ? `"${process.env.SMTP_USER}"` : 'NOT SET',
+    pass: process.env.SMTP_PASS ? '***SET***' : 'NOT SET',
+    port: process.env.SMTP_PORT || 'Default (587)',
+    secure: process.env.SMTP_SECURE || 'Default (false)'
+  });
+  
+  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    console.warn('[EMAIL] SMTP not configured, email functionality disabled');
+    return null;
+  }
+  
+  // Validate SMTP_HOST format - check for .env parsing issues
+  const smtpHost = process.env.SMTP_HOST.trim();
+  if (smtpHost.includes('=')) {
+    console.error('[EMAIL] ERROR: SMTP_HOST contains invalid characters (likely .env format issue):', smtpHost);
+    console.error('[EMAIL] This usually means your .env file has incorrect formatting');
+    return null;
+  }
+  
+  try {
+    const transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: process.env.SMTP_PORT || 587,
+      secure: process.env.SMTP_SECURE === 'true',
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS
+      }
+    });
+    console.log('[EMAIL] Transporter created successfully');
+    return transporter;
+  } catch (error) {
+    console.error('[EMAIL] Failed to create transporter:', error);
+    return null;
+  }
+};
+
+// Generate verification token
+const generateVerificationToken = () => {
+  return crypto.randomBytes(32).toString('hex');
+};
+
+// Generate password reset token
+const generatePasswordResetToken = () => {
+  return crypto.randomBytes(32).toString('hex');
+};
+
+// Send verification email
+const sendVerificationEmail = async (email, token, name) => {
+  const transporter = createTransporter();
+  if (!transporter) {
+    throw new Error('SMTP not configured');
+  }
+  
+  const verificationUrl = `${process.env.FRONTEND_URL || 'https://thediscourse.ai'}/verify-email?token=${token}&email=${encodeURIComponent(email)}`;
+  const currentYear = new Date().getFullYear();
+  
+  // Read and render the signup confirmation email template
+  let emailTemplate;
+  try {
+    emailTemplate = await fs.promises.readFile('./server/email-templates/signup-confirmation.html', 'utf8');
+  } catch (error) {
+    console.error('[EMAIL] Failed to read signup confirmation template:', error);
+    // Fallback to basic template
+    emailTemplate = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333;">Welcome to Discourse AI, ${name}!</h2>
+        <p>Thank you for registering. Please verify your email address to complete your account setup.</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${verificationUrl}" 
+             style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+            Verify Email Address
+          </a>
+        </div>
+        <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+        <p style="word-break: break-all; color: #666;">${verificationUrl}</p>
+        <p>This link will expire in 24 hours.</p>
+        <p>If you didn't create this account, please ignore this email.</p>
+      </div>
+    `;
+  }
+  
+  // Replace template variables
+  const htmlContent = emailTemplate
+    .replace(/\{\{ \.Name \}\}/g, name)
+    .replace(/\{\{ \.ConfirmationURL \}\}/g, verificationUrl)
+    .replace(/\{\{ \.CurrentYear \}\}/g, currentYear.toString());
+  
+  const mailOptions = {
+    from: process.env.SMTP_FROM || 'noreply@thediscourse.ai',
+    to: email,
+    subject: 'Verify Your Email - Discourse AI',
+    html: htmlContent
+  };
+  
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`[EMAIL] Verification email sent to ${email}`);
+    return true;
+  } catch (error) {
+    console.error('[EMAIL] Failed to send verification email:', error);
+    throw new Error('Failed to send verification email');
+  }
+};
+
+// Send password reset email
+const sendPasswordResetEmail = async (email, token, name) => {
+  const transporter = createTransporter();
+  if (!transporter) {
+    throw new Error('SMTP not configured');
+  }
+  
+  const resetUrl = `${process.env.FRONTEND_URL || 'https://thediscourse.ai'}/reset-password?token=${token}`;
+  const currentYear = new Date().getFullYear();
+  
+  // Read and render the password reset email template
+  let emailTemplate;
+  try {
+    emailTemplate = await fs.promises.readFile('./server/email-templates/password-reset.html', 'utf8');
+  } catch (error) {
+    console.error('[EMAIL] Failed to read password reset template:', error);
+    // Fallback to basic template
+    emailTemplate = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333;">Password Reset Request</h2>
+        <p>Hello ${name},</p>
+        <p>We received a request to reset your password. Click the button below to create a new password:</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${resetUrl}" 
+             style="background-color: #DC2626; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+            Reset Password
+          </a>
+        </div>
+        <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+        <p style="word-break: break-all; color: #666;">${resetUrl}</p>
+        <p>This link will expire in 1 hour.</p>
+        <p>If you didn't request a password reset, please ignore this email.</p>
+        <p>Your password will remain unchanged.</p>
+      </div>
+    `;
+  }
+  
+  // Replace template variables
+  const htmlContent = emailTemplate
+    .replace(/\{\{ \.Name \}\}/g, name)
+    .replace(/\{\{ \.ResetURL \}\}/g, resetUrl)
+    .replace(/\{\{ \.CurrentYear \}\}/g, currentYear.toString());
+  
+  const mailOptions = {
+    from: process.env.SMTP_FROM || 'noreply@thediscourse.ai',
+    to: email,
+    subject: 'Reset Your Password - Discourse AI',
+    html: htmlContent
+  };
+  
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`[EMAIL] Password reset email sent to ${email}`);
+    return true;
+  } catch (error) {
+    console.error('[EMAIL] Failed to send password reset email:', error);
+    throw new Error('Failed to send password reset email');
+  }
+};
+
+const app = express();
+
+
+
+// --- CORE MIDDLEWARE ---
+// Removed Private State Token restrictions to avoid console violations and allow embedded widgets to operate
+app.use((req, res, next) => {
+  try {
+    // Intentionally omit PST directives; other security headers are managed elsewhere
+  } catch {}
+  next();
+});
+// Apply compression to all responses - disabled to prevent decoding errors
+// app.use(compression());
+
+// Set reverse proxy trust for correct protocol/IP detection
+// Use a more secure trust proxy setting to avoid rate limiter warnings
+const trustProxySetting = process.env.TRUST_PROXY;
+if (trustProxySetting === 'true' || trustProxySetting === '1') {
+  // Only trust the first proxy (most secure)
+  app.set('trust proxy', 1);
+} else if (trustProxySetting === 'false' || trustProxySetting === '0') {
+  // Don't trust any proxies
+  app.set('trust proxy', false);
+} else {
+  // Default: trust only the first proxy
+  app.set('trust proxy', 1);
+}
+const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || 'https://thediscourse.ai,https://api.thediscourse.ai')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    return cb(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization']
+}));
+
+// Ensure caches vary by Origin and prevent compression issues
+app.use((req, res, next) => {
+  res.header('Vary', 'Origin');
+  
+  // Explicitly disable compression for this response to prevent decoding errors
+  res.setHeader('Content-Encoding', 'identity');
+  
+  // Log compression-related headers for debugging
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[DEBUG] Request headers:', {
+      'accept-encoding': req.get('Accept-Encoding'),
+      'user-agent': req.get('User-Agent')?.substring(0, 50)
+    });
+  }
+  
+  next();
+});
+
+// Security headers to prevent permissions policy violations and resource blocking
+app.use((req, res, next) => {
+  res.setHeader('Permissions-Policy', 'payment=(self), geolocation=(self), microphone=(self), camera=(self), private-state-token-redemption=(), private-state-token-issuance=()');
+  
+  // Content Security Policy to allow Stripe resources and prevent violations
+  res.setHeader('Content-Security-Policy', [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://r.stripe.com",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: https: http:",
+    "font-src 'self' data:",
+    "connect-src 'self' https://api.stripe.com https://r.stripe.com https://js.stripe.com",
+    "frame-src 'self' https://js.stripe.com https://hooks.stripe.com",
+    "object-src 'none'",
+    "base-uri 'self'"
+  ].join('; '));
+  
+  // Additional headers to prevent Stripe resource blocking
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  
+  next();
+});
+
+// Stripe webhook route - must come BEFORE JSON parsing middleware
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  console.log('[Stripe] Webhook received, STRIPE_WEBHOOK_SECRET:', STRIPE_WEBHOOK_SECRET ? 'SET' : 'NOT SET');
+  console.log('[Stripe] Webhook headers:', req.headers);
+  console.log('[Stripe] Request body type:', typeof req.body);
+  console.log('[Stripe] Request body length:', req.body ? req.body.length : 'undefined');
+  
+  let event;
+  try {
+    const sig = req.headers['stripe-signature'];
+    console.log('[Stripe] Stripe signature header:', sig ? 'PRESENT' : 'MISSING');
+    
+    // Ensure body is a Buffer for Stripe verification
+    let rawBody;
+    if (Buffer.isBuffer(req.body)) {
+      rawBody = req.body;
+    } else if (typeof req.body === 'string') {
+      rawBody = Buffer.from(req.body, 'utf8');
+    } else if (typeof req.body === 'object') {
+      rawBody = Buffer.from(JSON.stringify(req.body), 'utf8');
+    } else {
+      throw new Error(`Unexpected body type: ${typeof req.body}`);
+    }
+    
+    console.log('[Stripe] Raw body type:', typeof rawBody);
+    console.log('[Stripe] Raw body length:', rawBody.length);
+    
+    event = stripe.webhooks.constructEvent(rawBody, sig, STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    console.error('[Stripe] Webhook signature verification failed:', err.message);
+    console.error('[Stripe] Error details:', { 
+      STRIPE_WEBHOOK_SECRET: !!STRIPE_WEBHOOK_SECRET, 
+      sig: !!sig,
+      bodyType: typeof req.body,
+      bodyLength: req.body ? req.body.length : 'undefined'
+    });
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  console.log(`[Stripe] Webhook: Received event type: ${event.type}`);
+  
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object;
+    console.log(`[Stripe] Webhook: checkout.session.completed received for session: ${session.id}`);
+    console.log(`[Stripe] Webhook: Session metadata:`, session.metadata);
+    console.log(`[Stripe] Webhook: Session subscription:`, session.subscription);
+    
+    // Handle regular user payment (existing users)
+    if (session.metadata?.userId) {
+      const userId = session.metadata.userId;
+      const user = db.data.users.find(u => u.id === userId);
+      if (user) {
+        // Store Stripe customer ID if not already present
+        if (session.customer && !user.stripeCustomerId) {
+          user.stripeCustomerId = session.customer;
+          console.log(`[Stripe] Stored Stripe customer ID ${session.customer} for user ${userId}`);
+        }
+        
+        user.courseCredits = (user.courseCredits || 0) + 10;
+        await db.write();
+        console.log(`[Stripe] Added 10 credits to existing user ${userId}`);
+      }
+    }
+    
+    // Handle registration subscription (new users)
+    if (session.metadata?.registrationEmail) {
+      const registrationEmail = session.metadata.registrationEmail;
+      const registrationPassword = session.metadata.registrationPassword;
+      
+      console.log(`[Stripe] Registration subscription started for email: ${registrationEmail}`);
+      
+      // Create the user account immediately after successful payment
+      try {
+        // Check if user already exists
+        let existingUser = db.data.users.find(u => u.email === registrationEmail);
+        if (existingUser) {
+          console.log(`[Stripe] User already exists: ${registrationEmail}`);
+          // Update existing user with subscription info
+          existingUser.stripeSubscriptionId = session.subscription;
+          existingUser.subscriptionStatus = 'active';
+          existingUser.trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(); // 14 days from now
+          existingUser.updatedAt = new Date().toISOString();
+          
+          // Store Stripe customer ID if not already present
+          if (session.customer && !existingUser.stripeCustomerId) {
+            existingUser.stripeCustomerId = session.customer;
+            console.log(`[Stripe] Stored Stripe customer ID ${session.customer} for existing user ${existingUser.id}`);
+          }
+          
+          await db.write();
+        } else {
+          // Create new user account with proper verification token
+          const verificationToken = generateVerificationToken();
+          const newUser = {
+            id: generateId(),
+            email: registrationEmail.toLowerCase(),
+            password: registrationPassword,
+            name: registrationEmail.split('@')[0],
+            createdAt: new Date().toISOString(),
+            emailVerified: false,
+            verificationToken: verificationToken,
+            verificationTokenCreatedAt: new Date().toISOString(),
+            stripeSubscriptionId: session.subscription,
+            stripeCustomerId: session.customer, // Store Stripe customer ID
             subscriptionStatus: 'active',
             trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
             courseCredits: 10,
@@ -488,15 +1657,72 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
     }
   }
 
-  // Handle subscription events
+  // Handle subscription events to keep database in sync
   if (event.type === 'customer.subscription.created') {
     const subscription = event.data.object;
-    console.log(`[Stripe] New subscription created: ${subscription.id}`);
+    console.log(`[Stripe] New subscription created: ${subscription.id} for customer: ${subscription.customer}`);
+    
+    // Update user record with subscription info
+    try {
+      const user = db.data.users.find(u => u.stripeCustomerId === subscription.customer);
+      if (user) {
+        user.stripeSubscriptionId = subscription.id;
+        user.subscriptionStatus = subscription.status;
+        user.subscriptionCreatedAt = new Date(subscription.created * 1000).toISOString();
+        user.currentPeriodEnd = subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null;
+        user.updatedAt = new Date().toISOString();
+        await db.write();
+        console.log(`[Stripe] Updated user ${user.id} with subscription ${subscription.id}`);
+      } else {
+        console.log(`[Stripe] No user found with Stripe customer ID: ${subscription.customer}`);
+      }
+    } catch (err) {
+      console.error('[Stripe] Error updating user with subscription:', err);
+    }
   }
 
   if (event.type === 'customer.subscription.updated') {
     const subscription = event.data.object;
     console.log(`[Stripe] Subscription updated: ${subscription.id}, status: ${subscription.status}`);
+    
+    // Update user record with subscription status changes
+    try {
+      const user = db.data.users.find(u => u.stripeCustomerId === subscription.customer);
+      if (user) {
+        user.subscriptionStatus = subscription.status;
+        user.currentPeriodEnd = subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null;
+        user.updatedAt = new Date().toISOString();
+        
+        // If subscription is canceled, update the status
+        if (subscription.canceled_at) {
+          user.subscriptionCanceledAt = new Date(subscription.canceled_at * 1000).toISOString();
+        }
+        
+        await db.write();
+        console.log(`[Stripe] Updated user ${user.id} subscription status to: ${subscription.status}`);
+      }
+    } catch (err) {
+      console.error('[Stripe] Error updating user subscription status:', err);
+    }
+  }
+
+  if (event.type === 'customer.subscription.deleted') {
+    const subscription = event.data.object;
+    console.log(`[Stripe] Subscription deleted: ${subscription.id} for customer: ${subscription.customer}`);
+    
+    // Update user record to reflect subscription deletion
+    try {
+      const user = db.data.users.find(u => u.stripeCustomerId === subscription.customer);
+      if (user) {
+        user.subscriptionStatus = 'canceled';
+        user.subscriptionCanceledAt = new Date().toISOString();
+        user.updatedAt = new Date().toISOString();
+        await db.write();
+        console.log(`[Stripe] Marked subscription as canceled for user ${user.id}`);
+      }
+    } catch (err) {
+      console.error('[Stripe] Error updating user subscription deletion:', err);
+    }
   }
 
   if (event.type === 'invoice.payment_succeeded') {
@@ -510,6 +1736,19 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
     const invoice = event.data.object;
     if (invoice.subscription) {
       console.log(`[Stripe] Payment failed for subscription: ${invoice.subscription}`);
+      
+      // Update user subscription status to reflect payment failure
+      try {
+        const user = db.data.users.find(u => u.stripeSubscriptionId === invoice.subscription);
+        if (user) {
+          user.subscriptionStatus = 'past_due';
+          user.updatedAt = new Date().toISOString();
+          await db.write();
+          console.log(`[Stripe] Updated user ${user.id} subscription status to past_due due to payment failure`);
+        }
+      } catch (err) {
+        console.error('[Stripe] Error updating user payment failure status:', err);
+      }
     }
   }
 
@@ -8143,6 +9382,76 @@ app.post('/api/account/delete', authenticateToken, async (req, res) => {
     const userEmail = req.user.email;
 
     console.log('[ACCOUNT DELETE] Starting account deletion for:', { userId, userEmail });
+
+    // Check for active subscriptions before allowing account deletion
+    if (stripe) {
+      try {
+        // Get user's Stripe customer ID
+        let customerId = req.user.stripeCustomerId;
+        const dbUser = db.data.users.find(u => u.id === userId);
+        if (!customerId && dbUser?.stripeCustomerId) {
+          customerId = dbUser.stripeCustomerId;
+        }
+
+        if (customerId) {
+          console.log(`[ACCOUNT DELETE] Checking subscription status for customer: ${customerId}`);
+          
+          // Check for active subscriptions directly from Stripe
+          const subscriptions = await stripe.subscriptions.list({
+            customer: customerId,
+            status: 'all',
+            limit: 10
+          });
+
+          const activeSubscription = subscriptions.data.find(sub => 
+            ['active', 'trialing', 'past_due', 'unpaid'].includes(sub.status)
+          );
+
+          if (activeSubscription) {
+            console.log(`[ACCOUNT DELETE] User ${userId} has active subscription: ${activeSubscription.id} (${activeSubscription.status})`);
+            return res.status(403).json({
+              error: 'Cannot delete account with active subscription',
+              hasActiveSubscription: true,
+              subscriptionId: activeSubscription.id,
+              status: activeSubscription.status,
+              currentPeriodEnd: activeSubscription.current_period_end,
+              message: 'You cannot delete your account while you have an active subscription. Please cancel your plan first.'
+            });
+          } else {
+            console.log(`[ACCOUNT DELETE] User ${userId} has no active subscriptions, proceeding with deletion`);
+          }
+        } else {
+          console.log(`[ACCOUNT DELETE] User ${userId} has no Stripe customer ID, proceeding with deletion`);
+        }
+      } catch (stripeError) {
+        console.error('[ACCOUNT DELETE] Error checking Stripe subscription status:', stripeError);
+        // If Stripe check fails, also check local database as fallback
+        const dbUser = db.data.users.find(u => u.id === userId);
+        if (dbUser?.subscriptionStatus && ['active', 'trialing', 'past_due', 'unpaid'].includes(dbUser.subscriptionStatus)) {
+          console.log(`[ACCOUNT DELETE] User ${userId} has active subscription in local database: ${dbUser.subscriptionStatus}`);
+          return res.status(403).json({
+            error: 'Cannot delete account with active subscription',
+            hasActiveSubscription: true,
+            status: dbUser.subscriptionStatus,
+            message: 'You cannot delete your account while you have an active subscription. Please cancel your plan first.'
+          });
+        }
+        console.log(`[ACCOUNT DELETE] Stripe check failed, but local database shows no active subscription, proceeding with deletion`);
+      }
+    } else {
+      console.log('[ACCOUNT DELETE] Stripe not configured, checking local database only');
+      // Fallback to local database check if Stripe is not configured
+      const dbUser = db.data.users.find(u => u.id === userId);
+      if (dbUser?.subscriptionStatus && ['active', 'trialing', 'past_due', 'unpaid'].includes(dbUser.subscriptionStatus)) {
+        console.log(`[ACCOUNT DELETE] User ${userId} has active subscription in local database: ${dbUser.subscriptionStatus}`);
+        return res.status(403).json({
+          error: 'Cannot delete account with active subscription',
+          hasActiveSubscription: true,
+          status: dbUser.subscriptionStatus,
+          message: 'You cannot delete your account while you have an active subscription. Please cancel your plan first.'
+        });
+      }
+    }
 
     // 1. Remove user's courses and course files
     const userCourses = (db.data.courses || []).filter(c => c.userId === userId);
