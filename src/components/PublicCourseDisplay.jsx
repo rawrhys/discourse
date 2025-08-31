@@ -215,77 +215,105 @@ const PublicCourseDisplay = () => {
     return cleanAndCombineContent(currentLesson.content);
   }, [currentLesson]);
 
-  // Generate academic references using the same service as private LessonView
-  const academicReferences = useMemo(() => {
-    if (!processedContent || !currentLesson?.title || !course?.subject) return [];
-    
-    try {
-      // Only generate if content is substantial
-      if (processedContent.length < 100) return [];
-      
-      const currentLessonId = currentLesson.id || `${currentLesson.title}_${course.subject}`;
-      const lastLessonId = AcademicReferencesService.getLastProcessedLessonId();
-      
-      // Check if we already have saved references for this lesson
-      const savedReferences = AcademicReferencesService.getSavedReferences(currentLessonId);
-      
-      if (savedReferences && savedReferences.length > 0) {
-        console.log('[PublicCourseDisplay] Using saved references for lesson:', currentLessonId);
-        // Mark this lesson as processed
-        AcademicReferencesService.setLastProcessedLessonId(currentLessonId);
-        return savedReferences;
-      }
-      
-      // Check if this lesson is already being processed to prevent duplicate generation
-      if (AcademicReferencesService.isLessonBeingProcessed(currentLessonId)) {
-        console.log('[PublicCourseDisplay] Lesson is already being processed:', currentLessonId);
-        return [];
-      }
-      
-      console.log('[PublicCourseDisplay] Generating academic references for:', {
-        lessonTitle: currentLesson.title,
-        courseSubject: course.subject,
-        contentLength: processedContent?.length || 0
-      });
-      
-      // Mark this lesson as being processed to prevent duplicate generation
-      AcademicReferencesService.markLessonAsProcessing(currentLessonId);
-      
-      // Generate academic references using the same method as private LessonView
-      const references = AcademicReferencesService.generateReferences(
-        processedContent,
-        course.subject,
-        currentLesson.title
-      );
-      
-      console.log('[PublicCourseDisplay] Academic references generated:', {
-        referencesCount: references.length,
-        references: references,
-        contentLength: processedContent?.length || 0,
-        courseSubject: course.subject,
-        lessonTitle: currentLesson.title
-      });
-      
-      // Save the generated references for future use
-      if (references && references.length > 0) {
-        AcademicReferencesService.saveReferences(currentLessonId, references);
-        console.log('[PublicCourseDisplay] References saved for future use');
-        // Mark this lesson as processed
-        AcademicReferencesService.setLastProcessedLessonId(currentLessonId);
-      }
-      
-      // Mark this lesson as no longer processing
-      AcademicReferencesService.markLessonAsNotProcessing(currentLessonId);
-      
-      return references;
-    } catch (error) {
-      console.error('[PublicCourseDisplay] Error generating academic references:', error);
-      // Ensure processing flag is cleared on error
-      const currentLessonId = currentLesson.id || `${currentLesson.title}_${course.subject}`;
-      AcademicReferencesService.markLessonAsNotProcessing(currentLessonId);
-      return [];
+  // State for academic references
+  const [academicReferences, setAcademicReferences] = useState([]);
+
+  // Generate academic references using useEffect for async operations
+  useEffect(() => {
+    if (!processedContent || !currentLesson?.title || !course?.subject) {
+      setAcademicReferences([]);
+      return;
     }
-  }, [currentLesson?.id, currentLesson?.title, course?.subject]); // Only depend on lesson ID and title, not content
+    
+    const generateReferences = async () => {
+      try {
+        // Only generate if content is substantial
+        if (processedContent.length < 100) {
+          setAcademicReferences([]);
+          return;
+        }
+        
+        const currentLessonId = currentLesson.id || `${currentLesson.title}_${course.subject}`;
+        const lastLessonId = AcademicReferencesService.getLastProcessedLessonId();
+        
+        // Check if we already have saved references for this lesson
+        const savedReferences = AcademicReferencesService.getSavedReferences(currentLessonId);
+        
+        if (savedReferences && savedReferences.length > 0) {
+          console.log('[PublicCourseDisplay] Using saved references for lesson:', currentLessonId);
+          // Mark this lesson as processed
+          AcademicReferencesService.setLastProcessedLessonId(currentLessonId);
+          setAcademicReferences(savedReferences);
+          return;
+        }
+        
+        // Check if this lesson is already being processed to prevent duplicate generation
+        if (AcademicReferencesService.isLessonBeingProcessed(currentLessonId)) {
+          console.log('[PublicCourseDisplay] Lesson is already being processed:', currentLessonId);
+          return;
+        }
+        
+        console.log('[PublicCourseDisplay] Generating academic references for:', {
+          lessonTitle: currentLesson.title,
+          courseSubject: course.subject,
+          contentLength: processedContent?.length || 0
+        });
+        
+        // Mark this lesson as being processed to prevent duplicate generation
+        AcademicReferencesService.markLessonAsProcessing(currentLessonId);
+        
+        // Try to use AI-generated references instead of static ones
+        console.log('[PublicCourseDisplay] Attempting to use AI-generated references');
+        
+        try {
+          // Use AI service to generate authentic academic references
+          const references = await api.generateAuthenticBibliography(
+            currentLesson.title,
+            course.subject,
+            5, // Number of references
+            processedContent
+          );
+          
+          console.log('[PublicCourseDisplay] AI-generated references:', {
+            referencesCount: references.length,
+            references: references,
+            contentLength: processedContent?.length || 0,
+            courseSubject: course.subject,
+            lessonTitle: currentLesson.title
+          });
+          
+          // Save the generated references for future use
+          if (references && references.length > 0) {
+            AcademicReferencesService.saveReferences(currentLessonId, references);
+            console.log('[PublicCourseDisplay] AI-generated references saved for future use');
+            // Mark this lesson as processed
+            AcademicReferencesService.setLastProcessedLessonId(currentLessonId);
+          }
+          
+          // Mark this lesson as no longer processing
+          AcademicReferencesService.markLessonAsNotProcessing(currentLessonId);
+          
+          setAcademicReferences(references);
+        } catch (error) {
+          console.error('[PublicCourseDisplay] Error generating AI references:', error);
+          
+          // Ensure processing flag is cleared on error
+          AcademicReferencesService.markLessonAsNotProcessing(currentLessonId);
+          
+          // Set empty array as fallback
+          setAcademicReferences([]);
+        }
+      } catch (error) {
+        console.error('[PublicCourseDisplay] Error generating academic references:', error);
+        // Ensure processing flag is cleared on error
+        const currentLessonId = currentLesson.id || `${currentLesson.title}_${course.subject}`;
+        AcademicReferencesService.markLessonAsNotProcessing(currentLessonId);
+        setAcademicReferences([]);
+      }
+    };
+    
+    generateReferences();
+  }, [currentLesson?.id, currentLesson?.title, course?.subject, processedContent]); // Include processedContent in dependencies
 
   // Handle citation click
   const handleCitationClick = useCallback((referenceId) => {

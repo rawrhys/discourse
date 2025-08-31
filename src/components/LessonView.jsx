@@ -684,19 +684,9 @@ const LessonView = ({
           return;
         }
         
-        // Fallback to static references if AI generation fails
-        try {
-          const lessonContentString = getContentAsString(propLesson.content);
-          const fallbackReferences = academicReferencesService.generateReferences(
-            lessonContentString,
-            subject,
-            propLesson.title
-          );
-          setAcademicReferences(fallbackReferences);
-        } catch (fallbackError) {
-          console.error('[LessonView] Fallback reference generation also failed:', fallbackError);
-          setAcademicReferences([]);
-        }
+        // No fallback to static references - just log the error and continue
+        console.warn('[LessonView] AI reference generation failed, no fallback available');
+        setAcademicReferences([]);
       } finally {
         setIsGeneratingReferences(false);
         // Mark this lesson as no longer processing

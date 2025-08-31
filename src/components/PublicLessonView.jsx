@@ -545,27 +545,9 @@ const PublicLessonView = ({
         
       } catch (error) {
         console.error('[PublicLessonView] Failed to generate authentic academic references:', error);
-        // Fallback to static references if AI generation fails
-        try {
-          console.log('[PublicLessonView] Attempting fallback to static references');
-          const fallbackReferences = AcademicReferencesService.generateReferences(
-            deferredContent,
-            subject,
-            lesson.title,
-            courseDescription
-          );
-          setAcademicReferences(fallbackReferences);
-          
-          // Create references footer for fallback references
-          if (fallbackReferences && fallbackReferences.length > 0) {
-            const footer = AcademicReferencesService.createReferencesFooter(fallbackReferences);
-            setReferencesFooter(footer);
-            console.log('[PublicLessonView] Created fallback references footer:', footer);
-          }
-        } catch (fallbackError) {
-          console.error('[PublicLessonView] Fallback reference generation also failed:', fallbackError);
-          setAcademicReferences([]);
-        }
+        // No fallback to static references - just log the error and continue
+        console.warn('[PublicLessonView] AI reference generation failed, no fallback available');
+        setAcademicReferences([]);
       } finally {
         // Mark this lesson as no longer processing
         const currentLessonId = lesson.id || `${lesson.title}_${subject}`;
@@ -1232,22 +1214,69 @@ const PublicLessonView = ({
         return;
       }
       
-      // If no references found in content, generate academic references
-      console.log('[PublicLessonView] No references found in content, generating academic references');
+      // If no references found in content, try to use AI-generated references
+      console.log('[PublicLessonView] No references found in content, checking for AI-generated references');
       
-      // Generate academic references
-      const references = AcademicReferencesService.generateReferences(
-        lessonContentString,
-        subject,
-        lesson.title
-      );
+      // Check if we have saved AI-generated references for this lesson
+      const currentLessonId = lesson.id || `${lesson.title}_${subject}`;
+      const savedReferences = AcademicReferencesService.getSavedReferences(currentLessonId);
       
-      console.log('[PublicLessonView] Academic references generated:', {
-        referencesCount: references.length,
-        hasCitations: !!references.length
-      });
+      if (savedReferences && savedReferences.length > 0) {
+        console.log('[PublicLessonView] Using saved AI-generated references:', {
+          referencesCount: savedReferences.length,
+          references: savedReferences
+        });
+        setAcademicReferences(savedReferences);
+        return;
+      }
       
-      setAcademicReferences(references);
+      // If no saved references, try to generate new ones via AI
+      console.log('[PublicLessonView] No saved references found, attempting AI generation');
+      
+      try {
+        // Mark this lesson as being processed to prevent duplicate generation
+        if (!AcademicReferencesService.isLessonBeingProcessed(currentLessonId)) {
+          AcademicReferencesService.markLessonAsProcessing(currentLessonId);
+          
+          // Use AI service to generate authentic academic references
+          const references = await api.generateAuthenticBibliography(
+            lesson.title,
+            subject,
+            5, // Number of references
+            lessonContentString
+          );
+          
+          if (references && references.length > 0) {
+            console.log('[PublicLessonView] AI-generated references:', {
+              referencesCount: references.length,
+              references: references
+            });
+            
+            setAcademicReferences(references);
+            
+            // Save the generated references for future use
+            AcademicReferencesService.saveReferences(currentLessonId, references);
+            console.log('[PublicLessonView] AI-generated references saved for future use');
+            
+            // Mark this lesson as processed
+            AcademicReferencesService.setLastProcessedLessonId(currentLessonId);
+          } else {
+            console.log('[PublicLessonView] No AI-generated references returned');
+            setAcademicReferences([]);
+          }
+          
+          // Mark this lesson as no longer processing
+          AcademicReferencesService.markLessonAsNotProcessing(currentLessonId);
+        } else {
+          console.log('[PublicLessonView] Lesson is already being processed, skipping AI generation');
+        }
+      } catch (error) {
+        console.error('[PublicLessonView] Error generating AI references:', error);
+        setAcademicReferences([]);
+        
+        // Ensure processing flag is cleared on error
+        AcademicReferencesService.markLessonAsNotProcessing(currentLessonId);
+      }
     } catch (error) {
       console.error('[PublicLessonView] Error processing references:', error);
       setAcademicReferences([]);
