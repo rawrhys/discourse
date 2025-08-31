@@ -93,17 +93,55 @@ const Dashboard = () => {
     }
   }, [api]);
   
+  // Format user name properly - extract from email if no name is set
+  const formatUserName = (email, name) => {
+    if (name && name.trim()) {
+      // If we have a name, format it properly (capitalize first letter of each word)
+      return name.split(' ')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+        .join(' ');
+    }
+    
+    if (email && email.includes('@')) {
+      // Extract name from email (before the @ symbol)
+      const emailName = email.split('@')[0];
+      
+      // Handle common email formats
+      if (emailName.includes('.')) {
+        // Format: firstname.lastname -> Firstname Lastname
+        return emailName.split('.')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+          .join(' ');
+      } else {
+        // Format: firstname -> Firstname
+        return emailName.charAt(0).toUpperCase() + emailName.slice(1).toLowerCase();
+      }
+    }
+    
+    return 'Guest';
+  };
+  
   // Get the user's name from backend profile data, fallback to auth context
-  const userName = userProfile?.name || user?.name || user?.email || 'Guest';
+  const userName = formatUserName(user?.email, userProfile?.name || user?.name);
   
   // Debug log to verify user data
   logger.debug('👤 [DASHBOARD] User data:', {
     user: user,
     userProfile: userProfile,
     userName: userName,
+    originalName: userProfile?.name || user?.name,
+    originalEmail: user?.email,
     hasName: !!userProfile?.name,
     hasEmail: !!user?.email,
     timestamp: new Date().toISOString()
+  });
+  
+  // Debug log for name formatting
+  logger.debug('👤 [DASHBOARD] Name formatting:', {
+    inputName: userProfile?.name || user?.name,
+    inputEmail: user?.email,
+    formattedName: userName,
+    formatFunction: 'formatUserName called'
   });
 
   // Early return if user is not ready
@@ -836,6 +874,19 @@ const Dashboard = () => {
                     className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md text-yellow-700 bg-yellow-100 hover:bg-yellow-200"
                   >
                     Mark Complete
+                  </button>
+                  <button
+                    onClick={() => {
+                      console.log('🔍 [DEBUG] Current name formatting:', {
+                        originalName: userProfile?.name || user?.name,
+                        originalEmail: user?.email,
+                        formattedName: userName
+                      });
+                      alert(`Name Debug Info:\nOriginal Name: ${userProfile?.name || user?.name || 'None'}\nOriginal Email: ${user?.email || 'None'}\nFormatted Name: ${userName}`);
+                    }}
+                    className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md text-yellow-700 bg-yellow-100 hover:bg-yellow-200"
+                  >
+                    Debug Name
                   </button>
                 </div>
               </div>
