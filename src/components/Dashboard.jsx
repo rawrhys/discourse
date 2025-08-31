@@ -537,14 +537,22 @@ const Dashboard = () => {
   // Fetch onboarding completion status
   const fetchOnboardingStatus = useCallback(async () => {
     try {
+      console.log('🔍 [DASHBOARD] Fetching onboarding status...');
       const status = await api.getOnboardingStatus();
+      console.log('🔍 [DASHBOARD] Onboarding status response:', status);
+      
       const completed = !!status?.completed;
+      console.log('🔍 [DASHBOARD] Setting hasCompletedOnboarding to:', completed);
+      
       setHasCompletedOnboarding(completed);
       if (user?.id) {
         localStorage.setItem(`onboardingCompleted_${user.id}`, String(completed));
+        console.log('🔍 [DASHBOARD] Saved to localStorage:', `onboardingCompleted_${user.id} = ${completed}`);
       }
     } catch (error) {
+      console.error('🔍 [DASHBOARD] Error fetching onboarding status:', error);
       const cached = user?.id ? localStorage.getItem(`onboardingCompleted_${user.id}`) : localStorage.getItem('onboardingCompleted');
+      console.log('🔍 [DASHBOARD] Using cached value:', cached);
       setHasCompletedOnboarding(cached === 'true');
     }
   }, [api, user?.id]);
@@ -742,7 +750,7 @@ const Dashboard = () => {
           )}
         </div>
         {/* Welcome Message for New Users */}
-        {savedCourses.length === 0 && !hasCompletedOnboarding && (
+        {savedCourses.length === 0 && !hasCompletedOnboarding && !localStorage.getItem(`onboardingCompleted_${user?.id}`) && (
           <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded mb-4">
             <div className="flex items-start">
               <div className="flex-shrink-0">
@@ -762,6 +770,72 @@ const Dashboard = () => {
                     title="Complete onboarding to unlock the full dashboard experience"
                   >
                     🎓 Start Onboarding Course
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Debug: Onboarding Status */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded mb-4">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-yellow-800">Onboarding Status Debug</h3>
+                <div className="mt-2 text-sm text-yellow-700">
+                  <p>Courses Count: {savedCourses.length}</p>
+                  <p>Has Completed Onboarding: {hasCompletedOnboarding ? 'Yes' : 'No'}</p>
+                  <p>User ID: {user?.id}</p>
+                  <p>Show Welcome Banner: {savedCourses.length === 0 && !hasCompletedOnboarding ? 'Yes' : 'No'}</p>
+                </div>
+                <div className="mt-3 space-x-2">
+                  <button
+                    onClick={async () => {
+                      console.log('🔍 [DEBUG] Manually refreshing onboarding status...');
+                      await fetchOnboardingStatus();
+                      console.log('🔍 [DEBUG] Onboarding status refreshed');
+                    }}
+                    className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md text-yellow-700 bg-yellow-100 hover:bg-yellow-200"
+                  >
+                    Refresh Status
+                  </button>
+                  <button
+                    onClick={async () => {
+                      console.log('🔍 [DEBUG] Manually refreshing courses...');
+                      await fetchSavedCourses(true);
+                      console.log('🔍 [DEBUG] Courses refreshed');
+                    }}
+                    className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md text-yellow-700 bg-yellow-100 hover:bg-yellow-200"
+                  >
+                    Refresh Courses
+                  </button>
+                  <button
+                    onClick={async () => {
+                      console.log('🔍 [DEBUG] Manually marking onboarding as completed...');
+                      try {
+                        const response = await api.completeOnboarding();
+                        console.log('🔍 [DEBUG] Manual completion response:', response);
+                        if (response && response.success) {
+                          setHasCompletedOnboarding(true);
+                          localStorage.setItem(`onboardingCompleted_${user.id}`, 'true');
+                          alert('Onboarding manually marked as completed!');
+                        } else {
+                          alert('Failed to mark onboarding as completed');
+                        }
+                      } catch (error) {
+                        console.error('🔍 [DEBUG] Manual completion error:', error);
+                        alert('Error marking onboarding as completed');
+                      }
+                    }}
+                    className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md text-yellow-700 bg-yellow-100 hover:bg-yellow-200"
+                  >
+                    Mark Complete
                   </button>
                 </div>
               </div>
