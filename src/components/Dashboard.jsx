@@ -1628,7 +1628,7 @@ const Dashboard = () => {
                                 <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                               </svg>
                             </div>
-                            <div className="ml-3">
+                            <div className="ml-3 flex-1">
                               <h3 className="text-sm font-medium text-amber-800">
                                 Active Subscription Detected
                               </h3>
@@ -1637,20 +1637,86 @@ const Dashboard = () => {
                                   You cannot delete your account while you have an active subscription ({userProfile.subscriptionStatus || 'active'}).
                                   Please cancel your subscription first using the "Manage Payments & Subscription" button above.
                                 </p>
+                                <div className="mt-3">
+                                  <button
+                                    onClick={async () => {
+                                      try {
+                                        setIsCheckingSubscription(true);
+                                        const refreshedStatus = await api.refreshSubscriptionStatus();
+                                        console.log('🔍 [DASHBOARD] Refreshed subscription status:', refreshedStatus);
+                                        
+                                        setUserProfile(prev => ({
+                                          ...prev,
+                                          hasActiveSubscription: refreshedStatus?.hasActiveSubscription || false,
+                                          subscriptionStatus: refreshedStatus?.status || null
+                                        }));
+                                      } catch (error) {
+                                        console.error('🔍 [DASHBOARD] Error refreshing subscription status:', error);
+                                        alert('Failed to refresh subscription status. Please try again.');
+                                      } finally {
+                                        setIsCheckingSubscription(false);
+                                      }
+                                    }}
+                                    className="inline-flex items-center px-3 py-1.5 border border-amber-300 text-xs font-medium rounded text-amber-700 bg-amber-50 hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500"
+                                  >
+                                    <svg className="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                    Refresh Status
+                                  </button>
+                                  <p className="text-xs text-amber-600 mt-1">
+                                    If you've recently cancelled your subscription, click this button to update your status.
+                                  </p>
+                                </div>
                               </div>
                             </div>
                           </div>
                         </div>
                       )}
                       
-                      <p className="text-sm text-gray-600 mb-3">
-                        Type <span className="font-semibold">Delete</span> to confirm. This will remove your account and all courses permanently.
-                        {userProfile?.hasActiveSubscription && (
-                          <span className="block mt-2 text-amber-600 font-medium">
-                            ⚠️ Account deletion is blocked due to active subscription.
+                      <div className="mb-3">
+                        <p className="text-sm text-gray-600 mb-2">
+                          Type <span className="font-semibold">Delete</span> to confirm. This will remove your account and all courses permanently.
+                          {userProfile?.hasActiveSubscription && (
+                            <span className="block mt-2 text-amber-600 font-medium">
+                              ⚠️ Account deletion is blocked due to active subscription.
+                            </span>
+                          )}
+                        </p>
+                        
+                        {/* General refresh button for all users */}
+                        <div className="flex items-center justify-between">
+                          <button
+                            onClick={async () => {
+                              try {
+                                setIsCheckingSubscription(true);
+                                const refreshedStatus = await api.refreshSubscriptionStatus();
+                                console.log('🔍 [DASHBOARD] Refreshed subscription status:', refreshedStatus);
+                                
+                                setUserProfile(prev => ({
+                                  ...prev,
+                                  hasActiveSubscription: refreshedStatus?.hasActiveSubscription || false,
+                                  subscriptionStatus: refreshedStatus?.status || null
+                                }));
+                              } catch (error) {
+                                console.error('🔍 [DASHBOARD] Error refreshing subscription status:', error);
+                                alert('Failed to refresh subscription status. Please try again.');
+                              } finally {
+                                setIsCheckingSubscription(false);
+                              }
+                            }}
+                            className="inline-flex items-center px-2 py-1 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-gray-50 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                          >
+                            <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            Refresh Subscription Status
+                          </button>
+                          <span className="text-xs text-gray-500">
+                            Current status: {userProfile?.subscriptionStatus || 'none'}
                           </span>
-                        )}
-                      </p>
+                        </div>
+                      </div>
                       <input
                         type="text"
                         value={deleteConfirm}

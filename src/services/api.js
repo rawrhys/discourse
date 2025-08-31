@@ -239,6 +239,25 @@ const api = {
         }
     },
 
+    // Manual refresh subscription status
+    refreshSubscriptionStatus: async () => {
+        try {
+            const response = await apiClient('/api/billing/refresh-subscription-status', {
+                method: 'POST'
+            });
+            
+            if (!response) {
+                throw new Error('No response from subscription status refresh');
+            }
+            
+            return response;
+        } catch (error) {
+            console.error('Error refreshing subscription status:', error);
+            // Return safe default on error
+            return { hasActiveSubscription: false, message: 'Error refreshing subscription status' };
+        }
+    },
+
     // Account deletion
     deleteAccount: (confirm) =>
         apiClient('/api/account/delete', { method: 'POST', body: JSON.stringify({ confirm }) }),
