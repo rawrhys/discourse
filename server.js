@@ -7812,6 +7812,65 @@ app.get('/api/billing/status', authenticateToken, async (req, res) => {
 
 
 
+// Check subscription status before account deletion
+app.get('/api/billing/check-subscription-status', authenticateToken, async (req, res) => {
+  try {
+    if (!stripe) {
+      return res.json({ hasActiveSubscription: false, message: 'Stripe not configured' });
+    }
+
+    const userId = req.user.id;
+    console.log(`[BILLING] Checking subscription status for user ${userId} before account deletion`);
+
+    // Get user's Stripe customer ID
+    let customerId = req.user.stripeCustomerId;
+    const dbUser = db.data.users.find(u => u.id === userId);
+    if (!customerId && dbUser?.stripeCustomerId) {
+      customerId = dbUser.stripeCustomerId;
+    }
+
+    if (!customerId) {
+      console.log(`[BILLING] User ${userId} has no Stripe customer ID`);
+      return res.json({ hasActiveSubscription: false, message: 'No Stripe customer found' });
+    }
+
+    // Check for active subscriptions
+    const subscriptions = await stripe.subscriptions.list({
+      customer: customerId,
+      status: 'all',
+      limit: 10
+    });
+
+    const activeSubscription = subscriptions.data.find(sub => 
+      ['active', 'trialing', 'past_due', 'unpaid'].includes(sub.status)
+    );
+
+    if (activeSubscription) {
+      console.log(`[BILLING] User ${userId} has active subscription: ${activeSubscription.id} (${activeSubscription.status})`);
+      return res.json({
+        hasActiveSubscription: true,
+        subscriptionId: activeSubscription.id,
+        status: activeSubscription.status,
+        currentPeriodEnd: activeSubscription.current_period_end,
+        message: 'Active subscription found'
+      });
+    } else {
+      console.log(`[BILLING] User ${userId} has no active subscriptions`);
+      return res.json({
+        hasActiveSubscription: false,
+        message: 'No active subscriptions found'
+      });
+    }
+
+  } catch (error) {
+    console.error('[BILLING] Error checking subscription status:', error);
+    return res.status(500).json({ 
+      error: 'Failed to check subscription status',
+      hasActiveSubscription: false 
+    });
+  }
+});
+
 // Handle user creation from Stripe webhook
 app.post('/api/auth/create-user-from-webhook', async (req, res) => {
   try {

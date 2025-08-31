@@ -603,6 +603,32 @@ const Dashboard = () => {
     }
   }, [api, user?.id]);
 
+  // Fetch subscription status for account deletion check
+  const fetchSubscriptionStatus = useCallback(async () => {
+    try {
+      console.log('🔍 [DASHBOARD] Fetching subscription status...');
+      const status = await api.checkSubscriptionStatus();
+      console.log('🔍 [DASHBOARD] Subscription status response:', status);
+      
+      // Update user profile with subscription status
+      setUserProfile(prev => ({
+        ...prev,
+        hasActiveSubscription: status?.hasActiveSubscription || false,
+        subscriptionStatus: status?.status || null
+      }));
+      
+      console.log('🔍 [DASHBOARD] Updated user profile with subscription status:', status?.hasActiveSubscription);
+    } catch (error) {
+      console.error('🔍 [DASHBOARD] Error fetching subscription status:', error);
+      // Set to false on error to allow account deletion
+      setUserProfile(prev => ({
+        ...prev,
+        hasActiveSubscription: false,
+        subscriptionStatus: null
+      }));
+    }
+  }, [api]);
+
 
 
   useEffect(() => {
@@ -625,8 +651,9 @@ const Dashboard = () => {
     if (user) {
       fetchUserProfile();
       fetchOnboardingStatus();
+      fetchSubscriptionStatus();
     }
-  }, [user, fetchUserProfile, fetchOnboardingStatus]);
+  }, [user, fetchUserProfile, fetchOnboardingStatus, fetchSubscriptionStatus]);
 
   // Fetch saved courses on component mount
   useEffect(() => {
@@ -1575,7 +1602,14 @@ const Dashboard = () => {
 
                 <div className="border-t pt-4">
                   <h4 className="text-sm font-medium text-gray-900 mb-2">Delete Account</h4>
-                  <p className="text-sm text-gray-600 mb-3">Type <span className="font-semibold">Delete</span> to confirm. This will remove your account and all courses.</p>
+                  <p className="text-sm text-gray-600 mb-3">
+                    Type <span className="font-semibold">Delete</span> to confirm. This will remove your account and all courses.
+                    {userProfile?.hasActiveSubscription && (
+                      <span className="block mt-2 text-amber-600 font-medium">
+                        ⚠️ You have an active subscription. Cancel it first before deleting your account.
+                      </span>
+                    )}
+                  </p>
                   <input
                     type="text"
                     value={deleteConfirm}
@@ -1596,12 +1630,34 @@ const Dashboard = () => {
                           alert("Please type 'Delete' to confirm.");
                           return;
                         }
+                        
                         try {
                           setIsDeletingAccount(true);
+                          
+                          // Check if user has active subscription before allowing deletion
+                          console.log('🔍 [ACCOUNT_DELETION] Checking subscription status...');
+                          const subscriptionStatus = await api.checkSubscriptionStatus();
+                          
+                          if (subscriptionStatus?.hasActiveSubscription) {
+                            setIsDeletingAccount(false);
+                            alert(
+                              `⚠️ Cannot delete account with active subscription!\n\n` +
+                              `You have an active subscription (${subscriptionStatus.status}). ` +
+                              `Please cancel your subscription first through the "Manage Payments & Subscription" button above.\n\n` +
+                              `After canceling your subscription, you can delete your account.`
+                            );
+                            return;
+                          }
+                          
+                          console.log('✅ [ACCOUNT_DELETION] No active subscription, proceeding with account deletion...');
+                          
+                          // Proceed with account deletion
                           await api.deleteAccount('Delete');
                           await logout();
                           navigate('/login');
+                          
                         } catch (e) {
+                          console.error('❌ [ACCOUNT_DELETION] Error during account deletion:', e);
                           alert('Failed to delete account: ' + (e?.message || 'Unknown error'));
                         } finally {
                           setIsDeletingAccount(false);
@@ -1610,7 +1666,7 @@ const Dashboard = () => {
                       disabled={deleteConfirm !== 'Delete' || isDeletingAccount}
                       className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md disabled:opacity-50"
                     >
-                      {isDeletingAccount ? 'Deleting…' : 'Delete Account'}
+                      {isDeletingAccount ? 'Checking Subscription...' : 'Delete Account'}
                     </button>
                   </div>
                 </div>

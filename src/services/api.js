@@ -221,7 +221,9 @@ const api = {
     getBillingStatus: () =>
         apiClient('/api/billing/status'),
 
-
+    // Check subscription status before account deletion
+    checkSubscriptionStatus: () =>
+        apiClient('/api/billing/check-subscription-status'),
 
     // Account deletion
     deleteAccount: (confirm) =>
