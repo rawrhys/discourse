@@ -705,6 +705,713 @@ function extractMainLessonText(content) {
 }
 
 // Enhanced heuristic to score image candidates for relevance with full course context
+import express from 'express';
+import cookieParser from 'cookie-parser';
+import cors from 'cors';
+import axios from 'axios';
+import dotenv from 'dotenv';
+import fileUpload from 'express-fileupload';
+
+import path from 'path';
+import { fileURLToPath } from 'url';
+import fs from 'fs';
+import https from 'https';
+import http from 'http';
+import compression from 'compression';
+import net from 'net';
+import { WebSocketServer } from 'ws';
+import { Low } from 'lowdb';
+import { JSONFile } from 'lowdb/node';
+import Stripe from 'stripe';
+import { createClient } from '@supabase/supabase-js';
+import fetch from 'node-fetch';
+import nodemailer from 'nodemailer';
+import ApiError from './src/utils/ApiError.js';
+// import { execSync } from 'child_process';
+import { createServer as createHttpsServer } from 'https';
+import { createServer as createHttpServer } from 'http';
+import { exec } from 'child_process';
+import selfsigned from 'selfsigned';
+import crypto from 'crypto';
+import { compressImage, getOptimalFormat, getFileExtension, formatFileSize } from './server/utils/imageCompression.js';
+import sharp from 'sharp';
+import imageProxyHandler from './server/utils/proxy.js';
+import enhancedImageProxy from './server/utils/enhancedImageProxy.js';
+import publicCourseSessionService from './src/services/PublicCourseSessionService.js';
+import {
+  publicCourseRateLimit,
+  publicCourseSlowDown,
+  botDetection,
+  captchaChallenge,
+  verifySession,
+  checkCaptcha,
+  securityHeaders,
+  securityLogging
+} from './server/middleware/security.js';
+// import { isValidFlashcardTerm } from './src/utils/flashcardUtils.js';
+
+
+
+// Load environment variables from .env file
+dotenv.config();
+
+// Debug environment variables
+console.log('[SERVER] Environment check:');
+console.log('[SERVER] SMTP_HOST:', process.env.SMTP_HOST ? 'Set' : 'Not set');
+console.log('[SERVER] SMTP_USER:', process.env.SMTP_USER ? 'Set' : 'Not set');
+console.log('[SERVER] SMTP_PASS:', process.env.SMTP_PASS ? 'Set' : 'Not set');
+console.log('[SERVER] SMTP_PORT:', process.env.SMTP_PORT || 'Default (587)');
+console.log('[SERVER] SMTP_SECURE:', process.env.SMTP_SECURE || 'Default (false)');
+console.log('[SERVER] FRONTEND_URL:', process.env.FRONTEND_URL || 'Default (https://thediscourse.ai)');
+console.log('[SERVER] JWT_SECRET:', process.env.JWT_SECRET ? 'Set' : 'Not set');
+console.log('[SERVER] STRIPE_WEBHOOK_SECRET:', process.env.STRIPE_WEBHOOK_SECRET ? 'Set' : 'Not set');
+console.log('[SERVER] STRIPE_SECRET_KEY:', process.env.STRIPE_SECRET_KEY ? 'Set' : 'Not set');
+console.log('[SERVER] PORT:', process.env.PORT || 'Default (4003)');
+console.log('[SERVER] NODE_ENV:', process.env.NODE_ENV || 'Not set');
+
+// Initialize global CAPTCHA challenges map
+global.captchaChallenges = new Map();
+
+// Initialize global image search cache
+global.imageSearchCache = new Map();
+
+// Initialize global image cache for better performance
+global.imageCache = new Map();
+global.imageCacheTimeout = 30 * 60 * 1000; // 30 minutes
+
+// Initialize global SSE connections for real-time updates
+global.sseConnections = new Map();
+global.generationSessions = new Map();
+
+// Clean up old cache entries every 5 minutes
+setInterval(() => {
+  if (global.imageCache) {
+    const now = Date.now();
+    for (const [key, value] of global.imageCache.entries()) {
+      if (now - value.timestamp > global.imageCacheTimeout) {
+        global.imageCache.delete(key);
+      }
+    }
+  }
+}, 5 * 60 * 1000); // 5 minutes
+
+// Utility function to generate unique IDs
+const generateId = () => {
+  return Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+};
+
+// Email verification and password reset functionality
+const createTransporter = () => {
+  console.log('[EMAIL] createTransporter called with SMTP config:', {
+    host: process.env.SMTP_HOST ? 'SET' : 'NOT SET',
+    user: process.env.SMTP_USER ? 'SET' : 'NOT SET',
+    pass: process.env.SMTP_PASS ? 'SET' : 'NOT SET',
+    port: process.env.SMTP_PORT || 587,
+    secure: process.env.SMTP_SECURE === 'true'
+  });
+  
+  // Debug: Show exact values (be careful with sensitive data)
+  console.log('[EMAIL] Raw SMTP values:', {
+    host: process.env.SMTP_HOST ? `"${process.env.SMTP_HOST}"` : 'NOT SET',
+    user: process.env.SMTP_USER ? `"${process.env.SMTP_USER}"` : 'NOT SET',
+    pass: process.env.SMTP_PASS ? '***SET***' : 'NOT SET',
+    port: process.env.SMTP_PORT || 'Default (587)',
+    secure: process.env.SMTP_SECURE || 'Default (false)'
+  });
+  
+  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    console.warn('[EMAIL] SMTP not configured, email functionality disabled');
+    return null;
+  }
+  
+  // Validate SMTP_HOST format - check for .env parsing issues
+  const smtpHost = process.env.SMTP_HOST.trim();
+  if (smtpHost.includes('=')) {
+    console.error('[EMAIL] ERROR: SMTP_HOST contains invalid characters (likely .env format issue):', smtpHost);
+    console.error('[EMAIL] This usually means your .env file has incorrect formatting');
+    return null;
+  }
+  
+  try {
+    const transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: process.env.SMTP_PORT || 587,
+      secure: process.env.SMTP_SECURE === 'true',
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS
+      }
+    });
+    console.log('[EMAIL] Transporter created successfully');
+    return transporter;
+  } catch (error) {
+    console.error('[EMAIL] Failed to create transporter:', error);
+    return null;
+  }
+};
+
+// Generate verification token
+const generateVerificationToken = () => {
+  return crypto.randomBytes(32).toString('hex');
+};
+
+// Generate password reset token
+const generatePasswordResetToken = () => {
+  return crypto.randomBytes(32).toString('hex');
+};
+
+// Send verification email
+const sendVerificationEmail = async (email, token, name) => {
+  const transporter = createTransporter();
+  if (!transporter) {
+    throw new Error('SMTP not configured');
+  }
+  
+  const verificationUrl = `${process.env.FRONTEND_URL || 'https://thediscourse.ai'}/verify-email?token=${token}&email=${encodeURIComponent(email)}`;
+  const currentYear = new Date().getFullYear();
+  
+  // Read and render the signup confirmation email template
+  let emailTemplate;
+  try {
+    emailTemplate = await fs.promises.readFile('./server/email-templates/signup-confirmation.html', 'utf8');
+  } catch (error) {
+    console.error('[EMAIL] Failed to read signup confirmation template:', error);
+    // Fallback to basic template
+    emailTemplate = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333;">Welcome to Discourse AI, ${name}!</h2>
+        <p>Thank you for registering. Please verify your email address to complete your account setup.</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${verificationUrl}" 
+             style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+            Verify Email Address
+          </a>
+        </div>
+        <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+        <p style="word-break: break-all; color: #666;">${verificationUrl}</p>
+        <p>This link will expire in 24 hours.</p>
+        <p>If you didn't create this account, please ignore this email.</p>
+      </div>
+    `;
+  }
+  
+  // Replace template variables
+  const htmlContent = emailTemplate
+    .replace(/\{\{ \.Name \}\}/g, name)
+    .replace(/\{\{ \.ConfirmationURL \}\}/g, verificationUrl)
+    .replace(/\{\{ \.CurrentYear \}\}/g, currentYear.toString());
+  
+  const mailOptions = {
+    from: process.env.SMTP_FROM || 'noreply@thediscourse.ai',
+    to: email,
+    subject: 'Verify Your Email - Discourse AI',
+    html: htmlContent
+  };
+  
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`[EMAIL] Verification email sent to ${email}`);
+    return true;
+  } catch (error) {
+    console.error('[EMAIL] Failed to send verification email:', error);
+    throw new Error('Failed to send verification email');
+  }
+};
+
+// Send password reset email
+const sendPasswordResetEmail = async (email, token, name) => {
+  const transporter = createTransporter();
+  if (!transporter) {
+    throw new Error('SMTP not configured');
+  }
+  
+  const resetUrl = `${process.env.FRONTEND_URL || 'https://thediscourse.ai'}/reset-password?token=${token}`;
+  const currentYear = new Date().getFullYear();
+  
+  // Read and render the password reset email template
+  let emailTemplate;
+  try {
+    emailTemplate = await fs.promises.readFile('./server/email-templates/password-reset.html', 'utf8');
+  } catch (error) {
+    console.error('[EMAIL] Failed to read password reset template:', error);
+    // Fallback to basic template
+    emailTemplate = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333;">Password Reset Request</h2>
+        <p>Hello ${name},</p>
+        <p>We received a request to reset your password. Click the button below to create a new password:</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${resetUrl}" 
+             style="background-color: #DC2626; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+            Reset Password
+          </a>
+        </div>
+        <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+        <p style="word-break: break-all; color: #666;">${resetUrl}</p>
+        <p>This link will expire in 1 hour.</p>
+        <p>If you didn't request a password reset, please ignore this email.</p>
+        <p>Your password will remain unchanged.</p>
+      </div>
+    `;
+  }
+  
+  // Replace template variables
+  const htmlContent = emailTemplate
+    .replace(/\{\{ \.Name \}\}/g, name)
+    .replace(/\{\{ \.ResetURL \}\}/g, resetUrl)
+    .replace(/\{\{ \.CurrentYear \}\}/g, currentYear.toString());
+  
+  const mailOptions = {
+    from: process.env.SMTP_FROM || 'noreply@thediscourse.ai',
+    to: email,
+    subject: 'Reset Your Password - Discourse AI',
+    html: htmlContent
+  };
+  
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`[EMAIL] Password reset email sent to ${email}`);
+    return true;
+  } catch (error) {
+    console.error('[EMAIL] Failed to send password reset email:', error);
+    throw new Error('Failed to send password reset email');
+  }
+};
+
+const app = express();
+
+
+
+// --- CORE MIDDLEWARE ---
+// Removed Private State Token restrictions to avoid console violations and allow embedded widgets to operate
+app.use((req, res, next) => {
+  try {
+    // Intentionally omit PST directives; other security headers are managed elsewhere
+  } catch {}
+  next();
+});
+// Apply compression to all responses - disabled to prevent decoding errors
+// app.use(compression());
+
+// Set reverse proxy trust for correct protocol/IP detection
+// Use a more secure trust proxy setting to avoid rate limiter warnings
+const trustProxySetting = process.env.TRUST_PROXY;
+if (trustProxySetting === 'true' || trustProxySetting === '1') {
+  // Only trust the first proxy (most secure)
+  app.set('trust proxy', 1);
+} else if (trustProxySetting === 'false' || trustProxySetting === '0') {
+  // Don't trust any proxies
+  app.set('trust proxy', false);
+} else {
+  // Default: trust only the first proxy
+  app.set('trust proxy', 1);
+}
+const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || 'https://thediscourse.ai,https://api.thediscourse.ai')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    return cb(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization']
+}));
+
+// Ensure caches vary by Origin and prevent compression issues
+app.use((req, res, next) => {
+  res.header('Vary', 'Origin');
+  
+  // Explicitly disable compression for this response to prevent decoding errors
+  res.setHeader('Content-Encoding', 'identity');
+  
+  // Log compression-related headers for debugging
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[DEBUG] Request headers:', {
+      'accept-encoding': req.get('Accept-Encoding'),
+      'user-agent': req.get('User-Agent')?.substring(0, 50)
+    });
+  }
+  
+  next();
+});
+
+// Security headers to prevent permissions policy violations and resource blocking
+app.use((req, res, next) => {
+  res.setHeader('Permissions-Policy', 'payment=(self), geolocation=(self), microphone=(self), camera=(self), private-state-token-redemption=(), private-state-token-issuance=()');
+  
+  // Content Security Policy to allow Stripe resources and prevent violations
+  res.setHeader('Content-Security-Policy', [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://r.stripe.com",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: https: http:",
+    "font-src 'self' data:",
+    "connect-src 'self' https://api.stripe.com https://r.stripe.com https://js.stripe.com",
+    "frame-src 'self' https://js.stripe.com https://hooks.stripe.com",
+    "object-src 'none'",
+    "base-uri 'self'"
+  ].join('; '));
+  
+  // Additional headers to prevent Stripe resource blocking
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  
+  next();
+});
+
+// Stripe webhook route - must come BEFORE JSON parsing middleware
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  console.log('[Stripe] Webhook received, STRIPE_WEBHOOK_SECRET:', STRIPE_WEBHOOK_SECRET ? 'SET' : 'NOT SET');
+  console.log('[Stripe] Webhook headers:', req.headers);
+  console.log('[Stripe] Request body type:', typeof req.body);
+  console.log('[Stripe] Request body length:', req.body ? req.body.length : 'undefined');
+  
+  let event;
+  try {
+    const sig = req.headers['stripe-signature'];
+    console.log('[Stripe] Stripe signature header:', sig ? 'PRESENT' : 'MISSING');
+    
+    // Ensure body is a Buffer for Stripe verification
+    let rawBody;
+    if (Buffer.isBuffer(req.body)) {
+      rawBody = req.body;
+    } else if (typeof req.body === 'string') {
+      rawBody = Buffer.from(req.body, 'utf8');
+    } else if (typeof req.body === 'object') {
+      rawBody = Buffer.from(JSON.stringify(req.body), 'utf8');
+    } else {
+      throw new Error(`Unexpected body type: ${typeof req.body}`);
+    }
+    
+    console.log('[Stripe] Raw body type:', typeof rawBody);
+    console.log('[Stripe] Raw body length:', rawBody.length);
+    
+    event = stripe.webhooks.constructEvent(rawBody, sig, STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    console.error('[Stripe] Webhook signature verification failed:', err.message);
+    console.error('[Stripe] Error details:', { 
+      STRIPE_WEBHOOK_SECRET: !!STRIPE_WEBHOOK_SECRET, 
+      sig: !!sig,
+      bodyType: typeof req.body,
+      bodyLength: req.body ? req.body.length : 'undefined'
+    });
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  console.log(`[Stripe] Webhook: Received event type: ${event.type}`);
+  
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object;
+    console.log(`[Stripe] Webhook: checkout.session.completed received for session: ${session.id}`);
+    console.log(`[Stripe] Webhook: Session metadata:`, session.metadata);
+    console.log(`[Stripe] Webhook: Session subscription:`, session.subscription);
+    
+    // Handle regular user payment (existing users)
+    if (session.metadata?.userId) {
+      const userId = session.metadata.userId;
+      const user = db.data.users.find(u => u.id === userId);
+      if (user) {
+        // Store Stripe customer ID if not already present
+        if (session.customer && !user.stripeCustomerId) {
+          user.stripeCustomerId = session.customer;
+          console.log(`[Stripe] Stored Stripe customer ID ${session.customer} for user ${userId}`);
+        }
+        
+        user.courseCredits = (user.courseCredits || 0) + 10;
+        await db.write();
+        console.log(`[Stripe] Added 10 credits to existing user ${userId}`);
+      }
+    }
+    
+    // Handle registration subscription (new users)
+    if (session.metadata?.registrationEmail) {
+      const registrationEmail = session.metadata.registrationEmail;
+      const registrationPassword = session.metadata.registrationPassword;
+      
+      console.log(`[Stripe] Registration subscription started for email: ${registrationEmail}`);
+      
+      // Create the user account immediately after successful payment
+      try {
+        // Check if user already exists
+        let existingUser = db.data.users.find(u => u.email === registrationEmail);
+        if (existingUser) {
+          console.log(`[Stripe] User already exists: ${registrationEmail}`);
+          // Update existing user with subscription info
+          existingUser.stripeSubscriptionId = session.subscription;
+          existingUser.subscriptionStatus = 'active';
+          existingUser.trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(); // 14 days from now
+          existingUser.updatedAt = new Date().toISOString();
+          
+          // Store Stripe customer ID if not already present
+          if (session.customer && !existingUser.stripeCustomerId) {
+            existingUser.stripeCustomerId = session.customer;
+            console.log(`[Stripe] Stored Stripe customer ID ${session.customer} for existing user ${existingUser.id}`);
+          }
+          
+          await db.write();
+        } else {
+          // Create new user account with proper verification token
+          const verificationToken = generateVerificationToken();
+          const newUser = {
+            id: generateId(),
+            email: registrationEmail.toLowerCase(),
+            password: registrationPassword,
+            name: registrationEmail.split('@')[0],
+            createdAt: new Date().toISOString(),
+            emailVerified: false,
+            verificationToken: verificationToken,
+            verificationTokenCreatedAt: new Date().toISOString(),
+            stripeSubscriptionId: session.subscription,
+            stripeCustomerId: session.customer, // Store Stripe customer ID
+            subscriptionStatus: 'active',
+            trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+            courseCredits: 10,
+            gdprConsent: true,
+            policyVersion: '1.0',
+            source: 'stripe_registration'
+          };
+          
+          db.data.users.push(newUser);
+          console.log(`[Stripe] Created new user account: ${registrationEmail} with ID: ${newUser.id}`);
+          
+          // Save to database first
+          await db.write();
+          console.log(`[Stripe] User saved to database: ${registrationEmail}`);
+          
+          // Send email verification email
+          try {
+            console.log(`[Stripe] Attempting to send verification email to: ${registrationEmail}`);
+            await sendVerificationEmail(registrationEmail, verificationToken, newUser.name);
+            console.log(`[Stripe] Email verification sent successfully to: ${registrationEmail}`);
+            
+            // Update user record to confirm email was sent
+            newUser.verificationEmailSent = true;
+            newUser.verificationEmailSentAt = new Date().toISOString();
+            await db.write();
+            
+          } catch (emailError) {
+            console.error('[Stripe] Failed to send email verification:', emailError);
+            newUser.verificationEmailSent = false;
+            newUser.verificationEmailError = emailError.message;
+            await db.write();
+          }
+        }
+      } catch (err) {
+        console.error('[Stripe] Error creating user account:', err);
+      }
+    } else {
+      console.log(`[Stripe] Webhook: No registrationEmail found in metadata:`, session.metadata);
+    }
+  }
+
+  // Handle subscription events to keep database in sync
+  if (event.type === 'customer.subscription.created') {
+    const subscription = event.data.object;
+    console.log(`[Stripe] New subscription created: ${subscription.id} for customer: ${subscription.customer}`);
+    
+    // Update user record with subscription info
+    try {
+      const user = db.data.users.find(u => u.stripeCustomerId === subscription.customer);
+      if (user) {
+        user.stripeSubscriptionId = subscription.id;
+        user.subscriptionStatus = subscription.status;
+        user.subscriptionCreatedAt = new Date(subscription.created * 1000).toISOString();
+        user.currentPeriodEnd = subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null;
+        user.updatedAt = new Date().toISOString();
+        await db.write();
+        console.log(`[Stripe] Updated user ${user.id} with subscription ${subscription.id}`);
+      } else {
+        console.log(`[Stripe] No user found with Stripe customer ID: ${subscription.customer}`);
+      }
+    } catch (err) {
+      console.error('[Stripe] Error updating user with subscription:', err);
+    }
+  }
+
+  if (event.type === 'customer.subscription.updated') {
+    const subscription = event.data.object;
+    console.log(`[Stripe] Subscription updated: ${subscription.id}, status: ${subscription.status}`);
+    
+    // Update user record with subscription status changes
+    try {
+      const user = db.data.users.find(u => u.stripeCustomerId === subscription.customer);
+      if (user) {
+        user.subscriptionStatus = subscription.status;
+        user.currentPeriodEnd = subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null;
+        user.updatedAt = new Date().toISOString();
+        
+        // If subscription is canceled, update the status
+        if (subscription.canceled_at) {
+          user.subscriptionCanceledAt = new Date(subscription.canceled_at * 1000).toISOString();
+        }
+        
+        await db.write();
+        console.log(`[Stripe] Updated user ${user.id} subscription status to: ${subscription.status}`);
+      }
+    } catch (err) {
+      console.error('[Stripe] Error updating user subscription status:', err);
+    }
+  }
+
+  if (event.type === 'customer.subscription.deleted') {
+    const subscription = event.data.object;
+    console.log(`[Stripe] Subscription deleted: ${subscription.id} for customer: ${subscription.customer}`);
+    
+    // Update user record to reflect subscription deletion
+    try {
+      const user = db.data.users.find(u => u.stripeCustomerId === subscription.customer);
+      if (user) {
+        user.subscriptionStatus = 'canceled';
+        user.subscriptionCanceledAt = new Date().toISOString();
+        user.updatedAt = new Date().toISOString();
+        await db.write();
+        console.log(`[Stripe] Marked subscription as canceled for user ${user.id}`);
+      }
+    } catch (err) {
+      console.error('[Stripe] Error updating user subscription deletion:', err);
+    }
+  }
+
+  if (event.type === 'invoice.payment_succeeded') {
+    const invoice = event.data.object;
+    if (invoice.subscription) {
+      console.log(`[Stripe] Payment succeeded for subscription: ${invoice.subscription}`);
+    }
+  }
+
+  if (event.type === 'invoice.payment_failed') {
+    const invoice = event.data.object;
+    if (invoice.subscription) {
+      console.log(`[Stripe] Payment failed for subscription: ${invoice.subscription}`);
+      
+      // Update user subscription status to reflect payment failure
+      try {
+        const user = db.data.users.find(u => u.stripeSubscriptionId === invoice.subscription);
+        if (user) {
+          user.subscriptionStatus = 'past_due';
+          user.updatedAt = new Date().toISOString();
+          await db.write();
+          console.log(`[Stripe] Updated user ${user.id} subscription status to past_due due to payment failure`);
+        }
+      } catch (err) {
+        console.error('[Stripe] Error updating user payment failure status:', err);
+      }
+    }
+  }
+
+  res.json({ received: true });
+});
+
+// Parse JSON bodies
+// File upload middleware - must come BEFORE express.json() for FormData
+app.use(fileUpload({
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  abortOnLimit: true,
+  createParentPath: true,
+  useTempFiles: true,
+  tempFileDir: '/tmp/',
+  debug: process.env.NODE_ENV === 'development'
+}));
+
+// JSON and URL-encoded middleware - must come AFTER fileUpload
+app.use(express.json());
+app.use(cookieParser());
+app.use(express.urlencoded({ extended: true }));
+
+// Logging flags
+const SHOULD_LOG_AUTH = String(process.env.AUTH_LOG || '').toLowerCase() === 'true';
+
+// Admin emails allowed to hit maintenance endpoints (comma-separated)
+const ADMIN_EMAILS = new Set(
+  String(process.env.ADMIN_EMAILS || '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean)
+);
+
+// --- IMAGE SEARCH SETTINGS & HELPERS (top-level) ---
+const FETCH_TIMEOUT_MS = Number(process.env.IMAGE_SEARCH_TIMEOUT_MS || 8000);
+const DISALLOWED_IMAGE_URL_SUBSTRINGS = [
+  'e613b3a12ea22955fd9868b841af153a79db6a07',
+  'api-proxy.php/cached-images/',
+  // Explicitly block this Wikipedia image from appearing in results
+  'upload.wikimedia.org/wikipedia/commons/8/8a/PGM-19A_Jupiter_missile-02.jpg'
+];
+const EXTRA_NEGATIVE_TERMS = [
+  'orchestra','symphony','concert','conductor','musician','music','band','choir',
+  'violin','cello','piano','guitar','stage','auditorium',
+  // Finance/markets/modern economy terms to avoid when subject is historical
+  'stock','stocks','stock market','market','markets','trader','traders','trading','broker','brokers','wall street','dow','nasdaq','nyse','finance','financial','economy','economic','bank','banking','banker','money','currency','currencies','dollar','euro','pound','yen','chart','graph','candlestick','ticker','exchange','bond','bonds','forex','cryptocurrency','bitcoin','ethereum','ftse','s&p','sp500','gold price','oil price','ipo','merger','acquisition','bankruptcy','bailout','recession',
+  // Modern conflicts and contemporary military-specific terms (blocked unless present in subject)
+  'world war i','world war 1','ww1','wwi',
+  'world war ii','world war 2','ww2','wwii','nazi','nazis','hitler','swastika',
+  'cold war','berlin wall','cuban missile crisis',
+  'vietnam war','korean war','gulf war','iraq war','war in iraq','afghanistan war','war in afghanistan',
+  'falklands war','yom kippur war','six-day war','six day war','bosnian war','kosovo war','syrian civil war','ukraine war','russian invasion','donbas','crimea','chechen war','chechnya',
+  'american civil war','us civil war','spanish civil war','napoleonic wars','napoleonic war','crimean war','boer war','anglo-boer war',
+  // Modern weaponry, platforms, and gear
+  'tank','tanks','machine gun','assault rifle','ak-47','ak47','m16','m4','missile','missiles','rocket','rockets','icbm','warhead','ballistic',
+  'nuclear','nuclear bomb','atomic bomb','hydrogen bomb','thermonuclear','hiroshima','nagasaki',
+  'bomber','fighter jet','jet fighter','fighter','jet','stealth','helicopter','attack helicopter','apache','black hawk','uav','drone','drones',
+  'howitzer','artillery gun','grenade','grenades','rocket launcher','bazooka','rpg',
+  'submarine','submarines','aircraft carrier','carrier strike group','destroyer','frigate','battleship',
+  'navy seals','special forces','camo','camouflage','kevlar','night vision',
+  // Seasonal/ambiguous terms to avoid when subject implies historical events
+  'autumn','fall season','fall foliage','autumn foliage','autumn leaves','fall leaves','leaf','leaves','pumpkin','halloween','thanksgiving','maple leaves','autumn colors','autumnal','scarecrow','harvest festival','corn maze'
+];
+
+const normalizeForCompare = (str) => String(str || '').toLowerCase().trim();
+
+const normalizeUrlForCompare = (url) => {
+    try {
+        if (!url) return '';
+        return String(url).toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '').trim();
+    } catch {
+        return String(url || '').trim();
+    }
+};
+
+function containsAny(text, terms) {
+  const lower = (text || '').toLowerCase();
+  return terms.some(t => lower.includes(t));
+}
+
+function getDynamicExtraNegatives(subject) {
+  const subj = (subject || '').toLowerCase();
+  return EXTRA_NEGATIVE_TERMS.filter(term => !subj.includes(term));
+}
+
+async function fetchWithTimeout(resource, options = {}, timeoutMs = FETCH_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(resource, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// Extract the main text from lesson content
+function extractMainLessonText(content) {
+  try {
+    if (!content) return '';
+    if (typeof content === 'string') return content;
+    const parts = [content.introduction, content.main_content, content.conclusion]
+      .filter(Boolean)
+      .map((s) => String(s))
+      .join(' ');
+    return parts;
+  } catch {
+    return '';
+  }
+}
+
+// Enhanced heuristic to score image candidates for relevance with full course context
 function computeImageRelevanceScore(subject, mainText, meta, courseContext = {}) {
   try {
     const subj = String(subject || '').toLowerCase();
@@ -8254,14 +8961,16 @@ app.post('/api/account/delete', authenticateToken, async (req, res) => {
 
           if (activeSubscription) {
             console.log(`[ACCOUNT DELETE] User ${userId} has active subscription: ${activeSubscription.id} (${activeSubscription.status})`);
-            return res.status(403).json({
+            const errorResponse = {
               error: 'Cannot delete account with active subscription',
               hasActiveSubscription: true,
               subscriptionId: activeSubscription.id,
               status: activeSubscription.status,
               currentPeriodEnd: activeSubscription.current_period_end,
               message: 'You cannot delete your account while you have an active subscription. Please cancel your plan first.'
-            });
+            };
+            console.log(`[ACCOUNT DELETE] Blocking deletion with 403 response:`, errorResponse);
+            return res.status(403).json(errorResponse);
           } else {
             console.log(`[ACCOUNT DELETE] User ${userId} has no active subscriptions, proceeding with deletion`);
           }
