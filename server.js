@@ -497,6 +497,27 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
   if (event.type === 'customer.subscription.updated') {
     const subscription = event.data.object;
     console.log(`[Stripe] Subscription updated: ${subscription.id}, status: ${subscription.status}`);
+    
+    // Check if subscription was cancelled
+    if (subscription.cancel_at_period_end || subscription.canceled_at) {
+      console.log(`[Stripe] Subscription ${subscription.id} was cancelled`);
+      
+      try {
+        // Find user with this subscription ID and update their status
+        const user = db.data.users.find(u => u.stripeSubscriptionId === subscription.id);
+        if (user) {
+          user.subscriptionStatus = 'canceled';
+          user.subscriptionCanceledAt = new Date().toISOString();
+          user.updatedAt = new Date().toISOString();
+          await db.write();
+          console.log(`[Stripe] Updated user ${user.id} subscription status to: canceled (from updated event)`);
+        } else {
+          console.log(`[Stripe] No user found with subscription ID: ${subscription.id}`);
+        }
+      } catch (err) {
+        console.error('[Stripe] Error updating user subscription status from updated event:', err);
+      }
+    }
   }
 
   if (event.type === 'invoice.payment_succeeded') {
@@ -7850,6 +7871,30 @@ app.get('/api/billing/check-subscription-status', authenticateToken, async (req,
         message: 'Subscription canceled'
       });
     }
+    
+    // Also check if user has a cancelled subscription in Stripe that hasn't been updated locally
+    if (dbUser?.stripeSubscriptionId) {
+      try {
+        const stripeSub = await stripe.subscriptions.retrieve(dbUser.stripeSubscriptionId);
+        if (stripeSub.cancel_at_period_end || stripeSub.canceled_at) {
+          // Update local database to reflect cancellation
+          dbUser.subscriptionStatus = 'canceled';
+          dbUser.subscriptionCanceledAt = new Date().toISOString();
+          dbUser.updatedAt = new Date().toISOString();
+          await db.write();
+          console.log(`[BILLING] Updated user ${userId} subscription status to: canceled (found cancelled in Stripe)`);
+          
+          return res.json({
+            hasActiveSubscription: false,
+            status: 'canceled',
+            message: 'Subscription canceled'
+          });
+        }
+      } catch (stripeError) {
+        console.log(`[BILLING] Could not retrieve Stripe subscription for user ${userId}:`, stripeError.message);
+        // Continue with normal flow if Stripe check fails
+      }
+    }
 
     if (!stripe) {
       // If Stripe not configured, fall back to local database check
@@ -7889,9 +7934,15 @@ app.get('/api/billing/check-subscription-status', authenticateToken, async (req,
       limit: 10
     });
 
-    const activeSubscription = subscriptions.data.find(sub => 
-      ['active', 'trialing', 'past_due', 'unpaid'].includes(sub.status)
-    );
+    // Check if any subscription is truly active (not cancelled)
+    const activeSubscription = subscriptions.data.find(sub => {
+      // If subscription is cancelled, it's not active regardless of status
+      if (sub.cancel_at_period_end || sub.canceled_at) {
+        return false;
+      }
+      // Only consider these statuses as active if not cancelled
+      return ['active', 'trialing', 'past_due', 'unpaid'].includes(sub.status);
+    });
 
     if (activeSubscription) {
       console.log(`[BILLING] User ${userId} has active subscription: ${activeSubscription.id} (${activeSubscription.status})`);
@@ -7917,11 +7968,29 @@ app.get('/api/billing/check-subscription-status', authenticateToken, async (req,
       // Update local database if it still shows active
       if (dbUser && dbUser.subscriptionStatus && 
           ['active', 'trialing', 'past_due', 'unpaid'].includes(dbUser.subscriptionStatus)) {
-        dbUser.subscriptionStatus = 'canceled';
-        dbUser.subscriptionCanceledAt = new Date().toISOString();
-        dbUser.updatedAt = new Date().toISOString();
-        await db.write();
-        console.log(`[BILLING] Updated local DB subscription status to: canceled (no active Stripe subscription)`);
+        // Double-check if the subscription was actually cancelled
+        let shouldMarkAsCanceled = true;
+        if (dbUser.stripeSubscriptionId) {
+          try {
+            const stripeSub = await stripe.subscriptions.retrieve(dbUser.stripeSubscriptionId);
+            if (stripeSub.cancel_at_period_end || stripeSub.canceled_at) {
+              shouldMarkAsCanceled = true;
+            } else if (['active', 'trialing', 'past_due', 'unpaid'].includes(stripeSub.status)) {
+              shouldMarkAsCanceled = false; // Don't mark as canceled if Stripe shows it's still active
+            }
+          } catch (stripeError) {
+            console.log(`[BILLING] Could not retrieve Stripe subscription for user ${userId}:`, stripeError.message);
+            // Default to marking as canceled if we can't check Stripe
+          }
+        }
+        
+        if (shouldMarkAsCanceled) {
+          dbUser.subscriptionStatus = 'canceled';
+          dbUser.subscriptionCanceledAt = new Date().toISOString();
+          dbUser.updatedAt = new Date().toISOString();
+          await db.write();
+          console.log(`[BILLING] Updated local DB subscription status to: canceled (no active Stripe subscription)`);
+        }
       }
       
       return res.json({
@@ -7947,10 +8016,10 @@ app.get('/api/billing/check-subscription-status', authenticateToken, async (req,
       });
     } catch (fallbackError) {
       console.error('[BILLING] Fallback check also failed:', fallbackError);
-      return res.status(500).json({ 
-        error: 'Failed to check subscription status',
-        hasActiveSubscription: false 
-      });
+    return res.status(500).json({ 
+      error: 'Failed to check subscription status',
+      hasActiveSubscription: false 
+    });
     }
   }
 });
@@ -8006,9 +8075,15 @@ async function checkSubscriptionStatusFromStripe(userId) {
       limit: 10
     });
 
-    const activeSubscription = subscriptions.data.find(sub => 
-      ['active', 'trialing', 'past_due', 'unpaid'].includes(sub.status)
-    );
+    // Check if any subscription is truly active (not cancelled)
+    const activeSubscription = subscriptions.data.find(sub => {
+      // If subscription is cancelled, it's not active regardless of status
+      if (sub.cancel_at_period_end || sub.canceled_at) {
+        return false;
+      }
+      // Only consider these statuses as active if not cancelled
+      return ['active', 'trialing', 'past_due', 'unpaid'].includes(sub.status);
+    });
 
     if (activeSubscription) {
       return {
