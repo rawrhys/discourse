@@ -7810,76 +7810,7 @@ app.get('/api/billing/status', authenticateToken, async (req, res) => {
   }
 });
 
-// Billing: Cancel subscription (optionally at period end) and collect feedback only if canceled
-app.post('/api/billing/cancel-subscription', authenticateToken, async (req, res) => {
-  try {
-    if (!stripe) return res.status(500).json({ error: 'Stripe not configured' });
-    const { cancelAtPeriodEnd = true, feedback = '' } = req.body || {};
-    const user = req.user;
 
-    // Ensure we have a Stripe customer ID
-    let customerId = user.stripeCustomerId;
-    const dbUser = db.data.users.find(u => u.id === user.id);
-    if (!customerId && dbUser?.stripeCustomerId) customerId = dbUser.stripeCustomerId;
-    if (!customerId) {
-      const customer = await stripe.customers.create({ email: user.email, metadata: { userId: user.id } });
-      customerId = customer.id;
-      if (dbUser) { dbUser.stripeCustomerId = customerId; await db.write(); }
-    }
-
-    // Find an active or trialing subscription
-    const subs = await stripe.subscriptions.list({ customer: customerId, status: 'all', limit: 10 });
-    const target = (subs?.data || []).find(s => ['active', 'trialing', 'past_due', 'unpaid'].includes(s.status));
-    if (!target) return res.status(404).json({ error: 'No active subscription found' });
-
-    let updated;
-    if (cancelAtPeriodEnd) {
-      updated = await stripe.subscriptions.update(target.id, { cancel_at_period_end: true });
-    } else {
-      updated = await stripe.subscriptions.cancel(target.id);
-    }
-
-    const canceled = !!updated?.canceled_at || !!updated?.cancel_at_period_end;
-
-    // Only send feedback email if cancellation succeeded and feedback provided
-    if (canceled && feedback && process.env.SMTP_HOST && process.env.SMTP_PORT && process.env.SMTP_USER && process.env.SMTP_PASS) {
-      try {
-        const transporter = nodemailer.createTransport({
-          host: process.env.SMTP_HOST,
-          port: process.env.SMTP_PORT,
-          secure: process.env.SMTP_SECURE === 'true',
-          auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-        });
-
-        const emailContent = [
-          `A user canceled their subscription.`,
-          `User: ${user.email} (${user.id})`,
-          `Customer: ${customerId}`,
-          `Subscription: ${updated.id}`,
-          `Cancel at period end: ${updated.cancel_at_period_end ? 'Yes' : 'No'}`,
-          '',
-          'Feedback:',
-          feedback
-        ].join('\n');
-
-        await transporter.sendMail({
-          from: process.env.SMTP_FROM || 'noreply@thediscourse.ai',
-          to: 'admin@thediscourse.ai',
-          subject: 'Subscription Cancellation Feedback',
-          text: emailContent,
-          html: emailContent.replace(/\n/g, '<br>')
-        });
-      } catch (emailErr) {
-        console.warn('[BILLING] Failed to send cancellation feedback email:', emailErr?.message);
-      }
-    }
-
-    return res.json({ success: true, subscription: { id: updated.id, status: updated.status, cancel_at_period_end: updated.cancel_at_period_end } });
-  } catch (e) {
-    console.error('[BILLING] Failed to cancel subscription:', e);
-    return res.status(500).json({ error: 'Failed to cancel subscription' });
-  }
-});
 
 // Handle user creation from Stripe webhook
 app.post('/api/auth/create-user-from-webhook', async (req, res) => {

@@ -221,9 +221,7 @@ const api = {
     getBillingStatus: () =>
         apiClient('/api/billing/status'),
 
-    // Cancel subscription and optionally send feedback
-    cancelSubscription: (cancelAtPeriodEnd = true, feedback = '') =>
-        apiClient('/api/billing/cancel-subscription', { method: 'POST', body: JSON.stringify({ cancelAtPeriodEnd, feedback }) }),
+
 
     // Account deletion
     deleteAccount: (confirm) =>
