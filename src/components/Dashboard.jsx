@@ -124,9 +124,6 @@ const Dashboard = () => {
   // Get the user's name from backend profile data, fallback to auth context
   const userName = formatUserName(user?.email, userProfile?.name || user?.name);
   
-  // TEMPORARY OVERRIDE FOR TESTING - Force the name to be correct
-  const displayName = 'Rhys Higgs';
-  
   // Immediate debug logging to see what's happening
   console.log('🔍 [IMMEDIATE DEBUG] Name formatting debug:', {
     userEmail: user?.email,
@@ -134,7 +131,8 @@ const Dashboard = () => {
     userName: user?.name,
     formatUserNameResult: userName,
     formatUserNameCalled: 'YES',
-    displayNameOverride: displayName
+    fullUserObject: user,
+    fullUserProfile: userProfile
   });
   
   // Debug log to verify user data
@@ -655,18 +653,28 @@ const Dashboard = () => {
           const cleanUrl = window.location.pathname;
           window.history.replaceState({}, document.title, cleanUrl);
           
-          // Refresh onboarding status first
-          await fetchOnboardingStatus();
-          console.log('🎓 [DASHBOARD] Onboarding status refreshed');
+          // Create async function to handle onboarding completion refresh
+          const handleOnboardingCompletion = async () => {
+            try {
+              // Refresh onboarding status first
+              await fetchOnboardingStatus();
+              console.log('🎓 [DASHBOARD] Onboarding status refreshed');
+              
+              // Then refresh courses to hide the onboarding course
+              await fetchSavedCourses(true);
+              console.log('🎓 [DASHBOARD] Courses refreshed after onboarding completion');
+              
+              // Show success message
+              setSuccessMessage('🎉 Congratulations! You have completed the onboarding course. Welcome to Discourse AI!');
+              setShowSuccessToast(true);
+              setTimeout(() => setShowSuccessToast(false), 8000);
+            } catch (error) {
+              console.error('🎓 [DASHBOARD] Error handling onboarding completion:', error);
+            }
+          };
           
-          // Then refresh courses to hide the onboarding course
-          await fetchSavedCourses(true);
-          console.log('🎓 [DASHBOARD] Courses refreshed after onboarding completion');
-          
-          // Show success message
-          setSuccessMessage('🎉 Congratulations! You have completed the onboarding course. Welcome to Discourse AI!');
-          setShowSuccessToast(true);
-          setTimeout(() => setShowSuccessToast(false), 8000);
+          // Call the async function
+          handleOnboardingCompletion();
         }
         
       } catch (error) {
@@ -728,7 +736,7 @@ const Dashboard = () => {
               <h1 className="text-xl font-semibold">Course Dashboard</h1>
             </div>
             <div className="flex items-center space-x-2 sm:space-x-4 wrap-on-mobile">
-                              <span className="text-sm text-gray-600">Welcome, {displayName}!</span>
+                              <span className="text-sm text-gray-600">Welcome, {userName}!</span>
 
               <button
                 onClick={() => setShowReportProblem(true)}
