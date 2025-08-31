@@ -59,10 +59,26 @@ const Dashboard = () => {
     setSuccessMessage(message);
     setShowSuccessToast(true);
     
+    // Clear any existing timeout
+    if (window.successToastTimeout) {
+      clearTimeout(window.successToastTimeout);
+    }
+    
     // Auto-dismiss after specified timeout
-    setTimeout(() => {
+    window.successToastTimeout = setTimeout(() => {
       setShowSuccessToast(false);
+      window.successToastTimeout = null;
     }, timeoutMs);
+  }, []);
+  
+  // Force clear success toast (for manual dismissal)
+  const clearSuccessToast = useCallback(() => {
+    setShowSuccessToast(false);
+    setSuccessMessage('');
+    if (window.successToastTimeout) {
+      clearTimeout(window.successToastTimeout);
+      window.successToastTimeout = null;
+    }
   }, []);
 
   // Helper to refresh credits from backend and update state
@@ -183,6 +199,20 @@ const Dashboard = () => {
       setIsUpdatingCourseState(false);
     };
   }, []);
+  
+  // Cleanup effect to clear success toast and timeouts on unmount or user change
+  useEffect(() => {
+    return () => {
+      // Clear any pending timeouts
+      if (window.successToastTimeout) {
+        clearTimeout(window.successToastTimeout);
+        window.successToastTimeout = null;
+      }
+      // Reset toast state
+      setShowSuccessToast(false);
+      setSuccessMessage('');
+    };
+  }, [user?.id]); // Re-run when user changes
 
   // Setup SSE connection for course generation notifications
   useEffect(() => {
@@ -277,17 +307,39 @@ const Dashboard = () => {
       });
       
       if (recentCourses.length > 0 && !showSuccessToast) {
-        logger.info('🎉 [DASHBOARD] Found recently generated courses on dashboard load:', recentCourses.map(c => c.title));
-        setSuccessMessage(`Welcome back! You have ${recentCourses.length} recently generated course${recentCourses.length > 1 ? 's' : ''} available.`);
-        setShowSuccessToast(true);
+        // Check if we've already shown this message recently (within last 30 minutes)
+        const lastShownKey = `welcomeBackShown_${user.id}`;
+        const lastShown = localStorage.getItem(lastShownKey);
+        const thirtyMinutesAgo = Date.now() - 30 * 60 * 1000;
         
-        // Hide success message after a delay
-        setTimeout(() => {
-          setShowSuccessToast(false);
-        }, 5000);
+        if (!lastShown || parseInt(lastShown) < thirtyMinutesAgo) {
+          logger.info('🎉 [DASHBOARD] Found recently generated courses on dashboard load:', recentCourses.map(c => c.title));
+          setSuccessMessage(`Welcome back! You have ${recentCourses.length} recently generated course${recentCourses.length > 1 ? 's' : ''} available.`);
+          setShowSuccessToast(true);
+          
+          // Mark as shown
+          localStorage.setItem(lastShownKey, Date.now().toString());
+          
+          // Hide success message after a delay
+          const timeoutId = setTimeout(() => {
+            setShowSuccessToast(false);
+          }, 5000);
+          
+          // Cleanup timeout on unmount or dependency change
+          return () => {
+            clearTimeout(timeoutId);
+            // Also clear the global timeout if it exists
+            if (window.successToastTimeout) {
+              clearTimeout(window.successToastTimeout);
+              window.successToastTimeout = null;
+            }
+          };
+        } else {
+          logger.debug('🔄 [DASHBOARD] Welcome back message already shown recently, skipping');
+        }
       }
     }
-  }, [user, savedCourses, showSuccessToast]);
+  }, [user, savedCourses]); // Removed showSuccessToast from dependencies to prevent re-triggering
 
   // Removed periodic and focus/visibility auto-refresh per request
 
@@ -642,7 +694,7 @@ const Dashboard = () => {
               </svg>
               <span className="font-medium">{successMessage}</span>
               <button
-                onClick={() => setShowSuccessToast(false)}
+                onClick={clearSuccessToast}
                 className="ml-2 text-white hover:text-green-100 transition-colors duration-200"
                 title="Dismiss notification"
               >
@@ -720,6 +772,24 @@ const Dashboard = () => {
                   Profile Loaded: {userProfile ? 'Yes' : 'No'}
                 </p>
                 <div className="mt-2 space-x-2">
+                  <button
+                    onClick={clearSuccessToast}
+                    className="px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600"
+                    title="Force clear stuck notification"
+                  >
+                    Clear Toast
+                  </button>
+                  <button
+                    onClick={() => {
+                      const lastShownKey = `welcomeBackShown_${user.id}`;
+                      localStorage.removeItem(lastShownKey);
+                      alert('Welcome back message reset. It will show again on next dashboard load.');
+                    }}
+                    className="px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600"
+                    title="Reset welcome back message"
+                  >
+                    Reset Welcome
+                  </button>
                   <button
                     onClick={async () => {
                       try {
