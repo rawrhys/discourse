@@ -413,6 +413,11 @@ const CourseDisplay = () => {
   const currentLessonIndex = currentModule?.lessons.findIndex(l => l.id === activeLessonId) ?? 0;
   const totalLessonsInModule = currentModule?.lessons?.length ?? 0;
   
+  // Calculate if this is the last lesson of the last module (for onboarding completion)
+  const currentModuleIndex = course?.modules?.findIndex(m => m.id === activeModuleId) ?? 0;
+  const isLastModule = currentModuleIndex === (course?.modules?.length ?? 0) - 1;
+  const isLastLessonOfLastModule = isLastModule && currentLessonIndex === totalLessonsInModule - 1;
+  
   // Debug logging to help identify the issue (only log once per render cycle)
   if (process.env.NODE_ENV === 'development') {
     console.log('[CourseDisplay] Module/Lesson Debug:', {
@@ -617,6 +622,7 @@ const CourseDisplay = () => {
                   activeModule={currentModule}
                   courseDescription={course.description}
                   course={course}
+                  isLastLessonOfLastModule={isLastLessonOfLastModule}
               />
             ) : (
               <div className="text-center text-gray-500 pt-10">

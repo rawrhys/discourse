@@ -467,7 +467,8 @@ const LessonView = ({
   imageUrlCounts = {},
   courseId,
   courseDescription = null,
-  course = null
+  course = null,
+  isLastLessonOfLastModule = false
 }) => {
   const { user } = useAuth(); // Add this line to get the user
   const { lessonId: lessonIdFromParams } = useParams();
@@ -494,6 +495,22 @@ const LessonView = ({
            course.title?.toLowerCase().includes('onboarding') ||
            course.id?.includes('discourse-ai-onboarding');
   }, [course]);
+  
+  // Debug logging for onboarding completion logic
+  useEffect(() => {
+    if (isOnboardingCourse && process.env.NODE_ENV === 'development') {
+      console.log('[LessonView] Onboarding completion debug:', {
+        isOnboardingCourse,
+        currentLessonIndex,
+        totalLessonsInModule,
+        isLastLessonOfLastModule,
+        courseTitle: course?.title,
+        courseId: course?.id,
+        moduleTitle: activeModule?.title,
+        moduleId: activeModule?.id
+      });
+    }
+  }, [isOnboardingCourse, currentLessonIndex, totalLessonsInModule, isLastLessonOfLastModule, course, activeModule]);
   
   // Use the lesson prop as the main lesson data
   const propLesson = lesson;
@@ -1916,6 +1933,44 @@ const LessonView = ({
         {/* Spacing between content and messages */}
         <div className="mb-4"></div>
         
+        {/* Onboarding completion banner - only show on last lesson of last module of onboarding course */}
+        {isOnboardingCourse && isLastLessonOfLastModule && (
+          <div className="mb-6 p-6 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg text-center">
+            <div className="mb-4">
+              <div className="text-6xl mb-2">🎉</div>
+              <h3 className="text-xl font-bold text-green-800 mb-2">Congratulations!</h3>
+              <p className="text-green-700 mb-4">
+                You've reached the end of the Discourse AI onboarding course. 
+                You now have all the knowledge and tools you need to create amazing learning experiences!
+              </p>
+            </div>
+            <button
+              onClick={async () => {
+                try {
+                  const response = await api.completeOnboarding();
+                  if (response.success) {
+                    // Show success message
+                    alert('🎉 Congratulations! You have completed the onboarding course. You will now have access to all platform features.');
+                    // Redirect to dashboard
+                    window.location.href = '/dashboard?onboarding=completed';
+                  } else {
+                    alert('Failed to complete onboarding. Please try again.');
+                  }
+                } catch (error) {
+                  console.error('Error completing onboarding:', error);
+                  alert('Error completing onboarding. Please try again.');
+                }
+              }}
+              className="px-8 py-4 bg-green-600 text-white font-bold text-lg rounded-lg hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-300 focus:ring-offset-2 transition-all duration-200 shadow-lg transform hover:scale-105"
+            >
+              🎓 Complete Onboarding Course
+            </button>
+            <p className="text-sm text-green-600 mt-3">
+              Click the button above to complete onboarding and unlock all platform features
+            </p>
+          </div>
+        )}
+        
         {!isOnboardingCourse && showFailMessage && (
           <div className="p-3 mb-4 bg-yellow-100 text-yellow-800 rounded text-center text-sm">
             To move to the next module, you must score 5/5 on all quizzes within this module.
@@ -2016,7 +2071,32 @@ const LessonView = ({
             </button>
           </div>
           
-          {/* Onboarding completion handled in dashboard; lesson view button removed */}
+          {/* Onboarding completion button - only show on last lesson of last module of onboarding course */}
+          {isOnboardingCourse && isLastLessonOfLastModule && (
+            <div className="flex justify-center mt-4">
+              <button
+                onClick={async () => {
+                  try {
+                    const response = await api.completeOnboarding();
+                    if (response.success) {
+                      // Show success message
+                      alert('🎉 Congratulations! You have completed the onboarding course. You will now have access to all platform features.');
+                      // Redirect to dashboard
+                      window.location.href = '/dashboard?onboarding=completed';
+                    } else {
+                      alert('Failed to complete onboarding. Please try again.');
+                    }
+                  } catch (error) {
+                    console.error('Error completing onboarding:', error);
+                    alert('Error completing onboarding. Please try again.');
+                  }
+                }}
+                className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors duration-200"
+              >
+                🎓 Complete Onboarding
+              </button>
+            </div>
+          )}
         </div>
       </footer>
     </div>
@@ -2052,7 +2132,10 @@ LessonView.propTypes = {
   usedImageUrls: PropTypes.array,
   imageTitleCounts: PropTypes.object,
   imageUrlCounts: PropTypes.object,
-  courseId: PropTypes.string
+  courseId: PropTypes.string,
+  courseDescription: PropTypes.string,
+  course: PropTypes.object,
+  isLastLessonOfLastModule: PropTypes.bool
 };
 
 export default memo(LessonView);

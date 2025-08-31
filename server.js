@@ -1,4 +1,4 @@
-﻿import express from 'express';
+import express from 'express';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import axios from 'axios';
@@ -57,6 +57,8 @@ console.log('[SERVER] SMTP_PORT:', process.env.SMTP_PORT || 'Default (587)');
 console.log('[SERVER] SMTP_SECURE:', process.env.SMTP_SECURE || 'Default (false)');
 console.log('[SERVER] FRONTEND_URL:', process.env.FRONTEND_URL || 'Default (https://thediscourse.ai)');
 console.log('[SERVER] JWT_SECRET:', process.env.JWT_SECRET ? 'Set' : 'Not set');
+console.log('[SERVER] STRIPE_WEBHOOK_SECRET:', process.env.STRIPE_WEBHOOK_SECRET ? 'Set' : 'Not set');
+console.log('[SERVER] STRIPE_SECRET_KEY:', process.env.STRIPE_SECRET_KEY ? 'Set' : 'Not set');
 console.log('[SERVER] PORT:', process.env.PORT || 'Default (4003)');
 console.log('[SERVER] NODE_ENV:', process.env.NODE_ENV || 'Not set');
 
@@ -281,7 +283,7 @@ app.use((req, res, next) => {
   } catch {}
   next();
 });
-// Apply compression to all responses
+// Apply compression to all responses - disabled to prevent decoding errors
 // app.use(compression());
 
 // Set reverse proxy trust for correct protocol/IP detection
@@ -312,9 +314,21 @@ app.use(cors({
   allowedHeaders: ['Content-Type','Authorization']
 }));
 
-// Ensure caches vary by Origin
+// Ensure caches vary by Origin and prevent compression issues
 app.use((req, res, next) => {
   res.header('Vary', 'Origin');
+  
+  // Explicitly disable compression for this response to prevent decoding errors
+  res.setHeader('Content-Encoding', 'identity');
+  
+  // Log compression-related headers for debugging
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[DEBUG] Request headers:', {
+      'accept-encoding': req.get('Accept-Encoding'),
+      'user-agent': req.get('User-Agent')?.substring(0, 50)
+    });
+  }
+  
   next();
 });
 
@@ -341,6 +355,165 @@ app.use((req, res, next) => {
   res.setHeader('X-XSS-Protection', '1; mode=block');
   
   next();
+});
+
+// Stripe webhook route - must come BEFORE JSON parsing middleware
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  console.log('[Stripe] Webhook received, STRIPE_WEBHOOK_SECRET:', STRIPE_WEBHOOK_SECRET ? 'SET' : 'NOT SET');
+  console.log('[Stripe] Webhook headers:', req.headers);
+  console.log('[Stripe] Request body type:', typeof req.body);
+  console.log('[Stripe] Request body length:', req.body ? req.body.length : 'undefined');
+  
+  let event;
+  try {
+    const sig = req.headers['stripe-signature'];
+    console.log('[Stripe] Stripe signature header:', sig ? 'PRESENT' : 'MISSING');
+    
+    // Ensure body is a Buffer for Stripe verification
+    let rawBody;
+    if (Buffer.isBuffer(req.body)) {
+      rawBody = req.body;
+    } else if (typeof req.body === 'string') {
+      rawBody = Buffer.from(req.body, 'utf8');
+    } else if (typeof req.body === 'object') {
+      rawBody = Buffer.from(JSON.stringify(req.body), 'utf8');
+    } else {
+      throw new Error(`Unexpected body type: ${typeof req.body}`);
+    }
+    
+    console.log('[Stripe] Raw body type:', typeof rawBody);
+    console.log('[Stripe] Raw body length:', rawBody.length);
+    
+    event = stripe.webhooks.constructEvent(rawBody, sig, STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    console.error('[Stripe] Webhook signature verification failed:', err.message);
+    console.error('[Stripe] Error details:', { 
+      STRIPE_WEBHOOK_SECRET: !!STRIPE_WEBHOOK_SECRET, 
+      sig: !!sig,
+      bodyType: typeof req.body,
+      bodyLength: req.body ? req.body.length : 'undefined'
+    });
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  console.log(`[Stripe] Webhook: Received event type: ${event.type}`);
+  
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object;
+    console.log(`[Stripe] Webhook: checkout.session.completed received for session: ${session.id}`);
+    console.log(`[Stripe] Webhook: Session metadata:`, session.metadata);
+    console.log(`[Stripe] Webhook: Session subscription:`, session.subscription);
+    
+    // Handle regular user payment (existing users)
+    if (session.metadata?.userId) {
+      const userId = session.metadata.userId;
+      const user = db.data.users.find(u => u.id === userId);
+      if (user) {
+        user.courseCredits = (user.courseCredits || 0) + 10;
+        await db.write();
+        console.log(`[Stripe] Added 10 credits to existing user ${userId}`);
+      }
+    }
+    
+    // Handle registration subscription (new users)
+    if (session.metadata?.registrationEmail) {
+      const registrationEmail = session.metadata.registrationEmail;
+      const registrationPassword = session.metadata.registrationPassword;
+      
+      console.log(`[Stripe] Registration subscription started for email: ${registrationEmail}`);
+      
+      // Create the user account immediately after successful payment
+      try {
+        // Check if user already exists
+        let existingUser = db.data.users.find(u => u.email === registrationEmail);
+        if (existingUser) {
+          console.log(`[Stripe] User already exists: ${registrationEmail}`);
+          // Update existing user with subscription info
+          existingUser.stripeSubscriptionId = session.subscription;
+          existingUser.subscriptionStatus = 'active';
+          existingUser.trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(); // 14 days from now
+          existingUser.updatedAt = new Date().toISOString();
+          await db.write();
+        } else {
+          // Create new user account with proper verification token
+          const verificationToken = generateVerificationToken();
+          const newUser = {
+            id: generateId(),
+            email: registrationEmail.toLowerCase(),
+            password: registrationPassword,
+            name: registrationEmail.split('@')[0],
+            createdAt: new Date().toISOString(),
+            emailVerified: false,
+            verificationToken: verificationToken,
+            verificationTokenCreatedAt: new Date().toISOString(),
+            stripeSubscriptionId: session.subscription,
+            subscriptionStatus: 'active',
+            trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+            courseCredits: 10,
+            gdprConsent: true,
+            policyVersion: '1.0',
+            source: 'stripe_registration'
+          };
+          
+          db.data.users.push(newUser);
+          console.log(`[Stripe] Created new user account: ${registrationEmail} with ID: ${newUser.id}`);
+          
+          // Save to database first
+          await db.write();
+          console.log(`[Stripe] User saved to database: ${registrationEmail}`);
+          
+          // Send email verification email
+          try {
+            console.log(`[Stripe] Attempting to send verification email to: ${registrationEmail}`);
+            await sendVerificationEmail(registrationEmail, verificationToken, newUser.name);
+            console.log(`[Stripe] Email verification sent successfully to: ${registrationEmail}`);
+            
+            // Update user record to confirm email was sent
+            newUser.verificationEmailSent = true;
+            newUser.verificationEmailSentAt = new Date().toISOString();
+            await db.write();
+            
+          } catch (emailError) {
+            console.error('[Stripe] Failed to send email verification:', emailError);
+            newUser.verificationEmailSent = false;
+            newUser.verificationEmailError = emailError.message;
+            await db.write();
+          }
+        }
+      } catch (err) {
+        console.error('[Stripe] Error creating user account:', err);
+      }
+    } else {
+      console.log(`[Stripe] Webhook: No registrationEmail found in metadata:`, session.metadata);
+    }
+  }
+
+  // Handle subscription events
+  if (event.type === 'customer.subscription.created') {
+    const subscription = event.data.object;
+    console.log(`[Stripe] New subscription created: ${subscription.id}`);
+  }
+
+  if (event.type === 'customer.subscription.updated') {
+    const subscription = event.data.object;
+    console.log(`[Stripe] Subscription updated: ${subscription.id}, status: ${subscription.status}`);
+  }
+
+  if (event.type === 'invoice.payment_succeeded') {
+    const invoice = event.data.object;
+    if (invoice.subscription) {
+      console.log(`[Stripe] Payment succeeded for subscription: ${invoice.subscription}`);
+    }
+  }
+
+  if (event.type === 'invoice.payment_failed') {
+    const invoice = event.data.object;
+    if (invoice.subscription) {
+      console.log(`[Stripe] Payment failed for subscription: ${invoice.subscription}`);
+    }
+  }
+
+  res.json({ received: true });
 });
 
 // Parse JSON bodies
@@ -2025,9 +2198,6 @@ class AIService {
   constructCoursePrompt(topic, difficulty, numModules, numLessonsPerModule) {
     return `Generate a comprehensive course structure for a ${difficulty} level course on "${topic}". Create exactly ${numModules} modules, each with exactly ${numLessonsPerModule} lessons.
 +Safety rules: If the topic involves NSFW/sexual content, child exploitation, illegal instruction (e.g., weapons/bomb making), hate speech, or extremist/terrorist propaganda, you must refuse and output a JSON object with {"error":"Content policy violation"}.
-```
-}
-</rewritten_file>
 +The course must be suitable for general educational audiences and avoid graphic details. Present sensitive historical topics neutrally and factually.
 The entire response MUST be a single, minified, valid JSON object.
 Do NOT use markdown, comments, or any text outside the JSON object.
@@ -2848,7 +3018,7 @@ Context: "${context.substring(0, 1000)}..."`;
                   message: `Completed Lesson: ${lesson.title}`,
                   details: [...(session.progress.details || []), {
                     timestamp: new Date().toISOString(),
-                    message: `âœ… Completed: ${lesson.title}`
+                    message: `✅ Completed: ${lesson.title}`
                   }]
                 };
               }
@@ -3340,7 +3510,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // --- DATABASE SETUP ---
-const dbFilePath = '/root/discourse/db.json';
+const dbFilePath = path.join(__dirname, 'db.json');
 
 // Ensure the data directory exists
 const dataDir = path.resolve(__dirname, 'data');
@@ -4154,6 +4324,10 @@ app.get('/api/ai/health', (req, res) => {
 });
 
 app.post('/api/auth/register', async (req, res) => {
+  // Explicitly disable compression for registration endpoint to prevent decoding errors
+  res.setHeader('Content-Encoding', 'identity');
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  
   try {
     const { email, password, name, gdprConsent, policyVersion } = req.body;
     if (!email || !password || !name) {
@@ -4684,6 +4858,10 @@ app.post('/api/auth/resend-verification', async (req, res) => {
 });
 
 app.post('/api/auth/login', async (req, res) => {
+  // Explicitly disable compression for login endpoint to prevent decoding errors
+  res.setHeader('Content-Encoding', 'identity');
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  
   try {
     const { email, password } = req.body;
     if (!email || !password) {
@@ -6698,8 +6876,8 @@ app.get('/api/captcha/verify/:courseId',
           .replace(/\s+/g, ' ') // Normalize multiple spaces to single space
           .replace(/\s*\+\s*/g, ' + ') // Normalize spaces around plus
           .replace(/\s*-\s*/g, ' - ') // Normalize spaces around minus
-          .replace(/\s*Ã—\s*/g, ' Ã— ') // Normalize spaces around multiplication
-          .replace(/\s*Ã·\s*/g, ' Ã· ') // Normalize spaces around division
+          .replace(/\s*×\s*/g, ' × ') // Normalize spaces around multiplication
+          .replace(/\s*÷\s*/g, ' ÷ ') // Normalize spaces around division
           .trim();
       };
       const normalizedReceived = normalizeChallenge(challenge);
@@ -6736,8 +6914,8 @@ app.get('/api/captcha/verify/:courseId',
           } else {
             // Fallback: try to calculate from the stored challenge (not the URL-encoded one)
             const storedChallengeText = storedChallenge.challenge;
-            const sanitizedChallenge = storedChallengeText.replace(/[Ã—Ã·]/g, (match) => {
-              return match === 'Ã—' ? '*' : '/';
+            const sanitizedChallenge = storedChallengeText.replace(/[×÷]/g, (match) => {
+              return match === '×' ? '*' : '/';
             });
             // Use Function constructor instead of eval for safer execution
             expectedAnswer = new Function(`return ${sanitizedChallenge}`)();
@@ -6839,16 +7017,16 @@ app.get('/api/captcha/verify/:courseId',
         const num2 = Math.floor(Math.random() * (num1 - 1)) + 1; // 1 to num1-1
         return { num1, num2, operator: '-', answer: num1 - num2 };
       }},
-      { type: 'easy_multiplication', operator: 'Ã—', generate: () => {
+      { type: 'easy_multiplication', operator: '×', generate: () => {
         const num1 = Math.floor(Math.random() * 6) + 1; // 1-6
         const num2 = Math.floor(Math.random() * 6) + 1; // 1-6
-        return { num1, num2, operator: 'Ã—', answer: num1 * num2 };
+        return { num1, num2, operator: '×', answer: num1 * num2 };
       }},
-      { type: 'simple_division', operator: 'Ã·', generate: () => {
+      { type: 'simple_division', operator: '÷', generate: () => {
         const num2 = Math.floor(Math.random() * 6) + 2; // 2-7
         const answer = Math.floor(Math.random() * 6) + 1; // 1-6
         const num1 = answer * num2; // Calculate num1 based on answer and num2
-        return { num1, num2, operator: 'Ã·', answer: answer };
+        return { num1, num2, operator: '÷', answer: answer };
       }}
       // Removed sequence, word count, and letter count challenges - keeping only simple math
     ];
@@ -6993,16 +7171,16 @@ app.get('/api/captcha/new/:courseId',
         const num2 = Math.floor(Math.random() * (num1 - 1)) + 1; // 1 to num1-1
         return { num1, num2, operator: '-', answer: num1 - num2 };
       }},
-      { type: 'easy_multiplication', operator: 'Ã—', generate: () => {
+      { type: 'easy_multiplication', operator: '×', generate: () => {
         const num1 = Math.floor(Math.random() * 6) + 1; // 1-6
         const num2 = Math.floor(Math.random() * 6) + 1; // 1-6
-        return { num1, num2, operator: 'Ã—', answer: num1 * num2 };
+        return { num1, num2, operator: '×', answer: num1 * num2 };
       }},
-      { type: 'simple_division', operator: 'Ã·', generate: () => {
+      { type: 'simple_division', operator: '÷', generate: () => {
         const num2 = Math.floor(Math.random() * 6) + 2; // 2-7
         const answer = Math.floor(Math.random() * 6) + 1; // 1-6
         const num1 = answer * num2; // Calculate num1 based on answer and num2
-        return { num1, num2, operator: 'Ã·', answer: answer };
+        return { num1, num2, operator: '÷', answer: answer };
       }}
       // Removed sequence, word count, and letter count challenges - keeping only simple math
     ];
@@ -7434,7 +7612,7 @@ app.get('/api/public/courses/:courseId/quiz-scores',
   }
 });
 
-// Stripe: Create Checkout Session for Â£20 (10 credits)
+// Stripe: Create Checkout Session for £20 (10 credits)
 app.post('/api/create-checkout-session', authenticateToken, async (req, res) => {
   console.log('[Stripe] Creating checkout session for user:', req.user.id);
   console.log('[Stripe] Stripe configured:', !!stripe);
@@ -7458,7 +7636,7 @@ app.post('/api/create-checkout-session', authenticateToken, async (req, res) => 
               name: '10 Course Generations',
               description: 'Generate up to 10 courses on the platform',
             },
-            unit_amount: 2000, // Â£20.00 in pence
+            unit_amount: 2000, // £20.00 in pence
           },
           quantity: 1,
         },
@@ -7523,7 +7701,7 @@ app.post('/api/auth/create-checkout-session', async (req, res) => {
               name: 'Discourse Learning Platform',
               description: 'Access to course generation and learning tools',
             },
-            unit_amount: 2000, // Â£20.00 in pence
+            unit_amount: 2000, // £20.00 in pence
             recurring: {
               interval: 'month',
             },
@@ -7533,10 +7711,6 @@ app.post('/api/auth/create-checkout-session', async (req, res) => {
       ],
       subscription_data: {
         trial_period_days: 14,
-        metadata: {
-          registrationEmail: email,
-          registrationPassword: password,
-        },
       },
       payment_method_collection: 'always',
       success_url: `${req.headers.origin || 'https://thediscourse.ai'}/login?payment=success&email=${encodeURIComponent(email)}&redirect=login`,
@@ -7678,142 +7852,77 @@ app.post('/api/billing/cancel-subscription', authenticateToken, async (req, res)
   }
 });
 
-// Stripe: Webhook to handle successful payment and add credits
-app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
-  let event;
+// Handle user creation from Stripe webhook
+app.post('/api/auth/create-user-from-webhook', async (req, res) => {
   try {
-    const sig = req.headers['stripe-signature'];
-    event = stripe.webhooks.constructEvent(req.body, sig, STRIPE_WEBHOOK_SECRET);
-  } catch (err) {
-    console.error('[Stripe] Webhook signature verification failed:', err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
-  }
-
-  console.log(`[Stripe] Webhook: Received event type: ${event.type}`);
-  
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object;
-    console.log(`[Stripe] Webhook: checkout.session.completed received for session: ${session.id}`);
-    console.log(`[Stripe] Webhook: Session metadata:`, session.metadata);
-    console.log(`[Stripe] Webhook: Session subscription:`, session.subscription);
-    console.log(`[Stripe] Webhook: Session success_url:`, session.success_url);
-    console.log(`[Stripe] Webhook: Session cancel_url:`, session.cancel_url);
+    const { email, password, paymentIntentId, source } = req.body;
     
-    // Handle regular user payment (existing users)
-    if (session.metadata?.userId) {
-      const userId = session.metadata.userId;
-      const user = db.data.users.find(u => u.id === userId);
-      if (user) {
-        user.courseCredits = (user.courseCredits || 0) + 10;
-        await db.write();
-        console.log(`[Stripe] Added 10 credits to existing user ${userId}`);
-      }
+    // Verify webhook secret for security
+    const authHeader = req.headers.authorization;
+    if (authHeader !== `Bearer ${process.env.WEBHOOK_SECRET}`) {
+      return res.status(401).json({ error: 'Unauthorized' });
     }
     
-    // Handle registration subscription (new users)
-    // Check both session metadata and subscription metadata for registration details
-    const registrationEmail = session.metadata?.registrationEmail || session.subscription_data?.metadata?.registrationEmail;
-    const registrationPassword = session.metadata?.registrationPassword || session.subscription_data?.metadata?.registrationPassword;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password required' });
+    }
     
-    if (registrationEmail && registrationPassword) {
-      console.log(`[Stripe] Registration subscription started for email: ${registrationEmail}`);
-      
-      // Create the user account immediately after successful payment
-      try {
-        // Check if user already exists
-        let existingUser = db.data.users.find(u => u.email === registrationEmail);
-        if (existingUser) {
-          console.log(`[Stripe] User already exists: ${registrationEmail}`);
-          // Update existing user with subscription info and mark as verified
-          existingUser.stripeSubscriptionId = session.subscription;
-          existingUser.subscriptionStatus = 'active';
-          existingUser.trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(); // 14 days from now
-          existingUser.updatedAt = new Date().toISOString();
-          existingUser.emailVerified = true; // Mark as verified since they completed payment
-          existingUser.emailVerifiedAt = new Date().toISOString();
-          existingUser.courseCredits = (existingUser.courseCredits || 0) + 10; // Add credits
-          // Update password if provided
-          if (registrationPassword) {
-            existingUser.password = registrationPassword;
-          }
-          console.log(`[Stripe] Updated existing user: ${registrationEmail} with subscription and verification`);
-        } else {
-          // Create new user account
-          const newUser = {
-            id: generateId(),
-            email: registrationEmail.toLowerCase(),
-            password: registrationPassword, // Note: In production, this should be hashed
-            name: registrationEmail.split('@')[0], // Use email prefix as name
-            createdAt: new Date().toISOString(),
-            emailVerified: false,
-            stripeSubscriptionId: session.subscription,
-            subscriptionStatus: 'active',
-            trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(); // 14 days from now
-            courseCredits: 10, // Give initial credits
-            gdprConsent: true,
-            policyVersion: '1.0',
-            source: 'stripe_registration'
-          };
-          
-          db.data.users.push(newUser);
-          console.log(`[Stripe] Created new user account: ${registrationEmail} with ID: ${newUser.id}`);
-        }
-        
-        await db.write();
-        console.log(`[Stripe] User account setup completed for: ${registrationEmail}`);
-        
-        // For existing users who are now verified, no need to send verification email
-        if (!existingUser || existingUser.emailVerified) {
-          console.log(`[Stripe] User ${registrationEmail} is verified, no verification email needed`);
-        } else {
-          // Send email verification email only for new users
-          try {
-            const verificationToken = generateVerificationToken();
-            await sendVerificationEmail(registrationEmail, verificationToken, registrationEmail.split('@')[0]);
-            console.log(`[Stripe] Email verification sent to: ${registrationEmail}`);
-          } catch (emailError) {
-            console.error('[Stripe] Failed to send email verification:', emailError);
-          }
-        }
-        
-      } catch (err) {
-        console.error('[Stripe] Error creating user account:', err);
-      }
-    } else {
-      console.log(`[Stripe] Webhook: No registrationEmail or registrationPassword found in metadata:`, {
-        sessionMetadata: session.metadata,
-        subscriptionMetadata: session.subscription_data?.metadata
-      });
+    console.log('[WEBHOOK] Creating user from Stripe webhook:', email);
+    
+    // Check if user already exists
+    const existingUser = db.data.users.find(u => u.email === email);
+    if (existingUser) {
+      console.log('[WEBHOOK] User already exists:', email);
+      return res.json({ success: true, message: 'User already exists' });
     }
-  }
-  
-  // Handle subscription events
-  if (event.type === 'customer.subscription.created') {
-    const subscription = event.data.object;
-    console.log(`[Stripe] New subscription created: ${subscription.id}`);
-  }
-  
-  if (event.type === 'customer.subscription.updated') {
-    const subscription = event.data.object;
-    console.log(`[Stripe] Subscription updated: ${subscription.id}, status: ${subscription.status}`);
-  }
-  
-  if (event.type === 'invoice.payment_succeeded') {
-    const invoice = event.data.object;
-    if (invoice.subscription) {
-      console.log(`[Stripe] Payment succeeded for subscription: ${invoice.subscription}`);
+    
+    // Create new user
+    const userId = `stripe_${Date.now()}`;
+    const verificationToken = generateVerificationToken();
+    
+    const newUser = {
+      id: userId,
+      email: email.toLowerCase(),
+      name: email.split('@')[0], // Use email prefix as name
+      password: password,
+      createdAt: new Date().toISOString(),
+      emailVerified: false,
+      verificationToken: verificationToken,
+      verificationTokenCreatedAt: new Date().toISOString(),
+      courseCredits: 10, // Give initial credits
+      gdprConsent: true,
+      policyVersion: '1.0',
+      source: source || 'stripe_webhook',
+      stripePaymentIntentId: paymentIntentId
+    };
+    
+    // Add user to database
+    db.data.users.push(newUser);
+    await db.write();
+    
+    // Send verification email using your Hostinger SMTP
+    try {
+      await sendVerificationEmail(email, verificationToken, newUser.name);
+      console.log('[WEBHOOK] Verification email sent to:', email);
+    } catch (emailError) {
+      console.error('[WEBHOOK] Failed to send verification email:', emailError);
+      // Don't fail the webhook - user is created, just email failed
     }
+    
+    console.log('[WEBHOOK] User created successfully:', email);
+    return res.json({ 
+      success: true, 
+      message: 'User created and verification email sent',
+      userId: newUser.id
+    });
+    
+  } catch (error) {
+    console.error('[WEBHOOK] Error creating user:', error);
+    return res.status(500).json({ error: 'Failed to create user' });
   }
-  
-  if (event.type === 'invoice.payment_failed') {
-    const invoice = event.data.object;
-    if (invoice.subscription) {
-      console.error(`[Stripe] Payment failed for subscription: ${invoice.subscription}`);
-    }
-  }
-  
-  res.json({ received: true });
 });
+
+
 
 // API: Add credits to user account
 app.post('/api/add-credits', authenticateToken, async (req, res) => {
@@ -7992,69 +8101,6 @@ app.get('/api/admin/trials', authenticateToken, requireAdminIfConfigured, async 
   }
 });
 
-// Test endpoint to check if webhook is working
-app.post('/api/test-webhook', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password required' });
-    }
-    
-    // Simulate what the webhook would do
-    let existingUser = db.data.users.find(u => u.email === email);
-    if (existingUser) {
-      console.log(`[TEST] User already exists: ${email}`);
-      // Update existing user with subscription info and mark as verified
-      existingUser.stripeSubscriptionId = 'test_subscription_123';
-      existingUser.subscriptionStatus = 'active';
-      existingUser.trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
-      existingUser.updatedAt = new Date().toISOString();
-      existingUser.emailVerified = true; // Mark as verified since they completed payment
-      existingUser.emailVerifiedAt = new Date().toISOString();
-      existingUser.courseCredits = (existingUser.courseCredits || 0) + 10; // Add credits
-      // Update password if provided
-      if (password) {
-        existingUser.password = password;
-      }
-      console.log(`[TEST] Updated existing user: ${email} with subscription and verification`);
-    } else {
-      // Create new user account
-      const newUser = {
-        id: generateId(),
-        email: email.toLowerCase(),
-        password: password,
-        name: email.split('@')[0],
-        createdAt: new Date().toISOString(),
-        emailVerified: true,
-        stripeSubscriptionId: 'test_subscription_123',
-        subscriptionStatus: 'active',
-        trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-        courseCredits: 10,
-        gdprConsent: true,
-        policyVersion: '1.0',
-        source: 'test_webhook'
-      };
-      
-      db.data.users.push(newUser);
-      console.log(`[TEST] Created new user account: ${email} with ID: ${newUser.id}`);
-    }
-    
-    await db.write();
-    console.log(`[TEST] User account setup completed for: ${email}`);
-    
-    res.json({
-      success: true,
-      message: 'Test webhook executed successfully',
-      user: existingUser || db.data.users.find(u => u.email === email)
-    });
-    
-  } catch (error) {
-    console.error('[TEST] Error in test webhook:', error);
-    res.status(500).json({ error: 'Test webhook failed' });
-  }
-});
-
 // Admin: Clear trial records
 app.post('/api/admin/trials/clear', authenticateToken, requireAdminIfConfigured, async (req, res) => {
   try {
@@ -8063,33 +8109,6 @@ app.post('/api/admin/trials/clear', authenticateToken, requireAdminIfConfigured,
     return res.json({ success: true });
   } catch (e) {
     return res.status(500).json({ error: 'Failed to clear trials' });
-  }
-});
-
-// Debug endpoint to check current users (no auth required)
-app.get('/api/debug/users', async (req, res) => {
-  try {
-    const users = db.data.users.map(u => ({
-      id: u.id,
-      email: u.email,
-      name: u.name,
-      emailVerified: u.emailVerified,
-      emailVerifiedAt: u.emailVerifiedAt,
-      stripeSubscriptionId: u.stripeSubscriptionId,
-      subscriptionStatus: u.subscriptionStatus,
-      courseCredits: u.courseCredits,
-      createdAt: u.createdAt,
-      updatedAt: u.updatedAt,
-      source: u.source
-    }));
-    
-    res.json({
-      totalUsers: users.length,
-      users: users
-    });
-  } catch (error) {
-    console.error('[DEBUG] Error getting users:', error);
-    res.status(500).json({ error: 'Failed to get users' });
   }
 });
 
@@ -9501,25 +9520,25 @@ This is an automated notification from The Discourse AI platform.
       `;
 
       // Send email notification to admin
-      console.log('ðŸ“§ [PROBLEM_REPORT] Email notification to admin@thediscourse.ai:');
+      console.log('📧 [PROBLEM_REPORT] Email notification to admin@thediscourse.ai:');
       console.log(emailContent);
       
       // Debug: Check environment variables
-      console.log('ðŸ“§ [PROBLEM_REPORT] Environment variables check:');
-      console.log('ðŸ“§ [PROBLEM_REPORT] SMTP_HOST:', process.env.SMTP_HOST ? 'SET' : 'NOT SET');
-      console.log('ðŸ“§ [PROBLEM_REPORT] SMTP_PORT:', process.env.SMTP_PORT ? 'SET' : 'NOT SET');
-      console.log('ðŸ“§ [PROBLEM_REPORT] SMTP_USER:', process.env.SMTP_USER ? 'SET' : 'NOT SET');
-      console.log('ðŸ“§ [PROBLEM_REPORT] SMTP_PASS:', process.env.SMTP_PASS ? 'SET' : 'NOT SET');
-      console.log('ðŸ“§ [PROBLEM_REPORT] EMAIL_WEBHOOK_URL:', process.env.EMAIL_WEBHOOK_URL ? 'SET' : 'NOT SET');
-      console.log('ðŸ“§ [PROBLEM_REPORT] EMAIL_API_KEY:', process.env.EMAIL_API_KEY ? 'SET' : 'NOT SET');
-      console.log('ðŸ“§ [PROBLEM_REPORT] EMAILJS_SERVICE_ID:', process.env.EMAILJS_SERVICE_ID ? 'SET' : 'NOT SET');
+      console.log('📧 [PROBLEM_REPORT] Environment variables check:');
+      console.log('📧 [PROBLEM_REPORT] SMTP_HOST:', process.env.SMTP_HOST ? 'SET' : 'NOT SET');
+      console.log('📧 [PROBLEM_REPORT] SMTP_PORT:', process.env.SMTP_PORT ? 'SET' : 'NOT SET');
+      console.log('📧 [PROBLEM_REPORT] SMTP_USER:', process.env.SMTP_USER ? 'SET' : 'NOT SET');
+      console.log('📧 [PROBLEM_REPORT] SMTP_PASS:', process.env.SMTP_PASS ? 'SET' : 'NOT SET');
+      console.log('📧 [PROBLEM_REPORT] EMAIL_WEBHOOK_URL:', process.env.EMAIL_WEBHOOK_URL ? 'SET' : 'NOT SET');
+      console.log('📧 [PROBLEM_REPORT] EMAIL_API_KEY:', process.env.EMAIL_API_KEY ? 'SET' : 'NOT SET');
+      console.log('📧 [PROBLEM_REPORT] EMAILJS_SERVICE_ID:', process.env.EMAILJS_SERVICE_ID ? 'SET' : 'NOT SET');
       
       // Simple email sending using fetch to a webhook or email service
       // You can replace this with your preferred email service
       try {
         // Option 1: Send via SMTP server
         if (process.env.SMTP_HOST && process.env.SMTP_PORT && process.env.SMTP_USER && process.env.SMTP_PASS) {
-          console.log('ðŸ“§ [PROBLEM_REPORT] Attempting to send email via SMTP...');
+          console.log('📧 [PROBLEM_REPORT] Attempting to send email via SMTP...');
           
           const transporter = nodemailer.createTransport({
             host: process.env.SMTP_HOST,
@@ -9540,7 +9559,7 @@ This is an automated notification from The Discourse AI platform.
           };
           
           const info = await transporter.sendMail(mailOptions);
-          console.log('ðŸ“§ [PROBLEM_REPORT] Email sent via SMTP:', info.messageId);
+          console.log('📧 [PROBLEM_REPORT] Email sent via SMTP:', info.messageId);
         }
         
         // Option 2: Send to a webhook (e.g., Zapier, Make.com, etc.)
@@ -9555,7 +9574,7 @@ This is an automated notification from The Discourse AI platform.
               from: 'noreply@thediscourse.ai'
             })
           });
-          console.log('ðŸ“§ [PROBLEM_REPORT] Email sent via webhook');
+          console.log('📧 [PROBLEM_REPORT] Email sent via webhook');
         }
         
         // Option 3: Send to a simple email API service
@@ -9575,9 +9594,9 @@ This is an automated notification from The Discourse AI platform.
           });
           
           if (emailResponse.ok) {
-            console.log('ðŸ“§ [PROBLEM_REPORT] Email sent via Resend API');
+            console.log('📧 [PROBLEM_REPORT] Email sent via Resend API');
           } else {
-            console.error('ðŸ“§ [PROBLEM_REPORT] Failed to send email via Resend API');
+            console.error('📧 [PROBLEM_REPORT] Failed to send email via Resend API');
           }
         }
         
@@ -9601,25 +9620,25 @@ This is an automated notification from The Discourse AI platform.
           });
           
           if (emailResponse.ok) {
-            console.log('ðŸ“§ [PROBLEM_REPORT] Email sent via EmailJS');
+            console.log('📧 [PROBLEM_REPORT] Email sent via EmailJS');
           } else {
-            console.error('ðŸ“§ [PROBLEM_REPORT] Failed to send email via EmailJS');
+            console.error('📧 [PROBLEM_REPORT] Failed to send email via EmailJS');
           }
         }
         
         // Option 5: Log to console for development (current fallback)
         else {
-          console.log('ðŸ“§ [PROBLEM_REPORT] Email would be sent to admin@thediscourse.ai');
-          console.log('ðŸ“§ [PROBLEM_REPORT] Subject:', `New Problem Report - ${problemReport.id}`);
-          console.log('ðŸ“§ [PROBLEM_REPORT] Content:', emailContent);
-          console.log('ðŸ“§ [PROBLEM_REPORT] To enable email sending, set one of these environment variables:');
-          console.log('ðŸ“§ [PROBLEM_REPORT] - SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS (for SMTP server)');
-          console.log('ðŸ“§ [PROBLEM_REPORT] - EMAIL_WEBHOOK_URL (for webhook-based email services)');
-          console.log('ðŸ“§ [PROBLEM_REPORT] - EMAIL_API_KEY (for Resend API)');
-          console.log('ðŸ“§ [PROBLEM_REPORT] - EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_USER_ID (for EmailJS)');
+          console.log('📧 [PROBLEM_REPORT] Email would be sent to admin@thediscourse.ai');
+          console.log('📧 [PROBLEM_REPORT] Subject:', `New Problem Report - ${problemReport.id}`);
+          console.log('📧 [PROBLEM_REPORT] Content:', emailContent);
+          console.log('📧 [PROBLEM_REPORT] To enable email sending, set one of these environment variables:');
+          console.log('📧 [PROBLEM_REPORT] - SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS (for SMTP server)');
+          console.log('📧 [PROBLEM_REPORT] - EMAIL_WEBHOOK_URL (for webhook-based email services)');
+          console.log('📧 [PROBLEM_REPORT] - EMAIL_API_KEY (for Resend API)');
+          console.log('📧 [PROBLEM_REPORT] - EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_USER_ID (for EmailJS)');
         }
       } catch (emailSendError) {
-        console.error('ðŸ“§ [PROBLEM_REPORT] Email sending failed:', emailSendError);
+        console.error('📧 [PROBLEM_REPORT] Email sending failed:', emailSendError);
       }
 
     } catch (emailError) {
