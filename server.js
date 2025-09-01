@@ -3629,12 +3629,18 @@ Return only the JSON array, no other text.`;
         // Clean up markdown formatting within the JSON
         // Remove asterisks around titles and other markdown formatting
         cleanedContent = cleanedContent
-          .replace(/\*"([^"]+)"\*/g, '"$1"')  // Convert *"text"* to "text"
-          .replace(/\*([^*"]+)\*/g, '"$1"')   // Convert *text* to "text" (without quotes)
-          .replace(/\*"([^"]+)"\*/g, '"$1"')  // Handle nested cases
-          .replace(/\*([^*"]+)\*/g, '"$1"')   // Handle more nested cases
-          .replace(/\*([^*"]+)\*/g, '"$1"')   // Additional pass for any remaining asterisks
-          .replace(/\*([^*"]+)\*/g, '"$1"');  // Final pass to catch any missed cases
+          // Handle asterisks around quoted strings: *"text"* -> "text"
+          .replace(/\*"([^"]+)"\*/g, '"$1"')
+          // Handle asterisks around unquoted text: *text* -> "text"
+          .replace(/\*([^*"]+?)\*/g, '"$1"')
+          // Handle mixed cases like *"text"*, "additional" -> "text, additional"
+          .replace(/\*"([^"]+)"\*,\s*"([^"]+)"/g, '"$1, $2"')
+          // Handle remaining asterisks in any context
+          .replace(/\*([^*]+?)\*/g, '"$1"')
+          // Clean up any double quotes that might have been created
+          .replace(/""/g, '"')
+          // Handle edge cases with multiple asterisks
+          .replace(/\*+/g, '');
         
         // Additional cleanup for common JSON issues
         cleanedContent = cleanedContent
@@ -3642,6 +3648,11 @@ Return only the JSON array, no other text.`;
           .replace(/,\s*]/g, ']')  // Remove trailing commas before closing brackets
           .replace(/\n\s*\n/g, '\n')  // Remove empty lines
           .trim();
+        
+        // Debug logging to help troubleshoot parsing issues
+        console.log(`[AIService] Original AI content length: ${aiContent.length}`);
+        console.log(`[AIService] Cleaned content length: ${cleanedContent.length}`);
+        console.log(`[AIService] Cleaned content preview: ${cleanedContent.substring(0, 300)}...`);
         
         generatedReferences = JSON.parse(cleanedContent);
       } catch (parseError) {
