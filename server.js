@@ -3632,11 +3632,22 @@ Return only the JSON array, no other text.`;
           .replace(/\*"([^"]+)"\*/g, '"$1"')  // Convert *"text"* to "text"
           .replace(/\*([^*"]+)\*/g, '"$1"')   // Convert *text* to "text" (without quotes)
           .replace(/\*"([^"]+)"\*/g, '"$1"')  // Handle nested cases
-          .replace(/\*([^*"]+)\*/g, '"$1"');  // Handle more nested cases
+          .replace(/\*([^*"]+)\*/g, '"$1"')   // Handle more nested cases
+          .replace(/\*([^*"]+)\*/g, '"$1"')   // Additional pass for any remaining asterisks
+          .replace(/\*([^*"]+)\*/g, '"$1"');  // Final pass to catch any missed cases
+        
+        // Additional cleanup for common JSON issues
+        cleanedContent = cleanedContent
+          .replace(/,\s*}/g, '}')  // Remove trailing commas before closing braces
+          .replace(/,\s*]/g, ']')  // Remove trailing commas before closing brackets
+          .replace(/\n\s*\n/g, '\n')  // Remove empty lines
+          .trim();
         
         generatedReferences = JSON.parse(cleanedContent);
       } catch (parseError) {
         console.warn(`[AIService] Failed to parse AI response as JSON:`, aiContent);
+        console.warn(`[AIService] Parse error:`, parseError.message);
+        console.warn(`[AIService] Cleaned content:`, cleanedContent.substring(0, 500));
         throw new Error('Invalid JSON response from AI service');
       }
 
