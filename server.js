@@ -1832,12 +1832,21 @@ class RobustJsonParser {
       fixed = fixed.substring(0, lastBracket + 1);
     }
     
+    // Fix markdown formatting in JSON strings
     fixed = fixed
+      // Remove asterisks around quoted strings (markdown italics)
+      .replace(/\*\s*"([^"]*)"\s*\*/g, '"$1"')
+      // Remove asterisks around unquoted strings
+      .replace(/\*\s*([^*\s][^*]*[^*\s])\s*\*/g, '"$1"')
+      // Handle single asterisks
+      .replace(/\*\s*([^*\s]+)\s*\*/g, '"$1"')
+      // Fix trailing commas before closing brackets
       .replace(/,\s*}/g, '}')
       .replace(/,\s*]/g, ']')
-      .replace(/\n/g, '\\n')
-      .replace(/\r/g, '\\r')
-      .replace(/\t/g, '\\t');
+      // Fix any remaining markdown formatting issues
+      .replace(/\*\s*([^*]+?)\s*\*/g, '"$1"')
+      // Clean up any double quotes that might have been created
+      .replace(/""/g, '"');
     
     return fixed;
   }
@@ -3537,7 +3546,7 @@ ${lessonContent.substring(0, 2000)}
 Subject: ${subject}
 Topic: ${topic}
 
-Return the response as a simple text list with one reference per line in this format:
+CRITICAL: Return the response as a simple text list with one reference per line in this EXACT format:
 Author: [Author Name]
 Year: [Publication Year]
 Title: [Book/Article Title]
@@ -3553,7 +3562,14 @@ Publisher: Oxford University Press
 Type: book
 Relevance: Comprehensive coverage of ancient civilizations including the topics discussed in this lesson
 
-Return only the text list, no other formatting or text.`;
+IMPORTANT: 
+- Do NOT use JSON format
+- Do NOT use markdown formatting (no asterisks, underscores, or other markdown symbols)
+- Do NOT use any special characters or formatting
+- Use plain text only
+- Follow the exact format shown above
+
+Generate exactly ${numReferences} references following this exact format. Return only the text list, no other formatting or text.`;
 
       // Call the AI service to generate references
       if (!this.apiKey) {
@@ -3603,7 +3619,7 @@ Return only the text list, no other formatting or text.`;
         throw new Error('No content received from AI service');
       }
 
-      // Parse the plain text response from AI
+      // Parse the AI response - try both text and JSON formats
       let generatedReferences;
       try {
         // Clean up the AI response - remove any markdown code blocks if present
@@ -3616,17 +3632,36 @@ Return only the text list, no other formatting or text.`;
           }
         }
         
-        // Parse the plain text format
-        generatedReferences = this.parseTextReferences(cleanedContent);
+        // First, try to parse as JSON (in case AI returns JSON despite instructions)
+        if (cleanedContent.trim().startsWith('[') || cleanedContent.trim().startsWith('{')) {
+          try {
+            console.log(`[AIService] Attempting to parse as JSON: ${cleanedContent.substring(0, 200)}...`);
+            const jsonData = RobustJsonParser.parse(cleanedContent, 'Bibliography JSON Response');
+            if (jsonData && Array.isArray(jsonData)) {
+              generatedReferences = jsonData;
+              console.log(`[AIService] Successfully parsed ${generatedReferences.length} references from JSON format`);
+            } else {
+              throw new Error('JSON parsing returned non-array result');
+            }
+          } catch (jsonError) {
+            console.warn(`[AIService] JSON parsing failed, falling back to text parsing:`, jsonError.message);
+            // Fall back to text parsing
+            generatedReferences = this.parseTextReferences(cleanedContent);
+            console.log(`[AIService] Parsed ${generatedReferences.length} references from text format`);
+          }
+        } else {
+          // Parse the plain text format
+          generatedReferences = this.parseTextReferences(cleanedContent);
+          console.log(`[AIService] Parsed ${generatedReferences.length} references from text format`);
+        }
         
         // Debug logging
         console.log(`[AIService] Original AI content length: ${aiContent.length}`);
-        console.log(`[AIService] Parsed ${generatedReferences.length} references from text format`);
         
       } catch (parseError) {
-        console.warn(`[AIService] Failed to parse AI response as text:`, aiContent);
+        console.warn(`[AIService] Failed to parse AI response:`, aiContent);
         console.warn(`[AIService] Parse error:`, parseError.message);
-        throw new Error('Invalid text response from AI service');
+        throw new Error('Invalid response from AI service');
       }
 
       if (!Array.isArray(generatedReferences) || generatedReferences.length === 0) {
