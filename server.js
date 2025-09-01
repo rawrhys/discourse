@@ -3609,9 +3609,10 @@ Return only the JSON array, no other text.`;
 
       // Parse the JSON response from AI
       let generatedReferences;
+      let cleanedContent = ''; // Initialize to avoid reference errors
       try {
         // Clean up the AI response - remove markdown code blocks if present
-        let cleanedContent = aiContent;
+        cleanedContent = aiContent;
         if (cleanedContent.includes('```json')) {
           // Extract JSON from markdown code block
           const jsonMatch = cleanedContent.match(/```json\s*([\s\S]*?)\s*```/);
@@ -3635,6 +3636,8 @@ Return only the JSON array, no other text.`;
           .replace(/\*([^*"]+?)\*/g, '"$1"')
           // Handle mixed cases like *"text"*, "additional" -> "text, additional"
           .replace(/\*"([^"]+)"\*,\s*"([^"]+)"/g, '"$1, $2"')
+          // Handle complex publisher formats: *"Journal"*, "Volume" -> "Journal, Volume"
+          .replace(/\*"([^"]+)"\*,\s*"([^"]+)"\s*\)/g, '"$1, $2"')
           // Handle remaining asterisks in any context
           .replace(/\*([^*]+?)\*/g, '"$1"')
           // Clean up any double quotes that might have been created
@@ -3642,8 +3645,16 @@ Return only the JSON array, no other text.`;
           // Handle edge cases with multiple asterisks
           .replace(/\*+/g, '');
         
-        // Additional cleanup for common JSON issues
+        // Fix duplicate publisher fields and other structural issues
         cleanedContent = cleanedContent
+          // Remove duplicate publisher fields (keep the last one)
+          .replace(/"publisher":\s*"[^"]*",\s*"publisher":\s*"([^"]*)"/g, '"publisher": "$1"')
+          // Fix malformed publisher entries with parentheses
+          .replace(/"publisher":\s*"[^"]*"\s*\([^)]*\)/g, (match) => {
+            const cleanMatch = match.replace(/\([^)]*\)/g, '').replace(/,\s*$/, '');
+            return cleanMatch;
+          })
+          // Clean up any remaining structural issues
           .replace(/,\s*}/g, '}')  // Remove trailing commas before closing braces
           .replace(/,\s*]/g, ']')  // Remove trailing commas before closing brackets
           .replace(/\n\s*\n/g, '\n')  // Remove empty lines
@@ -3658,7 +3669,9 @@ Return only the JSON array, no other text.`;
       } catch (parseError) {
         console.warn(`[AIService] Failed to parse AI response as JSON:`, aiContent);
         console.warn(`[AIService] Parse error:`, parseError.message);
-        console.warn(`[AIService] Cleaned content:`, cleanedContent.substring(0, 500));
+        if (cleanedContent) {
+          console.warn(`[AIService] Cleaned content:`, cleanedContent.substring(0, 500));
+        }
         throw new Error('Invalid JSON response from AI service');
       }
 
