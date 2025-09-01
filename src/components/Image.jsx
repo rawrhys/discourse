@@ -173,6 +173,14 @@ const Image = ({
         if (urlMatch) {
           const originalUrl = decodeURIComponent(urlMatch[1]);
           console.log(`[Image] Trying fallback to original URL: ${originalUrl}`);
+          
+          // For Wikimedia images, try the original URL directly
+          if (originalUrl.includes('wikimedia.org')) {
+            console.log(`[Image] Attempting direct Wikimedia URL: ${originalUrl}`);
+            event.target.src = originalUrl;
+            return;
+          }
+          
           event.target.src = originalUrl;
           return;
         }

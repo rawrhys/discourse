@@ -745,8 +745,12 @@ const LessonView = ({
 
   const normalizeImageUrl = useCallback((url) => {
     if (!url || typeof url !== 'string') return url;
-    // Absolute URLs are used as-is
+    
+    // Absolute URLs are used as-is (including Wikimedia URLs)
     if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    
+    // If it's already a proxied URL, use it as-is
+    if (url.startsWith('/api/image/')) return url;
 
     let normalized = url;
 

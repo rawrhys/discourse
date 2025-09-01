@@ -2451,16 +2451,25 @@ Context: "${context.substring(0, 1000)}..."`;
         const isHistoricalContent = /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(subject) || 
                                    /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(courseContext?.title || '');
         
-        const minScoreThreshold = isHistoricalContent ? 50 : 0; // Reduced threshold to allow more relevant images
+        const minScoreThreshold = isHistoricalContent ? 25 : 0; // Further reduced threshold to allow more relevant images
           
           if (best.score >= minScoreThreshold) {
             console.log(`[AIService] Selected Wikipedia image for "${subject}" (score ${best.score}): ${best.imageUrl}`);
             console.log(`[AIService] Wikipedia candidates found: ${candidates.length}, best score: ${best.score}`);
             const originalUrl = best.imageUrl;
             // Return fast proxied URL for maximum speed
-            return { ...best, imageUrl: `/api/image/fast?url=${encodeURIComponent(originalUrl)}`, sourceUrlForCaching: originalUrl };
+            const proxiedUrl = `/api/image/fast?url=${encodeURIComponent(originalUrl)}`;
+            console.log(`[AIService] Returning proxied Wikimedia URL: ${proxiedUrl}`);
+            return { ...best, imageUrl: proxiedUrl, sourceUrlForCaching: originalUrl };
           } else {
             console.log(`[AIService] Best Wikipedia candidate score ${best.score} below threshold ${minScoreThreshold} for "${subject}", rejecting`);
+            console.log(`[AIService] Wikipedia candidate details:`, {
+              title: best.imageTitle,
+              url: best.imageUrl,
+              score: best.score,
+              threshold: minScoreThreshold,
+              isHistorical: isHistoricalContent
+            });
             return null;
           }
         }
@@ -2572,7 +2581,7 @@ Context: "${context.substring(0, 1000)}..."`;
         const isHistoricalContent = /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(subject) || 
                                    /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(courseContext?.title || '');
         
-        const minScoreThreshold = isHistoricalContent ? 50 : 0; // Reduced threshold to allow more relevant images
+        const minScoreThreshold = isHistoricalContent ? 25 : 0; // Further reduced threshold to allow more relevant images
         
         if (best.score >= minScoreThreshold) {
           console.log(`[AIService] Selected Pixabay image for "${subject}" (score ${best.score}): ${best.imageUrl}`);
@@ -6695,6 +6704,7 @@ app.get('/api/image/fast', async (req, res) => {
     }
 
     // Enhanced fetch with better timeout and connection settings
+    console.log(`[FastImageProxy] Fetching image from: ${url}`);
     const response = await fetch(url, {
       headers: { 
         'User-Agent': 'Fast-Image-Proxy/1.0',
@@ -6707,7 +6717,8 @@ app.get('/api/image/fast', async (req, res) => {
     });
 
     if (!response.ok) {
-      return res.status(response.status).json({ error: 'Failed to fetch image' });
+      console.warn(`[FastImageProxy] Failed to fetch image: ${response.status} ${response.statusText} for ${url}`);
+      return res.status(response.status).json({ error: `Failed to fetch image: ${response.statusText}` });
     }
 
     const imageBuffer = Buffer.from(await response.arrayBuffer());
