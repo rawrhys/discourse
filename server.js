@@ -3471,6 +3471,51 @@ Example format:
 
 Return only the JSON array, no other text.`;
 
+      // Call the AI service to generate references
+      if (!this.apiKey) {
+        console.warn(`[AIService] No API key available for generating authentic references`);
+        return [];
+      }
+
+      const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`
+        },
+        body: JSON.stringify({
+          model: 'mistral-large-latest',
+          messages: [
+            {
+              role: 'user',
+              content: referencePrompt
+            }
+          ],
+          temperature: 0.3,
+          max_tokens: 2000
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`AI API request failed: ${response.status} ${response.statusText}`);
+      }
+
+      const aiResponse = await response.json();
+      const aiContent = aiResponse.choices?.[0]?.message?.content?.trim();
+      
+      if (!aiContent) {
+        throw new Error('No content received from AI service');
+      }
+
+      // Parse the JSON response from AI
+      let generatedReferences;
+      try {
+        generatedReferences = JSON.parse(aiContent);
+      } catch (parseError) {
+        console.warn(`[AIService] Failed to parse AI response as JSON:`, aiContent);
+        throw new Error('Invalid JSON response from AI service');
+      }
+
       if (!Array.isArray(generatedReferences) || generatedReferences.length === 0) {
         console.warn(`[AIService] AI failed to generate authentic references, returning empty array`);
         return [];
