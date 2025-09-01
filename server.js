@@ -726,11 +726,12 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
       'dinosaur', 'toy', 'bellflower', 'crocus', 'flower', 'flowers', 'bud', 'sprout', 'bloom', 'blossom', 'petal', 'petals',
       'daisy', 'daisies', 'tulip', 'tulips', 'rose', 'roses', 'orchid', 'orchids', 'sunflower', 'sunflowers', 'lily', 'lilies',
       'peony', 'peonies', 'gerbera', 'gerberas', 'marigold', 'marigolds', 'carnation', 'carnations', 'bouquet', 'bouquets',
-      'tree', 'trees', 'plant', 'plants', 'garden', 'gardens', 'nature',
+      // Only reject generic nature terms, not contextually relevant ones
+      'garden', 'gardens',
       // Modern objects (completely irrelevant to ancient history)
-      'car', 'vehicle', 'computer', 'phone', 'laptop', 'office', 'kitchen', 'bathroom', 'bedroom', 'furniture', 'building', 'house', 'apartment',
-      // Generic landscape (completely irrelevant to history)
-      'dawn', 'ocean', 'sky', 'sunrise', 'sunset', 'landscape', 'early morning', 'boating', 'intercoastal', 'marsh', 'mountain', 'forest',
+      'car', 'vehicle', 'computer', 'phone', 'laptop', 'office', 'kitchen', 'bathroom', 'bedroom', 'furniture', 'house', 'apartment',
+      // Generic landscape (completely irrelevant to history) - but allow if contextually relevant
+      'dawn', 'ocean', 'sky', 'sunrise', 'sunset', 'early morning', 'boating', 'intercoastal', 'marsh',
       // Modern activities (completely irrelevant to history)
       'sport', 'game', 'exercise', 'fitness', 'cooking', 'shopping', 'business', 'technology', 'digital', 'online', 'web', 'internet'
     ];
@@ -740,11 +741,27 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
     
     for (const term of completelyIrrelevantTerms) {
       if (haystack.includes(term)) {
-        // Allow florals only if course is art-related; otherwise reject in history contexts
-        if (!courseLooksLikeArt && isHistoricalContent) {
-          score -= 10000;
-          console.log(`[ImageScoring] IMMEDIATE REJECTION (historical) floral/irrelevant term "${term}" for ${courseTitle}`);
-          return score;
+        // Check if the term is contextually relevant despite being in the irrelevant list
+        const isContextuallyRelevant = (
+          // Allow "building" if it's clearly historical/architectural
+          (term === 'building' && (haystack.includes('ancient') || haystack.includes('roman') || haystack.includes('temple') || haystack.includes('colosseum') || haystack.includes('architecture'))) ||
+          // Allow "nature" if it's clearly historical context
+          (term === 'nature' && (haystack.includes('ancient') || haystack.includes('roman') || haystack.includes('italy') || haystack.includes('rome'))) ||
+          // Allow "tree" if it's clearly historical context
+          (term === 'tree' && (haystack.includes('ancient') || haystack.includes('roman') || haystack.includes('italy') || haystack.includes('rome'))) ||
+          // Allow "office" if it's clearly historical context
+          (term === 'office' && (haystack.includes('ancient') || haystack.includes('roman') || haystack.includes('government') || haystack.includes('senate')))
+        );
+        
+        if (!isContextuallyRelevant) {
+          // Allow florals only if course is art-related; otherwise reject in history contexts
+          if (!courseLooksLikeArt && isHistoricalContent) {
+            score -= 10000;
+            console.log(`[ImageScoring] IMMEDIATE REJECTION (historical) floral/irrelevant term "${term}" for ${courseTitle}`);
+            return score;
+          }
+        } else {
+          console.log(`[ImageScoring] Allowing contextually relevant term "${term}" in historical context`);
         }
         // For non-historical or art courses, fall through and continue normal scoring
       }
@@ -3608,6 +3625,14 @@ Return only the JSON array, no other text.`;
             cleanedContent = codeMatch[1].trim();
           }
         }
+        
+        // Clean up markdown formatting within the JSON
+        // Remove asterisks around titles and other markdown formatting
+        cleanedContent = cleanedContent
+          .replace(/\*"([^"]+)"\*/g, '"$1"')  // Convert *"text"* to "text"
+          .replace(/\*([^*"]+)\*/g, '"$1"')   // Convert *text* to "text" (without quotes)
+          .replace(/\*"([^"]+)"\*/g, '"$1"')  // Handle nested cases
+          .replace(/\*([^*"]+)\*/g, '"$1"');  // Handle more nested cases
         
         generatedReferences = JSON.parse(cleanedContent);
       } catch (parseError) {
