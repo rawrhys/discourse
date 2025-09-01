@@ -622,7 +622,27 @@ const normalizeForCompare = (str) => String(str || '').toLowerCase().trim();
 const normalizeUrlForCompare = (url) => {
     try {
         if (!url) return '';
-        return String(url).toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '').trim();
+        let normalized = String(url).toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '').trim();
+        
+        // Handle Pixabay URLs specially - they have complex query parameters that should be normalized
+        if (normalized.includes('pixabay.com/get/')) {
+            // Extract the base path and filename for Pixabay URLs
+            const pixabayMatch = normalized.match(/pixabay\.com\/get\/([^\/]+)\/([^\/\?]+)/);
+            if (pixabayMatch) {
+                normalized = `pixabay.com/get/${pixabayMatch[1]}/${pixabayMatch[2]}`;
+            }
+        }
+        
+        // Handle Wikimedia URLs - normalize the path structure
+        if (normalized.includes('upload.wikimedia.org')) {
+            // Extract the key parts of Wikimedia URLs for comparison
+            const wikiMatch = normalized.match(/upload\.wikimedia\.org\/wikipedia\/([^\/]+)\/([^\/]+)\/([^\/\?]+)/);
+            if (wikiMatch) {
+                normalized = `upload.wikimedia.org/wikipedia/${wikiMatch[1]}/${wikiMatch[2]}/${wikiMatch[3]}`;
+            }
+        }
+        
+        return normalized;
     } catch {
         return String(url || '').trim();
     }
@@ -743,9 +763,16 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
       if (courseTopic.toLowerCase().includes(culture)) {
         for (const mismatch of mismatches) {
           if (haystack.includes(mismatch)) {
-            score -= 10000; // Immediate rejection for cultural mismatches
-            console.log(`[ImageScoring] IMMEDIATE REJECTION for cultural mismatch "${mismatch}" in ${culture} course`);
-            return score; // Return immediately to prevent further processing
+            // Only reject if it's a clear mismatch, not just any mention
+            if (haystack.includes(mismatch) && !haystack.includes(culture.toLowerCase())) {
+              score -= 10000; // Immediate rejection for cultural mismatches
+              console.log(`[ImageScoring] IMMEDIATE REJECTION for cultural mismatch "${mismatch}" in ${culture} course`);
+              return score; // Return immediately to prevent further processing
+            } else {
+              // If the image also mentions the correct culture, just apply a penalty instead of rejection
+              score -= 1000;
+              console.log(`[ImageScoring] Cultural mismatch penalty (not rejection) for "${mismatch}" in ${culture} course`);
+            }
           }
         }
       }
@@ -972,7 +999,7 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
 
     // Final validation: ensure minimum relevance for historical content (more permissive)
     if (isHistoricalContent && score < 25) {
-      score -= 1000; // Reduced penalty for low-scoring historical content
+      score -= 500; // Further reduced penalty for low-scoring historical content
       console.log(`[ImageScoring] Reduced penalty for low-scoring historical content: ${score} < 25`);
     }
 
@@ -2466,7 +2493,7 @@ Context: "${context.substring(0, 1000)}..."`;
         const isHistoricalContent = /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(subject) || 
                                    /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(courseContext?.title || '');
         
-        const minScoreThreshold = isHistoricalContent ? 25 : 0; // Further reduced threshold to allow more relevant images
+        const minScoreThreshold = isHistoricalContent ? 10 : 0; // Further reduced threshold to allow more relevant images
           
           if (best.score >= minScoreThreshold) {
             console.log(`[AIService] Selected Wikipedia image for "${subject}" (score ${best.score}): ${best.imageUrl}`);
@@ -2596,7 +2623,7 @@ Context: "${context.substring(0, 1000)}..."`;
         const isHistoricalContent = /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(subject) || 
                                    /\b(ancient|rome|greek|egypt|medieval|renaissance|history|empire|republic|kingdom|dynasty|civilization)\b/i.test(courseContext?.title || '');
         
-        const minScoreThreshold = isHistoricalContent ? 25 : 0; // Further reduced threshold to allow more relevant images
+        const minScoreThreshold = isHistoricalContent ? 10 : 0; // Further reduced threshold to allow more relevant images
         
         if (best.score >= minScoreThreshold) {
           console.log(`[AIService] Selected Pixabay image for "${subject}" (score ${best.score}): ${best.imageUrl}`);
@@ -3566,7 +3593,23 @@ Return only the JSON array, no other text.`;
       // Parse the JSON response from AI
       let generatedReferences;
       try {
-        generatedReferences = JSON.parse(aiContent);
+        // Clean up the AI response - remove markdown code blocks if present
+        let cleanedContent = aiContent;
+        if (cleanedContent.includes('```json')) {
+          // Extract JSON from markdown code block
+          const jsonMatch = cleanedContent.match(/```json\s*([\s\S]*?)\s*```/);
+          if (jsonMatch) {
+            cleanedContent = jsonMatch[1].trim();
+          }
+        } else if (cleanedContent.includes('```')) {
+          // Extract content from generic code block
+          const codeMatch = cleanedContent.match(/```\s*([\s\S]*?)\s*```/);
+          if (codeMatch) {
+            cleanedContent = codeMatch[1].trim();
+          }
+        }
+        
+        generatedReferences = JSON.parse(cleanedContent);
       } catch (parseError) {
         console.warn(`[AIService] Failed to parse AI response as JSON:`, aiContent);
         throw new Error('Invalid JSON response from AI service');
