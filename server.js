@@ -787,23 +787,28 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
       console.log(`[ImageScoring] Immediate rejection for Norse content in Egypt course: "${haystack.substring(0, 100)}"`);
     }
 
-    // STRONGER SUBJECT RELEVANCE CHECKING
+    // ENHANCED SUBJECT RELEVANCE CHECKING
     // The image must contain terms related to the actual subject being studied
     const subjectTerms = subj.split(/\s+/).filter(term => term.length > 2);
     let hasSubjectRelevance = false;
+    let subjectBonus = 0;
     
     for (const term of subjectTerms) {
       if (haystack.includes(term)) {
         hasSubjectRelevance = true;
-        score += 100; // Strong bonus for subject relevance
+        subjectBonus += 100; // Strong bonus for subject relevance
         break;
       }
     }
     
-    // If no subject relevance found, heavily penalize
-    if (!hasSubjectRelevance) {
-      score -= 5000; // Heavy penalty for no subject relevance
-      console.log(`[ImageScoring] HEAVY PENALTY for no subject relevance: "${subj}" not found in image metadata`);
+    // Apply subject bonus if found
+    if (hasSubjectRelevance) {
+      score += subjectBonus;
+      console.log(`[ImageScoring] Subject relevance bonus: +${subjectBonus}`);
+    } else {
+      // Reduced penalty for no subject relevance - be more permissive
+      score -= 500; // Reduced from 5000 to 500
+      console.log(`[ImageScoring] Reduced penalty for no subject relevance: "${subj}" not found in image metadata: -500`);
     }
 
     // Enhanced token-based matching using full course context
@@ -870,45 +875,55 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
       }
     }
 
-    // STRONGER HISTORICAL CONTEXT CHECKING
+    // ENHANCED HISTORICAL CONTEXT CHECKING
     if (isHistoricalContent) {
       // The image must contain historical terms to be considered relevant
-      const historicalTerms = ['ancient', 'historical', 'archaeological', 'classical', 'antiquity', 'rome', 'roman', 'greek', 'egypt', 'medieval', 'renaissance', 'dynasty', 'empire', 'kingdom', 'civilization', 'temple', 'ruins', 'artifact', 'monument', 'statue', 'sculpture', 'mosaic', 'fresco', 'tomb', 'pyramid', 'colosseum', 'forum', 'aqueduct', 'road', 'legion', 'emperor', 'senate', 'pharaoh', 'hieroglyph', 'mummy', 'sphinx', 'obelisk', 'papyrus', 'scroll', 'relief', 'painting', 'architecture', 'burial', 'religion', 'god', 'goddess', 'mythology'];
+      const historicalTerms = ['ancient', 'historical', 'archaeological', 'classical', 'antiquity', 'rome', 'roman', 'greek', 'egypt', 'medieval', 'renaissance', 'dynasty', 'empire', 'kingdom', 'civilization', 'temple', 'ruins', 'artifact', 'monument', 'statue', 'sculpture', 'mosaic', 'fresco', 'tomb', 'pyramid', 'colosseum', 'forum', 'aqueduct', 'road', 'legion', 'emperor', 'senate', 'pharaoh', 'hieroglyph', 'mummy', 'sphinx', 'obelisk', 'papyrus', 'scroll', 'relief', 'painting', 'architecture', 'burial', 'religion', 'god', 'goddess', 'mythology', 'founding', 'republic', 'early', 'period', 'era', 'century', 'bc', 'ad', 'before', 'christ', 'common', 'age'];
       
       let hasHistoricalRelevance = false;
+      let historicalBonus = 0;
       for (const term of historicalTerms) {
         if (haystack.includes(term)) {
           hasHistoricalRelevance = true;
-          score += 25; // Bonus for historical relevance
+          historicalBonus += 25; // Bonus for each historical relevance term found
           break;
         }
       }
       
-      // If no historical relevance found, heavily penalize
-      if (!hasHistoricalRelevance) {
-        score -= 3000; // Heavy penalty for no historical relevance in historical content
-        console.log(`[ImageScoring] HEAVY PENALTY for no historical relevance in historical content`);
+      // Apply historical bonus if found
+      if (hasHistoricalRelevance) {
+        score += historicalBonus;
+        console.log(`[ImageScoring] Historical relevance bonus: +${historicalBonus}`);
+      } else {
+        // Reduced penalty for no historical relevance - be more permissive
+        score -= 500; // Reduced from 3000 to 500
+        console.log(`[ImageScoring] Reduced penalty for no historical relevance in historical content: -500`);
       }
     }
 
-    // STRONGER ART CONTEXT CHECKING
+    // ENHANCED ART CONTEXT CHECKING
     if (isArtContent) {
       // The image must contain art-related terms to be considered relevant
       const artTerms = ['art', 'artist', 'painting', 'sculpture', 'drawing', 'artwork', 'gallery', 'museum', 'canvas', 'oil', 'watercolor', 'acrylic', 'fresco', 'mosaic', 'relief', 'statue', 'bust', 'portrait', 'landscape', 'still life', 'abstract', 'realistic', 'impressionist', 'modern', 'classical', 'renaissance', 'baroque', 'romantic', 'neoclassical', 'medieval', 'ancient', 'prehistoric', 'cave', 'temple', 'architecture', 'design', 'composition', 'color', 'form', 'line', 'texture', 'perspective', 'lighting', 'shadow', 'brush', 'palette', 'easel', 'studio', 'exhibition', 'masterpiece', 'masterwork', 'iconic', 'famous', 'renowned', 'celebrated', 'influential', 'pioneering', 'revolutionary', 'innovative', 'traditional', 'contemporary', 'classical', 'antique', 'vintage', 'heritage', 'cultural', 'historical', 'archaeological', 'anthropological', 'ethnographic', 'decorative', 'ornamental', 'ceremonial', 'ritual', 'religious', 'sacred', 'secular', 'profane', 'domestic', 'public', 'private', 'monumental', 'intimate', 'grand', 'delicate', 'bold', 'subtle', 'dramatic', 'peaceful', 'dynamic', 'static', 'flowing', 'rigid', 'organic', 'geometric', 'naturalistic', 'stylized', 'symbolic', 'narrative', 'allegorical', 'mythological', 'biblical', 'historical', 'portrait', 'landscape', 'genre', 'still life', 'abstract', 'non-objective', 'figurative', 'non-figurative'];
       
       let hasArtRelevance = false;
+      let artBonus = 0;
       for (const term of artTerms) {
         if (haystack.includes(term)) {
           hasArtRelevance = true;
-          score += 30; // Bonus for art relevance
+          artBonus += 30; // Bonus for each art relevance term found
           break;
         }
       }
       
-      // If no art relevance found, heavily penalize
-      if (!hasArtRelevance) {
-        score -= 3000; // Heavy penalty for no art relevance in art content
-        console.log(`[ImageScoring] HEAVY PENALTY for no art relevance in art content`);
+      // Apply art bonus if found
+      if (hasArtRelevance) {
+        score += artBonus;
+        console.log(`[ImageScoring] Art relevance bonus: +${artBonus}`);
+      } else {
+        // Reduced penalty for no art relevance - be more permissive
+        score -= 500; // Reduced from 3000 to 500
+        console.log(`[ImageScoring] Reduced penalty for no art relevance in art content: -500`);
       }
     }
 
@@ -955,10 +970,10 @@ function computeImageRelevanceScore(subject, mainText, meta, courseContext = {})
       console.log(`[ImageScoring] Bonus for Wikipedia image in art content: +30`);
     }
 
-    // Final validation: ensure minimum relevance for historical content
-    if (isHistoricalContent && score < 50) {
-      score -= 5000; // Heavy penalty for low-scoring historical content
-      console.log(`[ImageScoring] HEAVY penalty for low-scoring historical content: ${score} < 50`);
+    // Final validation: ensure minimum relevance for historical content (more permissive)
+    if (isHistoricalContent && score < 25) {
+      score -= 1000; // Reduced penalty for low-scoring historical content
+      console.log(`[ImageScoring] Reduced penalty for low-scoring historical content: ${score} < 25`);
     }
 
     console.log(`[ImageScoring] Final score for "${subj}": ${score}`);
@@ -3120,7 +3135,11 @@ Context: "${context.substring(0, 1000)}..."`;
 
             // Generate authentic bibliography for the lesson based on content
             try {
+              console.log(`[AIService] Starting bibliography generation for "${lesson.title}"`);
               const lessonContentText = `${lesson.content.introduction} ${lesson.content.main_content} ${lesson.content.conclusion}`;
+              console.log(`[AIService] Lesson content length: ${lessonContentText.length} characters`);
+              console.log(`[AIService] AI service API key status: ${this.apiKey ? 'Available' : 'Not available'}`);
+              
               const bibliography = await this.generateAuthenticBibliography(
                 lesson.title, 
                 courseWithIds.subject || 'history', 
@@ -3137,7 +3156,9 @@ Context: "${context.substring(0, 1000)}..."`;
               console.log(`[AIService] Authentic bibliography generated for "${lesson.title}": ${bibliography.length} references`);
             } catch (bibliographyError) {
               console.error(`[AIService] Bibliography generation failed for "${lesson.title}":`, bibliographyError.message);
+              console.error(`[AIService] Bibliography error details:`, bibliographyError);
               // Continue without bibliography
+              lesson.bibliography = []; // Ensure bibliography is always an array
             }
             
             // Flashcards are now generated directly from the lesson's key_terms array
@@ -3497,6 +3518,11 @@ Return only the JSON array, no other text.`;
       // Call the AI service to generate references
       if (!this.apiKey) {
         console.warn(`[AIService] No API key available for generating authentic references`);
+        console.warn(`[AIService] API key status:`, {
+          hasApiKey: !!this.apiKey,
+          apiKeyLength: this.apiKey ? this.apiKey.length : 0,
+          apiKeyPrefix: this.apiKey ? this.apiKey.substring(0, 10) + '...' : 'none'
+        });
         return [];
       }
 
@@ -3520,7 +3546,14 @@ Return only the JSON array, no other text.`;
       });
 
       if (!response.ok) {
-        throw new Error(`AI API request failed: ${response.status} ${response.statusText}`);
+        const errorText = await response.text();
+        console.error(`[AIService] AI API request failed:`, {
+          status: response.status,
+          statusText: response.statusText,
+          errorText: errorText,
+          apiKeyPrefix: this.apiKey ? this.apiKey.substring(0, 10) + '...' : 'none'
+        });
+        throw new Error(`AI API request failed: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
       const aiResponse = await response.json();
@@ -8848,7 +8881,39 @@ app.get(['/assets/images/discourse logo.png', '/assets/images/discourse%20logo.p
 });
 
 // Serve static assets from the dist directory (local build) or public_html directory
-const buildPath = process.env.FRONTEND_PATH || path.join(__dirname, 'dist') || path.join(process.env.HOME || process.env.USERPROFILE || '/root', 'public_html');
+let buildPath;
+if (process.env.FRONTEND_PATH) {
+  buildPath = process.env.FRONTEND_PATH;
+} else {
+  // Try multiple possible locations for the frontend build
+  const possiblePaths = [
+    path.join(__dirname, 'dist'),
+    path.join(process.cwd(), 'dist'),
+    path.join(process.env.HOME || process.env.USERPROFILE || '/root', 'public_html'),
+    path.join(process.env.HOME || process.env.USERPROFILE || '/root', 'discourse', 'dist')
+  ];
+  
+  buildPath = possiblePaths.find(p => fs.existsSync(p) && fs.existsSync(path.join(p, 'index.html')));
+  
+  if (!buildPath) {
+    // Fallback to the first path (dist in current directory)
+    buildPath = path.join(__dirname, 'dist');
+  }
+}
+
+console.log(`[SERVER] Using frontend build path: ${buildPath}`);
+
+// Verify frontend path on startup
+if (!fs.existsSync(buildPath)) {
+  console.error(`[SERVER] ERROR: Frontend build path does not exist: ${buildPath}`);
+  console.error(`[SERVER] Please ensure the frontend is built and available at this location.`);
+} else if (!fs.existsSync(path.join(buildPath, 'index.html'))) {
+  console.error(`[SERVER] ERROR: index.html not found in frontend build path: ${buildPath}`);
+  console.error(`[SERVER] Please ensure the frontend is properly built.`);
+} else {
+  console.log(`[SERVER] ✅ Frontend build verified at: ${buildPath}`);
+}
+
 app.use(express.static(buildPath, {
   // Set cache control for assets. Index is handled separately.
   setHeaders: (res, filePath) => {
@@ -9616,13 +9681,28 @@ app.get('*', (req, res, next) => {
     return next();
   }
   
-  // Check if the public_html directory and index.html exist
+  // Check if the build directory and index.html exist
   const indexPath = path.join(buildPath, 'index.html');
   if (!fs.existsSync(buildPath) || !fs.existsSync(indexPath)) {
     console.warn(`[SERVER] Frontend not found - ${buildPath}/index.html not found`);
+    console.warn(`[SERVER] Current working directory: ${process.cwd()}`);
+    console.warn(`[SERVER] __dirname: ${__dirname}`);
+    console.warn(`[SERVER] Available paths:`, {
+      distExists: fs.existsSync(path.join(__dirname, 'dist')),
+      cwdDistExists: fs.existsSync(path.join(process.cwd(), 'dist')),
+      buildPathExists: fs.existsSync(buildPath),
+      indexPathExists: fs.existsSync(indexPath)
+    });
     return res.status(503).json({
       error: 'Frontend not available',
       message: `The application frontend has not been found at ${buildPath}. Please ensure the frontend is built and deployed to the correct location.`,
+      details: {
+        buildPath,
+        currentWorkingDirectory: process.cwd(),
+        __dirname,
+        distExists: fs.existsSync(path.join(__dirname, 'dist')),
+        cwdDistExists: fs.existsSync(path.join(process.cwd(), 'dist'))
+      },
       timestamp: new Date().toISOString()
     });
   }
