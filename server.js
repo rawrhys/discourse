@@ -3537,27 +3537,23 @@ ${lessonContent.substring(0, 2000)}
 Subject: ${subject}
 Topic: ${topic}
 
-Return the response as a JSON array with objects containing:
-- "author": Real author name
-- "year": Publication year (between 1990-2024)
-- "title": Real book/article title (in quotes for articles, italics for books)
-- "publisher": Real publisher name
-- "type": "book", "journal", "encyclopedia", or "website"
-- "relevance": Brief explanation of why this source is relevant to the lesson content
+Return the response as a simple text list with one reference per line in this format:
+Author: [Author Name]
+Year: [Publication Year]
+Title: [Book/Article Title]
+Publisher: [Publisher Name]
+Type: [book/journal/encyclopedia/website]
+Relevance: [Brief explanation of relevance]
 
 Example format:
-[
-  {
-    "author": "John Smith",
-    "year": "2020",
-    "title": "Ancient Civilizations: A Comprehensive Study",
-    "publisher": "Oxford University Press",
-    "type": "book",
-    "relevance": "Comprehensive coverage of ancient civilizations including the topics discussed in this lesson"
-  }
-]
+Author: John Smith
+Year: 2020
+Title: Ancient Civilizations: A Comprehensive Study
+Publisher: Oxford University Press
+Type: book
+Relevance: Comprehensive coverage of ancient civilizations including the topics discussed in this lesson
 
-Return only the JSON array, no other text.`;
+Return only the text list, no other formatting or text.`;
 
       // Call the AI service to generate references
       if (!this.apiKey) {
@@ -3607,72 +3603,30 @@ Return only the JSON array, no other text.`;
         throw new Error('No content received from AI service');
       }
 
-      // Parse the JSON response from AI
+      // Parse the plain text response from AI
       let generatedReferences;
-      let cleanedContent = ''; // Initialize to avoid reference errors
       try {
-        // Clean up the AI response - remove markdown code blocks if present
-        cleanedContent = aiContent;
-        if (cleanedContent.includes('```json')) {
-          // Extract JSON from markdown code block
-          const jsonMatch = cleanedContent.match(/```json\s*([\s\S]*?)\s*```/);
-          if (jsonMatch) {
-            cleanedContent = jsonMatch[1].trim();
-          }
-        } else if (cleanedContent.includes('```')) {
-          // Extract content from generic code block
+        // Clean up the AI response - remove any markdown code blocks if present
+        let cleanedContent = aiContent;
+        if (cleanedContent.includes('```')) {
+          // Extract content from any code block
           const codeMatch = cleanedContent.match(/```\s*([\s\S]*?)\s*```/);
           if (codeMatch) {
             cleanedContent = codeMatch[1].trim();
           }
         }
         
-        // Clean up markdown formatting within the JSON
-        // Remove asterisks around titles and other markdown formatting
-        cleanedContent = cleanedContent
-          // Handle asterisks around quoted strings: *"text"* -> "text"
-          .replace(/\*"([^"]+)"\*/g, '"$1"')
-          // Handle asterisks around unquoted text: *text* -> "text"
-          .replace(/\*([^*"]+?)\*/g, '"$1"')
-          // Handle mixed cases like *"text"*, "additional" -> "text, additional"
-          .replace(/\*"([^"]+)"\*,\s*"([^"]+)"/g, '"$1, $2"')
-          // Handle complex publisher formats: *"Journal"*, "Volume" -> "Journal, Volume"
-          .replace(/\*"([^"]+)"\*,\s*"([^"]+)"\s*\)/g, '"$1, $2"')
-          // Handle remaining asterisks in any context
-          .replace(/\*([^*]+?)\*/g, '"$1"')
-          // Clean up any double quotes that might have been created
-          .replace(/""/g, '"')
-          // Handle edge cases with multiple asterisks
-          .replace(/\*+/g, '');
+        // Parse the plain text format
+        generatedReferences = this.parseTextReferences(cleanedContent);
         
-        // Fix duplicate publisher fields and other structural issues
-        cleanedContent = cleanedContent
-          // Remove duplicate publisher fields (keep the last one)
-          .replace(/"publisher":\s*"[^"]*",\s*"publisher":\s*"([^"]*)"/g, '"publisher": "$1"')
-          // Fix malformed publisher entries with parentheses
-          .replace(/"publisher":\s*"[^"]*"\s*\([^)]*\)/g, (match) => {
-            const cleanMatch = match.replace(/\([^)]*\)/g, '').replace(/,\s*$/, '');
-            return cleanMatch;
-          })
-          // Clean up any remaining structural issues
-          .replace(/,\s*}/g, '}')  // Remove trailing commas before closing braces
-          .replace(/,\s*]/g, ']')  // Remove trailing commas before closing brackets
-          .replace(/\n\s*\n/g, '\n')  // Remove empty lines
-          .trim();
-        
-        // Debug logging to help troubleshoot parsing issues
+        // Debug logging
         console.log(`[AIService] Original AI content length: ${aiContent.length}`);
-        console.log(`[AIService] Cleaned content length: ${cleanedContent.length}`);
-        console.log(`[AIService] Cleaned content preview: ${cleanedContent.substring(0, 300)}...`);
+        console.log(`[AIService] Parsed ${generatedReferences.length} references from text format`);
         
-        generatedReferences = JSON.parse(cleanedContent);
       } catch (parseError) {
-        console.warn(`[AIService] Failed to parse AI response as JSON:`, aiContent);
+        console.warn(`[AIService] Failed to parse AI response as text:`, aiContent);
         console.warn(`[AIService] Parse error:`, parseError.message);
-        if (cleanedContent) {
-          console.warn(`[AIService] Cleaned content:`, cleanedContent.substring(0, 500));
-        }
-        throw new Error('Invalid JSON response from AI service');
+        throw new Error('Invalid text response from AI service');
       }
 
       if (!Array.isArray(generatedReferences) || generatedReferences.length === 0) {
@@ -3718,6 +3672,65 @@ Return only the JSON array, no other text.`;
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
     return shuffled;
+  }
+
+  /**
+   * Parse plain text references into structured objects
+   * @param {string} textContent - Plain text content with references
+   * @returns {Array} Array of reference objects
+   */
+  parseTextReferences(textContent) {
+    const references = [];
+    const lines = textContent.split('\n').map(line => line.trim()).filter(line => line);
+    
+    let currentRef = {};
+    
+    for (const line of lines) {
+      if (line.startsWith('Author:')) {
+        // If we have a complete reference, save it
+        if (currentRef.author && currentRef.title) {
+          references.push(this.createReferenceObject(currentRef));
+        }
+        // Start new reference
+        currentRef = { author: line.replace('Author:', '').trim() };
+      } else if (line.startsWith('Year:')) {
+        currentRef.year = line.replace('Year:', '').trim();
+      } else if (line.startsWith('Title:')) {
+        currentRef.title = line.replace('Title:', '').trim();
+      } else if (line.startsWith('Publisher:')) {
+        currentRef.publisher = line.replace('Publisher:', '').trim();
+      } else if (line.startsWith('Type:')) {
+        currentRef.type = line.replace('Type:', '').trim();
+      } else if (line.startsWith('Relevance:')) {
+        currentRef.relevance = line.replace('Relevance:', '').trim();
+      }
+    }
+    
+    // Don't forget the last reference
+    if (currentRef.author && currentRef.title) {
+      references.push(this.createReferenceObject(currentRef));
+    }
+    
+    return references;
+  }
+
+  /**
+   * Create a properly formatted reference object
+   * @param {Object} refData - Raw reference data
+   * @returns {Object} Formatted reference object
+   */
+  createReferenceObject(refData) {
+    return {
+      id: Date.now() + Math.random(), // Simple unique ID
+      author: refData.author || 'Unknown Author',
+      year: refData.year || 'Unknown Year',
+      title: refData.title || 'Unknown Title',
+      publisher: refData.publisher || 'Unknown Publisher',
+      type: refData.type || 'book',
+      relevance: refData.relevance || 'Relevant to the topic',
+      verified: true, // Mark as verified since they're AI-generated authentic references
+      citationNumber: 1 // Will be updated when added to bibliography
+    };
   }
 
   /**
