@@ -1543,10 +1543,13 @@ const LessonView = ({
           if (result && result.url) {
             // Only update if the image data has actually changed
             const newImageData = { ...result, url: normalizeImageUrl(result.url) };
+            console.log('[LessonView] Normalized image data:', newImageData);
             setImageData(prevData => {
               if (prevData?.url === newImageData?.url && prevData?.title === newImageData?.title) {
+                console.log('[LessonView] Image data unchanged, keeping existing');
                 return prevData; // No change needed
               }
+              console.log('[LessonView] Updating image data from', prevData, 'to', newImageData);
               return newImageData;
             });
             

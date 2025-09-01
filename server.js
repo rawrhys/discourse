@@ -2769,11 +2769,18 @@ Context: "${context.substring(0, 1000)}..."`;
       
       // If the selected image is already being used, try to find an alternative
       if (selectedImage && usedImageUrls.length > 0) {
+        // Check both the proxied URL and the original source URL for duplicates
         const normalizedSelectedUrl = normalizeUrlForCompare(selectedImage.imageUrl);
-        const isAlreadyUsed = usedImageUrls.some(url => normalizeUrlForCompare(url) === normalizedSelectedUrl);
+        const normalizedSourceUrl = selectedImage.sourceUrlForCaching ? normalizeUrlForCompare(selectedImage.sourceUrlForCaching) : null;
+        
+        const isAlreadyUsed = usedImageUrls.some(url => {
+          const normalizedUrl = normalizeUrlForCompare(url);
+          return normalizedUrl === normalizedSelectedUrl || (normalizedSourceUrl && normalizedUrl === normalizedSourceUrl);
+        });
         
         if (isAlreadyUsed) {
           console.log(`[AIService] Selected image is already used, trying alternative for "${subject}" (used URLs: ${usedImageUrls.length})`);
+          console.log(`[AIService] Duplicate check - Selected URL: ${normalizedSelectedUrl}, Source URL: ${normalizedSourceUrl}`);
           
           // Try the other service if available
           if (wiki && pixa && selectedImage === wiki) {
@@ -2796,13 +2803,20 @@ Context: "${context.substring(0, 1000)}..."`;
         }
       }
       
-      // Log if we had to reject an image due to duplicates
+      // Final duplicate check - but be more lenient to avoid rejecting good images
       if (selectedImage && usedImageUrls.length > 0) {
         const normalizedSelectedUrl = normalizeUrlForCompare(selectedImage.imageUrl);
-        const isAlreadyUsed = usedImageUrls.some(url => normalizeUrlForCompare(url) === normalizedSelectedUrl);
+        const normalizedSourceUrl = selectedImage.sourceUrlForCaching ? normalizeUrlForCompare(selectedImage.sourceUrlForCaching) : null;
+        
+        const isAlreadyUsed = usedImageUrls.some(url => {
+          const normalizedUrl = normalizeUrlForCompare(url);
+          return normalizedUrl === normalizedSelectedUrl || (normalizedSourceUrl && normalizedUrl === normalizedSourceUrl);
+        });
+        
         if (isAlreadyUsed) {
-          console.log(`[AIService] WARNING: Could not find alternative image for "${subject}", returning null to prevent duplicate`);
-          selectedImage = null;
+          console.log(`[AIService] WARNING: Could not find alternative image for "${subject}", but allowing this image to prevent no-image scenario`);
+          // Don't return null - allow the image to be used even if it's a duplicate
+          // This prevents the "no images found" scenario
         }
       }
     
