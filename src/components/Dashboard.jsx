@@ -411,66 +411,85 @@ const Dashboard = () => {
     setEtaStartMs(Date.now());
     setEtaRemainingSec(estimated);
 
-    // Fire and forget the API call
-    api.generateCourse(
-      courseParams.prompt, 
-      courseParams.difficultyLevel || 'intermediate',
-      modules,
-      lessons
-    ).then(result => {
+    try {
+      // Check for content policy violations before starting generation
+      const result = await api.generateCourse(
+        courseParams.prompt, 
+        courseParams.difficultyLevel || 'intermediate',
+        modules,
+        lessons
+      );
+      
       logger.debug('✅ [COURSE GENERATION] API call returned a result (this might be rare for long generations):', result);
-    }).catch(error => {
-      logger.error('💥 [COURSE GENERATION] API call failed or timed out (expected for long generations):', error.message);
-    });
-
-    // Immediately update UI and start monitoring
-    setShowNewCourseForm(false);
-    setIsMonitoring(true);
-    try { await refreshCredits(); } catch {}
-    setSuccessMessage(`Course generation for "${courseParams.prompt}" has started. It will appear on your dashboard shortly.`);
-    setShowSuccessToast(true);
-    
-    setTimeout(() => setShowSuccessToast(false), 8000);
-    
-    // Multiple fallback refreshes to catch courses that might not trigger SSE
-    // First fallback: 10 seconds
-    setTimeout(async () => {
-      try {
-        logger.debug('🔄 [COURSE GENERATION] First fallback refresh (10s)');
-        await fetchSavedCourses(true);
-      } catch (error) {
-        logger.warn('⚠️ [COURSE GENERATION] First fallback refresh failed:', error.message);
-      }
-    }, 10000);
-    
-    // Second fallback: 30 seconds
-    setTimeout(async () => {
-      try {
-        logger.debug('🔄 [COURSE GENERATION] Second fallback refresh (30s)');
-        await fetchSavedCourses(true);
-        
-        // Check if we got a new course
-        const currentCount = savedCourses.length;
-        const newCourses = await api.getSavedCourses();
-        if (Array.isArray(newCourses) && newCourses.length > currentCount) {
-          logger.info('🎉 [COURSE GENERATION] Second fallback refresh found new course!');
-          setSavedCourses(newCourses);
-          try { await refreshCredits(); } catch {}
-          setSuccessMessage('Course generation completed! New course found via fallback refresh.');
-          setShowSuccessToast(true);
-          
-          // Auto-dismiss the success toast after 5 seconds
-          setTimeout(() => {
-            setShowSuccessToast(false);
-          }, 5000);
-          
-          setIsGenerating(false);
-          setIsMonitoring(false);
+      
+      // If we get here, the course generation was accepted and started
+      setShowNewCourseForm(false);
+      setIsMonitoring(true);
+      try { await refreshCredits(); } catch {}
+      setSuccessMessage(`Course generation for "${courseParams.prompt}" has started. It will appear on your dashboard shortly.`);
+      setShowSuccessToast(true);
+      
+      setTimeout(() => setShowSuccessToast(false), 8000);
+      
+      // Multiple fallback refreshes to catch courses that might not trigger SSE
+      // First fallback: 10 seconds
+      setTimeout(async () => {
+        try {
+          logger.debug('🔄 [COURSE GENERATION] First fallback refresh (10s)');
+          await fetchSavedCourses(true);
+        } catch (error) {
+          logger.warn('⚠️ [COURSE GENERATION] First fallback refresh failed:', error.message);
         }
-      } catch (error) {
-        logger.warn('⚠️ [COURSE GENERATION] Second fallback refresh failed:', error.message);
+      }, 10000);
+      
+      // Second fallback: 30 seconds
+      setTimeout(async () => {
+        try {
+          logger.debug('🔄 [COURSE GENERATION] Second fallback refresh (30s)');
+          await fetchSavedCourses(true);
+          
+          // Check if we got a new course
+          const currentCount = savedCourses.length;
+          const newCourses = await api.getSavedCourses();
+          if (Array.isArray(newCourses) && newCourses.length > currentCount) {
+            logger.info('🎉 [COURSE GENERATION] Second fallback refresh found new course!');
+            setSavedCourses(newCourses);
+            try { await refreshCredits(); } catch {}
+            setSuccessMessage('Course generation completed! New course found via fallback refresh.');
+            setShowSuccessToast(true);
+            
+            // Auto-dismiss the success toast after 5 seconds
+            setTimeout(() => {
+              setShowSuccessToast(false);
+            }, 5000);
+            
+            setIsGenerating(false);
+            setIsMonitoring(false);
+          }
+        } catch (error) {
+          logger.warn('⚠️ [COURSE GENERATION] Second fallback refresh failed:', error.message);
+        }
+      }, 30000);
+      
+    } catch (error) {
+      logger.error('💥 [COURSE GENERATION] API call failed:', error.message);
+      
+      // Handle content policy violations specifically
+      if (error.status === 400 && error.message.includes('content policy')) {
+        setError('The topic you entered contains inappropriate content and cannot be used to generate a course. Please choose a different, educational topic that is suitable for learning.');
+        setShowNewCourseForm(true); // Keep the form open so user can try again
+      } else {
+        // Handle other errors (network, server issues, etc.)
+        setError(error.message || 'Failed to start course generation. Please try again.');
+        setShowNewCourseForm(true); // Keep the form open so user can try again
       }
-    }, 30000);
+      
+      // Reset generation state
+      setIsGenerating(false);
+      setIsMonitoring(false);
+      setEtaTotalSec(0);
+      setEtaRemainingSec(0);
+    }
 
   }, [api, user?.id, savedCourses.length, fetchSavedCourses]);
 
