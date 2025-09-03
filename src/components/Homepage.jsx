@@ -10,13 +10,13 @@ const Homepage = () => {
   
   // Animation triggers
   const heroRef = useRef(null);
-  const differenceRef = useRef(null);
+
   const featuresRef = useRef(null);
   const howItWorksRef = useRef(null);
   const ctaRef = useRef(null);
   
   const heroInView = useInView(heroRef, { once: true, amount: 0.3 });
-  const differenceInView = useInView(differenceRef, { once: true, amount: 0.2 });
+
   const featuresInView = useInView(featuresRef, { once: true, amount: 0.2 });
   const howItWorksInView = useInView(howItWorksRef, { once: true, amount: 0.2 });
   const ctaInView = useInView(ctaRef, { once: true, amount: 0.3 });
@@ -29,32 +29,7 @@ const Homepage = () => {
     navigate('/login');
   };
 
-  const differences = [
-    {
-      icon: "🎯",
-      title: "Structured Learning Paths",
-      description: "Unlike ChatGPT's conversational approach, we create complete, structured courses with clear learning objectives, progress tracking, and assessment tools.",
-      comparison: "ChatGPT: Random conversations"
-    },
-    {
-      icon: "📈",
-      title: "Personalized Progress Tracking",
-      description: "Our AI adapts to your learning pace and style, providing detailed analytics and personalized recommendations to optimize your learning journey.",
-      comparison: "ChatGPT: No progress tracking"
-    },
-    {
-      icon: "🎨",
-      title: "Interactive Multimedia Content",
-      description: "Experience rich, interactive lessons with images, quizzes, and multimedia elements designed specifically for effective learning retention.",
-      comparison: "ChatGPT: Text-only responses"
-    },
-    {
-      icon: "🏆",
-      title: "Achievement & Certification System",
-      description: "Earn certificates, badges, and achievements as you complete courses, providing tangible proof of your learning accomplishments.",
-      comparison: "ChatGPT: No certification system"
-    }
-  ];
+
 
   const features = [
     {
@@ -234,11 +209,7 @@ const Homepage = () => {
           <p className="section-subtitle">
             While ChatGPT excels at conversation, we specialize in structured, measurable learning experiences
           </p>
-          <div className="difference-intro">
-            <p className="difference-intro-text">
-              The new "Why Choose Discourse Over ChatGPT?" section strategically positions your learning platform as the superior choice for structured education. This compelling comparison section directly addresses why users should choose your specialized learning platform over the popular but general-purpose ChatGPT. The section features four key differentiators that make the value proposition immediately obvious to visitors, transforming your homepage from a generic AI platform into a specialized educational solution that directly competes with and differentiates from the market leader.
-            </p>
-          </div>
+
         </motion.div>
         
         <div className="differences-grid">
