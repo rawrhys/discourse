@@ -8072,8 +8072,21 @@ app.post('/api/public/courses/:courseId/username',
         console.error(`[API] setUsername method not available on publicCourseSessionService:`, {
           serviceType: typeof publicCourseSessionService,
           serviceMethods: Object.getOwnPropertyNames(publicCourseSessionService),
-          prototypeMethods: Object.getOwnPropertyNames(Object.getPrototypeOf(publicCourseSessionService))
+          prototypeMethods: Object.getOwnPropertyNames(Object.getPrototypeOf(publicCourseSessionService)),
+          serviceConstructor: publicCourseSessionService.constructor?.name
         });
+        
+        // Try to re-import the service if it's not working
+        try {
+          const { default: freshService } = await import('./src/services/PublicCourseSessionService.js');
+          if (typeof freshService.setUsername === 'function') {
+            console.log('[API] Successfully re-imported service, using fresh instance');
+            return res.status(500).json({ error: 'Service temporarily unavailable, please retry' });
+          }
+        } catch (reimportError) {
+          console.error('[API] Failed to re-import service:', reimportError);
+        }
+        
         return res.status(500).json({ error: 'setUsername method not available' });
       }
       
@@ -8092,6 +8105,7 @@ app.post('/api/public/courses/:courseId/username',
       let success = false;
       try {
         success = publicCourseSessionService.setUsername(actualSessionId, firstName, lastName);
+        console.log(`[API] setUsername result for session ${actualSessionId}: ${success}`);
       } catch (error) {
         console.error(`[API] Error calling setUsername:`, error);
         // Fallback: manually update the session
@@ -8102,6 +8116,8 @@ app.post('/api/public/courses/:courseId/username',
           session.lastActivity = Date.now();
           success = true;
           console.log(`[API] Fallback: Manually set username for session ${actualSessionId}: ${firstName} ${lastName}`);
+        } else {
+          console.error(`[API] Fallback failed: Session ${actualSessionId} not found for manual update`);
         }
       }
       

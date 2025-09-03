@@ -576,7 +576,8 @@ const SimpleImageService = {
   // Get course context to check if the entire course is music-related
   async getCourseContext(courseId) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/courses/${courseId}`);
+      // Use public endpoint for public courses
+      const response = await fetch(`${API_BASE_URL}/api/public/courses/${courseId}`);
       if (response.ok) {
         const course = await response.json();
         return course;
