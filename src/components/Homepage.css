@@ -37,10 +37,10 @@
 }
 
 .logo-icon-large {
-  width: 120px;
-  height: 120px;
-  border-radius: 16px;
-  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.25));
+  width: 80px;
+  height: 80px;
+  border-radius: 12px;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.25));
 }
 
 .logo-text {
@@ -93,6 +93,111 @@
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+}
+
+/* Difference Section */
+.difference-section {
+  background: rgba(0, 0, 0, 0.1);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.differences-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 2rem;
+  max-width: 1200px;
+  margin: 0 auto 4rem;
+}
+
+.difference-card {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+  padding: 2.5rem;
+  text-align: center;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.difference-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(45deg, #3b82f6, #1d4ed8);
+  transform: scaleX(0);
+  transition: transform 0.3s ease;
+}
+
+.difference-card:hover::before {
+  transform: scaleX(1);
+}
+
+.difference-icon {
+  font-size: 3rem;
+  margin-bottom: 1.5rem;
+  display: block;
+}
+
+.difference-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: #fff;
+}
+
+.difference-description {
+  opacity: 0.9;
+  line-height: 1.6;
+  margin-bottom: 1.5rem;
+  font-size: 1rem;
+}
+
+.comparison-badge {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.comparison-label {
+  background: linear-gradient(45deg, #ef4444, #dc2626);
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.comparison-text {
+  font-size: 0.875rem;
+  opacity: 0.8;
+  font-style: italic;
+}
+
+.difference-cta {
+  text-align: center;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.difference-cta-text {
+  font-size: 1.25rem;
+  opacity: 0.9;
+  margin-bottom: 2rem;
+  line-height: 1.6;
 }
 
 .hero-subtitle {
@@ -196,6 +301,7 @@
 }
 
 /* Sections */
+.difference-section,
 .features-section,
 .how-it-works-section,
 .cta-section {
@@ -364,8 +470,8 @@
   }
   
   .logo-icon-large {
-    width: 90px;
-    height: 90px;
+    width: 60px;
+    height: 60px;
   }
   
   .hero-section {
@@ -412,6 +518,15 @@
     font-size: 1.1rem;
   }
   
+  .differences-grid {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+  
+  .difference-card {
+    padding: 2rem;
+  }
+  
   .features-grid {
     grid-template-columns: 1fr;
     gap: 1.5rem;
@@ -446,8 +561,8 @@
 
 @media (max-width: 480px) {
   .logo-icon-large {
-    width: 70px;
-    height: 70px;
+    width: 50px;
+    height: 50px;
   }
   
   .hero-title {
@@ -465,6 +580,14 @@
   
   .section-title {
     font-size: 1.75rem;
+  }
+  
+  .difference-card {
+    padding: 1.5rem;
+  }
+  
+  .difference-cta-text {
+    font-size: 1.1rem;
   }
   
   .feature-card {

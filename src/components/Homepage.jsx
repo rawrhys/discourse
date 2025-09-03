@@ -10,11 +10,13 @@ const Homepage = () => {
   
   // Animation triggers
   const heroRef = useRef(null);
+  const differenceRef = useRef(null);
   const featuresRef = useRef(null);
   const howItWorksRef = useRef(null);
   const ctaRef = useRef(null);
   
   const heroInView = useInView(heroRef, { once: true, amount: 0.3 });
+  const differenceInView = useInView(differenceRef, { once: true, amount: 0.2 });
   const featuresInView = useInView(featuresRef, { once: true, amount: 0.2 });
   const howItWorksInView = useInView(howItWorksRef, { once: true, amount: 0.2 });
   const ctaInView = useInView(ctaRef, { once: true, amount: 0.3 });
@@ -26,6 +28,33 @@ const Homepage = () => {
   const handleSignIn = () => {
     navigate('/login');
   };
+
+  const differences = [
+    {
+      icon: "🎯",
+      title: "Structured Learning Paths",
+      description: "Unlike ChatGPT's conversational approach, we create complete, structured courses with clear learning objectives, progress tracking, and assessment tools.",
+      comparison: "ChatGPT: Random conversations"
+    },
+    {
+      icon: "📈",
+      title: "Personalized Progress Tracking",
+      description: "Our AI adapts to your learning pace and style, providing detailed analytics and personalized recommendations to optimize your learning journey.",
+      comparison: "ChatGPT: No progress tracking"
+    },
+    {
+      icon: "🎨",
+      title: "Interactive Multimedia Content",
+      description: "Experience rich, interactive lessons with images, quizzes, and multimedia elements designed specifically for effective learning retention.",
+      comparison: "ChatGPT: Text-only responses"
+    },
+    {
+      icon: "🏆",
+      title: "Achievement & Certification System",
+      description: "Earn certificates, badges, and achievements as you complete courses, providing tangible proof of your learning accomplishments.",
+      comparison: "ChatGPT: No certification system"
+    }
+  ];
 
   const features = [
     {
@@ -188,6 +217,63 @@ const Homepage = () => {
               </div>
             </motion.div>
           </div>
+        </motion.div>
+      </section>
+
+      {/* Point of Difference Section */}
+      <section className="difference-section" ref={differenceRef}>
+        <motion.div 
+          className="section-header"
+          initial={{ opacity: 0, y: 30 }}
+          animate={differenceInView ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.8 }}
+        >
+          <h2 className="section-title">
+            Why Choose Discourse Over <span className="gradient-text">ChatGPT?</span>
+          </h2>
+          <p className="section-subtitle">
+            While ChatGPT excels at conversation, we specialize in structured, measurable learning experiences
+          </p>
+        </motion.div>
+        
+        <div className="differences-grid">
+          {differences.map((difference, index) => (
+            <motion.div
+              key={index}
+              className="difference-card"
+              initial={{ opacity: 0, y: 30 }}
+              animate={differenceInView ? { opacity: 1, y: 0 } : {}}
+              transition={{ duration: 0.6, delay: index * 0.1 }}
+              whileHover={{ y: -10, scale: 1.02 }}
+            >
+              <div className="difference-icon">{difference.icon}</div>
+              <h3 className="difference-title">{difference.title}</h3>
+              <p className="difference-description">{difference.description}</p>
+              <div className="comparison-badge">
+                <span className="comparison-label">vs</span>
+                <span className="comparison-text">{difference.comparison}</span>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+        
+        <motion.div 
+          className="difference-cta"
+          initial={{ opacity: 0, y: 30 }}
+          animate={differenceInView ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.8, delay: 0.6 }}
+        >
+          <p className="difference-cta-text">
+            Ready to experience the difference? Join thousands of learners who've made the switch.
+          </p>
+          <motion.button
+            className="cta-button primary"
+            onClick={handleSignIn}
+            whileHover={{ scale: 1.05, boxShadow: "0 20px 40px rgba(59, 130, 246, 0.3)" }}
+            whileTap={{ scale: 0.95 }}
+          >
+            Start Your Learning Journey
+          </motion.button>
         </motion.div>
       </section>
 
