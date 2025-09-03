@@ -10,6 +10,7 @@ import Image from './Image.jsx';
 import { publicTTSService } from '../services/TTSService.js';
 import markdownService from '../services/MarkdownService';
 import quizPersistenceService from '../services/QuizPersistenceService';
+import { useApiWrapper } from '../services/api';
 import './LessonView.css';
 
 // Function to extract references from content
@@ -355,6 +356,8 @@ const PublicLessonView = ({
   courseDescription,
   sessionId // Add sessionId prop
 }) => {
+  const api = useApiWrapper();
+  
   // Debug logging to see what props are received
   console.log('[PublicLessonView] Component rendered with props:', {
     hasLesson: !!lesson,
@@ -383,6 +386,7 @@ const PublicLessonView = ({
   // Academic references state
   const [academicReferences, setAcademicReferences] = useState([]);
   const [referencesFooter, setReferencesFooter] = useState(null);
+  const [isGeneratingBibliography, setIsGeneratingBibliography] = useState(false);
   
   // TTS state management (matching private LessonView)
   const [ttsStatus, setTtsStatus] = useState({
@@ -1323,6 +1327,60 @@ const PublicLessonView = ({
     console.log('[PublicLessonView] Citation clicked:', referenceId);
   }, []);
 
+  // Handle bibliography generation
+  const handleGenerateBibliography = useCallback(async () => {
+    if (!lesson?.title || !subject || isGeneratingBibliography) return;
+    
+    setIsGeneratingBibliography(true);
+    
+    try {
+      console.log('[PublicLessonView] Generating bibliography for:', lesson.title);
+      
+      const currentLessonId = lesson.id || `${lesson.title}_${subject}`;
+      
+      // Use AI service to generate authentic academic references
+      const references = await api.generateAuthenticBibliography(
+        lesson.title,
+        subject,
+        5, // Number of references
+        deferredContent || cleanAndCombineContent(lesson.content)
+      );
+      
+      if (references && references.length > 0) {
+        console.log('[PublicLessonView] Generated bibliography:', references);
+        
+        // Update the academic references
+        setAcademicReferences(references);
+        
+        // Save the generated references for future use
+        AcademicReferencesService.saveReferences(currentLessonId, references);
+        
+        // Mark this lesson as processed
+        AcademicReferencesService.setLastProcessedLessonId(currentLessonId);
+        
+        // Create references footer
+        const footer = AcademicReferencesService.createReferencesFooter(references);
+        setReferencesFooter(footer);
+        
+        // Generate content with inline citations
+        const { content: contentWithInlineCitations } = AcademicReferencesService.generateInlineCitations(
+          deferredContent || cleanAndCombineContent(lesson.content),
+          references
+        );
+        
+        setDeferredContent(contentWithInlineCitations);
+        
+        console.log('[PublicLessonView] Bibliography generated and applied successfully');
+      } else {
+        console.warn('[PublicLessonView] No bibliography generated');
+      }
+    } catch (error) {
+      console.error('[PublicLessonView] Error generating bibliography:', error);
+    } finally {
+      setIsGeneratingBibliography(false);
+    }
+  }, [lesson, subject, deferredContent, isGeneratingBibliography]);
+
   // Cleanup TTS when component unmounts
   useEffect(() => {
     return () => {
@@ -1823,6 +1881,15 @@ const PublicLessonView = ({
           >
             <i className={`mr-2 ${ttsStatus.isPlaying ? 'fas fa-pause' : ttsStatus.isPaused ? 'fas fa-play' : 'fas fa-volume-up'}`}></i>
             {ttsStatus.isPlaying ? 'Pause' : ttsStatus.isPaused ? 'Resume' : 'Read Aloud'}
+          </button>
+          <button
+            onClick={handleGenerateBibliography}
+            className="px-4 py-2 text-sm font-medium rounded-md transition-colors bg-purple-600 text-white hover:bg-purple-700"
+            title="Generate bibliography for this lesson"
+            disabled={isGeneratingBibliography}
+          >
+            <i className={`mr-2 ${isGeneratingBibliography ? 'fas fa-spinner fa-spin' : 'fas fa-book'}`}></i>
+            {isGeneratingBibliography ? 'Generating...' : 'Generate Bibliography'}
           </button>
           {(ttsStatus.isPlaying || ttsStatus.isPaused) && (
             <button

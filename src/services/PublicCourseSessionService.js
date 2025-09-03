@@ -167,6 +167,35 @@ class PublicCourseSessionService {
   }
 
   /**
+   * Set username for a session
+   */
+  setUsername(sessionId, firstName, lastName) {
+    const session = this.sessions.get(sessionId);
+    if (session) {
+      session.firstName = firstName;
+      session.lastName = lastName;
+      session.lastActivity = Date.now();
+      console.log(`[PublicCourseSession] Set username for session ${sessionId}: ${firstName} ${lastName}`);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Get username for a session
+   */
+  getUsername(sessionId) {
+    const session = this.getSession(sessionId);
+    if (session && session.firstName && session.lastName) {
+      return {
+        firstName: session.firstName,
+        lastName: session.lastName
+      };
+    }
+    return null;
+  }
+
+  /**
    * Release a session (mark as inactive)
    */
   releaseSession(sessionId) {

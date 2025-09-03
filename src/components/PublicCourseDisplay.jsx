@@ -18,6 +18,7 @@ import imagePerformanceMonitor from '../services/ImagePerformanceMonitor';
 import AcademicReferencesFooter from './AcademicReferencesFooter';
 import AcademicReferencesService from '../services/AcademicReferencesService';
 import publicCourseSessionService from '../services/PublicCourseSessionService';
+import NameEntryModal from './NameEntryModal';
 
 // Lazy load QuizView
 const QuizView = lazy(() => import('./QuizView'));
@@ -174,6 +175,8 @@ const PublicCourseDisplay = () => {
   });
   const [imageData, setImageData] = useState(null);
   const [imageLoading, setImageLoading] = useState(false);
+  const [showNameEntryModal, setShowNameEntryModal] = useState(false);
+  const [userName, setUserName] = useState(null);
 
   // Refs
   const ttsStateUpdateTimeoutRef = useRef(null);
@@ -343,6 +346,42 @@ const PublicCourseDisplay = () => {
       return null;
     }
   }, [academicReferences]);
+
+  // Check if user has entered their name
+  const checkUserName = useCallback(async (sessionId) => {
+    try {
+      const response = await fetch(`/api/public/courses/${courseId}/username?sessionId=${sessionId}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.firstName && data.lastName) {
+          setUserName({
+            firstName: data.firstName,
+            lastName: data.lastName
+          });
+          setShowNameEntryModal(false);
+        } else {
+          setShowNameEntryModal(true);
+        }
+      } else {
+        setShowNameEntryModal(true);
+      }
+    } catch (error) {
+      console.error('Error checking username:', error);
+      setShowNameEntryModal(true);
+    }
+  }, [courseId]);
+
+  // Handle name submission
+  const handleNameSubmit = useCallback((nameData) => {
+    setUserName(nameData);
+    setShowNameEntryModal(false);
+  }, []);
+
+  // Handle name modal close
+  const handleNameModalClose = useCallback(() => {
+    // Don't allow closing the modal without entering a name
+    // The user must enter their name to continue
+  }, []);
 
   // Callbacks
   const normalizeImageUrl = useCallback((url) => {
@@ -795,6 +834,9 @@ const PublicCourseDisplay = () => {
           
           const newUrl = `${window.location.pathname}?sessionId=${currentSessionId}`;
           window.history.replaceState({}, '', newUrl);
+          
+          // Check if user has entered their name
+          await checkUserName(currentSessionId);
           
           if (courseData && courseData.modules) {
             courseData.modules = courseData.modules.map(m => Module.fromJSON(m));
@@ -1506,6 +1548,15 @@ const PublicCourseDisplay = () => {
           )}
         </main>
       </div>
+
+      {/* Name Entry Modal */}
+      <NameEntryModal
+        isOpen={showNameEntryModal}
+        onClose={handleNameModalClose}
+        onNameSubmit={handleNameSubmit}
+        courseId={courseId}
+        sessionId={sessionId}
+      />
     </div>
   );
 };

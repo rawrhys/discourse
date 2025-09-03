@@ -7958,11 +7958,101 @@ app.post('/api/public/courses/:courseId/username',
   publicCourseRateLimit,
   publicCourseSlowDown,
   async (req, res) => {
-  try {
-    const { courseId } = req.params;
-    const { sessionId, username } = req.body;
-    
-    if (!sessionId || !username) {
+    try {
+      const { courseId } = req.params;
+      const { sessionId, firstName, lastName } = req.body;
+      
+      if (!sessionId || !firstName || !lastName) {
+        return res.status(400).json({ error: 'Missing required fields: sessionId, firstName, lastName' });
+      }
+      
+      console.log(`[API] Setting username for public course session:`, {
+        courseId,
+        sessionId,
+        firstName,
+        lastName
+      });
+      
+      // Update the session with the username
+      const success = publicCourseSessionService.setUsername(sessionId, firstName, lastName);
+      
+      if (success) {
+        console.log(`[API] Username set successfully for session ${sessionId}`);
+        res.json({ 
+          success: true,
+          sessionId,
+          firstName,
+          lastName
+        });
+      } else {
+        console.log(`[API] Failed to set username for session ${sessionId}`);
+        res.status(404).json({ error: 'Session not found' });
+      }
+    } catch (error) {
+      console.error('[API] Failed to set username:', error);
+      res.status(500).json({ error: 'Failed to set username' });
+    }
+  }
+);
+
+// Get username for public course session
+app.get('/api/public/courses/:courseId/username', 
+  securityHeaders,
+  securityLogging,
+  botDetection,
+  publicCourseRateLimit,
+  publicCourseSlowDown,
+  async (req, res) => {
+    try {
+      const { courseId } = req.params;
+      const { sessionId } = req.query;
+      
+      if (!sessionId) {
+        return res.status(400).json({ error: 'Missing sessionId' });
+      }
+      
+      console.log(`[API] Getting username for public course session:`, {
+        courseId,
+        sessionId
+      });
+      
+      // Get the session data
+      const session = publicCourseSessionService.getSession(sessionId);
+      
+      if (session && session.firstName && session.lastName) {
+        res.json({ 
+          success: true,
+          sessionId,
+          firstName: session.firstName,
+          lastName: session.lastName
+        });
+      } else {
+        res.json({ 
+          success: false,
+          sessionId,
+          hasName: false
+        });
+      }
+    } catch (error) {
+      console.error('[API] Failed to get username:', error);
+      res.status(500).json({ error: 'Failed to get username' });
+    }
+  }
+);
+
+// Legacy endpoint for backward compatibility
+app.post('/api/public/courses/:courseId/username-legacy', 
+  securityHeaders,
+  securityLogging,
+  botDetection,
+  publicCourseRateLimit,
+  publicCourseSlowDown,
+  async (req, res) => {
+    try {
+      const { courseId } = req.params;
+      const { sessionId, username } = req.body;
+      
+      if (!sessionId || !username) {
       return res.status(400).json({ error: 'Missing sessionId or username' });
     }
     
