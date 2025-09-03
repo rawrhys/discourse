@@ -5291,8 +5291,11 @@ app.post('/api/auth/login', async (req, res) => {
         db.data.users.push(existingUser);
         await db.write();
         
-        // Assign onboarding course to new users
-        await assignOnboardingCourse(existingUser.id);
+        // Assign onboarding course to new users (only if they haven't completed it)
+        const hasCompletedOnboarding = db.data.onboardingCompletions.some(c => c.userId === existingUser.id);
+        if (!hasCompletedOnboarding) {
+          await assignOnboardingCourse(existingUser.id);
+        }
     } else {
         // Only ensure credits exist, don't force minimum of 1
         if (existingUser.courseCredits === undefined || existingUser.courseCredits === null) {
@@ -5300,16 +5303,18 @@ app.post('/api/auth/login', async (req, res) => {
             await db.write();
         }
         
-        // Check if existing user needs onboarding course (only if they don't have one)
+        // Check if existing user needs onboarding course (only if they don't have one and haven't completed onboarding)
         const hasOnboardingCourse = db.data.courses.some(c => 
           c.userId === existingUser.id && c.id.includes('discourse-ai-onboarding')
         );
-        if (!hasOnboardingCourse) {
+        const hasCompletedOnboarding = db.data.onboardingCompletions.some(c => c.userId === existingUser.id);
+        
+        if (!hasOnboardingCourse && !hasCompletedOnboarding) {
           await ensureOnboardingCourse(existingUser.id);
-        } else {
-                  // Clean up any duplicate onboarding courses
-        await cleanupDuplicateOnboardingCourses(existingUser.id);
-      }
+        } else if (hasOnboardingCourse) {
+          // Clean up any duplicate onboarding courses
+          await cleanupDuplicateOnboardingCourses(existingUser.id);
+        }
     }
 
     // Note: Email verification is now handled by Supabase directly
@@ -5717,9 +5722,16 @@ app.get('/api/courses/onboarding', authenticateToken, async (req, res) => {
     );
     
     if (!userOnboardingCourse) {
-      console.log(`[API] User ${userId} doesn't have onboarding course, assigning now...`);
-      // User doesn't have the course, assign it now
-      await assignOnboardingCourse(userId);
+      // Check if user has completed onboarding
+      const hasCompletedOnboarding = db.data.onboardingCompletions.some(c => c.userId === userId);
+      if (!hasCompletedOnboarding) {
+        console.log(`[API] User ${userId} doesn't have onboarding course and hasn't completed it, assigning now...`);
+        // User doesn't have the course and hasn't completed onboarding, assign it now
+        await assignOnboardingCourse(userId);
+      } else {
+        console.log(`[API] User ${userId} has completed onboarding, not assigning course`);
+        return res.status(404).json({ error: 'Onboarding course not available - user has completed onboarding' });
+      }
       
       // Fetch the newly assigned course
       userOnboardingCourse = db.data.courses.find(c => 

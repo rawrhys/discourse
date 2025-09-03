@@ -10,6 +10,7 @@ import logger from '../utils/logger';
 import ConfettiAnimation from './ConfettiAnimation';
 import { supabase } from '../config/supabase';
 import StudentProgressDashboard from './StudentProgressDashboard';
+import HelpSection from './HelpSection';
 
 
 const Dashboard = () => {
@@ -859,7 +860,7 @@ const Dashboard = () => {
             </div>
           )}
         </div>
-        {/* Welcome Message for New Users */}
+        {/* Welcome Message for New Users (First Time Only) */}
         {savedCourses.length === 0 && !hasCompletedOnboarding && !localStorage.getItem(`onboardingCompleted_${user?.id}`) && (
           <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded mb-4">
             <div className="flex items-start">
@@ -884,6 +885,25 @@ const Dashboard = () => {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Help Section for Users Who Completed Onboarding but Have No Courses */}
+        {savedCourses.length === 0 && hasCompletedOnboarding && (
+          <HelpSection />
+        )}
+
+        {/* Collapsible Help Section for Users with Courses */}
+        {savedCourses.length > 0 && hasCompletedOnboarding && (
+          <div className="mb-6">
+            <details className="bg-gray-50 border border-gray-200 rounded-lg">
+              <summary className="px-4 py-3 cursor-pointer text-gray-700 font-medium hover:bg-gray-100 transition-colors">
+                💡 Need Help? Click to expand quick guides
+              </summary>
+              <div className="px-4 pb-4">
+                <HelpSection />
+              </div>
+            </details>
           </div>
         )}
         
