@@ -4514,6 +4514,59 @@ app.post('/api/ai/generate', authenticateToken, async (req, res, next) => {
     }
 });
 
+// Public bibliography generation endpoint for public courses
+app.post('/api/public/ai/generate-bibliography', 
+  securityHeaders,
+  securityLogging,
+  botDetection,
+  publicCourseRateLimit,
+  publicCourseSlowDown,
+  async (req, res, next) => {
+    console.log(`[API] Public bibliography generation request received:`, {
+        method: req.method,
+        url: req.url,
+        headers: req.headers,
+        body: req.body,
+        timestamp: new Date().toISOString()
+    });
+
+    if (!global.aiService) {
+        console.error(`[API] AI service not configured for public request`);
+        return res.status(503).json({ error: 'AI service is not configured.' });
+    }
+
+    try {
+        const { topic, subject, numReferences = 5, lessonContent = '' } = req.body;
+        if (!topic || !subject) {
+            console.error(`[API] Missing required parameters for public request:`, { topic, subject });
+            return res.status(400).json({ error: 'Missing required parameters: topic, subject.' });
+        }
+
+        console.log(`[API] Generating public bibliography for "${topic}" in ${subject}`);
+        
+        const bibliography = await global.aiService.generateAuthenticBibliography(
+            topic,
+            subject,
+            numReferences,
+            lessonContent
+        );
+
+        console.log(`[API] Public bibliography generated successfully:`, {
+            topic,
+            subject,
+            referencesCount: bibliography?.length || 0
+        });
+
+        res.json({ 
+            success: true,
+            bibliography: bibliography || []
+        });
+    } catch (error) {
+        console.error(`[API] Public bibliography generation failed:`, error);
+        res.status(500).json({ error: 'Failed to generate bibliography.' });
+    }
+});
+
 app.post('/api/ai/generate-bibliography', authenticateToken, async (req, res, next) => {
     console.log(`[API] Bibliography generation request received:`, {
         method: req.method,
@@ -7973,8 +8026,21 @@ app.post('/api/public/courses/:courseId/username',
         lastName
       });
       
+      // Debug: Check if session service is available
+      if (!publicCourseSessionService) {
+        console.error(`[API] Public course session service not available`);
+        return res.status(500).json({ error: 'Session service not available' });
+      }
+      
       // Update the session with the username
       const success = publicCourseSessionService.setUsername(sessionId, firstName, lastName);
+      
+      console.log(`[API] Set username result:`, {
+        sessionId,
+        success,
+        firstName,
+        lastName
+      });
       
       if (success) {
         console.log(`[API] Username set successfully for session ${sessionId}`);
@@ -8016,8 +8082,21 @@ app.get('/api/public/courses/:courseId/username',
         sessionId
       });
       
+      // Debug: Check if session service is available
+      if (!publicCourseSessionService) {
+        console.error(`[API] Public course session service not available`);
+        return res.status(500).json({ error: 'Session service not available' });
+      }
+      
       // Get the session data
       const session = publicCourseSessionService.getSession(sessionId);
+      
+      console.log(`[API] Session lookup result:`, {
+        sessionId,
+        sessionFound: !!session,
+        hasFirstName: session?.firstName,
+        hasLastName: session?.lastName
+      });
       
       if (session && session.firstName && session.lastName) {
         res.json({ 

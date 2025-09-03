@@ -52,11 +52,13 @@ class AIService {
    * @param {string} lessonContent - The actual lesson content to base references on
    * @returns {Array} Array of authentic reference objects
    */
-  async generateAuthenticBibliography(topic, subject, numReferences = 5, lessonContent = '') {
+  async generateAuthenticBibliography(topic, subject, numReferences = 5, lessonContent = '', isPublic = false) {
     try {
-      console.log(`[AIService] Generating authentic bibliography for "${topic}" in ${subject}`);
+      console.log(`[AIService] Generating authentic bibliography for "${topic}" in ${subject} (public: ${isPublic})`);
       
-      const response = await apiClient('/api/ai/generate-bibliography', {
+      const endpoint = isPublic ? '/api/public/ai/generate-bibliography' : '/api/ai/generate-bibliography';
+      
+      const response = await apiClient(endpoint, {
         method: 'POST',
         body: JSON.stringify({
           topic,

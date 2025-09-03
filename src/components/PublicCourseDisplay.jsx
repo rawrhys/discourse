@@ -274,7 +274,8 @@ const PublicCourseDisplay = () => {
             currentLesson.title,
             course.subject,
             5, // Number of references
-            processedContent
+            processedContent,
+            true // isPublic = true for public courses
           );
           
           console.log('[PublicCourseDisplay] AI-generated references:', {

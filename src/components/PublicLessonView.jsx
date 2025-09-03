@@ -1247,7 +1247,8 @@ const PublicLessonView = ({
             lesson.title,
             subject,
             5, // Number of references
-            lessonContentString
+            lessonContentString,
+            true // isPublic = true for public courses
           );
           
           if (references && references.length > 0) {
@@ -1338,13 +1339,14 @@ const PublicLessonView = ({
       
       const currentLessonId = lesson.id || `${lesson.title}_${subject}`;
       
-      // Use AI service to generate authentic academic references
-      const references = await api.generateAuthenticBibliography(
-        lesson.title,
-        subject,
-        5, // Number of references
-        deferredContent || cleanAndCombineContent(lesson.content)
-      );
+              // Use AI service to generate authentic academic references
+        const references = await api.generateAuthenticBibliography(
+          lesson.title,
+          subject,
+          5, // Number of references
+          deferredContent || cleanAndCombineContent(lesson.content),
+          true // isPublic = true for public courses
+        );
       
       if (references && references.length > 0) {
         console.log('[PublicLessonView] Generated bibliography:', references);
