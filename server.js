@@ -8032,6 +8032,14 @@ app.post('/api/public/courses/:courseId/username',
         return res.status(500).json({ error: 'Session service not available' });
       }
       
+      // Check if session exists, if not create it
+      let session = publicCourseSessionService.getSession(sessionId);
+      if (!session) {
+        console.log(`[API] Session ${sessionId} not found, creating new session for course ${courseId}`);
+        const newSessionId = publicCourseSessionService.createSession(courseId, sessionId);
+        session = publicCourseSessionService.getSession(newSessionId);
+      }
+      
       // Update the session with the username
       const success = publicCourseSessionService.setUsername(sessionId, firstName, lastName);
       
@@ -8043,6 +8051,17 @@ app.post('/api/public/courses/:courseId/username',
       });
       
       if (success) {
+        // Initialize student progress tracking
+        try {
+          const { default: studentProgressService } = await import('./src/services/StudentProgressService.js');
+          const fullName = `${firstName} ${lastName}`;
+          studentProgressService.initializeStudentProgress(sessionId, courseId, fullName);
+          console.log(`[API] Initialized student progress tracking for ${fullName}`);
+        } catch (progressError) {
+          console.error(`[API] Failed to initialize student progress:`, progressError);
+          // Don't fail the request if progress tracking fails
+        }
+        
         console.log(`[API] Username set successfully for session ${sessionId}`);
         res.json({ 
           success: true,
@@ -8106,6 +8125,13 @@ app.get('/api/public/courses/:courseId/username',
           lastName: session.lastName
         });
       } else {
+        // If session doesn't exist, create a new one
+        if (!session) {
+          console.log(`[API] Session ${sessionId} not found, creating new session for course ${courseId}`);
+          const newSessionId = publicCourseSessionService.createSession(courseId, sessionId);
+          console.log(`[API] Created new session: ${newSessionId}`);
+        }
+        
         res.json({ 
           success: false,
           sessionId,
@@ -8192,6 +8218,16 @@ app.post('/api/public/courses/:courseId/progress',
     
     // Import student progress service
     const { default: studentProgressService } = await import('./src/services/StudentProgressService.js');
+    
+    // Check if student progress is initialized, if not initialize it
+    let progress = studentProgressService.getStudentProgress(sessionId);
+    if (!progress) {
+      // Get session data to get the student name
+      const session = publicCourseSessionService.getSession(sessionId);
+      const studentName = session ? `${session.firstName || ''} ${session.lastName || ''}`.trim() : 'Anonymous';
+      progress = studentProgressService.initializeStudentProgress(sessionId, courseId, studentName);
+      console.log(`[API] Initialized student progress for session ${sessionId}`);
+    }
     
     // Update lesson completion
     studentProgressService.updateLessonCompletion(sessionId, lessonId, moduleId);
