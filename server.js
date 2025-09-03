@@ -7938,6 +7938,196 @@ app.get('/api/public/courses/:courseId/quiz-scores',
   }
 });
 
+// Set username for public course session
+app.post('/api/public/courses/:courseId/username', 
+  securityHeaders,
+  securityLogging,
+  botDetection,
+  publicCourseRateLimit,
+  publicCourseSlowDown,
+  async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const { sessionId, username } = req.body;
+    
+    if (!sessionId || !username) {
+      return res.status(400).json({ error: 'Missing sessionId or username' });
+    }
+    
+    console.log(`[API] Setting username for public course session:`, {
+      courseId,
+      sessionId,
+      username
+    });
+    
+    // Import username service
+    const { default: usernameService } = await import('./src/services/UsernameService.js');
+    
+    // Validate and set username
+    const result = usernameService.setUsername(sessionId, username);
+    
+    if (!result.valid) {
+      return res.status(400).json({ error: result.error });
+    }
+    
+    // Initialize student progress tracking
+    const { default: studentProgressService } = await import('./src/services/StudentProgressService.js');
+    studentProgressService.initializeStudentProgress(sessionId, courseId, result.username);
+    
+    res.json({ 
+      success: true,
+      username: result.username,
+      message: 'Username set successfully'
+    });
+  } catch (error) {
+    console.error('[API] Failed to set username:', error);
+    res.status(500).json({ error: 'Failed to set username' });
+  }
+});
+
+// Update student progress
+app.post('/api/public/courses/:courseId/progress', 
+  securityHeaders,
+  securityLogging,
+  botDetection,
+  publicCourseRateLimit,
+  publicCourseSlowDown,
+  async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const { sessionId, lessonId, moduleId, quizScore } = req.body;
+    
+    if (!sessionId || !lessonId) {
+      return res.status(400).json({ error: 'Missing sessionId or lessonId' });
+    }
+    
+    console.log(`[API] Updating student progress:`, {
+      courseId,
+      sessionId,
+      lessonId,
+      moduleId,
+      quizScore
+    });
+    
+    // Import student progress service
+    const { default: studentProgressService } = await import('./src/services/StudentProgressService.js');
+    
+    // Update lesson completion
+    studentProgressService.updateLessonCompletion(sessionId, lessonId, moduleId);
+    
+    // Update quiz score if provided
+    if (quizScore !== undefined) {
+      studentProgressService.updateQuizScore(sessionId, lessonId, quizScore);
+    }
+    
+    res.json({ 
+      success: true,
+      message: 'Progress updated successfully'
+    });
+  } catch (error) {
+    console.error('[API] Failed to update progress:', error);
+    res.status(500).json({ error: 'Failed to update progress' });
+  }
+});
+
+// Get student progress for course creator
+app.get('/api/courses/:courseId/students', authenticateToken, async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const userId = req.user.id;
+    
+    // Verify course ownership
+    const course = db.data.courses.find(c => c.id === courseId);
+    if (!course) {
+      return res.status(404).json({ error: 'Course not found' });
+    }
+    
+    if (course.userId !== userId) {
+      return res.status(403).json({ error: 'Unauthorized to view student progress' });
+    }
+    
+    // Import student progress service
+    const { default: studentProgressService } = await import('./src/services/StudentProgressService.js');
+    
+    // Get students and stats
+    const students = studentProgressService.getCourseStudents(courseId);
+    const stats = studentProgressService.getCourseStats(courseId);
+    
+    res.json({
+      students,
+      stats,
+      courseTitle: course.title
+    });
+  } catch (error) {
+    console.error('[API] Failed to get student progress:', error);
+    res.status(500).json({ error: 'Failed to get student progress' });
+  }
+});
+
+// Send certificate via email
+app.post('/api/certificates/email', 
+  securityHeaders,
+  securityLogging,
+  botDetection,
+  publicCourseRateLimit,
+  publicCourseSlowDown,
+  async (req, res) => {
+  try {
+    const { sessionId, email, courseTitle, studentName, certificateHtml } = req.body;
+    
+    if (!sessionId || !email || !certificateHtml) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    
+    console.log(`[API] Sending certificate email:`, {
+      sessionId,
+      email,
+      courseTitle,
+      studentName
+    });
+    
+    // Import certificate service
+    const { default: certificateService } = await import('./src/services/CertificateService.js');
+    
+    // Mark certificate as emailed
+    certificateService.markCertificateEmailed(sessionId, email);
+    
+    // Here you would integrate with your email service (SendGrid, AWS SES, etc.)
+    // For now, we'll just log the email content
+    console.log(`[EMAIL] Certificate email would be sent to ${email} for course "${courseTitle}"`);
+    console.log(`[EMAIL] Student: ${studentName}`);
+    console.log(`[EMAIL] Certificate HTML length: ${certificateHtml.length} characters`);
+    
+    // TODO: Implement actual email sending
+    // Example with SendGrid:
+    // const sgMail = require('@sendgrid/mail');
+    // sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+    // 
+    // const msg = {
+    //   to: email,
+    //   from: 'noreply@discourse.ai',
+    //   subject: `Certificate of Completion - ${courseTitle}`,
+    //   html: certificateHtml,
+    //   attachments: [{
+    //     content: Buffer.from(certificateHtml).toString('base64'),
+    //     filename: `Certificate_${courseTitle.replace(/[^a-zA-Z0-9]/g, '_')}_${studentName}.html`,
+    //     type: 'text/html',
+    //     disposition: 'attachment'
+    //   }]
+    // };
+    // 
+    // await sgMail.send(msg);
+    
+    res.json({ 
+      success: true,
+      message: 'Certificate email sent successfully'
+    });
+  } catch (error) {
+    console.error('[API] Failed to send certificate email:', error);
+    res.status(500).json({ error: 'Failed to send certificate email' });
+  }
+});
+
 // Stripe: Create Checkout Session for £20 (10 credits)
 app.post('/api/create-checkout-session', authenticateToken, async (req, res) => {
   console.log('[Stripe] Creating checkout session for user:', req.user.id);

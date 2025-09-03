@@ -9,6 +9,7 @@ import LoadingIndicator from './LoadingIndicator';
 import logger from '../utils/logger';
 import ConfettiAnimation from './ConfettiAnimation';
 import { supabase } from '../config/supabase';
+import StudentProgressDashboard from './StudentProgressDashboard';
 
 
 const Dashboard = () => {
@@ -36,6 +37,10 @@ const Dashboard = () => {
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [isOpeningPortal, setIsOpeningPortal] = useState(false);
   const [isCheckingSubscription, setIsCheckingSubscription] = useState(false);
+  
+  // Student progress dashboard state
+  const [showStudentProgress, setShowStudentProgress] = useState(false);
+  const [selectedCourseForProgress, setSelectedCourseForProgress] = useState(null);
   
   // ETA countdown for generation
   const [etaTotalSec, setEtaTotalSec] = useState(0);
@@ -1475,6 +1480,18 @@ const Dashboard = () => {
                                 {isUpdatingCourseState ? 'Updating...' : (course.published ? 'Unpublish' : 'Publish')}
                               </button>
                               )}
+                              {course.published && (
+                                <button
+                                  onClick={() => {
+                                    setSelectedCourseForProgress(course);
+                                    setShowStudentProgress(true);
+                                  }}
+                                  className="text-sm font-medium rounded px-3 py-2 transition-colors duration-200 bg-blue-600 text-white hover:bg-blue-700"
+                                  title="View student progress and analytics"
+                                >
+                                  📊 View Progress
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -1828,6 +1845,32 @@ const Dashboard = () => {
             console.log('Report submitted successfully');
           }}
         />
+
+        {/* Student Progress Dashboard Modal */}
+        {showStudentProgress && selectedCourseForProgress && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-hidden">
+              <div className="flex justify-between items-center p-4 border-b">
+                <h2 className="text-xl font-semibold">Student Progress Dashboard</h2>
+                <button
+                  onClick={() => {
+                    setShowStudentProgress(false);
+                    setSelectedCourseForProgress(null);
+                  }}
+                  className="text-gray-500 hover:text-gray-700 text-2xl"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="overflow-y-auto max-h-[calc(90vh-80px)]">
+                <StudentProgressDashboard 
+                  courseId={selectedCourseForProgress.id}
+                  courseTitle={selectedCourseForProgress.title}
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
