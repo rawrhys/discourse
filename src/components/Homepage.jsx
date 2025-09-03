@@ -234,6 +234,11 @@ const Homepage = () => {
           <p className="section-subtitle">
             While ChatGPT excels at conversation, we specialize in structured, measurable learning experiences
           </p>
+          <div className="difference-intro">
+            <p className="difference-intro-text">
+              The new "Why Choose Discourse Over ChatGPT?" section strategically positions your learning platform as the superior choice for structured education. This compelling comparison section directly addresses why users should choose your specialized learning platform over the popular but general-purpose ChatGPT. The section features four key differentiators that make the value proposition immediately obvious to visitors, transforming your homepage from a generic AI platform into a specialized educational solution that directly competes with and differentiates from the market leader.
+            </p>
+          </div>
         </motion.div>
         
         <div className="differences-grid">

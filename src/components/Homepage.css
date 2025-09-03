@@ -327,6 +327,23 @@
   margin: 0 auto;
 }
 
+.difference-intro {
+  max-width: 800px;
+  margin: 2rem auto 0;
+  padding: 2rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.difference-intro-text {
+  font-size: 1.1rem;
+  line-height: 1.7;
+  opacity: 0.9;
+  text-align: left;
+  margin: 0;
+}
+
 /* Features Grid */
 .features-grid {
   display: grid;
@@ -516,6 +533,15 @@
   
   .section-subtitle {
     font-size: 1.1rem;
+  }
+  
+  .difference-intro {
+    padding: 1.5rem;
+    margin: 1.5rem auto 0;
+  }
+  
+  .difference-intro-text {
+    font-size: 1rem;
   }
   
   .differences-grid {
