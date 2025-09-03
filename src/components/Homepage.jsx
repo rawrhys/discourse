@@ -29,6 +29,32 @@ const Homepage = () => {
     navigate('/login');
   };
 
+  const differences = [
+    {
+      icon: "🎯",
+      title: "Structured Learning Paths",
+      description: "Unlike ChatGPT's conversational approach, we create complete, structured courses with clear learning objectives, progress tracking, and assessment tools.",
+      comparison: "ChatGPT: Random conversations"
+    },
+    {
+      icon: "📈",
+      title: "Personalized Progress Tracking",
+      description: "Our AI adapts to your learning pace and style, providing detailed analytics and personalized recommendations to optimize your learning journey.",
+      comparison: "ChatGPT: No progress tracking"
+    },
+    {
+      icon: "🎨",
+      title: "Interactive Multimedia Content",
+      description: "Experience rich, interactive lessons with images, quizzes, and multimedia elements designed specifically for effective learning retention.",
+      comparison: "ChatGPT: Text-only responses"
+    },
+    {
+      icon: "🏆",
+      title: "Achievement & Certification System",
+      description: "Earn certificates, badges, and achievements as you complete courses, providing tangible proof of your learning accomplishments.",
+      comparison: "ChatGPT: No certification system"
+    }
+  ];
 
 
   const features = [
@@ -196,11 +222,11 @@ const Homepage = () => {
       </section>
 
       {/* Point of Difference Section */}
-      <section className="difference-section" ref={differenceRef}>
+      <section className="difference-section">
         <motion.div 
           className="section-header"
           initial={{ opacity: 0, y: 30 }}
-          animate={differenceInView ? { opacity: 1, y: 0 } : {}}
+          animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8 }}
         >
           <h2 className="section-title">
@@ -218,7 +244,7 @@ const Homepage = () => {
               key={index}
               className="difference-card"
               initial={{ opacity: 0, y: 30 }}
-              animate={differenceInView ? { opacity: 1, y: 0 } : {}}
+              animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: index * 0.1 }}
               whileHover={{ y: -10, scale: 1.02 }}
             >
@@ -236,7 +262,7 @@ const Homepage = () => {
         <motion.div 
           className="difference-cta"
           initial={{ opacity: 0, y: 30 }}
-          animate={differenceInView ? { opacity: 1, y: 0 } : {}}
+          animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.6 }}
         >
           <p className="difference-cta-text">
