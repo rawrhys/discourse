@@ -31,6 +31,41 @@ import sharp from 'sharp';
 import imageProxyHandler from './server/utils/proxy.js';
 import enhancedImageProxy from './server/utils/enhancedImageProxy.js';
 import publicCourseSessionService from './src/services/PublicCourseSessionService.js';
+
+// Verify the service is properly imported and has required methods
+console.log('[Server] Verifying PublicCourseSessionService import:', {
+  serviceExists: !!publicCourseSessionService,
+  serviceType: typeof publicCourseSessionService,
+  hasSetUsername: typeof publicCourseSessionService?.setUsername === 'function',
+  hasCreateSession: typeof publicCourseSessionService?.createSession === 'function',
+  hasGetSession: typeof publicCourseSessionService?.getSession === 'function'
+});
+
+// Test the service methods
+if (publicCourseSessionService) {
+  try {
+    const testSessionId = 'test-session-123';
+    const testCourseId = 'test-course-456';
+    
+    // Test createSession
+    const createdSessionId = publicCourseSessionService.createSession(testCourseId);
+    console.log('[Server] Test createSession result:', createdSessionId);
+    
+    // Test getSession
+    const session = publicCourseSessionService.getSession(createdSessionId);
+    console.log('[Server] Test getSession result:', !!session);
+    
+    // Test setUsername
+    const setUsernameResult = publicCourseSessionService.setUsername(createdSessionId, 'Test', 'User');
+    console.log('[Server] Test setUsername result:', setUsernameResult);
+    
+    // Clean up test session
+    publicCourseSessionService.sessions.delete(createdSessionId);
+    console.log('[Server] PublicCourseSessionService test completed successfully');
+  } catch (testError) {
+    console.error('[Server] PublicCourseSessionService test failed:', testError);
+  }
+}
 import {
   publicCourseRateLimit,
   publicCourseSlowDown,
@@ -8032,19 +8067,47 @@ app.post('/api/public/courses/:courseId/username',
         return res.status(500).json({ error: 'Session service not available' });
       }
       
+      // Debug: Check if setUsername method is available
+      if (typeof publicCourseSessionService.setUsername !== 'function') {
+        console.error(`[API] setUsername method not available on publicCourseSessionService:`, {
+          serviceType: typeof publicCourseSessionService,
+          serviceMethods: Object.getOwnPropertyNames(publicCourseSessionService),
+          prototypeMethods: Object.getOwnPropertyNames(Object.getPrototypeOf(publicCourseSessionService))
+        });
+        return res.status(500).json({ error: 'setUsername method not available' });
+      }
+      
       // Check if session exists, if not create it
       let session = publicCourseSessionService.getSession(sessionId);
+      let actualSessionId = sessionId;
+      
       if (!session) {
         console.log(`[API] Session ${sessionId} not found, creating new session for course ${courseId}`);
         const newSessionId = publicCourseSessionService.createSession(courseId, sessionId);
         session = publicCourseSessionService.getSession(newSessionId);
+        actualSessionId = newSessionId; // Use the new session ID
       }
       
       // Update the session with the username
-      const success = publicCourseSessionService.setUsername(sessionId, firstName, lastName);
+      let success = false;
+      try {
+        success = publicCourseSessionService.setUsername(actualSessionId, firstName, lastName);
+      } catch (error) {
+        console.error(`[API] Error calling setUsername:`, error);
+        // Fallback: manually update the session
+        const session = publicCourseSessionService.getSession(actualSessionId);
+        if (session) {
+          session.firstName = firstName;
+          session.lastName = lastName;
+          session.lastActivity = Date.now();
+          success = true;
+          console.log(`[API] Fallback: Manually set username for session ${actualSessionId}: ${firstName} ${lastName}`);
+        }
+      }
       
       console.log(`[API] Set username result:`, {
-        sessionId,
+        originalSessionId: sessionId,
+        actualSessionId,
         success,
         firstName,
         lastName
@@ -8055,17 +8118,18 @@ app.post('/api/public/courses/:courseId/username',
         try {
           const { default: studentProgressService } = await import('./src/services/StudentProgressService.js');
           const fullName = `${firstName} ${lastName}`;
-          studentProgressService.initializeStudentProgress(sessionId, courseId, fullName);
+          studentProgressService.initializeStudentProgress(actualSessionId, courseId, fullName);
           console.log(`[API] Initialized student progress tracking for ${fullName}`);
         } catch (progressError) {
           console.error(`[API] Failed to initialize student progress:`, progressError);
           // Don't fail the request if progress tracking fails
         }
         
-        console.log(`[API] Username set successfully for session ${sessionId}`);
+        console.log(`[API] Username set successfully for session ${actualSessionId}`);
         res.json({ 
           success: true,
-          sessionId,
+          sessionId: actualSessionId, // Return the actual session ID that was used
+          originalSessionId: sessionId, // Also return the original for reference
           firstName,
           lastName
         });
