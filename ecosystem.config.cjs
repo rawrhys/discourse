@@ -2,7 +2,7 @@ module.exports = {
   apps: [
     {
       name: 'discourse-app',
-      script: './server.cjs',
+      script: './server.js',
       instances: 1,
       exec_mode: 'fork',
       env: {
