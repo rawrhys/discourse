@@ -1,0 +1,318 @@
+import apiClient from './apiClient';
+import { API_BASE_URL } from '../config/api.js';
+import { supabase } from '../config/supabase';
+
+class AIService {
+  async getDefinitionForTerm(term, lessonContext, lessonTitle) {
+    try {
+      const response = await apiClient.post('/api/ai/definition', {
+        term,
+        lessonContext,
+        lessonTitle,
+      });
+      return response.definition || `Could not generate a definition for "${term}".`;
+    } catch (error) {
+      console.error(`[AIService] Error fetching definition for "${term}":`, error);
+      return `Definition not available for "${term}". The server might be busy.`;
+    }
+  }
+
+  validateCourseStructure(data) {
+    if (!data || !data.title || !data.modules || !Array.isArray(data.modules)) {
+      return false;
+    }
+    for (const module of data.modules) {
+      if (!module.title || !module.lessons || !Array.isArray(module.lessons)) {
+        return false;
+      }
+      for (const lesson of module.lessons) {
+        if (!lesson.title) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  async getUser(userId) {
+    try {
+      const user = await apiClient.get(`/api/users/${userId}`);
+      return user;
+    } catch (error) {
+      console.error('Failed to fetch user', error);
+      return null;
+    }
+  }
+
+  /**
+   * Generate authentic academic references based on lesson content
+   * @param {string} topic - Lesson topic
+   * @param {string} subject - Subject area
+   * @param {number} numReferences - Number of references to generate
+   * @param {string} lessonContent - The actual lesson content to base references on
+   * @returns {Array} Array of authentic reference objects
+   */
+  async generateAuthenticBibliography(topic, subject, numReferences = 5, lessonContent = '', isPublic = false) {
+    try {
+      console.log(`[AIService] Generating authentic bibliography for "${topic}" in ${subject} (public: ${isPublic})`);
+      
+      const endpoint = isPublic ? '/api/public/ai/generate-bibliography' : '/api/ai/generate-bibliography';
+      
+      const response = await apiClient(endpoint, {
+        method: 'POST',
+        body: JSON.stringify({
+          topic,
+          subject,
+          numReferences,
+          lessonContent: lessonContent.substring(0, 2000) // Limit content size
+        })
+      });
+      
+      return response.bibliography || [];
+    } catch (error) {
+      console.error(`[AIService] Error generating authentic bibliography for "${topic}":`, error);
+      // Return empty array as fallback
+      return [];
+    }
+  }
+}
+
+const aiService = new AIService();
+
+const api = {
+    getLesson: (moduleId, lessonId) => 
+        apiClient(`/api/lessons/${moduleId}/${lessonId}`),
+
+    getModule: (moduleId) => 
+        apiClient(`/api/modules/${moduleId}`),
+
+    getCourse: (courseId) => 
+        apiClient(`/api/courses/${courseId}`),
+
+    getOnboardingCourse: () => 
+        apiClient('/api/courses/onboarding'),
+
+    // Onboarding status and completion
+    getOnboardingStatus: () =>
+        apiClient('/api/onboarding/status'),
+
+    completeOnboarding: () =>
+        apiClient('/api/onboarding/complete', { method: 'POST' }),
+
+    getPublicCourse: (courseId, sessionId = null) => {
+        // Normalize: strip optional trailing _<timestamp> (e.g., _1754750525562)
+        const normalizedId = String(courseId || '').replace(/_[0-9]{10,}$/,'');
+        let fullUrl = `${API_BASE_URL}/api/public/courses/${normalizedId}`;
+        
+        // Add sessionId as query parameter if provided
+        if (sessionId) {
+            fullUrl += `?sessionId=${encodeURIComponent(sessionId)}`;
+        }
+        
+        console.log('📡 [API SERVICE] Fetching public course:', fullUrl);
+        
+        return fetch(fullUrl, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        }).then(response => {
+            console.log('📡 [API SERVICE] Response status:', response.status);
+            // Handle CAPTCHA response (200 status with requiresCaptcha flag)
+            if (response.status === 200) {
+                return response.json().then(data => {
+                    console.log('📡 [API SERVICE] Response data:', data);
+                    // Return CAPTCHA data as successful response instead of throwing error
+                    return data;
+                });
+            }
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        });
+    },
+
+    saveCourse: (course) => 
+        apiClient('/api/courses', {
+            method: 'POST',
+            body: JSON.stringify(course),
+        }),
+    
+    getDefinitionForTerm: aiService.getDefinitionForTerm,
+    validateCourseStructure: aiService.validateCourseStructure,
+    getUser: aiService.getUser,
+    generateAuthenticBibliography: aiService.generateAuthenticBibliography,
+
+    generateCourse: (topic, difficulty, numModules, numLessonsPerModule) => {
+        console.log('📡 [API SERVICE] Calling simplified generateCourse API', {
+            topic: topic,
+            difficulty: difficulty,
+            numModules: numModules,
+            numLessonsPerModule: numLessonsPerModule,
+            timestamp: new Date().toISOString()
+        });
+        
+        const result = apiClient('/api/courses/generate', {
+            method: 'POST',
+            body: JSON.stringify({ topic, difficulty, numModules, numLessonsPerModule }),
+        });
+        
+        // Add additional logging for the result
+        result.then(response => {
+            console.log('✅ [API SERVICE] Course generation API call succeeded:', {
+                success: response?.success,
+                courseId: response?.courseId,
+                courseTitle: response?.course?.title,
+                message: response?.message,
+                timestamp: new Date().toISOString()
+            });
+        }).catch(error => {
+            console.error('❌ [API SERVICE] Course generation API call failed:', {
+                error: error.message,
+                timestamp: new Date().toISOString()
+            });
+        });
+        
+        return result;
+    },
+    
+    getSavedCourses: () => {
+        console.log('📡 [API SERVICE] Fetching saved courses');
+        const cacheBuster = `t=${Date.now()}`;
+        const path = `/api/courses/saved?${cacheBuster}`;
+        return apiClient(path, {
+            headers: { 'Cache-Control': 'no-store' }
+        });
+    },
+    
+    getUserCredits: () => {
+        console.log('📡 [API SERVICE] Fetching user credits');
+        return apiClient('/api/user/credits');
+    },
+        
+    deleteCourse: (courseId) =>
+        apiClient(`/api/courses/${courseId}`, { method: 'DELETE' }),
+
+    verifyCourse: (courseId) =>
+        apiClient(`/api/courses/verify/${courseId}`),
+
+
+
+    clearCache: (courseId = null, cacheType = null) => {
+        const body = {};
+        if (courseId) body.courseId = courseId;
+        if (cacheType) body.cacheType = cacheType;
+        
+        return apiClient('/api/admin/clear-cache', {
+            method: 'POST',
+            body: JSON.stringify(body),
+        });
+    },
+
+    publishCourse: (courseId) =>
+        apiClient(`/api/courses/${courseId}/publish`, { method: 'POST' }),
+
+    unpublishCourse: (courseId) =>
+        apiClient(`/api/courses/${courseId}/unpublish`, { method: 'POST' }),
+
+    // Billing portal session removed; frontend links directly to Stripe portal
+
+    // Billing status
+    getBillingStatus: () =>
+        apiClient('/api/billing/status'),
+
+    // Check subscription status before account deletion (direct Stripe check)
+    checkSubscriptionStatus: async () => {
+        try {
+            // Call the backend endpoint that checks Stripe directly
+            const response = await apiClient('/api/billing/check-subscription-status');
+            
+            if (!response) {
+                throw new Error('No response from subscription status check');
+            }
+            
+            return response;
+        } catch (error) {
+            console.error('Error checking subscription status:', error);
+            // Return safe default on error
+            return { hasActiveSubscription: false, message: 'Error checking subscription status' };
+        }
+    },
+
+    // Manual refresh subscription status
+    refreshSubscriptionStatus: async () => {
+        try {
+            const response = await apiClient('/api/billing/refresh-subscription-status', {
+                method: 'POST'
+            });
+            
+            if (!response) {
+                throw new Error('No response from subscription status refresh');
+            }
+            
+            return response;
+        } catch (error) {
+            console.error('Error refreshing subscription status:', error);
+            // Return safe default on error
+            return { hasActiveSubscription: false, message: 'Error refreshing subscription status' };
+        }
+    },
+
+    // Account deletion
+    deleteAccount: (confirm) =>
+        apiClient('/api/account/delete', { method: 'POST', body: JSON.stringify({ confirm }) }),
+
+    getCurrentUser: () =>
+        apiClient('/api/auth/me'),
+
+    login: (email, password) =>
+        apiClient('/api/auth/login', {
+            method: 'POST',
+            body: JSON.stringify({ email, password }),
+        }),
+
+    register: (email, password, name, { gdprConsent, policyVersion } = {}) =>
+        apiClient('/api/auth/register', {
+            method: 'POST',
+            body: JSON.stringify({ email, password, name, gdprConsent: !!gdprConsent, policyVersion: policyVersion || '1.0' }),
+        }),
+
+    logout: () =>
+        apiClient('/api/auth/logout', { method: 'POST' }),
+
+    reportProblem: async (formData) => {
+        console.log('📡 [API SERVICE] Submitting problem report');
+        
+        // Get the current Supabase session
+        const { data: { session } } = await supabase.auth.getSession();
+        const accessToken = session?.access_token;
+        
+        if (!accessToken) {
+            throw new Error('Authentication required. Please log in again.');
+        }
+        
+        // For FormData, we need to handle it differently than JSON requests
+        const fullUrl = API_BASE_URL ? `${API_BASE_URL}/api/report-problem` : '/api/report-problem';
+        
+        console.log('📡 [API SERVICE] Report problem URL:', fullUrl);
+        
+        return fetch(fullUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                // Don't set Content-Type for FormData - let the browser set it with boundary
+            },
+            body: formData,
+        });
+    },
+};
+
+export default api;
+
+// This hook is now a simple wrapper around the api object.
+// It can be used in components to access the api functions.
+export const useApiWrapper = () => {
+    return api;
+}; 

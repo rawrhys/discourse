@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en" style="margin:0; padding:0; background:#f6f7fb;">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width">
+    <title>Confirm your signup</title>
+    <style>
+      /* Preheader text (hidden) */
+      .preheader { display:none !important; visibility:hidden; opacity:0; color:transparent; height:0; width:0; overflow:hidden; mso-hide:all; }
+      /* Dark mode friendly button text fix for some clients */
+      @media (prefers-color-scheme: dark) {
+        .btn a { color:#ffffff !important; }
+      }
+    </style>
+  </head>
+  <body style="margin:0; padding:0; background:#f6f7fb;">
+    <span class="preheader">Confirm your email to finish creating your account.</span>
+
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f6f7fb; padding:24px 0;">
+      <tr>
+        <td align="center">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:600px; background:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 6px 24px rgba(31,41,55,0.08);">
+            <!-- Header / Brand -->
+            <tr>
+              <td align="center" style="padding:24px 24px 0 24px; background:#ffffff;">
+                <img src="https://thediscourse.ai/assets/images/discourse-logo.png" width="120" height="120" alt="Discourse AI" style="display:block; border:0; outline:none; text-decoration:none; width:120px; height:120px;">
+              </td>
+            </tr>
+
+            <!-- Title -->
+            <tr>
+              <td align="center" style="padding:16px 24px 0 24px; background:#ffffff;">
+                <h2 style="margin:0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', Arial, sans-serif; font-size:24px; line-height:32px; color:#111827;">
+                  Confirm your signup
+                </h2>
+              </td>
+            </tr>
+
+            <!-- Intro copy -->
+            <tr>
+              <td align="center" style="padding:12px 24px 0 24px; background:#ffffff;">
+                <p style="margin:0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', Arial, sans-serif; font-size:15px; line-height:24px; color:#4b5563;">
+                  Hi <strong>{{ .Name }}</strong> — thanks for signing up for Discourse AI.
+                  Please confirm your email address to activate your account.
+                </p>
+              </td>
+            </tr>
+
+            <!-- Button -->
+            <tr>
+              <td align="center" style="padding:24px; background:#ffffff;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" class="btn">
+                  <tr>
+                    <td align="center" bgcolor="#4f46e5" style="border-radius:8px;">
+                      <a href="{{ .ConfirmationURL }}" target="_blank"
+                         style="display:inline-block; padding:12px 22px; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', Arial, sans-serif; font-size:15px; line-height:20px; color:#ffffff; text-decoration:none; font-weight:600;">
+                        Confirm your email
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Fallback link -->
+            <tr>
+              <td align="left" style="padding:0 24px 24px 24px; background:#ffffff;">
+                <p style="margin:0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', Arial, sans-serif; font-size:13px; line-height:20px; color:#6b7280;">
+                  If the button doesn't work, copy and paste this link into your browser:
+                </p>
+                <p style="margin:8px 0 0 0; word-break:break-all; font-family:Menlo, Consolas, Monaco, 'Courier New', monospace; font-size:12px; line-height:18px; color:#374151;">
+                  {{ .ConfirmationURL }}
+                </p>
+              </td>
+            </tr>
+
+            <!-- Footer / Help -->
+            <tr>
+              <td align="center" style="padding:16px 24px 24px 24px; background:#f9fafb; border-top:1px solid #eef2f7;">
+                <p style="margin:0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', Arial, sans-serif; font-size:12px; line-height:18px; color:#9ca3af;">
+                  Didn't create an account? You can safely ignore this email.
+                </p>
+                <p style="margin:8px 0 0 0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', Arial, sans-serif; font-size:12px; line-height:18px; color:#9ca3af;">
+                  Need help? Contact <a href="mailto:admin@thediscourse.ai" style="color:#6366f1; text-decoration:none;">admin@thediscourse.ai</a>
+                </p>
+                <p style="margin:8px 0 0 0; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', Arial, sans-serif; font-size:11px; line-height:16px; color:#9ca3af;">
+                  © {{ .CurrentYear }} Discourse AI
+                </p>
+              </td>
+            </tr>
+          </table>
+
+          <!-- Spacer -->
+          <div style="height:24px; line-height:24px;">&nbsp;</div>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

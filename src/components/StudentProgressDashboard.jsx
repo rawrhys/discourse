@@ -103,8 +103,8 @@ const StudentProgressDashboard = ({ courseId, courseTitle }) => {
             <div className="stat-label">Completion Rate</div>
           </div>
           <div className="stat-card">
-            <div className="stat-number">{stats.averageQuizScore}%</div>
-            <div className="stat-label">Avg Quiz Score</div>
+            <div className="stat-number">{stats.totalCorrectQuizzes}/{stats.totalQuizzes}</div>
+            <div className="stat-label">Quiz Performance</div>
           </div>
         </div>
       )}
@@ -160,7 +160,7 @@ const StudentProgressDashboard = ({ courseId, courseTitle }) => {
                   </div>
                   
                   <div className="col-score">
-                    {student.averageQuizScore}%
+                    {student.totalQuizzes > 0 ? `${student.correctQuizzes}/${student.totalQuizzes}` : 'N/A'}
                   </div>
                   
                   <div className="col-activity">

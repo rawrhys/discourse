@@ -8253,88 +8253,14 @@ app.get('/api/courses/:courseId/student-progress',
       
       console.log(`[API] Getting student progress for course:`, courseId);
       
-      // Get course data to verify it exists and get course details
-      const course = db.data.courses.find(c => c.id === courseId);
-      if (!course) {
-        return res.status(404).json({ error: 'Course not found' });
-      }
+      // Import student progress service
+      const { default: studentProgressService } = await import('./src/services/StudentProgressService.js');
       
-      // Get onboarding completions for this course (assuming courseId matches)
-      // For now, we'll get all completions and filter by course if needed
-      const completions = db.data.onboardingCompletions || [];
-      
-      console.log(`[API] Found ${completions.length} total completions in database`);
-      
-      // Convert completions to student progress format
-      const students = completions.map((completion, index) => {
-        // Get user data if available
-        const user = db.data.users.find(u => u.id === completion.userId);
-        let username = 'Anonymous';
-        
-        if (user && user.firstName && user.lastName) {
-          username = `${user.firstName} ${user.lastName}`.trim();
-        } else if (completion.email) {
-          username = completion.email;
-        }
-        
-        // Try to get session data for this user to get quiz scores
-        let averageQuizScore = 0;
-        let totalQuizzes = 0;
-        let correctQuizzes = 0;
-        
-        // Look for session data that might contain quiz scores
-        // We'll need to find sessions by userId or email
-        const sessionData = Array.from(publicCourseSessionService.sessions.values())
-          .find(session => 
-            session.firstName && session.lastName && 
-            `${session.firstName} ${session.lastName}`.trim() === username
-          );
-        
-        if (sessionData && sessionData.quizScores) {
-          const scores = Object.values(sessionData.quizScores);
-          if (scores.length > 0) {
-            totalQuizzes = scores.length;
-            correctQuizzes = scores.filter(score => score === 5).length; // Assuming 5 is perfect score
-            averageQuizScore = Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length);
-          }
-        }
-        
-        return {
-          sessionId: `completion_${completion.userId}_${index}`,
-          username: username,
-          startTime: new Date(completion.completedAt),
-          lastActivity: new Date(completion.completedAt),
-          completedLessons: 1, // Assuming completion means 1 lesson completed
-          totalLessons: 1, // This should be the actual course lesson count
-          completedModules: 1,
-          totalModules: 1,
-          isCompleted: true,
-          completionTime: new Date(completion.completedAt),
-          certificateGenerated: false,
-          averageQuizScore: averageQuizScore,
-          correctQuizzes: correctQuizzes,
-          totalQuizzes: totalQuizzes
-        };
-      });
-      
-      // Calculate stats
-      const totalCorrectQuizzes = students.reduce((sum, s) => sum + (s.correctQuizzes || 0), 0);
-      const totalQuizzes = students.reduce((sum, s) => sum + (s.totalQuizzes || 0), 0);
-      const averageQuizScore = students.length > 0 ? 
-        Math.round(students.reduce((sum, s) => sum + (s.averageQuizScore || 0), 0) / students.length) : 0;
-      
-      const stats = {
-        totalStudents: students.length,
-        completedStudents: students.filter(s => s.isCompleted).length,
-        averageCompletionTime: 0, // Could calculate from completion times
-        averageQuizScore: averageQuizScore,
-        totalCorrectQuizzes: totalCorrectQuizzes,
-        totalQuizzes: totalQuizzes,
-        completionRate: students.length > 0 ? 100 : 0 // All completions are 100% complete
-      };
+      // Get students and stats for the course
+      const students = studentProgressService.getCourseStudents(courseId);
+      const stats = studentProgressService.getCourseStats(courseId);
       
       console.log(`[API] Found ${students.length} students for course ${courseId}`);
-      console.log(`[API] Stats:`, stats);
       
       res.json({
         success: true,
@@ -8529,77 +8455,12 @@ app.get('/api/courses/:courseId/students', authenticateToken, async (req, res) =
       return res.status(403).json({ error: 'Unauthorized to view student progress' });
     }
     
-    // Get onboarding completions for this course
-    const completions = db.data.onboardingCompletions || [];
+    // Import student progress service
+    const { default: studentProgressService } = await import('./src/services/StudentProgressService.js');
     
-    console.log(`[API] Found ${completions.length} total completions in database for course ${courseId}`);
-    
-    // Convert completions to student progress format
-    const students = completions.map((completion, index) => {
-      // Get user data if available
-      const user = db.data.users.find(u => u.id === completion.userId);
-      let username = 'Anonymous';
-      
-      if (user && user.firstName && user.lastName) {
-        username = `${user.firstName} ${user.lastName}`.trim();
-      } else if (completion.email) {
-        username = completion.email;
-      }
-      
-      // Try to get session data for this user to get quiz scores
-      let averageQuizScore = 0;
-      let totalQuizzes = 0;
-      let correctQuizzes = 0;
-      
-      // Look for session data that might contain quiz scores
-      const sessionData = Array.from(publicCourseSessionService.sessions.values())
-        .find(session => 
-          session.firstName && session.lastName && 
-          `${session.firstName} ${session.lastName}`.trim() === username
-        );
-      
-      if (sessionData && sessionData.quizScores) {
-        const scores = Object.values(sessionData.quizScores);
-        if (scores.length > 0) {
-          totalQuizzes = scores.length;
-          correctQuizzes = scores.filter(score => score === 5).length; // Assuming 5 is perfect score
-          averageQuizScore = Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length);
-        }
-      }
-      
-      return {
-        sessionId: `completion_${completion.userId}_${index}`,
-        username: username,
-        startTime: new Date(completion.completedAt),
-        lastActivity: new Date(completion.completedAt),
-        completedLessons: 1, // Assuming completion means 1 lesson completed
-        totalLessons: 1, // This should be the actual course lesson count
-        completedModules: 1,
-        totalModules: 1,
-        isCompleted: true,
-        completionTime: new Date(completion.completedAt),
-        certificateGenerated: false,
-        averageQuizScore: averageQuizScore,
-        correctQuizzes: correctQuizzes,
-        totalQuizzes: totalQuizzes
-      };
-    });
-    
-          // Calculate stats
-      const totalCorrectQuizzes = students.reduce((sum, s) => sum + (s.correctQuizzes || 0), 0);
-      const totalQuizzes = students.reduce((sum, s) => sum + (s.totalQuizzes || 0), 0);
-      const averageQuizScore = students.length > 0 ? 
-        Math.round(students.reduce((sum, s) => sum + (s.averageQuizScore || 0), 0) / students.length) : 0;
-      
-      const stats = {
-        totalStudents: students.length,
-        completedStudents: students.filter(s => s.isCompleted).length,
-        averageCompletionTime: 0, // Could calculate from completion times
-        averageQuizScore: averageQuizScore,
-        totalCorrectQuizzes: totalCorrectQuizzes,
-        totalQuizzes: totalQuizzes,
-        completionRate: students.length > 0 ? 100 : 0 // All completions are 100% complete
-      };
+    // Get students and stats
+    const students = studentProgressService.getCourseStudents(courseId);
+    const stats = studentProgressService.getCourseStats(courseId);
     
     res.json({
       students,
