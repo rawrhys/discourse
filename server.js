@@ -3839,6 +3839,28 @@ Generate exactly ${numReferences} references following this exact format. Return
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Helper function for robust service imports
+async function importService(serviceName) {
+  try {
+    const servicePath = path.resolve(__dirname, 'src', 'services', `${serviceName}.js`);
+    console.log(`[IMPORT] Attempting to import ${serviceName} from:`, servicePath);
+    
+    // Check if file exists
+    if (!fs.existsSync(servicePath)) {
+      throw new Error(`Service file not found: ${servicePath}`);
+    }
+    
+    const { default: service } = await import(pathToFileURL(servicePath).href);
+    console.log(`[IMPORT] Successfully imported ${serviceName}`);
+    return service;
+  } catch (error) {
+    console.error(`[IMPORT] Failed to import ${serviceName}:`, error.message);
+    console.error(`[IMPORT] Current working directory:`, process.cwd());
+    console.error(`[IMPORT] __dirname:`, __dirname);
+    throw error;
+  }
+}
+
 // --- DATABASE SETUP ---
 const dbFilePath = path.join(__dirname, 'db.json');
 
@@ -8124,7 +8146,7 @@ app.post('/api/public/courses/:courseId/username',
         if (success) {
                   // Initialize student progress tracking (optional, don't fail if this fails)
         try {
-          const { default: studentProgressService } = await import(pathToFileURL(path.join(__dirname, 'src', 'services', 'StudentProgressService.js')).href);
+          const studentProgressService = await importService('StudentProgressService');
           const fullName = `${firstName.trim()} ${lastName.trim()}`;
           
           // Get course data to calculate total lessons and modules
@@ -8380,7 +8402,7 @@ app.post('/api/public/courses/:courseId/student-progress',
       });
       
       // Import student progress service
-      const { default: studentProgressService } = await import(pathToFileURL(path.join(__dirname, 'src', 'services', 'StudentProgressService.js')).href);
+      const studentProgressService = await importService('StudentProgressService');
       
       // Get or create student progress
       let progress = studentProgressService.getStudentProgress(sessionId);
@@ -8439,7 +8461,7 @@ app.post('/api/public/courses/:courseId/username-legacy',
     });
     
     // Import username service
-    const { default: usernameService } = await import(pathToFileURL(path.join(__dirname, 'src', 'services', 'UsernameService.js')).href);
+    const usernameService = await importService('UsernameService');
     
     // Validate and set username
     const result = usernameService.setUsername(sessionId, username);
@@ -8449,7 +8471,7 @@ app.post('/api/public/courses/:courseId/username-legacy',
     }
     
     // Initialize student progress tracking
-    const { default: studentProgressService } = await import(pathToFileURL(path.join(__dirname, 'src', 'services', 'StudentProgressService.js')).href);
+    const studentProgressService = await importService('StudentProgressService');
     studentProgressService.initializeStudentProgress(sessionId, courseId, result.username);
     
     res.json({ 
@@ -8488,7 +8510,7 @@ app.post('/api/public/courses/:courseId/progress',
     });
     
     // Import student progress service
-    const { default: studentProgressService } = await import(pathToFileURL(path.join(__dirname, 'src', 'services', 'StudentProgressService.js')).href);
+    const studentProgressService = await importService('StudentProgressService');
     
     // Check if student progress is initialized, if not initialize it
     let progress = studentProgressService.getStudentProgress(sessionId);
@@ -8639,7 +8661,7 @@ app.post('/api/certificates/email',
     });
     
     // Import certificate service
-    const { default: certificateService } = await import(pathToFileURL(path.join(__dirname, 'src', 'services', 'CertificateService.js')).href);
+    const certificateService = await importService('CertificateService');
     
     // Mark certificate as emailed
     certificateService.markCertificateEmailed(sessionId, email);
