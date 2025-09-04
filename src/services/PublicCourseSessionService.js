@@ -3,6 +3,8 @@
  * Handles session isolation for public course users to prevent quiz progression interference
  */
 
+import publicCourseLocalStorage from './PublicCourseLocalStorage.js';
+
 class PublicCourseSessionService {
   constructor() {
     this.sessions = new Map();
@@ -131,6 +133,10 @@ class PublicCourseSessionService {
     if (session) {
       session.quizScores[lessonId] = score;
       session.lastActivity = Date.now();
+      
+      // Also save to local storage
+      publicCourseLocalStorage.saveQuizScore(sessionId, session.courseId, lessonId, score);
+      
       console.log(`[PublicCourseSession] Saved quiz score for session ${sessionId}, lesson ${lessonId}: ${score}`);
       return true;
     }
@@ -175,6 +181,10 @@ class PublicCourseSessionService {
       session.firstName = firstName;
       session.lastName = lastName;
       session.lastActivity = Date.now();
+      
+      // Also save to local storage
+      publicCourseLocalStorage.saveUserDetails(sessionId, session.courseId, firstName, lastName);
+      
       console.log(`[PublicCourseSession] Set username for session ${sessionId}: ${firstName} ${lastName}`);
       return true;
     }
@@ -246,6 +256,28 @@ class PublicCourseSessionService {
       activeSessions: activeSessions.length,
       activeSessionIds: Array.from(this.activeSessions)
     };
+  }
+
+  /**
+   * Get all sessions for a course (including from local storage)
+   */
+  getCourseSessions(courseId) {
+    const memorySessions = Array.from(this.sessions.values())
+      .filter(session => session.courseId === courseId);
+    
+    const localSessions = publicCourseLocalStorage.getCourseSessions(courseId);
+    
+    // Merge memory and local storage sessions, prioritizing memory sessions
+    const allSessions = [...memorySessions];
+    
+    // Add local storage sessions that aren't already in memory
+    for (const localSession of localSessions) {
+      if (!this.sessions.has(localSession.sessionId)) {
+        allSessions.push(localSession);
+      }
+    }
+    
+    return allSessions;
   }
 
   /**

@@ -6,7 +6,7 @@ import dotenv from 'dotenv';
 import fileUpload from 'express-fileupload';
 
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import fs from 'fs';
 import https from 'https';
 import http from 'http';
@@ -8124,7 +8124,7 @@ app.post('/api/public/courses/:courseId/username',
         if (success) {
                   // Initialize student progress tracking (optional, don't fail if this fails)
         try {
-          const { default: studentProgressService } = await import('./src/services/StudentProgressService.js');
+          const { default: studentProgressService } = await import(pathToFileURL(path.join(__dirname, 'src', 'services', 'StudentProgressService.js')).href);
           const fullName = `${firstName.trim()} ${lastName.trim()}`;
           
           // Get course data to calculate total lessons and modules
@@ -8247,25 +8247,31 @@ app.get('/api/public/courses/:courseId/username',
 app.get('/api/courses/:courseId/student-progress', 
   securityHeaders,
   securityLogging,
+  authenticateToken,
   async (req, res) => {
     try {
       const { courseId } = req.params;
+      const userId = req.user.id;
       
-      console.log(`[API] Getting student progress for course:`, courseId);
+      console.log(`[API] Getting student progress for course:`, courseId, 'by user:', userId);
       
-      // Get course data to verify it exists and get course details
+      // Get course data to verify it exists and check ownership
       const course = db.data.courses.find(c => c.id === courseId);
       if (!course) {
         return res.status(404).json({ error: 'Course not found' });
       }
       
-      // Get public course sessions for this course
-      const publicSessions = Array.from(publicCourseSessionService.sessions.values())
-        .filter(session => session.courseId === courseId);
+      // Verify course ownership
+      if (course.userId !== userId) {
+        return res.status(403).json({ error: 'Unauthorized to view student progress for this course' });
+      }
+      
+      // Get public course sessions for this course (including from local storage)
+      const publicSessions = publicCourseSessionService.getCourseSessions(courseId);
       
       console.log(`[API] Found ${publicSessions.length} public course sessions for course ${courseId}`);
       console.log(`[API] Session details:`, publicSessions.map(s => ({
-        id: s.id,
+        id: s.id || s.sessionId,
         firstName: s.firstName,
         lastName: s.lastName,
         quizScores: s.quizScores,
@@ -8298,16 +8304,16 @@ app.get('/api/courses/:courseId/student-progress',
         const isCompleted = totalQuizzes > 0 && correctQuizzes === totalQuizzes;
         
         return {
-          sessionId: session.id,
+          sessionId: session.id || session.sessionId,
           username: username,
-          startTime: new Date(session.createdAt),
-          lastActivity: new Date(session.lastActivity),
+          startTime: new Date(session.createdAt || session.lastUpdated || Date.now()),
+          lastActivity: new Date(session.lastActivity || session.lastUpdated || Date.now()),
           completedLessons: completedLessons,
           totalLessons: totalQuizzes, // For now, total lessons = total quizzes
           completedModules: completedLessons > 0 ? 1 : 0,
           totalModules: 1,
           isCompleted: isCompleted,
-          completionTime: isCompleted ? new Date(session.lastActivity) : null,
+          completionTime: isCompleted ? new Date(session.lastActivity || session.lastUpdated || Date.now()) : null,
           certificateGenerated: false,
           averageQuizScore: averageQuizScore,
           correctQuizzes: correctQuizzes,
@@ -8338,7 +8344,8 @@ app.get('/api/courses/:courseId/student-progress',
         success: true,
         courseId,
         students,
-        stats
+        stats,
+        courseTitle: course.title
       });
     } catch (error) {
       console.error('[API] Failed to get student progress:', error);
@@ -8373,7 +8380,7 @@ app.post('/api/public/courses/:courseId/student-progress',
       });
       
       // Import student progress service
-      const { default: studentProgressService } = await import('./src/services/StudentProgressService.js');
+      const { default: studentProgressService } = await import(pathToFileURL(path.join(__dirname, 'src', 'services', 'StudentProgressService.js')).href);
       
       // Get or create student progress
       let progress = studentProgressService.getStudentProgress(sessionId);
@@ -8432,7 +8439,7 @@ app.post('/api/public/courses/:courseId/username-legacy',
     });
     
     // Import username service
-    const { default: usernameService } = await import('./src/services/UsernameService.js');
+    const { default: usernameService } = await import(pathToFileURL(path.join(__dirname, 'src', 'services', 'UsernameService.js')).href);
     
     // Validate and set username
     const result = usernameService.setUsername(sessionId, username);
@@ -8442,7 +8449,7 @@ app.post('/api/public/courses/:courseId/username-legacy',
     }
     
     // Initialize student progress tracking
-    const { default: studentProgressService } = await import('./src/services/StudentProgressService.js');
+    const { default: studentProgressService } = await import(pathToFileURL(path.join(__dirname, 'src', 'services', 'StudentProgressService.js')).href);
     studentProgressService.initializeStudentProgress(sessionId, courseId, result.username);
     
     res.json({ 
@@ -8481,7 +8488,7 @@ app.post('/api/public/courses/:courseId/progress',
     });
     
     // Import student progress service
-    const { default: studentProgressService } = await import('./src/services/StudentProgressService.js');
+    const { default: studentProgressService } = await import(pathToFileURL(path.join(__dirname, 'src', 'services', 'StudentProgressService.js')).href);
     
     // Check if student progress is initialized, if not initialize it
     let progress = studentProgressService.getStudentProgress(sessionId);
@@ -8527,13 +8534,12 @@ app.get('/api/courses/:courseId/students', authenticateToken, async (req, res) =
       return res.status(403).json({ error: 'Unauthorized to view student progress' });
     }
     
-    // Get public course sessions for this course
-    const publicSessions = Array.from(publicCourseSessionService.sessions.values())
-      .filter(session => session.courseId === courseId);
+    // Get public course sessions for this course (including from local storage)
+    const publicSessions = publicCourseSessionService.getCourseSessions(courseId);
     
     console.log(`[API] Found ${publicSessions.length} public course sessions for course ${courseId}`);
     console.log(`[API] Session details:`, publicSessions.map(s => ({
-      id: s.id,
+      id: s.id || s.sessionId,
       firstName: s.firstName,
       lastName: s.lastName,
       quizScores: s.quizScores,
@@ -8566,16 +8572,16 @@ app.get('/api/courses/:courseId/students', authenticateToken, async (req, res) =
       const isCompleted = totalQuizzes > 0 && correctQuizzes === totalQuizzes;
       
       return {
-        sessionId: session.id,
+        sessionId: session.id || session.sessionId,
         username: username,
-        startTime: new Date(session.createdAt),
-        lastActivity: new Date(session.lastActivity),
+        startTime: new Date(session.createdAt || session.lastUpdated || Date.now()),
+        lastActivity: new Date(session.lastActivity || session.lastUpdated || Date.now()),
         completedLessons: completedLessons,
         totalLessons: totalQuizzes, // For now, total lessons = total quizzes
         completedModules: completedLessons > 0 ? 1 : 0,
         totalModules: 1,
         isCompleted: isCompleted,
-        completionTime: isCompleted ? new Date(session.lastActivity) : null,
+        completionTime: isCompleted ? new Date(session.lastActivity || session.lastUpdated || Date.now()) : null,
         certificateGenerated: false,
         averageQuizScore: averageQuizScore,
         correctQuizzes: correctQuizzes,
@@ -8633,7 +8639,7 @@ app.post('/api/certificates/email',
     });
     
     // Import certificate service
-    const { default: certificateService } = await import('./src/services/CertificateService.js');
+    const { default: certificateService } = await import(pathToFileURL(path.join(__dirname, 'src', 'services', 'CertificateService.js')).href);
     
     // Mark certificate as emailed
     certificateService.markCertificateEmailed(sessionId, email);
