@@ -44,6 +44,11 @@ class PublicCourseSessionService {
     this.activeSessions.add(finalSessionId);
     
     console.log(`[PublicCourseSession] Created session ${finalSessionId} for course ${courseId}`);
+    console.log(`[PublicCourseSession] Session stored:`, {
+      id: session.id,
+      courseId: session.courseId,
+      totalSessions: this.sessions.size
+    });
     
     return finalSessionId;
   }
@@ -186,8 +191,15 @@ class PublicCourseSessionService {
       publicCourseLocalStorage.saveUserDetails(sessionId, session.courseId, firstName, lastName);
       
       console.log(`[PublicCourseSession] Set username for session ${sessionId}: ${firstName} ${lastName}`);
+      console.log(`[PublicCourseSession] Session after setUsername:`, {
+        id: session.id,
+        courseId: session.courseId,
+        firstName: session.firstName,
+        lastName: session.lastName
+      });
       return true;
     }
+    console.log(`[PublicCourseSession] Session ${sessionId} not found for setUsername`);
     return false;
   }
 
@@ -227,8 +239,10 @@ class PublicCourseSessionService {
     const expiredSessions = [];
 
     for (const [sessionId, session] of this.sessions.entries()) {
-      if (now - session.lastActivity > this.sessionTimeout) {
+      const timeSinceLastActivity = now - session.lastActivity;
+      if (timeSinceLastActivity > this.sessionTimeout) {
         expiredSessions.push(sessionId);
+        console.log(`[PublicCourseSession] Session ${sessionId} expired (${Math.round(timeSinceLastActivity / 1000 / 60)} minutes old)`);
       }
     }
 
@@ -262,22 +276,72 @@ class PublicCourseSessionService {
    * Get all sessions for a course (including from local storage)
    */
   getCourseSessions(courseId) {
+    console.log(`[PublicCourseSession] Getting sessions for courseId: ${courseId}`);
+    console.log(`[PublicCourseSession] Total sessions in memory: ${this.sessions.size}`);
+    
     const memorySessions = Array.from(this.sessions.values())
-      .filter(session => session.courseId === courseId);
+      .filter(session => {
+        const matches = session.courseId === courseId;
+        console.log(`[PublicCourseSession] Session ${session.id} courseId: ${session.courseId}, matches: ${matches}`);
+        return matches;
+      });
     
-    const localSessions = publicCourseLocalStorage.getCourseSessions(courseId);
+    console.log(`[PublicCourseSession] Found ${memorySessions.length} memory sessions for course ${courseId}`);
     
-    // Merge memory and local storage sessions, prioritizing memory sessions
+    // For server-side usage, we don't have access to localStorage
+    // So we only return memory sessions
     const allSessions = [...memorySessions];
     
-    // Add local storage sessions that aren't already in memory
-    for (const localSession of localSessions) {
-      if (!this.sessions.has(localSession.sessionId)) {
-        allSessions.push(localSession);
+    // If we're in a browser environment, try to get local storage sessions
+    if (typeof window !== 'undefined') {
+      try {
+        const localSessions = publicCourseLocalStorage.getCourseSessions(courseId);
+        
+        // Add local storage sessions that aren't already in memory
+        for (const localSession of localSessions) {
+          if (!this.sessions.has(localSession.sessionId)) {
+            allSessions.push(localSession);
+          }
+        }
+      } catch (error) {
+        console.warn('[PublicCourseSession] Could not access local storage:', error);
       }
     }
     
+    console.log(`[PublicCourseSession] Returning ${allSessions.length} total sessions for course ${courseId}`);
     return allSessions;
+  }
+
+  /**
+   * Get all sessions for a course with user details for dashboard
+   */
+  getCourseSessionsWithDetails(courseId) {
+    const sessions = this.getCourseSessions(courseId);
+    
+    // Ensure each session has the necessary user details
+    return sessions.map(session => {
+      // If session doesn't have firstName/lastName, try to get from username
+      if (!session.firstName && !session.lastName && session.username) {
+        const nameParts = session.username.split(' ');
+        session.firstName = nameParts[0] || '';
+        session.lastName = nameParts.slice(1).join(' ') || '';
+      }
+      
+      return {
+        id: session.id || session.sessionId,
+        sessionId: session.id || session.sessionId,
+        courseId: session.courseId,
+        firstName: session.firstName || '',
+        lastName: session.lastName || '',
+        username: session.username || `${session.firstName || ''} ${session.lastName || ''}`.trim() || 'Anonymous',
+        createdAt: session.createdAt || session.lastUpdated || Date.now(),
+        lastActivity: session.lastActivity || session.lastUpdated || Date.now(),
+        quizScores: session.quizScores || {},
+        lessonProgress: session.lessonProgress || {},
+        data: session.data || null,
+        isActive: session.isActive !== false
+      };
+    });
   }
 
   /**
