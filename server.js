@@ -8061,33 +8061,19 @@ app.post('/api/public/courses/:courseId/username',
         lastName
       });
       
+      // Validate input
+      if (typeof firstName !== 'string' || typeof lastName !== 'string') {
+        return res.status(400).json({ error: 'firstName and lastName must be strings' });
+      }
+      
+      if (firstName.trim().length < 2 || lastName.trim().length < 2) {
+        return res.status(400).json({ error: 'firstName and lastName must be at least 2 characters long' });
+      }
+      
       // Debug: Check if session service is available
       if (!publicCourseSessionService) {
         console.error(`[API] Public course session service not available`);
         return res.status(500).json({ error: 'Session service not available' });
-      }
-      
-      // Debug: Check if setUsername method is available
-      if (typeof publicCourseSessionService.setUsername !== 'function') {
-        console.error(`[API] setUsername method not available on publicCourseSessionService:`, {
-          serviceType: typeof publicCourseSessionService,
-          serviceMethods: Object.getOwnPropertyNames(publicCourseSessionService),
-          prototypeMethods: Object.getOwnPropertyNames(Object.getPrototypeOf(publicCourseSessionService)),
-          serviceConstructor: publicCourseSessionService.constructor?.name
-        });
-        
-        // Try to re-import the service if it's not working
-        try {
-          const { default: freshService } = await import('./src/services/PublicCourseSessionService.js');
-          if (typeof freshService.setUsername === 'function') {
-            console.log('[API] Successfully re-imported service, using fresh instance');
-            return res.status(500).json({ error: 'Service temporarily unavailable, please retry' });
-          }
-        } catch (reimportError) {
-          console.error('[API] Failed to re-import service:', reimportError);
-        }
-        
-        return res.status(500).json({ error: 'setUsername method not available' });
       }
       
       // Check if session exists, if not create it
@@ -8096,62 +8082,94 @@ app.post('/api/public/courses/:courseId/username',
       
       if (!session) {
         console.log(`[API] Session ${sessionId} not found, creating new session for course ${courseId}`);
-        const newSessionId = publicCourseSessionService.createSession(courseId, sessionId);
-        session = publicCourseSessionService.getSession(newSessionId);
-        actualSessionId = newSessionId; // Use the new session ID
-      }
-      
-      // Update the session with the username
-      let success = false;
-      try {
-        success = publicCourseSessionService.setUsername(actualSessionId, firstName, lastName);
-        console.log(`[API] setUsername result for session ${actualSessionId}: ${success}`);
-      } catch (error) {
-        console.error(`[API] Error calling setUsername:`, error);
-        // Fallback: manually update the session
-        const session = publicCourseSessionService.getSession(actualSessionId);
-        if (session) {
-          session.firstName = firstName;
-          session.lastName = lastName;
-          session.lastActivity = Date.now();
-          success = true;
-          console.log(`[API] Fallback: Manually set username for session ${actualSessionId}: ${firstName} ${lastName}`);
-        } else {
-          console.error(`[API] Fallback failed: Session ${actualSessionId} not found for manual update`);
+        try {
+          const newSessionId = publicCourseSessionService.createSession(courseId, sessionId);
+          session = publicCourseSessionService.getSession(newSessionId);
+          actualSessionId = newSessionId; // Use the new session ID
+          console.log(`[API] Created new session ${actualSessionId} for course ${courseId}`);
+        } catch (createError) {
+          console.error(`[API] Error creating session:`, createError);
+          return res.status(500).json({ error: 'Failed to create session' });
         }
       }
       
-      console.log(`[API] Set username result:`, {
-        originalSessionId: sessionId,
-        actualSessionId,
-        success,
-        firstName,
-        lastName
-      });
+      if (!session) {
+        console.error(`[API] Failed to get or create session for ${sessionId}`);
+        return res.status(500).json({ error: 'Failed to get or create session' });
+      }
       
-      if (success) {
-        // Initialize student progress tracking
+      // Update the session with the username - use direct property assignment
+      try {
+        session.firstName = firstName.trim();
+        session.lastName = lastName.trim();
+        session.lastActivity = Date.now();
+        
+        console.log(`[API] Set username for session ${actualSessionId}: ${firstName.trim()} ${lastName.trim()}`);
+        
+        // Also try the setUsername method if available
+        if (typeof publicCourseSessionService.setUsername === 'function') {
+          publicCourseSessionService.setUsername(actualSessionId, firstName.trim(), lastName.trim());
+        }
+        
+        const success = true;
+        
+        console.log(`[API] Set username result:`, {
+          originalSessionId: sessionId,
+          actualSessionId,
+          success,
+          firstName: firstName.trim(),
+          lastName: lastName.trim()
+        });
+        
+        if (success) {
+                  // Initialize student progress tracking (optional, don't fail if this fails)
         try {
           const { default: studentProgressService } = await import('./src/services/StudentProgressService.js');
-          const fullName = `${firstName} ${lastName}`;
-          studentProgressService.initializeStudentProgress(actualSessionId, courseId, fullName);
-          console.log(`[API] Initialized student progress tracking for ${fullName}`);
+          const fullName = `${firstName.trim()} ${lastName.trim()}`;
+          
+          // Get course data to calculate total lessons and modules
+          let courseData = null;
+          try {
+            // Try to get course data from the session or fetch it
+            const session = publicCourseSessionService.getSession(actualSessionId);
+            if (session && session.data) {
+              courseData = session.data;
+            }
+          } catch (courseDataError) {
+            console.warn(`[API] Could not get course data for progress initialization:`, courseDataError);
+          }
+          
+          // Check if progress already exists, if not create it
+          let progress = studentProgressService.getStudentProgress(actualSessionId);
+          if (!progress) {
+            progress = studentProgressService.initializeStudentProgress(actualSessionId, courseId, fullName, courseData);
+            console.log(`[API] Initialized new student progress tracking for ${fullName}`);
+          } else {
+            // Update existing progress with the name
+            progress.username = fullName;
+            progress.lastActivity = new Date();
+            console.log(`[API] Updated existing student progress with name: ${fullName}`);
+          }
         } catch (progressError) {
           console.error(`[API] Failed to initialize student progress:`, progressError);
           // Don't fail the request if progress tracking fails
         }
-        
-        console.log(`[API] Username set successfully for session ${actualSessionId}`);
-        res.json({ 
-          success: true,
-          sessionId: actualSessionId, // Return the actual session ID that was used
-          originalSessionId: sessionId, // Also return the original for reference
-          firstName,
-          lastName
-        });
-      } else {
-        console.log(`[API] Failed to set username for session ${sessionId}`);
-        res.status(404).json({ error: 'Session not found' });
+          
+          console.log(`[API] Username set successfully for session ${actualSessionId}`);
+          res.json({ 
+            success: true,
+            sessionId: actualSessionId, // Return the actual session ID that was used
+            originalSessionId: sessionId, // Also return the original for reference
+            firstName: firstName.trim(),
+            lastName: lastName.trim()
+          });
+        } else {
+          console.log(`[API] Failed to set username for session ${sessionId}`);
+          res.status(500).json({ error: 'Failed to set username' });
+        }
+      } catch (error) {
+        console.error(`[API] Error setting username:`, error);
+        res.status(500).json({ error: 'Failed to set username' });
       }
     } catch (error) {
       console.error('[API] Failed to set username:', error);
@@ -8221,6 +8239,100 @@ app.get('/api/public/courses/:courseId/username',
     } catch (error) {
       console.error('[API] Failed to get username:', error);
       res.status(500).json({ error: 'Failed to get username' });
+    }
+  }
+);
+
+// Get student progress data for a course (for course creator dashboard)
+app.get('/api/courses/:courseId/student-progress', 
+  securityHeaders,
+  securityLogging,
+  async (req, res) => {
+    try {
+      const { courseId } = req.params;
+      
+      console.log(`[API] Getting student progress for course:`, courseId);
+      
+      // Import student progress service
+      const { default: studentProgressService } = await import('./src/services/StudentProgressService.js');
+      
+      // Get students and stats for the course
+      const students = studentProgressService.getCourseStudents(courseId);
+      const stats = studentProgressService.getCourseStats(courseId);
+      
+      console.log(`[API] Found ${students.length} students for course ${courseId}`);
+      
+      res.json({
+        success: true,
+        courseId,
+        students,
+        stats
+      });
+    } catch (error) {
+      console.error('[API] Failed to get student progress:', error);
+      res.status(500).json({ error: 'Failed to get student progress' });
+    }
+  }
+);
+
+// Update student progress (lesson completion, quiz scores, etc.)
+app.post('/api/public/courses/:courseId/student-progress', 
+  securityHeaders,
+  securityLogging,
+  botDetection,
+  publicCourseRateLimit,
+  publicCourseSlowDown,
+  async (req, res) => {
+    try {
+      const { courseId } = req.params;
+      const { sessionId, lessonId, moduleId, quizScore, action } = req.body;
+      
+      if (!sessionId) {
+        return res.status(400).json({ error: 'Missing sessionId' });
+      }
+      
+      console.log(`[API] Updating student progress for course:`, {
+        courseId,
+        sessionId,
+        lessonId,
+        moduleId,
+        quizScore,
+        action
+      });
+      
+      // Import student progress service
+      const { default: studentProgressService } = await import('./src/services/StudentProgressService.js');
+      
+      // Get or create student progress
+      let progress = studentProgressService.getStudentProgress(sessionId);
+      if (!progress) {
+        // Create new progress entry
+        progress = studentProgressService.initializeStudentProgress(sessionId, courseId, 'Anonymous');
+        console.log(`[API] Created new student progress for session ${sessionId}`);
+      }
+      
+      // Update progress based on action
+      if (action === 'lesson_completed' && lessonId) {
+        studentProgressService.updateLessonCompletion(sessionId, lessonId, moduleId);
+        console.log(`[API] Marked lesson ${lessonId} as completed for session ${sessionId}`);
+      }
+      
+      if (action === 'quiz_completed' && lessonId && quizScore !== undefined) {
+        studentProgressService.updateQuizScore(sessionId, lessonId, quizScore);
+        console.log(`[API] Updated quiz score for lesson ${lessonId}: ${quizScore} for session ${sessionId}`);
+      }
+      
+      // Get updated progress
+      const updatedProgress = studentProgressService.getStudentProgress(sessionId);
+      
+      res.json({
+        success: true,
+        sessionId,
+        progress: updatedProgress
+      });
+    } catch (error) {
+      console.error('[API] Failed to update student progress:', error);
+      res.status(500).json({ error: 'Failed to update student progress' });
     }
   }
 );

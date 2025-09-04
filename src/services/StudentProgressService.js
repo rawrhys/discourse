@@ -12,7 +12,18 @@ class StudentProgressService {
   /**
    * Initialize progress tracking for a student
    */
-  initializeStudentProgress(sessionId, courseId, username = null) {
+  initializeStudentProgress(sessionId, courseId, username = null, courseData = null) {
+    // Calculate total lessons and modules from course data if available
+    let totalLessons = 0;
+    let totalModules = 0;
+    
+    if (courseData && courseData.modules) {
+      totalModules = courseData.modules.length;
+      totalLessons = courseData.modules.reduce((total, module) => {
+        return total + (module.lessons ? module.lessons.length : 0);
+      }, 0);
+    }
+    
     const progress = {
       sessionId,
       courseId,
@@ -21,15 +32,16 @@ class StudentProgressService {
       lastActivity: new Date(),
       completedLessons: new Set(),
       quizScores: new Map(), // lessonId -> score
-      totalLessons: 0,
+      totalLessons,
       completedModules: new Set(),
-      totalModules: 0,
+      totalModules,
       isCompleted: false,
       completionTime: null,
       certificateGenerated: false
     };
 
     this.studentProgress.set(sessionId, progress);
+    console.log(`[StudentProgressService] Initialized progress for ${username} - ${totalLessons} lessons, ${totalModules} modules`);
     return progress;
   }
 

@@ -452,6 +452,27 @@ const PublicCourseDisplay = () => {
           window.history.replaceState({}, '', newUrl);
         }
         
+        // Update student progress tracking
+        try {
+          await fetch(`/api/public/courses/${courseId}/student-progress`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              sessionId: result.sessionId || sessionId,
+              lessonId,
+              moduleId: moduleOfCompletedQuizId,
+              quizScore: score,
+              action: 'quiz_completed'
+            })
+          });
+          console.log(`[PublicCourseDisplay] Updated student progress for quiz completion: lesson ${lessonId}, score ${score}`);
+        } catch (progressError) {
+          console.error('[PublicCourseDisplay] Failed to update student progress:', progressError);
+          // Don't fail the quiz completion if progress tracking fails
+        }
+        
         const updatedCourse = {
           ...course,
           modules: course.modules.map(m => {
@@ -677,9 +698,41 @@ const PublicCourseDisplay = () => {
     setShowQuiz(false);
   }, [course, unlockedModules, courseId, sessionId]);
 
+  // Track lesson completion
+  const trackLessonCompletion = useCallback(async (lessonId, moduleId) => {
+    if (!courseId || !sessionId || !lessonId || !moduleId) return;
+    
+    try {
+      await fetch(`/api/public/courses/${courseId}/student-progress`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sessionId,
+          lessonId,
+          moduleId,
+          action: 'lesson_completed'
+        })
+      });
+      console.log(`[PublicCourseDisplay] Tracked lesson completion: lesson ${lessonId}, module ${moduleId}`);
+    } catch (error) {
+      console.error('[PublicCourseDisplay] Failed to track lesson completion:', error);
+      // Don't fail lesson navigation if progress tracking fails
+    }
+  }, [courseId, sessionId]);
+
   const handleLessonClick = useCallback((lessonId) => {
     if (!courseId || !sessionId) return;
     setActiveLessonId(lessonId);
+    
+    // Find the module for this lesson
+    const module = course?.modules?.find(m => m.lessons?.some(l => l.id === lessonId));
+    if (module) {
+      // Track lesson completion
+      trackLessonCompletion(lessonId, module.id);
+    }
+    
     // Update URL without causing a full navigation/remount
     const newUrl = `/public/course/${courseId}/lesson/${lessonId}?sessionId=${sessionId}`;
     window.history.replaceState({}, '', newUrl);
@@ -687,7 +740,7 @@ const PublicCourseDisplay = () => {
     if (window.innerWidth < 768) {
       setSidebarOpen(false);
     }
-  }, [courseId, sessionId]);
+  }, [courseId, sessionId, course, trackLessonCompletion]);
 
   const handleNextLesson = useCallback(() => {
     if (!course?.modules || !courseId) return;

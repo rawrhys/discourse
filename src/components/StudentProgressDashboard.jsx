@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import studentProgressService from '../services/StudentProgressService';
 
 const StudentProgressDashboard = ({ courseId, courseTitle }) => {
   const [students, setStudents] = useState([]);
@@ -11,16 +10,30 @@ const StudentProgressDashboard = ({ courseId, courseTitle }) => {
     loadStudentData();
   }, [courseId]);
 
-  const loadStudentData = () => {
+  const loadStudentData = async () => {
     setLoading(true);
     
-    // Get students and stats
-    const studentData = studentProgressService.getCourseStudents(courseId);
-    const courseStats = studentProgressService.getCourseStats(courseId);
-    
-    setStudents(studentData);
-    setStats(courseStats);
-    setLoading(false);
+    try {
+      // Fetch student progress data from API
+      const response = await fetch(`/api/courses/${courseId}/student-progress`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        setStudents(data.students || []);
+        setStats(data.stats || null);
+        console.log(`[StudentProgressDashboard] Loaded ${data.students?.length || 0} students for course ${courseId}`);
+      } else {
+        console.error('[StudentProgressDashboard] Failed to load student data:', response.status);
+        setStudents([]);
+        setStats(null);
+      }
+    } catch (error) {
+      console.error('[StudentProgressDashboard] Error loading student data:', error);
+      setStudents([]);
+      setStats(null);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const formatDate = (date) => {
