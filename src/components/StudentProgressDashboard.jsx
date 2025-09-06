@@ -14,8 +14,19 @@ const StudentProgressDashboard = ({ courseId, courseTitle }) => {
     setLoading(true);
     
     try {
-      // Fetch student progress data from API
-      const response = await fetch(`/api/courses/${courseId}/student-progress`);
+      // Try authenticated endpoint first
+      let response = await fetch(`/api/courses/${courseId}/student-progress`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      // If authenticated endpoint fails, try public endpoint
+      if (!response.ok && response.status === 401) {
+        console.log('[StudentProgressDashboard] Authenticated endpoint failed, trying public endpoint');
+        response = await fetch(`/api/courses/${courseId}/student-progress`);
+      }
       
       if (response.ok) {
         const data = await response.json();

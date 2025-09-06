@@ -3874,6 +3874,13 @@ async function importService(serviceName) {
     
     const { default: service } = await import(pathToFileURL(servicePath).href);
     console.log(`[IMPORT] Successfully imported ${serviceName}`);
+    
+    // Initialize StudentProgressService with database if it has an initialize method
+    if (serviceName === 'StudentProgressService' && service && typeof service.initialize === 'function') {
+      service.initialize(db);
+      console.log(`[IMPORT] Initialized ${serviceName} with database`);
+    }
+    
     return service;
   } catch (error) {
     console.error(`[IMPORT] Failed to import ${serviceName}:`, error.message);
@@ -5671,13 +5678,13 @@ app.get('/api/courses/saved', authenticateToken, async (req, res) => {
     
     console.log(`[API] Fetching saved courses for user ${userId} (${userEmail})`);
     
-    // First, try to find courses with the current user ID
+    // Get user-specific courses
     let userCourses = db.data.courses.filter(c => c.userId === userId);
     
     // If no courses found, check if there are courses with the same email but different user ID
     // This handles the migration from old user ID format to Supabase UUID
     if (userCourses.length === 0) {
-      console.log(`[API] No courses found for user ID ${userId}, checking for email-based migration`);
+      console.log(`[API] No user-specific courses found for user ID ${userId}, checking for email-based migration`);
       
       // Find the existing user in the database with the same email
       const existingUser = db.data.users.find(u => u.email === userEmail);
@@ -5712,6 +5719,45 @@ app.get('/api/courses/saved', authenticateToken, async (req, res) => {
       }
     }
     
+    // Copy public courses (those with userId: undefined) to the current user if they don't already exist
+    const publicCourses = db.data.courses.filter(c => c.userId === undefined);
+    console.log(`[API] Found ${publicCourses.length} public courses to potentially copy for user ${userId}`);
+    
+    for (const publicCourse of publicCourses) {
+      // Check if user already has a copy of this public course
+      const existingCopy = userCourses.find(c => 
+        c.id === publicCourse.id || 
+        (c.title === publicCourse.title && c.userId === userId)
+      );
+      
+      if (!existingCopy) {
+        console.log(`[API] Creating user copy of public course: ${publicCourse.title} for user ${userId}`);
+        
+        // Create a copy of the public course for the user
+        const userCourseCopy = {
+          ...publicCourse,
+          id: `${publicCourse.id}_${userId}_${Date.now()}`,
+          userId: userId,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          isPublicCopy: true // Flag to indicate this is a copy of a public course
+        };
+        
+        // Add to database
+        db.data.courses.push(userCourseCopy);
+        userCourses.push(userCourseCopy);
+        
+        console.log(`[API] Created user copy: ${userCourseCopy.id}`);
+      } else {
+        console.log(`[API] User ${userId} already has a copy of public course: ${publicCourse.title}`);
+      }
+    }
+    
+    // Save the database after creating copies
+    if (publicCourses.length > 0) {
+      await db.write();
+    }
+    
     // If the user has completed onboarding, hide onboarding courses from dashboard results
     const hasCompletedOnboarding = Array.isArray(db.data.onboardingCompletions)
       && db.data.onboardingCompletions.some(c => c.userId === userId);
@@ -5737,7 +5783,7 @@ app.get('/api/courses/saved', authenticateToken, async (req, res) => {
       console.log(`[API] Filtered onboarding courses for user ${userId}: ${before} -> ${userCourses.length}`);
     }
 
-    console.log(`[API] Returning ${userCourses.length} courses for user ${userId}`);
+    console.log(`[API] Returning ${userCourses.length} courses for user ${userId} (including copies of public courses)`);
     console.log(`[API] All courses in database:`, db.data.courses.map(c => ({ id: c.id, userId: c.userId, title: c.title })));
     console.log(`[API] User courses found:`, userCourses.map(c => ({ id: c.id, userId: c.userId, title: c.title })));
     res.json(userCourses);
@@ -5918,6 +5964,22 @@ app.get('/api/courses/:courseId', authenticateToken, async (req, res) => {
       const normalizedCourseId = String(courseId || '').replace(/_[0-9]{10,}$/, '');
       course = db.data.courses.find(c => String(c.id || '').replace(/_[0-9]{10,}$/, '') === normalizedCourseId);
     }
+    
+    // If still not found, try to find by the original public course ID (for copied public courses)
+    if (!course) {
+      // Extract the original public course ID from copied course IDs
+      // Format: originalId_userId_timestamp
+      const parts = courseId.split('_');
+      if (parts.length >= 3) {
+        const originalPublicId = parts[0];
+        // Only look for public courses (userId: undefined) as the original
+        course = db.data.courses.find(c => c.id === originalPublicId && c.userId === undefined);
+        if (course) {
+          console.log(`[API] Found original public course ${originalPublicId} for copied course ${courseId}`);
+        }
+      }
+    }
+    
     console.log(`[API] Course found:`, {
       found: !!course,
       courseId: courseId,
@@ -5989,7 +6051,8 @@ app.get('/api/courses/:courseId', authenticateToken, async (req, res) => {
       });
     }
     
-    if (course.userId !== req.user.id) {
+    // Allow access if course belongs to user OR if it's a public course (userId: undefined)
+    if (course.userId !== req.user.id && course.userId !== undefined) {
       console.log(`[API] Access denied - course belongs to user ${course.userId}, but request is from user ${req.user.id}`);
       
       // For debugging, let's also check if there are any users with the same email
@@ -8742,18 +8805,18 @@ app.post('/api/public/courses/:courseId/student-progress',
       let progress = studentProgressService.getStudentProgress(sessionId);
       if (!progress) {
         // Create new progress entry
-        progress = studentProgressService.initializeStudentProgress(sessionId, courseId, 'Anonymous');
+        progress = await studentProgressService.initializeStudentProgress(sessionId, courseId, 'Anonymous');
         console.log(`[API] Created new student progress for session ${sessionId}`);
       }
       
       // Update progress based on action
       if (action === 'lesson_completed' && lessonId) {
-        studentProgressService.updateLessonCompletion(sessionId, lessonId, moduleId);
+        await studentProgressService.updateLessonCompletion(sessionId, lessonId, moduleId);
         console.log(`[API] Marked lesson ${lessonId} as completed for session ${sessionId}`);
       }
       
       if (action === 'quiz_completed' && lessonId && quizScore !== undefined) {
-        studentProgressService.updateQuizScore(sessionId, lessonId, quizScore);
+        await studentProgressService.updateQuizScore(sessionId, lessonId, quizScore);
         console.log(`[API] Updated quiz score for lesson ${lessonId}: ${quizScore} for session ${sessionId}`);
       }
       
@@ -8909,16 +8972,16 @@ app.post('/api/public/courses/:courseId/progress',
       // Get session data to get the student name
       const session = publicCourseSessionService.getSession(sessionId);
       const studentName = session ? `${session.firstName || ''} ${session.lastName || ''}`.trim() : 'Anonymous';
-      progress = studentProgressService.initializeStudentProgress(sessionId, courseId, studentName);
+      progress = await studentProgressService.initializeStudentProgress(sessionId, courseId, studentName);
       console.log(`[API] Initialized student progress for session ${sessionId}`);
     }
     
     // Update lesson completion
-    studentProgressService.updateLessonCompletion(sessionId, lessonId, moduleId);
+    await studentProgressService.updateLessonCompletion(sessionId, lessonId, moduleId);
     
     // Update quiz score if provided
     if (quizScore !== undefined) {
-      studentProgressService.updateQuizScore(sessionId, lessonId, quizScore);
+      await studentProgressService.updateQuizScore(sessionId, lessonId, quizScore);
     }
     
     res.json({ 

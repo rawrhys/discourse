@@ -5,14 +5,71 @@
 
 class StudentProgressService {
   constructor() {
-    this.studentProgress = new Map(); // sessionId -> progress data
+    this.studentProgress = new Map(); // sessionId -> progress data (in-memory cache)
     this.courseStats = new Map(); // courseId -> aggregated stats
+    this.db = null; // Will be set when service is initialized
+  }
+
+  /**
+   * Initialize the service with database reference
+   */
+  initialize(db) {
+    this.db = db;
+    this.loadFromDatabase();
+  }
+
+  /**
+   * Load student progress data from database
+   */
+  loadFromDatabase() {
+    if (!this.db || !this.db.data.studentProgress) return;
+
+    console.log(`[StudentProgressService] Loading ${this.db.data.studentProgress.length} student progress records from database`);
+    
+    for (const progressData of this.db.data.studentProgress) {
+      // Convert arrays back to Sets and Maps
+      const progress = {
+        ...progressData,
+        completedLessons: new Set(progressData.completedLessons || []),
+        quizScores: new Map(Object.entries(progressData.quizScores || {})),
+        completedModules: new Set(progressData.completedModules || [])
+      };
+      
+      this.studentProgress.set(progressData.sessionId, progress);
+    }
+  }
+
+  /**
+   * Save student progress data to database
+   */
+  async saveToDatabase() {
+    if (!this.db) return;
+
+    // Convert Sets and Maps to serializable formats
+    const serializableData = Array.from(this.studentProgress.entries()).map(([sessionId, progress]) => ({
+      sessionId,
+      courseId: progress.courseId,
+      username: progress.username,
+      startTime: progress.startTime,
+      lastActivity: progress.lastActivity,
+      completedLessons: Array.from(progress.completedLessons),
+      quizScores: Object.fromEntries(progress.quizScores),
+      totalLessons: progress.totalLessons,
+      completedModules: Array.from(progress.completedModules),
+      totalModules: progress.totalModules,
+      isCompleted: progress.isCompleted,
+      completionTime: progress.completionTime,
+      certificateGenerated: progress.certificateGenerated
+    }));
+
+    this.db.data.studentProgress = serializableData;
+    await this.db.write();
   }
 
   /**
    * Initialize progress tracking for a student
    */
-  initializeStudentProgress(sessionId, courseId, username = null, courseData = null) {
+  async initializeStudentProgress(sessionId, courseId, username = null, courseData = null) {
     // Calculate total lessons and modules from course data if available
     let totalLessons = 0;
     let totalModules = 0;
@@ -41,6 +98,7 @@ class StudentProgressService {
     };
 
     this.studentProgress.set(sessionId, progress);
+    await this.saveToDatabase();
     console.log(`[StudentProgressService] Initialized progress for ${username} - ${totalLessons} lessons, ${totalModules} modules`);
     return progress;
   }
@@ -48,7 +106,7 @@ class StudentProgressService {
   /**
    * Update lesson completion
    */
-  updateLessonCompletion(sessionId, lessonId, moduleId) {
+  async updateLessonCompletion(sessionId, lessonId, moduleId) {
     const progress = this.studentProgress.get(sessionId);
     if (!progress) return null;
 
@@ -61,19 +119,21 @@ class StudentProgressService {
     // Check if course is completed
     this.checkCourseCompletion(sessionId);
 
+    await this.saveToDatabase();
     return progress;
   }
 
   /**
    * Update quiz score
    */
-  updateQuizScore(sessionId, lessonId, score) {
+  async updateQuizScore(sessionId, lessonId, score) {
     const progress = this.studentProgress.get(sessionId);
     if (!progress) return null;
 
     progress.quizScores.set(lessonId, score);
     progress.lastActivity = new Date();
 
+    await this.saveToDatabase();
     return progress;
   }
 
